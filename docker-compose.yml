@@ -59,6 +59,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    environment:
+      - API_TARGET=http://taskflow-api:8080
     restart: unless-stopped
     depends_on:
       taskflow-api:

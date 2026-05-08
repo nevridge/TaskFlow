@@ -186,13 +186,16 @@ RUN npm run build
 
 # Stage 2: serve
 FROM node:20-alpine AS runtime
-RUN npm install -g serve
+WORKDIR /app
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY vite.preview.config.js ./
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["node_modules/.bin/vite", "preview", "--config", "vite.preview.config.js", "--host", "0.0.0.0", "--port", "3000"]
 ```
 
-The `-s` flag enables SPA mode in `serve`, so all paths return `index.html` and React Router handles client-side routing.
+The `vite preview` server handles SPA fallback routing and proxies `/api` and `/openapi` requests to `$API_TARGET` (set to `http://taskflow-api:8080` in Docker Compose). This removes the need for CORS since all requests appear same-origin to the browser.
 
 ## Related Documentation
 

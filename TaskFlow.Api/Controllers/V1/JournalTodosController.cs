@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
@@ -24,14 +25,19 @@ public class JournalTodosController(IJournalEntryService journalEntryService, IT
             return NotFound();
         }
 
-        var todos = await _journalEntryService.GetTodosAsync(entryId);
-        return Ok(todos.Select(ToTaskItemDto));
+        return Ok(entry.Todos.Select(ToTaskItemDto));
     }
 
     // POST: api/v1/JournalEntries/{entryId}/todos
     [HttpPost]
     public async Task<IActionResult> Add(int entryId, [FromBody] AddJournalTodoDto addDto)
     {
+        if (addDto.TaskItemId <= 0)
+        {
+            ModelState.AddModelError(nameof(addDto.TaskItemId), "TaskItemId must be greater than 0.");
+            return BadRequest(new ValidationProblemDetails(ModelState));
+        }
+
         var entry = await _journalEntryService.GetByIdAsync(entryId);
         if (entry is null)
         {
@@ -81,7 +87,7 @@ public class JournalTodosController(IJournalEntryService journalEntryService, IT
         Description = item.Description,
         IsComplete = item.IsComplete,
         DueDate = item.DueDate,
-        Status = item.Status.ToString(),
-        Priority = item.Priority.ToString()
+        Status = JsonNamingPolicy.CamelCase.ConvertName(item.Status.ToString()),
+        Priority = JsonNamingPolicy.CamelCase.ConvertName(item.Priority.ToString())
     };
 }

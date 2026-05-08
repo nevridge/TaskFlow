@@ -74,4 +74,17 @@ public class JournalEntryValidatorTests
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Validate_ShouldFail_WhenDateIsDefault()
+    {
+        var entry = new JournalEntry { Title = "Day 1", Date = default };
+
+        var result = await _validator.ValidateAsync(entry);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(error =>
+            error.PropertyName == "Date" &&
+            error.ErrorMessage == "Date is required.");
+    }
 }

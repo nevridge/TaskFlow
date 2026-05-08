@@ -10,15 +10,21 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
 
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
         await _context.JournalEntries
+            .AsSplitQuery()
             .Include(e => e.Todos)
             .Include(e => e.LogEntries)
             .ToListAsync();
 
     public async Task<JournalEntry?> GetByIdAsync(int id) =>
         await _context.JournalEntries
+            .AsSplitQuery()
             .Include(e => e.Todos)
             .Include(e => e.LogEntries)
             .FirstOrDefaultAsync(e => e.Id == id);
+
+    public async Task<JournalEntry?> GetByDateAsync(DateOnly date) =>
+        await _context.JournalEntries
+            .FirstOrDefaultAsync(e => e.Date == date);
 
     public async Task<JournalEntry> AddAsync(JournalEntry entry)
     {

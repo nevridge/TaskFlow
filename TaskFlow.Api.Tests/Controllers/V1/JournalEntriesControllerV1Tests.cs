@@ -91,6 +91,7 @@ public class JournalEntriesControllerV1Tests
         var created = new JournalEntry { Id = 1, Title = "Day 1", Date = new DateOnly(2026, 5, 7), CreatedAt = DateTime.UtcNow };
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default))
             .ReturnsAsync(new ValidationResult());
+        _mockService.Setup(s => s.GetByDateAsync(createDto.Date)).ReturnsAsync((JournalEntry?)null);
         _mockService.Setup(s => s.CreateAsync(It.IsAny<JournalEntry>())).ReturnsAsync(created);
 
         var result = await _controller.Create(createDto);
@@ -99,6 +100,23 @@ public class JournalEntriesControllerV1Tests
         var dto = createdResult.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
         dto.Id.Should().Be(1);
         dto.Title.Should().Be("Day 1");
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnConflict_WhenDateAlreadyExists()
+    {
+        var createDto = new CreateJournalEntryDto { Title = "Day 1", Date = new DateOnly(2026, 5, 7) };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockService.Setup(s => s.GetByDateAsync(createDto.Date))
+            .ReturnsAsync(new JournalEntry { Id = 7, Title = "Existing", Date = createDto.Date });
+
+        var result = await _controller.Create(createDto);
+
+        var conflict = result.Result.Should().BeOfType<ConflictObjectResult>().Subject;
+        conflict.Value.Should().BeOfType<ProblemDetails>()
+            .Which.Detail.Should().Be("A journal entry already exists for 2026-05-07.");
+        _mockService.Verify(s => s.CreateAsync(It.IsAny<JournalEntry>()), Times.Never);
     }
 
     [Fact]
@@ -179,5 +197,28 @@ public class JournalEntriesControllerV1Tests
 
         result.Should().BeOfType<NotFoundResult>();
         _mockService.Verify(s => s.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_ShouldReturnOrderedLogEntries()
+    {
+        var entry = new JournalEntry
+        {
+            Id = 1,
+            Title = "Day 1",
+            Date = new DateOnly(2026, 5, 1),
+            LogEntries =
+            [
+                new JournalLogEntry { Id = 2, Content = "Later", JournalEntryId = 1, CreatedAt = new DateTime(2026, 5, 1, 9, 0, 0, DateTimeKind.Utc) },
+                new JournalLogEntry { Id = 1, Content = "Earlier", JournalEntryId = 1, CreatedAt = new DateTime(2026, 5, 1, 8, 0, 0, DateTimeKind.Utc) }
+            ]
+        };
+        _mockService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(entry);
+
+        var result = await _controller.Get(1);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = ok.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
+        dto.LogEntries.Select(log => log.Id).Should().ContainInOrder(1, 2);
     }
 }

@@ -13,6 +13,9 @@ public class JournalEntryService(IJournalEntryRepository repo) : IJournalEntrySe
     public async Task<JournalEntry?> GetByIdAsync(int id) =>
         await _repo.GetByIdAsync(id);
 
+    public async Task<JournalEntry?> GetByDateAsync(DateOnly date) =>
+        await _repo.GetByDateAsync(date);
+
     public async Task<JournalEntry> CreateAsync(JournalEntry entry) =>
         await _repo.AddAsync(entry);
 

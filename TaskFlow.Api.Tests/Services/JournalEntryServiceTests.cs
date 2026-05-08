@@ -56,6 +56,19 @@ public class JournalEntryServiceTests
     }
 
     [Fact]
+    public async Task GetByDateAsync_ShouldReturnEntry_WhenExists()
+    {
+        var date = new DateOnly(2026, 5, 1);
+        var entry = new JournalEntry { Id = 1, Title = "Day 1", Date = date };
+        _mockRepo.Setup(r => r.GetByDateAsync(date)).ReturnsAsync(entry);
+
+        var result = await _service.GetByDateAsync(date);
+
+        result.Should().BeEquivalentTo(entry);
+        _mockRepo.Verify(r => r.GetByDateAsync(date), Times.Once);
+    }
+
+    [Fact]
     public async Task CreateAsync_ShouldCreateAndReturnEntry()
     {
         var entry = new JournalEntry { Title = "Day 1", Date = new DateOnly(2026, 5, 1) };

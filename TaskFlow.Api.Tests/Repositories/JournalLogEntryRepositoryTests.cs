@@ -31,9 +31,9 @@ public class JournalLogEntryRepositoryTests
         SeedEntry(context, 1);
         SeedEntry(context, 2);
         context.JournalLogEntries.AddRange(
-            new JournalLogEntry { Content = "Log A", JournalEntryId = 1 },
-            new JournalLogEntry { Content = "Log B", JournalEntryId = 1 },
-            new JournalLogEntry { Content = "Log C", JournalEntryId = 2 }
+            new JournalLogEntry { Id = 12, Content = "Log B", JournalEntryId = 1, CreatedAt = new DateTime(2026, 5, 8, 8, 0, 0, DateTimeKind.Utc) },
+            new JournalLogEntry { Id = 11, Content = "Log A", JournalEntryId = 1, CreatedAt = new DateTime(2026, 5, 8, 7, 0, 0, DateTimeKind.Utc) },
+            new JournalLogEntry { Id = 13, Content = "Log C", JournalEntryId = 2 }
         );
         await context.SaveChangesAsync();
         var repo = new JournalLogEntryRepository(context);
@@ -42,6 +42,7 @@ public class JournalLogEntryRepositoryTests
 
         result.Should().HaveCount(2);
         result.Should().AllSatisfy(l => l.JournalEntryId.Should().Be(1));
+        result.Select(l => l.Id).Should().ContainInOrder(11, 12);
     }
 
     [Fact]

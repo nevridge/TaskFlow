@@ -26,21 +26,22 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task GetAll_ShouldReturnOkWithTodos_WhenEntryExists()
     {
-        var entry = new JournalEntry { Id = 1, Title = "Day 1", Date = new DateOnly(2026, 5, 1) };
         var todos = new List<TaskItem>
         {
-            new() { Id = 1, Title = "Task 1" },
-            new() { Id = 2, Title = "Task 2" }
+            new() { Id = 1, Title = "Task 1", Status = Status.Draft, Priority = Priority.Low },
+            new() { Id = 2, Title = "Task 2", Status = Status.Completed, Priority = Priority.High }
         };
+        var entry = new JournalEntry { Id = 1, Title = "Day 1", Date = new DateOnly(2026, 5, 1), Todos = todos };
         _mockJournalService.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(entry);
-        _mockJournalService.Setup(s => s.GetTodosAsync(1)).ReturnsAsync(todos);
 
         var result = await _controller.GetAll(1);
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject;
+        var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
         dtos.Should().HaveCount(2);
-        _mockJournalService.Verify(s => s.GetTodosAsync(1), Times.Once);
+        dtos[0].Status.Should().Be("draft");
+        dtos[1].Priority.Should().Be("high");
+        _mockJournalService.Verify(s => s.GetTodosAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -70,6 +71,18 @@ public class JournalTodosControllerV1Tests
 
         result.Should().BeOfType<NoContentResult>();
         _mockJournalService.Verify(s => s.AddTodoAsync(1, 5), Times.Once);
+    }
+
+    [Fact]
+    public async Task Add_ShouldReturnBadRequest_WhenTaskItemIdIsInvalid()
+    {
+        var result = await _controller.Add(1, new AddJournalTodoDto { TaskItemId = 0 });
+
+        var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        badRequest.Value.Should().BeOfType<ValidationProblemDetails>()
+            .Which.Errors.Should().ContainKey("TaskItemId");
+        _mockJournalService.Verify(s => s.AddTodoAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        _mockTaskService.Verify(s => s.GetTaskAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]

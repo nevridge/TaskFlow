@@ -55,6 +55,17 @@ public class JournalEntriesController(IJournalEntryService journalEntryService, 
             return BadRequest(validationResult.Errors);
         }
 
+        var existing = await _journalEntryService.GetByDateAsync(entry.Date);
+        if (existing is not null)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Journal entry already exists",
+                Detail = $"A journal entry already exists for {entry.Date:yyyy-MM-dd}.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
         var created = await _journalEntryService.CreateAsync(entry);
         return CreatedAtRoute(GetJournalEntryRouteName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
     }
@@ -105,13 +116,16 @@ public class JournalEntriesController(IJournalEntryService journalEntryService, 
         CreatedAt = entry.CreatedAt,
         UpdatedAt = entry.UpdatedAt,
         TodoTaskItemIds = entry.Todos.Select(t => t.Id),
-        LogEntries = entry.LogEntries.Select(l => new JournalLogEntryResponseDto
-        {
-            Id = l.Id,
-            Content = l.Content,
-            JournalEntryId = l.JournalEntryId,
-            CreatedAt = l.CreatedAt,
-            UpdatedAt = l.UpdatedAt
-        })
+        LogEntries = entry.LogEntries
+            .OrderBy(l => l.CreatedAt)
+            .ThenBy(l => l.Id)
+            .Select(l => new JournalLogEntryResponseDto
+            {
+                Id = l.Id,
+                Content = l.Content,
+                JournalEntryId = l.JournalEntryId,
+                CreatedAt = l.CreatedAt,
+                UpdatedAt = l.UpdatedAt
+            })
     };
 }

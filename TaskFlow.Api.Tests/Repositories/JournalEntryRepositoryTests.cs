@@ -87,6 +87,20 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
+    public async Task GetByDateAsync_ShouldReturnEntry_WhenDateExists()
+    {
+        using var context = CreateInMemoryContext();
+        var date = new DateOnly(2026, 5, 7);
+        SeedEntry(context, 1, date);
+        var repo = new JournalEntryRepository(context);
+
+        var result = await repo.GetByDateAsync(date);
+
+        result.Should().NotBeNull();
+        result!.Date.Should().Be(date);
+    }
+
+    [Fact]
     public async Task AddAsync_ShouldPersistEntryWithCreatedAt()
     {
         using var context = CreateInMemoryContext();

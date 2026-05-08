@@ -2,37 +2,61 @@
 
 > **📖 Reference Documentation** - This is a detailed technical reference for understanding Docker configuration differences. For quick start deployment, see the [Deployment Guide](DEPLOYMENT.md).
 
-This document provides a comprehensive comparison of Docker configurations for local development and production environments, ensuring consistency and clarity.
+This document covers Docker configurations for all three TaskFlow services: the API (`taskflow-api`), the React frontend (`taskflow-web`), and the Seq log viewer (`taskflow-seq`).
 
 ## Overview
 
-TaskFlow.Api supports multiple Docker configurations optimized for different deployment scenarios:
+The `docker-compose.yml` (development) file runs all three services together. A separate `docker-compose.prod.yml` runs a production-like API configuration (the web service is not yet wired into the production compose).
 
-- **Development**: Fast iteration with automatic migrations and development settings
-- **Production**: Optimized build with production settings and manual migration control
+- **Development**: Fast iteration with automatic migrations, Seq log viewer, React frontend
+- **Production**: Optimised build with manual migration control, no Seq, no frontend
 
 **When to use this guide:**
-- Understanding intentional configuration differences
+- Understanding intentional configuration differences between services and environments
 - Troubleshooting Docker issues
-- Customizing Docker setup for specific needs
-- Learning Docker best practices
+- Learning Docker best practices applied across a multi-service project
+
+## Services
+
+The development `docker-compose.yml` defines three services:
+
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| `taskflow-api` | `taskflow-api` | 8080 | .NET 10 REST API |
+| `taskflow-web` | `taskflow-web` | 3000 | React SPA frontend |
+| `seq` | `taskflow-seq` | 5380 (UI), 5341 (OTLP) | Structured log viewer |
 
 ## Configuration Comparison
 
-### Dockerfile
+### Dockerfiles
 
-A single multi-stage `TaskFlow.Api/Dockerfile` is used for all environments. The build context is always the repository root (`.`). Runtime behaviour is controlled via environment variables injected by the docker-compose files.
+**API (`TaskFlow.Api/Dockerfile`)**
+
+A single multi-stage .NET Dockerfile used for both dev and prod. The build context is always the repository root (`.`). Runtime behaviour is controlled via environment variables from the compose files.
 
 | Aspect | Value |
 |--------|-------|
 | **Build Context** | Repository root (`.`) |
 | **Base Images** | .NET 10 SDK → .NET 10 ASP.NET runtime |
 | **Environment** | Injected at runtime via `ASPNETCORE_ENVIRONMENT` |
-| **Copy Strategy** | Multi-stage with explicit paths |
 | **Port** | 8080 |
 | **Optimizations** | Release build with `--no-restore` |
 
+**Frontend (`TaskFlow.Web/Dockerfile`)**
+
+A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_BASE_URL=http://localhost:8080` from `.env.production` into the bundle. Because the generated SDK paths already include `/api/v1/...`, the base URL must be the API origin only — not a path prefix like `/api`. The runtime stage serves the static files with `serve -s dist`.
+
+| Aspect | Value |
+|--------|-------|
+| **Build Context** | `./TaskFlow.Web` |
+| **Stage 1** | `node:20-alpine` — `npm ci` + `npm run build` |
+| **Stage 2** | `node:20-alpine` — `serve -s dist -l 3000` |
+| **Port** | 3000 |
+| **SPA routing** | `-s` flag in `serve` (all paths → `index.html`) |
+
 ### Docker Compose Files
+
+**API service comparison:**
 
 | Aspect | Development (`docker-compose.yml`) | Production (`docker-compose.prod.yml`) |
 |--------|-----------------------------------|--------------------------------------|
@@ -42,11 +66,26 @@ A single multi-stage `TaskFlow.Api/Dockerfile` is used for all environments. The
 | **Image Tag** | `taskflow-api:dev` | `taskflow-api:prod` |
 | **Environment** | `Development` | `Production` |
 | **Auto Migrations** | `Database__MigrateOnStartup=true` | `Database__MigrateOnStartup=false` |
-| **Volumes** | `./data`, `./logs` | `./data`, `./logs` |
+| **Volumes** | Named Docker volumes | Named Docker volumes |
 | **Health Check** | Enabled (40s start period) | Enabled (40s start period) |
 | **Port Mapping** | `8080:8080` | `8080:8080` |
 
-**Note on service names**: Both compose files define the service as `taskflow-api`, which is used in `docker-compose` commands. The container names (`taskflow-api` and `taskflow-api-prod`) are for the running containers and allow both to run simultaneously.
+**Frontend service (dev only):**
+
+| Aspect | Value |
+|--------|-------|
+| **Build Context** | `./TaskFlow.Web` |
+| **Container Name** | `taskflow-web` |
+| **Image Tag** | `taskflow-web:dev` |
+| **Port Mapping** | `3000:3000` |
+| **Depends on** | `taskflow-api` (health check must pass) |
+| **`VITE_API_BASE_URL`** | `http://localhost:8080` (baked in at build time from `.env.production`) |
+
+The frontend container waits for `taskflow-api` to pass its health check before starting, ensuring the API is ready to receive requests when the UI loads.
+
+**Note on CORS in Docker Compose:** The frontend at port 3000 makes cross-origin requests to the API at port 8080. The API's `CorsServiceExtensions` reads allowed origins from `appsettings.Development.json` (`Cors:AllowedOrigins`). Both `localhost:3000` and `localhost:5173` (Vite dev server) are included.
+
+**Note on service names**: Both compose files define the API service as `taskflow-api`, which is used in `docker-compose` commands. The container names (`taskflow-api` and `taskflow-api-prod`) are for the running containers and allow both to run simultaneously.
 
 ### Environment Variables
 
@@ -74,16 +113,16 @@ A single multi-stage `TaskFlow.Api/Dockerfile` is used for all environments. The
 
 ### Volume Mounts
 
-**Both environments use identical volume mounts:**
+**Both environments use named Docker volumes:**
 
-| Host Path | Container Path | Purpose |
-|-----------|---------------|---------|
-| `./data` | `/app/data` | Persist SQLite database |
-| `./logs` | `/app/logs` | Persist application logs |
+| Volume Name | Container Path | Purpose |
+|-------------|---------------|---------|
+| `taskflow-data` | `/app/data` | Persist SQLite database |
+| `taskflow-logs` | `/app/logs` | Persist application logs |
 
 **Important Notes:**
-- These directories are created automatically on first run
-- Both are excluded from version control via `.gitignore`
+- Named volumes are managed by Docker and not tied to a host directory
+- Both are created automatically on first `docker compose up`
 - Database files differ by environment: `tasks.dev.db` vs `tasks.db`
 - For detailed volume configuration, see [VOLUMES.md](VOLUMES.md)
 

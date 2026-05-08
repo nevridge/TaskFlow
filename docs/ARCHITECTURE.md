@@ -1,6 +1,6 @@
 # Architecture & Design
 
-This document explains the architectural decisions, design patterns, and quality practices used in TaskFlow.Api.
+This document explains the architectural decisions, design patterns, and quality practices used across the TaskFlow stack (API and frontend).
 
 ## Table of Contents
 
@@ -13,6 +13,7 @@ This document explains the architectural decisions, design patterns, and quality
 - [Data Persistence](#data-persistence)
 - [Logging Strategy](#logging-strategy)
 - [Quality Practices](#quality-practices)
+- [Frontend Architecture](#frontend-architecture)
 
 ## Overview
 
@@ -574,6 +575,98 @@ See [API Versioning Guide](API_VERSIONING.md) for complete documentation.
 ## Documentation Philosophy
 
 See the [Contributing Guide](CONTRIBUTING.md#documentation-philosophy) for the documentation approach, audience priorities, and documentation file structure.
+
+---
+
+## Frontend Architecture
+
+> For a detailed frontend reference including testing, environment config, and troubleshooting, see [FRONTEND.md](FRONTEND.md).
+
+### Overview
+
+TaskFlow.Web is a React 19 + TypeScript SPA built with Vite 8. Its architecture prioritises type safety end-to-end and a clean separation between server state and UI state.
+
+```
+┌─────────────────────────────────────┐
+│         Pages (Route Components)    │  ← Composition, minimal logic
+├─────────────────────────────────────┤
+│     TanStack Query Hooks            │  ← Server state: cache, mutations
+├─────────────────────────────────────┤
+│     Generated API Client            │  ← Typed fetch functions from OpenAPI spec
+├─────────────────────────────────────┤
+│     TaskFlow.Api (REST)             │  ← Backend (separate process/container)
+└─────────────────────────────────────┘
+```
+
+### Key Architectural Decisions
+
+#### Generated API client
+
+The API client in `src/api/client/` is auto-generated from the live OpenAPI spec via `@hey-api/openapi-ts`:
+
+```bash
+npm run gen:api
+# Reads: http://localhost:8080/openapi/v1.json
+# Writes: src/api/client/{client,sdk,types}.gen.ts
+```
+
+This means TypeScript types for every request and response are always derived from the actual backend contract. When the API changes, a re-generation surfaces type errors immediately in hooks and pages — no manual type maintenance.
+
+The client is committed to source control so CI doesn't require a running API server.
+
+#### TanStack Query for server state
+
+UI state (modal open/closed, which item is being edited) lives in component `useState`. Server state (task list, task detail, notes) lives in TanStack Query's cache.
+
+Hooks in `src/hooks/` encapsulate all query and mutation logic. Pages call hooks and don't interact with the API client directly.
+
+```typescript
+// Pages are thin — they call hooks and render
+function TasksPage() {
+  const { data, isLoading, error } = useTasksQuery()
+  const createMutation = useCreateTaskMutation()
+  // ...
+}
+
+// Hooks own the cache keys and invalidation strategy
+export function useCreateTaskMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: CreateTaskItemDto) => postApiV1TaskItems({ body: data }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  })
+}
+```
+
+`throwOnError: true` is set at the client level so non-2xx API responses throw, which React Query routes to `isError` / `error` rather than treating the response as a successful (empty) result.
+
+#### PascalCase normalisation
+
+`TaskItemResponseDto` on the backend stores `Status` and `Priority` as `string` via `ToString()`, which produces PascalCase values (`"Draft"`, `"High"`). The frontend option values and badge class maps use lowercase keys. Normalisation via `.toLowerCase()` is applied at the comparison site (filter logic in `TasksPage`) and at the display site (`TaskCard`, `TaskForm` initial state) — not in the hooks or generated types.
+
+### Frontend Structure
+
+```
+src/
+├── api/client/       # Auto-generated (do not edit)
+├── hooks/            # TanStack Query hooks — all server state
+├── pages/            # Route-level components
+├── components/       # Shared UI components
+└── lib/              # Utilities (cn, formatDate)
+```
+
+### Frontend Tech Stack
+
+| Concern | Technology | Why |
+|---------|-----------|-----|
+| Framework | React 19 + TypeScript | Industry standard; strict typing |
+| Build | Vite 8 | Fast HMR, esbuild-based, Tailwind v4 plugin |
+| Styling | Tailwind CSS v4 | Utility-first, no config file, tree-shaken |
+| Routing | React Router v7 | De-facto SPA routing library |
+| Server state | TanStack Query v5 | Caching, invalidation, deduplication |
+| API client | hey-api/openapi-ts | Generated types from OpenAPI spec |
+| Testing | Vitest + RTL | Fast Vite-native test runner |
+| Production | `serve -s dist` | Minimal SPA server, no nginx needed |
 
 ---
 

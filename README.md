@@ -1,203 +1,272 @@
-# TaskFlow.Api
+# TaskFlow
 
-A production-ready .NET 10 Web API for managing tasks, demonstrating modern development practices and cloud deployment patterns.
+A full-stack task management application demonstrating modern development practices and cloud deployment patterns. The project consists of a **production-ready .NET 10 REST API** and a **React TypeScript frontend**, both containerised and deployed to Azure.
+
+While functional as a task management system, this project serves as a portfolio piece showcasing professional engineering practices across the full stack — from API design and automated testing to CI/CD pipelines and cloud-native deployment.
 
 ## Overview
 
-TaskFlow.Api is a RESTful task management API built to showcase:
-- **Clean architecture** with dependency injection and service patterns
-- **Production deployment** with Docker and Azure integration
-- **Automated CI/CD** with GitHub Actions, testing, and security scanning
-- **Comprehensive monitoring** with health checks, logging, and telemetry
-
-While functional as a task management system, this project serves as a portfolio piece demonstrating professional engineering practices and cloud-native development workflows.
+| Component | Stack | Purpose |
+|-----------|-------|---------|
+| **TaskFlow.Api** | .NET 10, EF Core, SQLite | REST API, business logic, data persistence |
+| **TaskFlow.Web** | React 19, TypeScript, Vite, Tailwind CSS v4 | SPA frontend, task and note management UI |
 
 ## Key Features
 
-- ✅ Full CRUD operations for task items via REST API
-- 🔄 **API versioning** with URL path and header support (v1.0, with infrastructure for future versions)
+**Backend (TaskFlow.Api)**
+- ✅ Full CRUD for tasks and notes via versioned REST API
+- 🔄 API versioning — URL path (`/api/v1/`) and header (`x-api-version`)
 - 🗄️ Entity Framework Core with SQLite persistence
-- 🔍 OpenAPI documentation with Scalar UI and multi-version support
-- 📊 Structured logging via OpenTelemetry (OTLP export)
+- 🔍 OpenAPI documentation with Scalar UI
+- 📊 Structured logging via OpenTelemetry (OTLP → Seq)
 - 🏥 Health check endpoints for container orchestration
-- 🐳 Docker support for local and production deployment
-- ☁️ Azure deployment automation with GitHub Actions
 - 🔒 Security scanning (CodeQL + Trivy)
-- 📈 OpenTelemetry tracing, metrics, and logging integration
-- ✅ Automated testing with code coverage enforcement
+- ✅ Automated testing with 75%+ code coverage enforcement
+
+**Frontend (TaskFlow.Web)**
+- ⚛️ React 19 + TypeScript SPA with Vite 8 and Tailwind CSS v4
+- 🔗 Typed API client auto-generated from the live OpenAPI spec
+- 📦 TanStack Query v5 for server state management (caching, invalidation, optimistic UI)
+- 🧭 Client-side routing with React Router v7
+- 🎛️ Task list with status/priority filtering and multi-key sort
+- 📝 Task detail page with inline note management (create, edit, delete)
+- 🧪 Component and hook tests with Vitest + React Testing Library
+
+**DevOps**
+- 🐳 Docker Compose for local full-stack development
+- ☁️ Azure deployment automation via GitHub Actions + OIDC (no stored credentials)
+- 🔁 CI pipeline: lint → type-check → test → build → smoke test (parallel API and Web jobs)
 
 ## Quick Start
 
 ### Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) (for containerized development)
+- [Node.js 20+](https://nodejs.org/) (for the frontend)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) (for the full stack via Compose)
 
-### Run Locally (5 minutes)
+### Option 1 — Full Stack with Docker Compose (Recommended)
 
-1. **Clone and restore:**
-   ```bash
-   git clone https://github.com/nevridge/TaskFlow.Api.git
-   cd TaskFlow.Api
-   dotnet restore
-   ```
-
-2. **Run the application:**
-   ```bash
-   dotnet run --project TaskFlow.Api
-   ```
-   
-3. **Access Scalar UI:**
-   Navigate to `https://localhost:{port}/scalar/v1` (port displayed in console output)
-
-The application will automatically apply database migrations on first run.
-
-### Run with Docker
+The easiest way to run everything together:
 
 ```bash
+git clone https://github.com/nevridge/TaskFlow.git
+cd TaskFlow
 docker compose up
 ```
 
-Access the API at `http://localhost:8080`. Data persists in Docker volumes across container restarts.
+| Service | URL |
+|---------|-----|
+| Frontend (React UI) | http://localhost:3000 |
+| API | http://localhost:8080 |
+| Scalar UI (API docs) | http://localhost:8080/scalar/v1 |
+| Seq (log viewer) | http://localhost:5380 |
+
+### Option 2 — Run API + Frontend Separately
+
+**API:**
+```bash
+dotnet run --project TaskFlow.Api
+# → https://localhost:{port}/scalar/v1
+```
+
+**Frontend:**
+```bash
+cd TaskFlow.Web
+npm install
+npm run dev
+# → http://localhost:5173
+```
+
+The Vite dev server proxies `/api` requests to `http://localhost:8080` automatically.
+
+See **[Getting Started](docs/GETTING_STARTED.md)** for the full setup walkthrough.
 
 ## Documentation
 
 ### Primary Guides
 
-- **[Getting Started](docs/GETTING_STARTED.md)** - Setup and run locally in 5 minutes
-- **[API Reference](docs/API.md)** - Complete endpoint documentation with examples
-- **[API Versioning](docs/API_VERSIONING.md)** - Versioning strategy and migration guide
-- **[Architecture](docs/ARCHITECTURE.md)** - Design decisions, patterns, and quality practices
-- **[Deployment](docs/DEPLOYMENT.md)** - Docker, Azure, and CI/CD workflows
-- **[Contributing](docs/CONTRIBUTING.md)** - Development workflow and standards
+- **[Getting Started](docs/GETTING_STARTED.md)** — Setup and run the full stack locally
+- **[Frontend Guide](docs/FRONTEND.md)** — React project structure, API client generation, testing
+- **[API Reference](docs/API.md)** — Complete endpoint documentation with examples
+- **[API Versioning](docs/API_VERSIONING.md)** — Versioning strategy and migration guide
+- **[Architecture](docs/ARCHITECTURE.md)** — Design decisions, patterns, and quality practices
+- **[Deployment](docs/DEPLOYMENT.md)** — Docker, Azure, and CI/CD workflows
+- **[Contributing](docs/CONTRIBUTING.md)** — Development workflow and standards
 
 ### Reference Documentation
 
-- **[Docker Configuration](docs/DOCKER_CONFIGURATION.md)** - Detailed dev vs prod Docker comparison
-- **[Volumes](docs/VOLUMES.md)** - Volume configuration and persistence
-- **[Health Checks](docs/HEALTH_CHECK_TESTING.md)** - Health check setup and testing
-- **[Azure OIDC](docs/AZURE_OIDC_AUTHENTICATION.md)** - Azure authentication setup
-- **[QA Deployment](docs/QA_DEPLOYMENT.md)** - Ephemeral QA environments
-- **[Resource Naming](docs/DEPLOY.md)** - Azure naming standards
-- **[Service Registration](docs/SERVICE_REGISTRATION_PATTERN.md)** - DI extension pattern
-- **[Security Scanning](docs/SECURITY_SCANNING.md)** - CodeQL and Trivy
-- **[Logging](docs/LOGGING.md)** - Serilog configuration
-- **[Volume Testing](docs/VOLUME_TESTING.md)** - Testing volume persistence
+- **[Docker Configuration](docs/DOCKER_CONFIGURATION.md)** — Dev vs prod Docker comparison (all three services)
+- **[Volumes](docs/VOLUMES.md)** — Volume configuration and persistence
+- **[Health Checks](docs/HEALTH_CHECK_TESTING.md)** — Health check setup and testing
+- **[Azure OIDC](docs/AZURE_OIDC_AUTHENTICATION.md)** — Azure authentication setup
+- **[QA Deployment](docs/QA_DEPLOYMENT.md)** — Ephemeral QA environments
+- **[Resource Naming](docs/DEPLOY.md)** — Azure naming standards
+- **[Service Registration](docs/SERVICE_REGISTRATION_PATTERN.md)** — .NET DI extension pattern
+- **[Security Scanning](docs/SECURITY_SCANNING.md)** — CodeQL and Trivy
+- **[Logging](docs/LOGGING.md)** — OpenTelemetry configuration
+- **[Volume Testing](docs/VOLUME_TESTING.md)** — Testing volume persistence
 
 ## Project Structure
 
 ```
-TaskFlow.Api/
-├── Controllers/          # REST API endpoints (versioned under V1/)
-├── Services/             # Business logic layer
-├── Repositories/         # Data access layer
-├── Models/               # Domain entities
-├── DTOs/                 # Data transfer objects
-├── Validators/           # FluentValidation validators
-├── Extensions/           # DI service registration extensions
-├── HealthChecks/         # Custom health check implementations
-├── Providers/            # Shared providers (e.g. JSON serialization options)
-└── Migrations/           # EF Core database migrations
+TaskFlow/
+├── TaskFlow.Api/               # .NET 10 REST API
+│   ├── Controllers/V1/         # Versioned REST endpoints
+│   ├── Services/               # Business logic layer
+│   ├── Repositories/           # Data access layer
+│   ├── Models/                 # Domain entities
+│   ├── DTOs/                   # Data transfer objects
+│   ├── Validators/             # FluentValidation validators
+│   ├── Extensions/             # DI service registration extensions
+│   ├── HealthChecks/           # Custom health check implementations
+│   ├── Providers/              # Shared providers (JSON serialisation)
+│   └── Migrations/             # EF Core migrations
+│
+├── TaskFlow.Web/               # React TypeScript frontend
+│   ├── src/
+│   │   ├── api/client/         # Auto-generated typed API client
+│   │   ├── hooks/              # TanStack Query hooks (useTasks, useNotes)
+│   │   ├── pages/              # Route-level components (TasksPage, TaskDetailPage)
+│   │   ├── components/         # Shared UI components (TaskCard, TaskForm, etc.)
+│   │   └── lib/                # Utilities (cn, formatDate)
+│   ├── .env.development        # Dev base URL (http://localhost:8080)
+│   ├── .env.production         # Prod base URL (/api — relative for reverse proxy)
+│   └── Dockerfile              # Multi-stage build → serve -s dist
+│
+├── TaskFlow.Api.Tests/         # xUnit test suite for the API
+├── docs/                       # Extended documentation
+├── docker-compose.yml          # Full-stack dev environment (api + web + seq)
+└── docker-compose.prod.yml     # Production-like compose
 ```
 
 ## Technology Stack
 
-- **Framework:** .NET 10, ASP.NET Core
-- **Database:** Entity Framework Core with SQLite
-- **Logging:** OpenTelemetry (OTLP export — console added in Development)
-- **Validation:** FluentValidation
-- **Testing:** xUnit, Moq, NSubstitute, Coverlet (code coverage)
-- **Monitoring:** Health checks, OpenTelemetry (tracing, metrics, logging)
-- **Documentation:** OpenAPI with Scalar UI
-- **Deployment:** Docker, Azure Container Instances (ACI)
-- **CI/CD:** GitHub Actions
+### Backend
+| Concern | Technology |
+|---------|-----------|
+| Framework | .NET 10, ASP.NET Core |
+| Database | Entity Framework Core + SQLite |
+| Validation | FluentValidation |
+| Observability | OpenTelemetry (traces, metrics, logs → Seq) |
+| API docs | OpenAPI + Scalar UI |
+| Testing | xUnit, Moq, FluentAssertions, Coverlet |
+| Deployment | Docker, Azure Container Instances (ACI) |
+| CI/CD | GitHub Actions |
+
+### Frontend
+| Concern | Technology |
+|---------|-----------|
+| Framework | React 19 + TypeScript, Vite 8 |
+| Styling | Tailwind CSS v4 |
+| Routing | React Router v7 |
+| Server state | TanStack Query v5 |
+| API client | hey-api/openapi-ts (generated from OpenAPI spec) |
+| Testing | Vitest + React Testing Library |
+| Production serve | `serve -s dist` (SPA routing) |
 
 ## Portfolio Highlights
 
-If you're evaluating this project for hiring or collaboration, here's what to notice:
+If you're evaluating this project for hiring or collaboration, here's what to look for:
 
 ### Architecture & Code Quality
-- **Service registration pattern** keeps `Program.cs` clean and maintainable ([docs](docs/ARCHITECTURE.md#service-registration-pattern))
-- **Repository pattern** abstracts data access
-- **Dependency injection** throughout with proper lifetimes
-- **Async/await** for all I/O operations
-- **FluentValidation** for input validation
+- **Layered API architecture** — Controller → Service → Repository → EF Core, each with clear responsibilities and test coverage
+- **Extension method pattern** — `Program.cs` stays minimal; each cross-cutting concern lives in its own `Extensions/` file
+- **Repository pattern** — data access abstracted behind interfaces, enabling in-memory testing without mocks
+- **Generated API client** — `@hey-api/openapi-ts` generates a fully typed fetch client from the live OpenAPI spec, keeping frontend types in sync with the backend contract
+- **TanStack Query hooks** — server state (caching, invalidation, loading/error states) encapsulated in `useTasks` and `useNotes` hooks, keeping pages clean
 
 ### DevOps & Deployment
-- **Multi-stage Docker builds** for optimized production images
-- **GitHub Actions workflows** for CI/CD with automated testing
-- **Azure deployment automation** via OIDC (no stored credentials)
-- **Infrastructure as Code** patterns in workflow definitions
-- **Environment-specific configurations** (dev/production)
+- **Multi-stage Docker builds** — optimised production images for both API and frontend
+- **GitHub Actions workflows** — parallel CI jobs for API and frontend (lint, type-check, test, build, smoke test)
+- **Azure deployment via OIDC** — no stored credentials; federated identity with Azure
+- **Environment-specific configuration** — `.env.development` / `.env.production` for frontend; `appsettings.*.json` and env vars for the API
 
 ### Testing & Quality
-- **Unit and integration tests** with 75%+ code coverage enforcement
-- **Health checks** for readiness and liveness probes
-- **Security scanning** with CodeQL (SAST) and Trivy (container scanning)
-- **Automated code formatting** checks in CI
+- **75%+ line coverage** enforced in CI — PRs are blocked below the threshold
+- **API tests** — unit tests at controller, service, and repository layers; integration tests for DI registrations and CORS
+- **Frontend tests** — Vitest + RTL for all components and TanStack Query hooks
+- **Security scanning** — CodeQL (SAST) + Trivy (container image CVEs)
+- **Automated formatting** — `dotnet format` and ESLint enforced in CI
 
 ### Observability
-- **Structured logging** with OpenTelemetry (OTLP export to Seq; console added in Development)
-- **Health check endpoints** (`/health`, `/health/ready`, `/health/live`)
-- **OpenTelemetry tracing and metrics** via OTLP export
-- **Detailed health check responses** with timing metrics
+- **Structured logging** via OpenTelemetry OTLP → Seq (Seq UI at `http://localhost:5380` in dev)
+- **Health check endpoints** — `/health`, `/health/ready` (DB), `/health/live` (lightweight)
+- **OpenTelemetry tracing and metrics**
 
 ## API Endpoints
 
-### Task Management Endpoints
-
-TaskFlow.Api supports **URL path versioning** for API evolution. Current version: 1.0
+### Task Items
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/TaskItems` | List all tasks |
 | GET | `/api/v1/TaskItems/{id}` | Get task by ID |
-| POST | `/api/v1/TaskItems` | Create new task |
+| POST | `/api/v1/TaskItems` | Create task |
 | PUT | `/api/v1/TaskItems/{id}` | Update task |
 | DELETE | `/api/v1/TaskItems/{id}` | Delete task |
 
-**Versioning Support:**
-- Use versioned routes (`/api/v1/TaskItems`) for all integrations
-- Header versioning supported via `x-api-version` header
-- Infrastructure in place to add future versions (v2, v3, etc.)
-
-### Health Check Endpoints
+### Notes (per task)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | Overall health status |
-| GET | `/health/ready` | Readiness probe |
+| GET | `/api/v1/TaskItems/{taskId}/Notes` | List notes for a task |
+| GET | `/api/v1/TaskItems/{taskId}/Notes/{id}` | Get note by ID |
+| POST | `/api/v1/TaskItems/{taskId}/Notes` | Add note |
+| PUT | `/api/v1/TaskItems/{taskId}/Notes/{id}` | Update note |
+| DELETE | `/api/v1/TaskItems/{taskId}/Notes/{id}` | Delete note |
+
+### Health Checks
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Combined health status |
+| GET | `/health/ready` | DB readiness probe |
 | GET | `/health/live` | Liveness probe |
 
-See [API Reference](docs/API.md) for detailed endpoint documentation and [API Versioning Guide](docs/API_VERSIONING.md) for versioning strategy.
+See [API Reference](docs/API.md) for request/response shapes and [API Versioning Guide](docs/API_VERSIONING.md) for versioning strategy.
 
 ## Configuration
 
-Configure via `appsettings.json` or environment variables:
+### API
 
 | Setting | Environment Variable | Default | Description |
 |---------|---------------------|---------|-------------|
-| Database connection | `ConnectionStrings__DefaultConnection` | `Data Source=tasks.db` | SQLite database path |
-| Auto migrations | `Database__MigrateOnStartup` | `false` (true in Development) | Enable automatic migrations |
-| OTel service name | `OpenTelemetry__ServiceName` | `TaskFlow.Api` | Service name reported in traces/logs |
-| OTel endpoint | `OpenTelemetry__Endpoint` | `http://localhost:5341/ingest/otlp` | OTLP collector endpoint (e.g. Seq) |
-| OTel auth header | `OpenTelemetry__Header` | - | Optional auth header for the OTLP exporter |
-| OTel protocol | `OpenTelemetry__Protocol` | `http/protobuf` | Export protocol (`http/protobuf` only) |
+| Database | `ConnectionStrings__DefaultConnection` | `Data Source=tasks.db` | SQLite path |
+| Auto migrations | `Database__MigrateOnStartup` | `false` | Auto-apply on startup |
+| OTel service name | `OpenTelemetry__ServiceName` | `TaskFlow.Api` | Name in traces/logs |
+| OTel endpoint | `OpenTelemetry__Endpoint` | `http://localhost:5341/ingest/otlp` | OTLP backend |
+| OTel header | `OpenTelemetry__Header` | — | Optional auth header |
+| CORS origins | `Cors__AllowedOrigins` | — | Allowed origins (set in appsettings.Development.json) |
+
+### Frontend
+
+| File | `VITE_API_BASE_URL` | Used when |
+|------|-------------------|-----------|
+| `.env.development` | `http://localhost:8080` | `npm run dev` |
+| `.env.production` | `http://localhost:8080` | `npm run build` (Docker Compose image) |
+
+The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`). Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`. For a same-origin production deployment behind a reverse proxy, set it to an empty string.
+
+In the Vite dev server, requests to `/api` and `/openapi` are proxied to `process.env.API_TARGET ?? 'http://localhost:8080'`.
 
 ## Testing
 
 ```bash
+# API tests
 dotnet test
+
+# Frontend tests
+cd TaskFlow.Web && npm run test -- --run
+
+# Type-check frontend
+cd TaskFlow.Web && npm run type-check
 ```
 
-The CI pipeline enforces a minimum of **75% total line coverage** and blocks PRs below this threshold. See [Contributing Guide](docs/CONTRIBUTING.md#code-coverage) for coverage configuration, excluded types, and how to mirror CI enforcement locally.
+The CI pipeline enforces **75% minimum line coverage** for the API and blocks PRs below this threshold. See [Contributing Guide](docs/CONTRIBUTING.md#code-coverage) for details.
 
 ## Contributing
 
-Contributions welcome! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for:
-- Development workflow and branch strategy
-- Code standards and conventions
-- Testing requirements
-- Pull request process
+Contributions welcome! See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for development workflow, code standards, and PR process.
 
 ## License
 
@@ -209,4 +278,4 @@ No license specified. This project is primarily for portfolio and learning purpo
 
 ---
 
-*Last updated: 2025-07-01*
+*Last updated: 2026-04-18*

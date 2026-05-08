@@ -30,6 +30,8 @@ public static class PersistenceServiceExtensions
         // Register repositories
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<INoteRepository, NoteRepository>();
+        services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
+        services.AddScoped<IJournalLogEntryRepository, JournalLogEntryRepository>();
 
         return services;
     }

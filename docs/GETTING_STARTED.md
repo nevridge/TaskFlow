@@ -375,9 +375,11 @@ The generated files are committed to source control — you don't need a running
 | File | `VITE_API_BASE_URL` | Purpose |
 |------|-------------------|---------|
 | `.env.development` | `http://localhost:8080` | Used by `npm run dev` |
-| `.env.production` | `http://localhost:8080` | Baked into the Docker image at build time |
+| `.env.production` | *(empty)* | Baked into the Docker image at build time |
 
-The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only. Do not set it to `/api` — that produces double-prefixed paths like `/api/api/v1/...`. For a same-origin deployment behind a reverse proxy, use an empty string.
+The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only or left empty for same-origin deployments. Do not set it to `/api` — that produces double-prefixed paths like `/api/api/v1/...`.
+
+In Docker Compose, `.env.production` is empty so the browser sends requests to the same origin. The `vite preview` runtime server proxies `/api` and `/openapi` to `$API_TARGET` (`http://taskflow-api:8080` inside the Docker network) — no CORS needed.
 
 ### Vite proxy override
 

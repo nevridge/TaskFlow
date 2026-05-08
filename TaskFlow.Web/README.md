@@ -17,7 +17,7 @@ TaskFlow.Web is a single-page application (SPA) that provides a UI for managing 
 | Server state | TanStack Query v5 |
 | API client | hey-api/openapi-ts (generated from OpenAPI spec) |
 | Testing | Vitest + React Testing Library |
-| Production serve | `serve -s dist` |
+| Production serve | `vite preview` (with `/api` proxy) |
 
 ## Getting Started
 
@@ -94,9 +94,9 @@ TaskFlow.Web/
 │   ├── App.tsx                 # Router setup
 │   └── main.tsx                # React root, QueryClient provider
 ├── .env.development            # VITE_API_BASE_URL=http://localhost:8080
-├── .env.production             # VITE_API_BASE_URL=/api (relative, for reverse proxy)
+├── .env.production             # VITE_API_BASE_URL= (empty — same-origin via vite preview proxy)
 ├── vite.config.ts              # Vite config — @ alias, dev proxy, test config
-├── Dockerfile                  # Multi-stage: build → serve -s dist
+├── Dockerfile                  # Multi-stage: build → vite preview
 └── package.json
 ```
 
@@ -143,9 +143,11 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 | File | Variable | Value | Used when |
 |------|----------|-------|-----------|
 | `.env.development` | `VITE_API_BASE_URL` | `http://localhost:8080` | `npm run dev` |
-| `.env.production` | `VITE_API_BASE_URL` | `http://localhost:8080` | `npm run build` (Docker Compose image) |
+| `.env.production` | `VITE_API_BASE_URL` | *(empty)* | `npm run build` (Docker Compose image) |
 
-The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`). Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`. For a same-origin production deployment behind a reverse proxy, use an empty string instead.
+The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`) or left empty for same-origin deployments. Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`.
+
+In Docker Compose, `.env.production` uses an empty string so the browser sends requests to the same origin (port 3000). The `vite preview` server (configured in `vite.preview.config.js`) proxies `/api` and `/openapi` requests to `$API_TARGET` (`http://taskflow-api:8080` inside the Docker network). This removes the need for CORS and avoids exposing port 8080 to the browser.
 
 The Vite dev server proxy can be redirected via environment variable:
 
@@ -184,13 +186,16 @@ RUN npm run build
 
 # Stage 2: serve
 FROM node:20-alpine AS runtime
-RUN npm install -g serve
+WORKDIR /app
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY vite.preview.config.js ./
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["node_modules/.bin/vite", "preview", "--config", "vite.preview.config.js", "--host", "0.0.0.0", "--port", "3000"]
 ```
 
-The `-s` flag enables SPA mode in `serve`, so all paths return `index.html` and React Router handles client-side routing.
+The `vite preview` server handles SPA fallback routing and proxies `/api` and `/openapi` requests to `$API_TARGET` (set to `http://taskflow-api:8080` in Docker Compose). This removes the need for CORS since all requests appear same-origin to the browser.
 
 ## Related Documentation
 

@@ -61,7 +61,7 @@ docker compose up
 | API | http://localhost:8080 |
 | Seq (log viewer) | http://localhost:5380 |
 
-Note: `docker compose up` serves the **production build** of the frontend via `serve -s dist`. For hot-reload development, run `npm run dev` separately and point it at the running API container.
+Note: `docker compose up` serves the **production build** of the frontend via `vite preview` (with a proxy for `/api` and `/openapi`). For hot-reload development, run `npm run dev` separately and point it at the running API container.
 
 ## Project Structure
 
@@ -105,7 +105,7 @@ TaskFlow.Web/
 │   └── index.css                   # Tailwind base import
 │
 ├── .env.development                # VITE_API_BASE_URL=http://localhost:8080
-├── .env.production                 # VITE_API_BASE_URL=/api
+├── .env.production                 # VITE_API_BASE_URL= (empty — same-origin via vite preview proxy)
 ├── vite.config.ts                  # @ path alias, dev proxy, vitest config
 ├── tsconfig.app.json               # App TypeScript config
 ├── tsconfig.node.json              # Node/tooling TypeScript config
@@ -272,12 +272,12 @@ Straightforward note display and edit forms. `NoteCard` shows content and timest
 | File | `VITE_API_BASE_URL` | When used |
 |------|-------------------|-----------|
 | `.env.development` | `http://localhost:8080` | `npm run dev` |
-| `.env.production` | `http://localhost:8080` | `npm run build` (Docker Compose image) |
+| `.env.production` | *(empty)* | `npm run build` (Docker Compose image) |
 
 `VITE_API_BASE_URL` is baked into the bundle at build time by Vite. The value must be the API **origin only** — the generated SDK paths already include `/api/v1/...`, so setting this to `/api` would produce double-prefixed requests like `/api/api/v1/...`.
 
-- **Docker Compose (no reverse proxy):** use `http://localhost:8080` — the browser resolves requests to the API on port 8080.
-- **Same-origin production (behind a reverse proxy):** use an empty string — requests resolve against the current origin.
+- **Docker Compose:** use an empty string — the `vite preview` runtime server proxies `/api` and `/openapi` to `$API_TARGET` (`http://taskflow-api:8080`), so the browser makes same-origin requests without CORS.
+- **Direct API access (no proxy):** use `http://localhost:8080` — the browser resolves requests to the API on port 8080 (requires CORS).
 - **Do not** set this to `/api` or any path prefix.
 
 ## Vite Dev Server Proxy
@@ -363,16 +363,19 @@ RUN npm run build
 
 FROM node:20-alpine AS runtime
 WORKDIR /app
-RUN npm install -g serve
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
+COPY vite.preview.config.js ./
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["node_modules/.bin/vite", "preview", "--config", "vite.preview.config.js", "--host", "0.0.0.0", "--port", "3000"]
 ```
 
 **Key points:**
 - `npm ci` (not `npm install`) for reproducible installs in CI and Docker
-- `serve -s` enables SPA fallback — all paths serve `index.html` so React Router handles routing
-- The build stage bakes `VITE_API_BASE_URL=/api` from `.env.production` into the bundle
+- `vite preview` serves the built files and handles SPA fallback (all unmatched paths → `index.html`)
+- The build stage bakes `VITE_API_BASE_URL=` (empty) from `.env.production` into the bundle
+- `vite.preview.config.js` is copied into the runtime stage to configure the preview server proxy
 
 ### docker-compose.yml integration
 
@@ -391,7 +394,7 @@ taskflow-web:
       condition: service_healthy
 ```
 
-The web service waits for `taskflow-api` to pass its health check before starting. The frontend image is built with `VITE_API_BASE_URL=http://localhost:8080` baked in from `.env.production`, so the browser makes cross-origin requests directly to the API on port 8080. CORS is handled by the API's `CorsServiceExtensions`, which reads `Cors:AllowedOrigins` from `appsettings.Development.json`.
+The web service waits for `taskflow-api` to pass its health check before starting. The frontend image is built with `VITE_API_BASE_URL=` (empty) from `.env.production`, so the browser sends same-origin requests to the `vite preview` server (port 3000). That server proxies `/api` and `/openapi` to `http://taskflow-api:8080` inside the Docker network via `vite.preview.config.js`. CORS configuration is not needed since all requests appear same-origin to the browser.
 
 > **Note for local dev:** Running `npm run dev` and `docker compose up` simultaneously may cause port conflicts on 5173 vs 3000 but not on 8080. The dev server proxies to port 8080 either way.
 

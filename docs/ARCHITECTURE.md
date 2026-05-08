@@ -666,7 +666,7 @@ src/
 | Server state | TanStack Query v5 | Caching, invalidation, deduplication |
 | API client | hey-api/openapi-ts | Generated types from OpenAPI spec |
 | Testing | Vitest + RTL | Fast Vite-native test runner |
-| Production | `serve -s dist` | Minimal SPA server, no nginx needed |
+| Production | `vite preview` (with `/api` proxy) | SPA server with same-origin API proxying |
 
 ---
 

@@ -8,6 +8,15 @@ services:
     environment:
       - ACCEPT_EULA=Y
       - SEQ_FIRSTRUN_NOAUTHENTICATION=true
+      - SEQ_STORAGE_DISABLEFREEDISKSPACECHECKING=true
+    volumes:
+      - seq-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/api || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
   taskflow-api:
@@ -27,6 +36,7 @@ services:
       - DOTNET_RUNNING_IN_CONTAINER=true
       - Database__MigrateOnStartup=true
       - OpenTelemetry__Endpoint=http://seq:5341/ingest/otlp
+      - OpenTelemetry__Header=
     volumes:
       - taskflow-data:/app/data
       - taskflow-logs:/app/logs
@@ -39,7 +49,7 @@ services:
     restart: unless-stopped
     depends_on:
       seq:
-        condition: service_started
+        condition: service_healthy
 
   taskflow-web:
     container_name: taskflow-web
@@ -49,6 +59,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
+    environment:
+      - API_TARGET=http://taskflow-api:8080
     restart: unless-stopped
     depends_on:
       taskflow-api:
@@ -58,4 +70,6 @@ volumes:
   taskflow-data:
     driver: local
   taskflow-logs:
+    driver: local
+  seq-data:
     driver: local

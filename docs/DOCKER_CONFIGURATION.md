@@ -44,15 +44,15 @@ A single multi-stage .NET Dockerfile used for both dev and prod. The build conte
 
 **Frontend (`TaskFlow.Web/Dockerfile`)**
 
-A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_BASE_URL=http://localhost:8080` from `.env.production` into the bundle. Because the generated SDK paths already include `/api/v1/...`, the base URL must be the API origin only — not a path prefix like `/api`. The runtime stage serves the static files with `serve -s dist`.
+A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_BASE_URL=` (empty) from `.env.production` into the bundle. Because the generated SDK paths already include `/api/v1/...` and the runtime stage serves via `vite preview` with a proxy, an empty base URL causes the browser to send requests to the same origin. The runtime stage serves the built files and proxies `/api` and `/openapi` to `$API_TARGET` via `vite.preview.config.js`.
 
 | Aspect | Value |
 |--------|-------|
 | **Build Context** | `./TaskFlow.Web` |
 | **Stage 1** | `node:20-alpine` — `npm ci` + `npm run build` |
-| **Stage 2** | `node:20-alpine` — `serve -s dist -l 3000` |
+| **Stage 2** | `node:20-alpine` — `vite preview` with `vite.preview.config.js` |
 | **Port** | 3000 |
-| **SPA routing** | `-s` flag in `serve` (all paths → `index.html`) |
+| **SPA routing** | Handled by `vite preview` (all unmatched paths → `index.html`) |
 
 ### Docker Compose Files
 
@@ -79,11 +79,11 @@ A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_B
 | **Image Tag** | `taskflow-web:dev` |
 | **Port Mapping** | `3000:3000` |
 | **Depends on** | `taskflow-api` (health check must pass) |
-| **`VITE_API_BASE_URL`** | `http://localhost:8080` (baked in at build time from `.env.production`) |
+| **`VITE_API_BASE_URL`** | *(empty — baked in at build time from `.env.production`)* |
 
-The frontend container waits for `taskflow-api` to pass its health check before starting, ensuring the API is ready to receive requests when the UI loads.
+The frontend container waits for `taskflow-api` to pass its health check before starting. The `vite preview` runtime server proxies `/api` and `/openapi` requests to `$API_TARGET` (`http://taskflow-api:8080` inside the Docker network), so the browser makes same-origin requests and no CORS configuration is required.
 
-**Note on CORS in Docker Compose:** The frontend at port 3000 makes cross-origin requests to the API at port 8080. The API's `CorsServiceExtensions` reads allowed origins from `appsettings.Development.json` (`Cors:AllowedOrigins`). Both `localhost:3000` and `localhost:5173` (Vite dev server) are included.
+**Note on CORS in Docker Compose:** With `vite preview` proxying API requests, the browser sees all requests as same-origin (port 3000) and CORS is not needed. For direct API access (e.g. from Scalar UI or curl), the API still exposes port 8080.
 
 **Note on service names**: Both compose files define the API service as `taskflow-api`, which is used in `docker-compose` commands. The container names (`taskflow-api` and `taskflow-api-prod`) are for the running containers and allow both to run simultaneously.
 

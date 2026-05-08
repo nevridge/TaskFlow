@@ -1,27 +1,49 @@
-# Getting Started with TaskFlow.Api
+# Getting Started with TaskFlow
 
-This guide walks you through setting up TaskFlow.Api for local development.
+This guide walks you through setting up the full TaskFlow stack (API + frontend) for local development.
 
 ## Prerequisites
 
 ### Required
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) installed
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — for the API
+- [Node.js 20+](https://nodejs.org/) — for the frontend
 - A terminal/command prompt
 - A code editor (Visual Studio, VS Code, Rider, etc.)
 
 ### Optional
-- [Docker Desktop](https://www.docker.com/products/docker-desktop) - for containerized development
-- [Visual Studio 2022 or later](https://visualstudio.microsoft.com/) - for IDE-based Docker support
-- [Postman](https://www.postman.com/) - for API testing
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) — for the full stack via Compose
+- [Visual Studio 2022 or later](https://visualstudio.microsoft.com/) — for IDE-based Docker support
+- [Postman](https://www.postman.com/) — for API testing
 
-## Local Development Setup
+## Option 0: Full Stack with Docker Compose (Easiest)
+
+Runs the API, frontend, and Seq log viewer in one command:
+
+```bash
+git clone https://github.com/nevridge/TaskFlow.git
+cd TaskFlow
+docker compose up
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend (React UI) | http://localhost:3000 |
+| API | http://localhost:8080 |
+| Scalar UI (API docs) | http://localhost:8080/scalar/v1 |
+| Seq (log viewer) | http://localhost:5380 |
+
+Data persists in Docker volumes. To tear down without losing data: `docker compose down`. To also remove volumes: `docker compose down -v`.
+
+---
+
+## Running the API
 
 ### Option 1: Run Directly with .NET CLI (Fastest)
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/nevridge/TaskFlow.Api.git
-   cd TaskFlow.Api
+   git clone https://github.com/nevridge/TaskFlow.git
+   cd TaskFlow
    ```
 
 2. **Restore dependencies:**
@@ -306,16 +328,91 @@ If migrations fail to apply:
 - Volumes are preserved by default with `docker compose down`
 - To remove volumes: `docker compose down -v`
 
+---
+
+## Running the Frontend
+
+### Prerequisites
+
+- Node.js 20+
+- TaskFlow.Api running at `http://localhost:8080`
+
+### Install and start
+
+```bash
+cd TaskFlow.Web
+npm install
+npm run dev
+```
+
+Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/openapi` requests to `http://localhost:8080`, so the frontend and API work together without any CORS configuration.
+
+### Available scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Dev server with HMR at http://localhost:5173 |
+| `npm run build` | Production bundle → `dist/` |
+| `npm run test -- --run` | Run all 24 tests once |
+| `npm run type-check` | TypeScript check only |
+| `npm run lint` | ESLint |
+| `npm run gen:api` | Regenerate typed API client from live spec |
+
+### Regenerating the API client
+
+The typed API client in `src/api/client/` is generated from the live OpenAPI spec. After any API changes:
+
+```bash
+# With the API running at http://localhost:8080:
+cd TaskFlow.Web
+npm run gen:api
+```
+
+The generated files are committed to source control — you don't need a running API server to build or test the frontend.
+
+### Frontend environment variables
+
+| File | `VITE_API_BASE_URL` | Purpose |
+|------|-------------------|---------|
+| `.env.development` | `http://localhost:8080` | Used by `npm run dev` |
+| `.env.production` | `http://localhost:8080` | Baked into the Docker image at build time |
+
+The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only. Do not set it to `/api` — that produces double-prefixed paths like `/api/api/v1/...`. For a same-origin deployment behind a reverse proxy, use an empty string.
+
+### Vite proxy override
+
+To run `npm run dev` against a Dockerised API:
+
+```bash
+API_TARGET=http://localhost:8080 npm run dev
+# or, if inside the Docker network:
+API_TARGET=http://taskflow-api:8080 npm run dev
+```
+
+### Frontend troubleshooting
+
+**Blank page / network errors:** Verify the API is reachable at `http://localhost:8080/health`.
+
+**Filters or badge colours wrong:** The API returns status and priority as PascalCase strings (`"Draft"`, `"High"`). The frontend normalises to lowercase before comparisons and display. If this breaks after a `gen:api` run, the DTO type may have changed.
+
+**API client type errors after backend change:** Run `npm run gen:api` with the API running, then fix any TypeScript errors surfaced in hooks/pages.
+
+See [Frontend Guide](FRONTEND.md) for the full frontend reference.
+
+---
+
 ## Next Steps
 
-- **Explore the API:** Try all CRUD operations in Scalar UI
-- **Review the code:** Check out the architecture in [ARCHITECTURE.md](ARCHITECTURE.md)
-- **Deploy to Azure:** See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment instructions
-- **Run tests:** `dotnet test` to see the test suite
-- **Add features:** See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines
+- **Explore the UI:** http://localhost:5173 (dev) or http://localhost:3000 (Docker)
+- **Explore the API:** Scalar UI at http://localhost:8080/scalar/v1
+- **Review the code:** [Architecture](ARCHITECTURE.md) for design decisions
+- **Deploy to Azure:** [Deployment Guide](DEPLOYMENT.md)
+- **Run tests:** `dotnet test` and `cd TaskFlow.Web && npm run test -- --run`
+- **Add features:** [Contributing Guide](CONTRIBUTING.md)
 
 ## Additional Resources
 
+- [Frontend Guide](FRONTEND.md)
 - [Architecture Documentation](ARCHITECTURE.md)
 - [Deployment Guide](DEPLOYMENT.md)
 - [API Reference](API.md)

@@ -1,73 +1,200 @@
-# React + TypeScript + Vite
+# TaskFlow.Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React TypeScript frontend for TaskFlow — a full-stack task management application. Built with Vite 8, React 19, Tailwind CSS v4, and TanStack Query v5.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+TaskFlow.Web is a single-page application (SPA) that provides a UI for managing tasks and per-task notes. It communicates with the [TaskFlow.Api](../TaskFlow.Api) backend via a fully typed API client that is auto-generated from the OpenAPI specification.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Concern | Technology |
+|---------|-----------|
+| Framework | React 19 + TypeScript |
+| Build tool | Vite 8 |
+| Styling | Tailwind CSS v4 |
+| Routing | React Router v7 |
+| Server state | TanStack Query v5 |
+| API client | hey-api/openapi-ts (generated from OpenAPI spec) |
+| Testing | Vitest + React Testing Library |
+| Production serve | `serve -s dist` |
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
+- Node.js 20+
+- The TaskFlow.Api running at `http://localhost:8080` (or via Docker Compose)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Install and run
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd TaskFlow.Web
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The app is available at **http://localhost:5173**.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+The Vite dev server proxies `/api` and `/openapi` requests to `http://localhost:8080` by default, so no CORS configuration is needed during development. To target a different API host:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+API_TARGET=http://myhost:8080 npm run dev
 ```
+
+### Run via Docker Compose (full stack)
+
+From the repo root:
+
+```bash
+docker compose up
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:8080 |
+| Seq (logs) | http://localhost:5380 |
+
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Vite dev server with HMR at http://localhost:5173 |
+| `npm run build` | Type-check + production bundle → `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run test` | Run tests with Vitest (watch mode) |
+| `npm run test -- --run` | Run tests once and exit |
+| `npm run type-check` | TypeScript check without emitting files |
+| `npm run lint` | ESLint |
+| `npm run gen:api` | Regenerate typed client from live OpenAPI spec |
+
+## Project Structure
+
+```
+TaskFlow.Web/
+├── src/
+│   ├── api/
+│   │   └── client/             # Auto-generated typed API client (do not edit manually)
+│   │       ├── client.gen.ts   # Client instance (baseUrl from VITE_API_BASE_URL)
+│   │       ├── sdk.gen.ts      # All generated API functions
+│   │       └── types.gen.ts    # All generated TypeScript types
+│   ├── hooks/
+│   │   ├── useTasks.ts         # TanStack Query hooks for task CRUD
+│   │   └── useNotes.ts         # TanStack Query hooks for note CRUD
+│   ├── pages/
+│   │   ├── TasksPage.tsx       # Task list — filter, sort, create, edit, delete
+│   │   └── TaskDetailPage.tsx  # Task detail + inline note management
+│   ├── components/
+│   │   ├── TaskCard.tsx        # Task summary card (used in list)
+│   │   ├── TaskForm.tsx        # Create/edit task form (shared)
+│   │   ├── NoteCard.tsx        # Note display with edit/delete actions
+│   │   └── NoteForm.tsx        # Create/edit note form
+│   ├── lib/
+│   │   └── utils.ts            # cn() class helper, formatDate()
+│   ├── App.tsx                 # Router setup
+│   └── main.tsx                # React root, QueryClient provider
+├── .env.development            # VITE_API_BASE_URL=http://localhost:8080
+├── .env.production             # VITE_API_BASE_URL=/api (relative, for reverse proxy)
+├── vite.config.ts              # Vite config — @ alias, dev proxy, test config
+├── Dockerfile                  # Multi-stage: build → serve -s dist
+└── package.json
+```
+
+## API Client Generation
+
+The typed API client is generated by `@hey-api/openapi-ts` directly from the running backend's OpenAPI spec. This ensures TypeScript types always match the actual API contract.
+
+**Regenerate the client:**
+
+```bash
+# 1. Ensure the API is running at http://localhost:8080
+dotnet run --project ../TaskFlow.Api
+
+# 2. Regenerate
+npm run gen:api
+```
+
+The generated files land in `src/api/client/`. Do not edit them manually — they will be overwritten on the next `gen:api` run. Commit the generated files to source control so the build is reproducible without a live API server.
+
+**How it works:**
+- `client.gen.ts` exports the configured client singleton (baseUrl from `VITE_API_BASE_URL`, `throwOnError: true` so failed requests propagate as errors to TanStack Query)
+- `sdk.gen.ts` exports one typed function per API endpoint (e.g. `getApiV1TaskItems`, `postApiV1TaskItems`)
+- `types.gen.ts` exports all request/response types derived from the OpenAPI schema
+
+## TanStack Query Hooks
+
+All server state (fetching, caching, mutation, invalidation) is encapsulated in hooks in `src/hooks/`. Pages and components call hooks and don't touch the API client directly.
+
+**`useTasks.ts`** exports:
+- `useTasksQuery()` — fetch all tasks
+- `useTaskQuery(id)` — fetch a single task (disabled when id is not finite)
+- `useCreateTaskMutation()` — create task, invalidates task list
+- `useUpdateTaskMutation()` — update task, invalidates list and detail
+- `useDeleteTaskMutation()` — delete task, invalidates list, removes detail from cache
+
+**`useNotes.ts`** exports:
+- `useNotesQuery(taskId)` — fetch notes for a task (disabled when taskId is not finite)
+- `useCreateNoteMutation(taskId)` — add note, invalidates note list
+- `useUpdateNoteMutation(taskId)` — update note, invalidates note list
+- `useDeleteNoteMutation(taskId)` — delete note, invalidates note list
+
+## Configuration
+
+| File | Variable | Value | Used when |
+|------|----------|-------|-----------|
+| `.env.development` | `VITE_API_BASE_URL` | `http://localhost:8080` | `npm run dev` |
+| `.env.production` | `VITE_API_BASE_URL` | `http://localhost:8080` | `npm run build` (Docker Compose image) |
+
+The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`). Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`. For a same-origin production deployment behind a reverse proxy, use an empty string instead.
+
+The Vite dev server proxy can be redirected via environment variable:
+
+```bash
+API_TARGET=http://taskflow-api:8080 npm run dev
+```
+
+## Testing
+
+```bash
+# Run all tests once
+npm run test -- --run
+
+# Watch mode
+npm run test
+```
+
+Tests are in `*.test.ts(x)` files co-located alongside the source files they cover. There are 24 tests across components and hooks.
+
+**Coverage areas:**
+- `TaskCard`, `TaskForm`, `NoteCard`, `NoteForm` — rendering, interaction, form submission
+- `useTasks`, `useNotes` — all query and mutation hooks, verifying correct SDK calls and arguments
+
+## Docker
+
+The production Dockerfile is a two-stage build:
+
+```dockerfile
+# Stage 1: build
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+# Stage 2: serve
+FROM node:20-alpine AS runtime
+RUN npm install -g serve
+COPY --from=builder /app/dist ./dist
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]
+```
+
+The `-s` flag enables SPA mode in `serve`, so all paths return `index.html` and React Router handles client-side routing.
+
+## Related Documentation
+
+- [Getting Started](../docs/GETTING_STARTED.md) — Full local setup including the API
+- [Frontend Guide](../docs/FRONTEND.md) — Extended frontend reference
+- [Architecture](../docs/ARCHITECTURE.md) — Frontend architecture section
+- [Root README](../README.md) — Project overview

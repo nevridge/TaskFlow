@@ -17,6 +17,8 @@ public static class ApplicationServiceExtensions
         // Register application services
         services.AddScoped<ITaskService, TaskService>();
         services.AddScoped<INoteService, NoteService>();
+        services.AddScoped<IJournalEntryService, JournalEntryService>();
+        services.AddScoped<IJournalLogEntryService, JournalLogEntryService>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
@@ -13,6 +14,8 @@ namespace TaskFlow.Api.Controllers.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class JournalEntriesController(IJournalEntryService journalService, IValidator<JournalEntry> validator) : ControllerBase
 {
+    private const int SqliteConstraintViolationCode = 19;
+    private const int SqliteUniqueConstraintViolationCode = 2067;
     private const string GetRouteEntryName = "GetJournalEntryV1";
     private const string ApiVersionString = "1.0";
     private readonly IJournalEntryService _journalService = journalService;
@@ -71,12 +74,12 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
             var existing = await _journalService.GetByDateAsync(dto.Date);
             if (existing is null)
             {
-                return Conflict("A journal entry already exists for this date.");
+                return Conflict("A journal entry for this date was created by another request.");
             }
 
             return Conflict(new
             {
-                message = "A journal entry already exists for this date.",
+                message = "A journal entry for this date was created by another request.",
                 existingEntry = ToDto(existing)
             });
         }
@@ -139,5 +142,8 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     };
 
     private static bool IsJournalDateUniqueConstraintViolation(DbUpdateException ex) =>
-        ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
+        (ex.InnerException is SqliteException sqliteEx
+            && sqliteEx.SqliteErrorCode == SqliteConstraintViolationCode
+            && sqliteEx.SqliteExtendedErrorCode == SqliteUniqueConstraintViolationCode)
+        || ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
 }

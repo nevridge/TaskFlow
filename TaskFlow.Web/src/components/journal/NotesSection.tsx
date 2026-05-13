@@ -17,7 +17,7 @@ export function NotesSection({ entryId, entryTitle, initialValue }: Props) {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [])
+  }, [entryId])
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value

@@ -72,4 +72,8 @@ Create a root `.env` with `COMPOSE_PROJECT_NAME=taskflowapi` for consistent CLI 
 
 ## CI/CD
 
-GitHub Actions workflows: `ci.yml` (lint → build → test → smoke test), `codeql.yml`, `container-scan.yml` (Trivy), `prod-deploy.yaml` / `qa-deploy.yaml` (Azure ACI via OIDC — no stored credentials).
+GitHub Actions workflows: `ci.yml` (lint → build → test → smoke test), `codeql.yml`, `container-scan.yml` (Trivy), `ghcr-deploy.yml` (build images → push to GHCR → update `taskflow-deploy` repo → Portainer GitOps deploys).
+
+**Production deployment:** Push to `main` triggers automatic deployment to Docker Host via Portainer. Images are tagged with `sha-<commit>` for immutability. The GitOps compose file lives in `nevridge/taskflow-deploy`.
+
+**Production URLs:** `taskflow.skalaforge.com` (web), `taskflow-api.skalaforge.com` (API), `taskflow-seq.skalaforge.com` (Seq).

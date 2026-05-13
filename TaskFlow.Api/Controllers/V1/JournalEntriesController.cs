@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Services;
@@ -42,6 +43,16 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     [HttpPost]
     public async Task<ActionResult<JournalEntryResponseDto>> Create([FromBody] CreateJournalEntryDto dto)
     {
+        var existingByDate = await _journalService.GetByDateAsync(dto.Date);
+        if (existingByDate is not null)
+        {
+            return Conflict(new
+            {
+                message = "A journal entry already exists for this date.",
+                existingEntry = ToDto(existingByDate)
+            });
+        }
+
         var entry = new JournalEntry { Title = dto.Title, Summary = dto.Summary, Date = dto.Date };
 
         var validation = await _validator.ValidateAsync(entry);
@@ -50,8 +61,25 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
             return BadRequest(validation.Errors);
         }
 
-        var created = await _journalService.CreateAsync(entry);
-        return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
+        try
+        {
+            var created = await _journalService.CreateAsync(entry);
+            return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
+        }
+        catch (DbUpdateException ex) when (IsJournalDateUniqueConstraintViolation(ex))
+        {
+            var existing = await _journalService.GetByDateAsync(dto.Date);
+            if (existing is null)
+            {
+                return Conflict("A journal entry already exists for this date.");
+            }
+
+            return Conflict(new
+            {
+                message = "A journal entry already exists for this date.",
+                existingEntry = ToDto(existing)
+            });
+        }
     }
 
     // PUT: api/v1/JournalEntries/5
@@ -109,4 +137,7 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
             UpdatedAt = l.UpdatedAt,
         }),
     };
+
+    private static bool IsJournalDateUniqueConstraintViolation(DbUpdateException ex) =>
+        ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
 }

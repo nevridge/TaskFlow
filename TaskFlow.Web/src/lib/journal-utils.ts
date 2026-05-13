@@ -11,6 +11,19 @@ export function parseISO(s: string): Date {
   return new Date(y, m - 1, d)
 }
 
+export function isValidISODate(s: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (!match) return false
+
+  const y = Number(match[1])
+  const m = Number(match[2])
+  const d = Number(match[3])
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false
+
+  const date = new Date(y, m - 1, d)
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
+}
+
 export function isoDate(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -77,7 +90,10 @@ export function urlDateToISO(urlDate: string): string {
   const parts = urlDate.split('-')
   if (parts.length !== 3) return todayISO()
   const [mm, dd, yyyy] = parts
-  return `${yyyy}-${mm}-${dd}`
+  if (!/^\d{2}$/.test(mm) || !/^\d{2}$/.test(dd) || !/^\d{4}$/.test(yyyy)) return todayISO()
+
+  const iso = `${yyyy}-${mm}-${dd}`
+  return isValidISODate(iso) ? iso : todayISO()
 }
 
 export function todayUrlDate(): string {

@@ -40,6 +40,11 @@ public class JournalTodosController(IJournalEntryService journalService, ITaskSe
     [HttpPost]
     public async Task<IActionResult> AddTodo(int entryId, [FromBody] AddJournalTodoDto dto)
     {
+        if (dto.TaskItemId <= 0)
+        {
+            return BadRequest("TaskItemId must be greater than 0.");
+        }
+
         var entry = await _journalService.GetByIdAsync(entryId);
         if (entry is null)
         {

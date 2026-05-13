@@ -6,6 +6,7 @@ public interface IJournalEntryService
 {
     Task<IEnumerable<JournalEntry>> GetAllAsync();
     Task<JournalEntry?> GetByIdAsync(int id);
+    Task<JournalEntry?> GetByDateAsync(DateOnly date);
     Task<JournalEntry> CreateAsync(JournalEntry entry);
     Task UpdateAsync(JournalEntry entry);
     Task DeleteAsync(int id);

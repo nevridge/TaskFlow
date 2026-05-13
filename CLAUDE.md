@@ -40,7 +40,7 @@ docker compose -f docker-compose.prod.yml up
 
 **API versioning** uses both URL path (`/api/v1/TaskItems`) and request header (`x-api-version`). Controllers live in `Controllers/V1/` and are decorated with `[ApiVersion("1.0")]`.
 
-**Validation** is handled by FluentValidation validators in `Validators/` and applied globally via middleware registered in `ValidationServiceExtensions`. Controllers don't manually invoke validators. New validators are auto-discovered via `AddValidatorsFromAssemblyContaining` — no registration needed when adding a new validator class.
+**Validation** is handled by FluentValidation validators in `Validators/`. Controllers currently invoke validators manually (`ValidateAsync`) before writes. New validators are auto-discovered via `AddValidatorsFromAssemblyContaining` — no registration needed when adding a new validator class.
 
 **Health checks:** Three endpoints — `/health` (combined), `/health/ready` (DB connectivity, used as K8s readiness probe), `/health/live` (always up, liveness probe). Custom JSON writer in `HealthChecks/`.
 

@@ -9,6 +9,7 @@ public class JournalEntryService(IJournalEntryRepository repo) : IJournalEntrySe
 
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() => await _repo.GetAllAsync();
     public async Task<JournalEntry?> GetByIdAsync(int id) => await _repo.GetByIdAsync(id);
+    public async Task<JournalEntry?> GetByDateAsync(DateOnly date) => await _repo.GetByDateAsync(date);
     public async Task<JournalEntry> CreateAsync(JournalEntry entry) => await _repo.AddAsync(entry);
     public async Task UpdateAsync(JournalEntry entry) => await _repo.UpdateAsync(entry);
     public async Task DeleteAsync(int id) => await _repo.DeleteAsync(id);

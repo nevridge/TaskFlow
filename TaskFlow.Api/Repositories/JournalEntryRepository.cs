@@ -21,6 +21,12 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .Include(e => e.LogEntries)
             .FirstOrDefaultAsync(e => e.Id == id);
 
+    public async Task<JournalEntry?> GetByDateAsync(DateOnly date) =>
+        await _context.JournalEntries
+            .Include(e => e.Todos)
+            .Include(e => e.LogEntries)
+            .FirstOrDefaultAsync(e => e.Date == date);
+
     public async Task<JournalEntry> AddAsync(JournalEntry entry)
     {
         entry.CreatedAt = DateTime.UtcNow;

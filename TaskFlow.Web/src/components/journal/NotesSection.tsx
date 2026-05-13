@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useUpdateNotesMutation } from '@/hooks/useJournal'
 
 interface Props {
@@ -13,11 +13,11 @@ export function NotesSection({ entryId, entryTitle, initialValue }: Props) {
   const updateNotes = useUpdateNotesMutation(entryId, entryTitle)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Sync external value when entry changes (e.g., navigating to a different date)
   useEffect(() => {
-    setValue(initialValue ?? '')
-    setSavedAt(null)
-  }, [entryId, initialValue])
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const next = e.target.value

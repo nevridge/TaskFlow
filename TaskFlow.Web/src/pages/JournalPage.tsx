@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useEnsureJournalEntry, useJournalEntries, useJournalTodos } from '@/hooks/useJournal'
 import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
-import { urlDateToISO, todayISO } from '@/lib/journal-utils'
+import { urlDateToISO, todayISO, isValidISODate } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
@@ -32,7 +32,7 @@ export function JournalPage() {
   )
 
   // Fall back to today if the param is missing or malformed
-  const effectiveDate = /^\d{4}-\d{2}-\d{2}$/.test(isoDate) ? isoDate : todayISO()
+  const effectiveDate = isValidISODate(isoDate) ? isoDate : todayISO()
 
   const { entry, isLoading, error } = useEnsureJournalEntry(effectiveDate)
 
@@ -91,6 +91,7 @@ export function JournalPage() {
               </section>
 
               <NotesSection
+                key={entry.id}
                 entryId={entry.id}
                 entryTitle={entry.title}
                 initialValue={entry.summary}

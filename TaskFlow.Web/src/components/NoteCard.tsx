@@ -9,25 +9,13 @@ interface Props {
 
 export function NoteCard({ note, onEdit, onDelete }: Props) {
   return (
-    <div className="rounded-lg border bg-white p-3 flex flex-col gap-2">
-      <p className="text-sm text-slate-800 whitespace-pre-wrap">{note.content}</p>
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-400">{formatDate(note.createdAt)}</span>
-        <div className="flex gap-1">
-          <button
-            aria-label="Edit"
-            onClick={() => onEdit(note)}
-            className="rounded px-2 py-1 text-xs text-slate-600 hover:bg-slate-100"
-          >
-            Edit
-          </button>
-          <button
-            aria-label="Delete"
-            onClick={() => onDelete(note)}
-            className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-          >
-            Delete
-          </button>
+    <div className="t-note-card">
+      <p className="t-note-content">{note.content}</p>
+      <div className="t-note-footer">
+        <span className="t-note-date">{formatDate(note.createdAt)}</span>
+        <div className="t-note-actions">
+          <button className="t-btn" aria-label="Edit" onClick={() => onEdit(note)}>Edit</button>
+          <button className="t-btn-danger" aria-label="Delete" onClick={() => onDelete(note)}>Delete</button>
         </div>
       </div>
     </div>

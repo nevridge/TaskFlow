@@ -3,26 +3,6 @@
    All rules are scoped under .journal-page to avoid conflicts with Tailwind. */
 
 .journal-page {
-  --bg: #f6f7f9;
-  --paper: #ffffff;
-  --paper-2: #fdfdfb;
-  --ink: #0f172a;
-  --ink-2: #334155;
-  --muted: #64748b;
-  --muted-2: #94a3b8;
-  --line: #e2e8f0;
-  --line-2: #cbd5e1;
-  --line-soft: #eef2f7;
-  --accent: #2563eb;
-  --accent-soft: color-mix(in oklab, var(--accent) 10%, white);
-  --accent-ink: color-mix(in oklab, var(--accent) 70%, #0f172a);
-  --hover-soft: #eef2f7;
-  --danger-bg: #fee2e2;
-  --danger-ink: #b91c1c;
-  --shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 1px rgba(15,23,42,.03);
-  --shadow-md: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.06);
-  --radius: 12px;
-  --radius-sm: 8px;
   --den: 1;
   color-scheme: light;
 

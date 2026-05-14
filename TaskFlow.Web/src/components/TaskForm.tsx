@@ -27,79 +27,46 @@ export function TaskForm({ task, onSubmit, onCancel }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="title" className="text-sm font-medium text-slate-700">Title</label>
-        <input
-          id="title"
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          required
-          className="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+    <form onSubmit={handleSubmit} className="t-form">
+      <div className="t-field">
+        <label htmlFor="title" className="t-label">Title</label>
+        <input id="title" className="t-input" value={title} onChange={e => setTitle(e.target.value)} required />
       </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="description" className="text-sm font-medium text-slate-700">Description</label>
+      <div className="t-field">
+        <label htmlFor="description" className="t-label">Description</label>
         <textarea
           id="description"
+          className="t-input"
           value={description ?? ''}
           onChange={e => setDescription(e.target.value)}
           rows={3}
-          className="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
       </div>
-      <div className="flex gap-4">
-        <div className="flex flex-col gap-1 flex-1">
-          <label htmlFor="status" className="text-sm font-medium text-slate-700">Status</label>
-          <select
-            id="status"
-            value={status}
-            onChange={e => setStatus(e.target.value)}
-            className="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          >
+      <div className="t-form-row">
+        <div className="t-field">
+          <label htmlFor="status" className="t-label">Status</label>
+          <select id="status" className="t-input" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
             <option value="completed">Completed</option>
           </select>
         </div>
-        <div className="flex flex-col gap-1 flex-1">
-          <label htmlFor="priority" className="text-sm font-medium text-slate-700">Priority</label>
-          <select
-            id="priority"
-            value={priority}
-            onChange={e => setPriority(e.target.value)}
-            className="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-          >
+        <div className="t-field">
+          <label htmlFor="priority" className="t-label">Priority</label>
+          <select id="priority" className="t-input" value={priority} onChange={e => setPriority(e.target.value)}>
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
           </select>
         </div>
       </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="dueDate" className="text-sm font-medium text-slate-700">Due Date</label>
-        <input
-          id="dueDate"
-          type="date"
-          value={dueDate}
-          onChange={e => setDueDate(e.target.value)}
-          className="rounded border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+      <div className="t-field">
+        <label htmlFor="dueDate" className="t-label">Due Date</label>
+        <input id="dueDate" type="date" className="t-input" value={dueDate} onChange={e => setDueDate(e.target.value)} />
       </div>
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-        >
-          Save
-        </button>
+      <div className="t-form-actions">
+        <button type="button" className="t-btn" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="t-btn-primary">Save</button>
       </div>
     </form>
   )

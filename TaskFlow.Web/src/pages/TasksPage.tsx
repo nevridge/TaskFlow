@@ -3,6 +3,7 @@ import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteT
 import { TaskCard } from '@/components/TaskCard'
 import { TaskForm } from '@/components/TaskForm'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
+import '@/tasks.css'
 
 type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
 type PriorityFilter = 'all' | 'low' | 'medium' | 'high'
@@ -56,90 +57,80 @@ export function TasksPage() {
     }
   }
 
-  if (isLoading) return <div className="p-8 text-slate-500">Loading tasks…</div>
-  if (error) return <div className="p-8 text-red-600">Failed to load tasks.</div>
+  if (isLoading) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--muted)', paddingTop: 40 }}>Loading tasks…</div></div>
+  if (error) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--danger-ink)', paddingTop: 40 }}>Failed to load tasks.</div></div>
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Tasks</h1>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-        >
-          New Task
-        </button>
-      </div>
-
-      {(showCreate || editingTask) && (
-        <div className="mb-6 rounded-lg border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">{editingTask ? 'Edit Task' : 'New Task'}</h2>
-          <TaskForm
-            task={editingTask ?? undefined}
-            onSubmit={editingTask ? handleUpdate : handleCreate}
-            onCancel={() => { setShowCreate(false); setEditingTask(null) }}
-          />
+    <div className="tasks-page">
+      <div className="t-shell">
+        <div className="t-page-hdr">
+          <h1 className="t-page-title">Tasks</h1>
+          <button className="t-btn-primary" onClick={() => setShowCreate(true)}>New Task</button>
         </div>
-      )}
 
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="flex gap-2 items-center">
-          <label htmlFor="status-filter" className="text-xs text-slate-500 font-medium uppercase">Status</label>
+        {(showCreate || editingTask) && (
+          <div className="t-panel">
+            <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
+            <TaskForm
+              task={editingTask ?? undefined}
+              onSubmit={editingTask ? handleUpdate : handleCreate}
+              onCancel={() => { setShowCreate(false); setEditingTask(null) }}
+            />
+          </div>
+        )}
+
+        <div className="t-filter-row">
+          <span className="t-filter-label">Status</span>
           <select
-            id="status-filter"
+            className="t-select"
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
             <option value="completed">Completed</option>
           </select>
-        </div>
-        <div className="flex gap-2 items-center">
-          <label htmlFor="priority-filter" className="text-xs text-slate-500 font-medium uppercase">Priority</label>
+
+          <span className="t-filter-label">Priority</span>
           <select
-            id="priority-filter"
+            className="t-select"
             value={priorityFilter}
             onChange={e => setPriorityFilter(e.target.value as PriorityFilter)}
-            className="rounded border px-2 py-1 text-sm"
           >
             <option value="all">All</option>
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
           </select>
-        </div>
-        <div className="flex gap-2 items-center">
-          <label htmlFor="sort-key" className="text-xs text-slate-500 font-medium uppercase">Sort</label>
+
+          <span className="t-filter-label">Sort</span>
           <select
-            id="sort-key"
+            className="t-select"
             value={sortKey}
             onChange={e => setSortKey(e.target.value as SortKey)}
-            className="rounded border px-2 py-1 text-sm"
           >
             <option value="title">Title</option>
             <option value="dueDate">Due Date</option>
             <option value="priority">Priority</option>
           </select>
         </div>
-      </div>
 
-      {filtered.length === 0 ? (
-        <p className="text-slate-500 text-sm">No tasks match your filters.</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {filtered.map(task => (
-            <TaskCard
-              key={String(task.id)}
-              task={task}
-              onEdit={setEditingTask}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
-      )}
+        {filtered.length === 0 ? (
+          <p className="t-empty">No tasks match your filters.</p>
+        ) : (
+          <div className="t-card-grid">
+            {filtered.map(task => (
+              <TaskCard
+                key={String(task.id)}
+                task={task}
+                onEdit={setEditingTask}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

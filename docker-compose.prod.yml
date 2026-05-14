@@ -11,7 +11,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8080
       - DOTNET_RUNNING_IN_CONTAINER=true
-      - Database__MigrateOnStartup=false
+      - Database__MigrateOnStartup=true
     volumes:
       - taskflow-data-prod:/app/data
       - taskflow-logs-prod:/app/logs

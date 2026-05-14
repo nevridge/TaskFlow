@@ -26,7 +26,7 @@ export function Layout() {
     try {
       const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
       localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, dark: isDark }))
-    } catch {}
+    } catch { /* localStorage unavailable */ }
   }, [isDark])
 
   return (

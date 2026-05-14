@@ -30,9 +30,9 @@ export function TaskDetailPage() {
   const task = taskData?.data as TaskItemResponseDto | undefined
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
 
-  if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--danger-ink)', paddingTop: 40 }}>Task not found.</div></div>
-  if (taskLoading) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--muted)', paddingTop: 40 }}>Loading…</div></div>
-  if (taskError || !task) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--danger-ink)', paddingTop: 40 }}>Task not found.</div></div>
+  if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
+  if (taskLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading…</p></div></div>
+  if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
   function handleUpdateTask(data: CreateTaskItemDto) {
     updateTask.mutate({ id: taskId, data }, { onSuccess: () => setEditingTask(false) })
@@ -55,7 +55,7 @@ export function TaskDetailPage() {
 
   return (
     <div className="tasks-page">
-      <div className="t-shell" style={{ maxWidth: 800 }}>
+      <div className="t-shell t-shell--narrow">
         <Link to="/tasks" className="t-back-link">← Back to Tasks</Link>
 
         <div className="t-panel">
@@ -79,7 +79,7 @@ export function TaskDetailPage() {
                 <span>Priority: <strong>{task.priority}</strong></span>
                 {task.dueDate && <span>Due: <strong>{formatDate(task.dueDate)}</strong></span>}
               </div>
-              <div className="t-badges" style={{ marginTop: 14 }}>
+              <div className="t-detail-badges">
                 <span className={`t-badge t-badge-${status}`}>{status}</span>
                 <span className={`t-badge t-badge-${priority}`}>{priority}</span>
               </div>
@@ -96,7 +96,7 @@ export function TaskDetailPage() {
           </div>
 
           {showNoteForm && (
-            <div className="t-panel" style={{ marginBottom: 12 }}>
+            <div className="t-panel">
               <NoteForm
                 onSubmit={data => createNote.mutate(data, { onSuccess: () => setShowNoteForm(false) })}
                 onCancel={() => setShowNoteForm(false)}
@@ -109,10 +109,10 @@ export function TaskDetailPage() {
           ) : notes.length === 0 ? (
             <p className="t-empty">No notes yet.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="t-note-list">
               {notes.map(note =>
                 editingNote?.id === note.id ? (
-                  <div key={String(note.id)} className="t-panel" style={{ marginBottom: 0 }}>
+                  <div key={String(note.id)} className="t-panel t-panel--flush">
                     <NoteForm
                       note={note}
                       onSubmit={data => updateNote.mutate(

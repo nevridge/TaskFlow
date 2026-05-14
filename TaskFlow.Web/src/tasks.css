@@ -372,3 +372,38 @@ html.is-dark .t-input option { background: var(--paper); }
   font-style: italic;
   padding: 8px 0;
 }
+
+.t-loading {
+  font-size: 14px;
+  color: var(--muted);
+  padding: 40px 0;
+}
+
+.t-error {
+  font-size: 14px;
+  color: var(--danger-ink);
+  padding: 40px 0;
+}
+
+/* ─── Detail page ─────────────────────────────────────────────────────────── */
+
+.t-shell--narrow {
+  max-width: 800px;
+}
+
+.t-detail-badges {
+  margin-top: 14px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.t-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.t-panel--flush {
+  margin-bottom: 0;
+}

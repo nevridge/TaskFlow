@@ -27,22 +27,22 @@ describe('Nav', () => {
     renderNav('/journal/05-14-2026')
     const journalLink = screen.getByRole('link', { name: /journal/i })
     const tasksLink = screen.getByRole('link', { name: /tasks/i })
-    expect(journalLink.className).toContain('bg-blue-600')
-    expect(tasksLink.className).not.toContain('bg-blue-600')
+    expect(journalLink.className).toContain('is-active')
+    expect(tasksLink.className).not.toContain('is-active')
   })
 
   it('marks Tasks link as active on the tasks route', () => {
     renderNav('/tasks')
     const journalLink = screen.getByRole('link', { name: /journal/i })
     const tasksLink = screen.getByRole('link', { name: /tasks/i })
-    expect(tasksLink.className).toContain('bg-blue-600')
-    expect(journalLink.className).not.toContain('bg-blue-600')
+    expect(tasksLink.className).toContain('is-active')
+    expect(journalLink.className).not.toContain('is-active')
   })
 
   it('marks Tasks link as active on a task detail route', () => {
     renderNav('/tasks/42')
     const tasksLink = screen.getByRole('link', { name: /tasks/i })
-    expect(tasksLink.className).toContain('bg-blue-600')
+    expect(tasksLink.className).toContain('is-active')
   })
 
   it('Journal link points to today\'s journal date', () => {

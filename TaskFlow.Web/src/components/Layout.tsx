@@ -1,21 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Nav } from '@/components/Nav'
+import { loadPrefs, savePrefs } from '@/lib/prefs'
 
 export interface AppContext {
   isDark: boolean
   setIsDark: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
-const PREFS_KEY = 'taskflow_journal_prefs_v1'
-
 function loadDark(): boolean {
-  try {
-    const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}').dark
-    return saved != null ? saved : true
-  } catch {
-    return true
-  }
+  const saved = loadPrefs().dark
+  return typeof saved === 'boolean' ? saved : true
 }
 
 export function Layout() {
@@ -23,10 +18,7 @@ export function Layout() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('is-dark', isDark)
-    try {
-      const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, dark: isDark }))
-    } catch { /* localStorage unavailable */ }
+    savePrefs({ dark: isDark })
   }, [isDark])
 
   return (

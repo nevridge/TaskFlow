@@ -57,8 +57,8 @@ export function TasksPage() {
     }
   }
 
-  if (isLoading) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--muted)', paddingTop: 40 }}>Loading tasks…</div></div>
-  if (error) return <div className="tasks-page"><div className="t-shell" style={{ color: 'var(--danger-ink)', paddingTop: 40 }}>Failed to load tasks.</div></div>
+  if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks…</p></div></div>
+  if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Failed to load tasks.</p></div></div>
 
   return (
     <div className="tasks-page">
@@ -80,8 +80,9 @@ export function TasksPage() {
         )}
 
         <div className="t-filter-row">
-          <span className="t-filter-label">Status</span>
+          <label htmlFor="status-filter" className="t-filter-label">Status</label>
           <select
+            id="status-filter"
             className="t-select"
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value as StatusFilter)}
@@ -92,8 +93,9 @@ export function TasksPage() {
             <option value="completed">Completed</option>
           </select>
 
-          <span className="t-filter-label">Priority</span>
+          <label htmlFor="priority-filter" className="t-filter-label">Priority</label>
           <select
+            id="priority-filter"
             className="t-select"
             value={priorityFilter}
             onChange={e => setPriorityFilter(e.target.value as PriorityFilter)}
@@ -104,8 +106,9 @@ export function TasksPage() {
             <option value="high">High</option>
           </select>
 
-          <span className="t-filter-label">Sort</span>
+          <label htmlFor="sort-key" className="t-filter-label">Sort</label>
           <select
+            id="sort-key"
             className="t-select"
             value={sortKey}
             onChange={e => setSortKey(e.target.value as SortKey)}

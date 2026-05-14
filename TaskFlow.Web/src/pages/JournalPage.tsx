@@ -9,20 +9,11 @@ import { TodosSection } from '@/components/journal/TodosSection'
 import { DailyLogSection } from '@/components/journal/DailyLogSection'
 import { NotesSection } from '@/components/journal/NotesSection'
 import type { AppContext } from '@/components/Layout'
+import { loadPrefs, savePrefs } from '@/lib/prefs'
 import '@/journal.css'
 
 type SortMode = 'manual' | 'open first' | 'done last'
 type HeaderStyle = 'stat' | 'minimal'
-
-const PREFS_KEY = 'taskflow_journal_prefs_v1'
-
-function loadPrefs() {
-  try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
-}
 
 export function JournalPage() {
   const { date: urlDate } = useParams<{ date: string }>()
@@ -52,8 +43,7 @@ export function JournalPage() {
   const [projectStart, setProjectStart] = useState<string>(() => loadPrefs().projectStart ?? '2026-05-09')
 
   useEffect(() => {
-    const prefs = loadPrefs()
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, headerStyle, todoSort, projectStart }))
+    savePrefs({ headerStyle, todoSort, projectStart })
   }, [headerStyle, todoSort, projectStart])
 
   return (

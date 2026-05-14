@@ -17,23 +17,6 @@
 }
 
 .journal-page.is-dark {
-  --bg: #0b1220;
-  --paper: #131b2c;
-  --paper-2: #161f33;
-  --ink: #e8edf6;
-  --ink-2: #c2cbdc;
-  --muted: #8b97ad;
-  --muted-2: #5b6781;
-  --line: #1f2a40;
-  --line-2: #2b3853;
-  --line-soft: #19233a;
-  --accent-soft: color-mix(in oklab, var(--accent) 22%, #131b2c);
-  --accent-ink: color-mix(in oklab, var(--accent) 35%, #e8edf6);
-  --hover-soft: #1a2438;
-  --danger-bg: #3a1316;
-  --danger-ink: #fca5a5;
-  --shadow-sm: 0 1px 2px rgba(0,0,0,.4), 0 1px 1px rgba(0,0,0,.3);
-  --shadow-md: 0 1px 2px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.45);
   color-scheme: dark;
 }
 

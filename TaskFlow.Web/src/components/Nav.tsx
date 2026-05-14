@@ -7,7 +7,7 @@ export function Nav() {
   const isTasks = pathname.startsWith('/tasks')
 
   return (
-    <nav className="app-nav">
+    <nav aria-label="Primary navigation" className="app-nav">
       <Link
         to={`/journal/${todayUrlDate()}`}
         className={`app-nav-link${isJournal ? ' is-active' : ''}`}

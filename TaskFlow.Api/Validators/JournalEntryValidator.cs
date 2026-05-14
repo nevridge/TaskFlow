@@ -1,0 +1,21 @@
+using FluentValidation;
+using TaskFlow.Api.Models;
+
+namespace TaskFlow.Api.Validators;
+
+public class JournalEntryValidator : AbstractValidator<JournalEntry>
+{
+    public JournalEntryValidator()
+    {
+        RuleFor(e => e.Title)
+            .NotEmpty().WithMessage("Title is required.")
+            .MaximumLength(200).WithMessage("Title must not exceed 200 characters.");
+
+        RuleFor(e => e.Date)
+            .NotEqual(default(DateOnly)).WithMessage("Date is required.");
+
+        RuleFor(e => e.Summary)
+            .MaximumLength(10000).WithMessage("Summary must not exceed 10000 characters.")
+            .When(e => e.Summary is not null);
+    }
+}

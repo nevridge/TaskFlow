@@ -4,7 +4,7 @@ The React TypeScript frontend for TaskFlow — a full-stack task management appl
 
 ## Overview
 
-TaskFlow.Web is a single-page application (SPA) that provides a UI for managing tasks and per-task notes. It communicates with the [TaskFlow.Api](../TaskFlow.Api) backend via a fully typed API client that is auto-generated from the OpenAPI specification.
+TaskFlow.Web is a single-page application (SPA) that provides a UI for managing tasks, per-task notes, and a daily journal. It communicates with the [TaskFlow.Api](../TaskFlow.Api) backend via a fully typed API client that is auto-generated from the OpenAPI specification.
 
 ## Tech Stack
 
@@ -74,24 +74,35 @@ docker compose up
 TaskFlow.Web/
 ├── src/
 │   ├── api/
-│   │   └── client/             # Auto-generated typed API client (do not edit manually)
-│   │       ├── client.gen.ts   # Client instance (baseUrl from VITE_API_BASE_URL)
-│   │       ├── sdk.gen.ts      # All generated API functions
-│   │       └── types.gen.ts    # All generated TypeScript types
+│   │   ├── client/             # Auto-generated typed API client (do not edit manually)
+│   │   │   ├── client.gen.ts   # Client instance (baseUrl from VITE_API_BASE_URL)
+│   │   │   ├── sdk.gen.ts      # All generated API functions
+│   │   │   └── types.gen.ts    # All generated TypeScript types
+│   │   └── journal.ts          # Hand-written journal API functions + DTO types
 │   ├── hooks/
 │   │   ├── useTasks.ts         # TanStack Query hooks for task CRUD
-│   │   └── useNotes.ts         # TanStack Query hooks for note CRUD
+│   │   ├── useNotes.ts         # TanStack Query hooks for note CRUD
+│   │   └── useJournal.ts       # TanStack Query hooks for journal (entries, todos, logs)
 │   ├── pages/
 │   │   ├── TasksPage.tsx       # Task list — filter, sort, create, edit, delete
-│   │   └── TaskDetailPage.tsx  # Task detail + inline note management
+│   │   ├── TaskDetailPage.tsx  # Task detail + inline note management
+│   │   └── JournalPage.tsx     # Daily journal page + PrefsBar settings panel
 │   ├── components/
 │   │   ├── TaskCard.tsx        # Task summary card (used in list)
 │   │   ├── TaskForm.tsx        # Create/edit task form (shared)
 │   │   ├── NoteCard.tsx        # Note display with edit/delete actions
-│   │   └── NoteForm.tsx        # Create/edit note form
+│   │   ├── NoteForm.tsx        # Create/edit note form
+│   │   └── journal/
+│   │       ├── DateNav.tsx         # Prev/next date navigation bar
+│   │       ├── JournalHeader.tsx   # Day/week stat header (stat or minimal style)
+│   │       ├── TodosSection.tsx    # Linked tasks with toggle, edit, carry-over
+│   │       ├── DailyLogSection.tsx # Timestamped activity log
+│   │       └── NotesSection.tsx    # Freeform notes (debounced auto-save)
 │   ├── lib/
-│   │   └── utils.ts            # cn() class helper, formatDate()
-│   ├── App.tsx                 # Router setup
+│   │   ├── utils.ts            # cn() class helper, formatDate()
+│   │   └── journal-utils.ts    # Date helpers (ISO↔URL, day/week counters, formatting)
+│   ├── journal.css             # Journal page styles (scoped under .journal-page)
+│   ├── App.tsx                 # Router setup (/ → today's journal, /journal/:date, /tasks)
 │   └── main.tsx                # React root, QueryClient provider
 ├── .env.development            # VITE_API_BASE_URL=http://localhost:8080
 ├── .env.production             # VITE_API_BASE_URL= (empty — same-origin via vite preview proxy)
@@ -137,6 +148,19 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 - `useCreateNoteMutation(taskId)` — add note, invalidates note list
 - `useUpdateNoteMutation(taskId)` — update note, invalidates note list
 - `useDeleteNoteMutation(taskId)` — delete note, invalidates note list
+
+**`useJournal.ts`** exports:
+- `useJournalEntries()` — fetch all journal entries (includes embedded log entries)
+- `useJournalTodos(entryId)` — fetch tasks linked to an entry
+- `useEnsureJournalEntry(isoDate)` — finds or auto-creates the entry for a given date
+- `useUpdateNotesMutation(entryId, entryTitle)` — debounced summary save
+- `useCreateTodoMutation(entryId)` — creates a TaskItem then links it to the entry
+- `useToggleTodoMutation(entryId)` — toggles task status (`todo` ↔ `completed`)
+- `useEditTodoMutation(entryId)` — renames a linked task
+- `useRemoveTodoMutation(entryId)` — unlinks a task from the entry
+- `useCarryOverMutation()` — copies uncompleted todos from one entry into another
+- `useAddLogEntryMutation(entryId)` — adds a log entry, invalidates journal cache
+- `useDeleteLogEntryMutation(entryId)` — removes a log entry
 
 ## Configuration
 

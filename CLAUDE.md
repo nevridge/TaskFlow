@@ -40,11 +40,46 @@ docker compose -f docker-compose.prod.yml up
 
 **API versioning** uses both URL path (`/api/v1/TaskItems`) and request header (`x-api-version`). Controllers live in `Controllers/V1/` and are decorated with `[ApiVersion("1.0")]`.
 
-**Validation** is handled by FluentValidation validators in `Validators/` and applied globally via middleware registered in `ValidationServiceExtensions`. Controllers don't manually invoke validators.
+**Validation** is handled by FluentValidation validators in `Validators/`. Controllers currently invoke validators manually (`ValidateAsync`) before writes. New validators are auto-discovered via `AddValidatorsFromAssemblyContaining` — no registration needed when adding a new validator class.
 
 **Health checks:** Three endpoints — `/health` (combined), `/health/ready` (DB connectivity, used as K8s readiness probe), `/health/live` (always up, liveness probe). Custom JSON writer in `HealthChecks/`.
 
 **Migrations run on startup** when `Database:MigrateOnStartup` is `true` (default in Docker; disabled in production deploy if needed).
+
+## Frontend
+
+```bash
+# Install deps (first time or after pulling)
+cd TaskFlow.Web && npm install
+
+# Dev server (proxies /api → http://localhost:8080)
+cd TaskFlow.Web && npm run dev
+
+# Type-check
+cd TaskFlow.Web && npx tsc --noEmit
+
+# Regenerate typed API client from live OpenAPI spec (API must be running)
+cd TaskFlow.Web && npm run gen:api
+```
+
+**Frontend stack:** React 19, React Router v7, TanStack Query v5, Tailwind CSS v4, hey-api/client-fetch.
+
+**API client:** `src/api/client/sdk.gen.ts` is auto-generated — do not edit. Hand-written API modules (e.g. `src/api/journal.ts`) use the same `client` singleton from `client.gen.ts` with the pattern `client.get<{ 200: T }, unknown, true>({ url, path?, body?, headers? })`.
+
+**Journal feature** (`/journal/:date`, URL format MM-DD-YYYY):
+- Route auto-redirects `/` to today's journal date
+- Entry is auto-created on first visit to any date via `useEnsureJournalEntry` in `src/hooks/useJournal.ts`
+- Todos are existing `TaskItem` records linked to the entry via a many-to-many join (`JournalEntryTaskItem`)
+- Log entries are separate `JournalLogEntry` records embedded in the entry response
+- Notes are stored in `JournalEntry.Summary` (debounced PUT on textarea change)
+- Date utilities (ISO ↔ URL format, day/week counters) are in `src/lib/journal-utils.ts`
+- Journal-specific styles are in `src/journal.css`, scoped under `.journal-page` to avoid conflicts with Tailwind
+- User preferences (header style, sort, dark mode, project start date) are persisted to `localStorage` under key `taskflow_journal_prefs_v1`
+
+**Known gotchas:**
+- C# enum `.ToString()` produces PascalCase (`"Todo"`, `"Completed"`, `"Draft"`). Always compare `status === 'Completed'` not `'completed'` in the frontend.
+- The `.journal-page button` reset rule has specificity `0-1-1`. Any button class that needs its own `border` or `background` must be scoped as `.journal-page .classname` (`0-2-0`) to win the cascade.
+- The journal API functions in `src/api/journal.ts` are hand-written and must be kept in sync manually — running `gen:api` will NOT update them (it only writes to `src/api/client/`).
 
 ## Testing
 

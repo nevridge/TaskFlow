@@ -30,6 +30,7 @@ While functional as a task management system, this project serves as a portfolio
 - 🧭 Client-side routing with React Router v7
 - 🎛️ Task list with status/priority filtering and multi-key sort
 - 📝 Task detail page with inline note management (create, edit, delete)
+- 📓 Daily journal — per-day entry with todos (linked tasks), a timestamped activity log, and freeform notes; navigable by date with carry-over of incomplete tasks
 - 🧪 Component and hook tests with Vitest + React Testing Library
 
 **DevOps**
@@ -124,11 +125,14 @@ TaskFlow/
 │
 ├── TaskFlow.Web/               # React TypeScript frontend
 │   ├── src/
-│   │   ├── api/client/         # Auto-generated typed API client
-│   │   ├── hooks/              # TanStack Query hooks (useTasks, useNotes)
-│   │   ├── pages/              # Route-level components (TasksPage, TaskDetailPage)
-│   │   ├── components/         # Shared UI components (TaskCard, TaskForm, etc.)
-│   │   └── lib/                # Utilities (cn, formatDate)
+│   │   ├── api/
+│   │   │   ├── client/         # Auto-generated typed API client (do not edit)
+│   │   │   └── journal.ts      # Hand-written journal API functions + types
+│   │   ├── hooks/              # TanStack Query hooks (useTasks, useNotes, useJournal)
+│   │   ├── pages/              # Route-level components (TasksPage, TaskDetailPage, JournalPage)
+│   │   ├── components/
+│   │   │   └── journal/        # Journal sub-components (DateNav, TodosSection, DailyLogSection, etc.)
+│   │   └── lib/                # Utilities (cn, formatDate, journal-utils)
 │   ├── .env.development        # Dev base URL (http://localhost:8080)
 │   ├── .env.production         # Prod base URL (empty — same-origin via vite preview proxy)
 │   └── Dockerfile              # Multi-stage build → vite preview
@@ -215,6 +219,34 @@ If you're evaluating this project for hiring or collaboration, here's what to lo
 | PUT | `/api/v1/TaskItems/{taskId}/Notes/{id}` | Update note |
 | DELETE | `/api/v1/TaskItems/{taskId}/Notes/{id}` | Delete note |
 
+### Journal Entries
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/JournalEntries` | List all journal entries (includes embedded log entries) |
+| GET | `/api/v1/JournalEntries/{id}` | Get entry by ID |
+| POST | `/api/v1/JournalEntries` | Create entry (`title`, `date` required) |
+| PUT | `/api/v1/JournalEntries/{id}` | Update entry title/summary |
+| DELETE | `/api/v1/JournalEntries/{id}` | Delete entry |
+
+### Journal Todos (linked tasks)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/JournalEntries/{entryId}/todos` | List tasks linked to an entry |
+| POST | `/api/v1/JournalEntries/{entryId}/todos` | Link an existing task (`{ taskItemId }`) |
+| DELETE | `/api/v1/JournalEntries/{entryId}/todos/{taskItemId}` | Unlink a task |
+
+### Journal Log Entries
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/JournalEntries/{entryId}/logs` | List log entries |
+| GET | `/api/v1/JournalEntries/{entryId}/logs/{id}` | Get log entry by ID |
+| POST | `/api/v1/JournalEntries/{entryId}/logs` | Add log entry (`{ content }`) |
+| PUT | `/api/v1/JournalEntries/{entryId}/logs/{id}` | Update log entry content |
+| DELETE | `/api/v1/JournalEntries/{entryId}/logs/{id}` | Delete log entry |
+
 ### Health Checks
 
 | Method | Endpoint | Description |
@@ -278,4 +310,4 @@ No license specified. This project is primarily for portfolio and learning purpo
 
 ---
 
-*Last updated: 2026-04-18*
+*Last updated: 2026-05-09*

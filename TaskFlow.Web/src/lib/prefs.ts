@@ -1,6 +1,7 @@
 export const PREFS_KEY = 'taskflow_journal_prefs_v1'
 
-export function loadPrefs(): Record<string, unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function loadPrefs(): Record<string, any> {
   try {
     return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
   } catch {

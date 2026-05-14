@@ -9,7 +9,7 @@ This document covers Docker configurations for all three TaskFlow services: the 
 The `docker-compose.yml` (development) file runs all three services together. A separate `docker-compose.prod.yml` runs a production-like API configuration (the web service is not yet wired into the production compose).
 
 - **Development**: Fast iteration with automatic migrations, Seq log viewer, React frontend
-- **Production**: Optimised build with manual migration control, no Seq, no frontend
+- **Production**: Optimised build with automatic migrations, no Seq, no frontend
 
 **When to use this guide:**
 - Understanding intentional configuration differences between services and environments
@@ -65,7 +65,7 @@ A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_B
 | **Container Name** | `taskflow-api` | `taskflow-api-prod` |
 | **Image Tag** | `taskflow-api:dev` | `taskflow-api:prod` |
 | **Environment** | `Development` | `Production` |
-| **Auto Migrations** | `Database__MigrateOnStartup=true` | `Database__MigrateOnStartup=false` |
+| **Auto Migrations** | `Database__MigrateOnStartup=true` | `Database__MigrateOnStartup=true` |
 | **Volumes** | Named Docker volumes | Named Docker volumes |
 | **Health Check** | Enabled (40s start period) | Enabled (40s start period) |
 | **Port Mapping** | `8080:8080` | `8080:8080` |
@@ -109,7 +109,16 @@ The frontend container waits for `taskflow-api` to pass its health check before 
 | Variable | Value | Purpose |
 |----------|-------|---------|
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Enable production optimizations |
-| `Database__MigrateOnStartup` | `false` | Prevent automatic migrations (manual control) |
+| `Database__MigrateOnStartup` | `true` | Apply migrations automatically on startup |
+
+#### Frontend Runtime Variables
+
+These variables are read by `vite.preview.config.js` at container startup and are not baked into the image.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `API_TARGET` | `http://localhost:8080` | Backend API URL the preview server proxies `/api` and `/openapi` to |
+| `ALLOWED_HOSTS` | *(unset — allows all hosts)* | Comma-separated list of hostnames the preview server accepts requests from (e.g. `taskflow.skalaforge.com`). When unset, all hostnames are accepted. |
 
 ### Volume Mounts
 
@@ -166,14 +175,11 @@ Some differences between environments are intentional and necessary:
 
 **Impact**: Production-like testing requires explicitly setting `ASPNETCORE_ENVIRONMENT=Production`.
 
-### 3. Migration Strategy Difference
+### 3. Migration Strategy
 
-**Reason**: Production deployments require controlled migration execution.
+Both environments apply database migrations automatically on startup via `Database__MigrateOnStartup=true`. The 40-second health check start period provides a sufficient grace window for migrations to complete before the container is considered healthy.
 
-- **Development**: Automatic migrations (`Database__MigrateOnStartup=true`) for convenience
-- **Production**: Manual migrations (`Database__MigrateOnStartup=false`) to prevent concurrent migration issues in scaled deployments
-
-**Impact**: Production deployments must explicitly run migrations or set the flag.
+**Impact**: No manual migration step is required when starting either environment.
 
 ## Usage Scenarios
 
@@ -206,23 +212,11 @@ docker-compose up
 docker-compose -f docker-compose.prod.yml up
 ```
 
-**Before first run, apply migrations manually:**
-```bash
-# Option 1: Use dotnet CLI (if .NET 9 SDK installed locally)
-# From repository root
-dotnet ef database update --project TaskFlow.Api
-
-# Option 2: Run container with migrations enabled for first run
-# Note: 'taskflow-api' is the service name (not the container name 'taskflow-api-prod')
-docker-compose -f docker-compose.prod.yml run --rm -e Database__MigrateOnStartup=true taskflow-api
-```
-
 **Characteristics:**
 - ✅ Production environment
-- ✅ Manual migration control
+- ✅ Automatic migrations on startup
 - ✅ Scalar UI disabled
 - ✅ Production logging
-- ⚠️ Requires explicit migration
 
 ### CI/CD Production Build
 
@@ -239,7 +233,7 @@ docker run -d -p 8080:8080 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   -e ASPNETCORE_ENVIRONMENT=Production \
-  -e Database__MigrateOnStartup=false \
+  -e Database__MigrateOnStartup=true \
   --name taskflow-api taskflow-api:latest
 ```
 
@@ -359,14 +353,12 @@ docker-compose -f docker-compose.prod.yml down
 
 ### Issue: "Database migrations not applied in production"
 
-**Cause**: `Database__MigrateOnStartup=false` in production.
+**Cause**: `Database__MigrateOnStartup` is not set or set to `false` when running a container directly (outside of compose).
 
 **Solution**:
 ```bash
-# Option 1: Run container with migrations enabled
-# Note: 'taskflow-api' is the service name from docker-compose.prod.yml
-docker-compose -f docker-compose.prod.yml run --rm \
-  -e Database__MigrateOnStartup=true taskflow-api
+# Option 1: Pass the flag explicitly when running the container
+docker run -e Database__MigrateOnStartup=true taskflow-api:latest
 
 # Option 2: Run migrations via dotnet CLI
 # From repository root
@@ -467,7 +459,6 @@ docker run ...
 |--------|--------|
 | Build context (local dir vs repo root) | Optimizes for different workflows |
 | `ASPNETCORE_ENVIRONMENT` setting | Enables appropriate features per environment |
-| `Database__MigrateOnStartup` flag | Production requires migration control |
 | Database filename | Separates dev and prod data |
 
 ### Aligned Settings (Already Consistent)
@@ -492,7 +483,6 @@ docker run ...
 - [Main README](../README.md) - Getting started and deployment
 - [Deployment Guide](DEPLOYMENT.md) - Quick start deployment instructions
 - [Volume Configuration](VOLUMES.md) - Detailed volume setup
-- [Kubernetes Deployment](../k8s/README.md) - K8s-specific configuration
 - [Security Scanning](SECURITY_SCANNING.md) - Docker image security
 
 ## Feedback and Improvements

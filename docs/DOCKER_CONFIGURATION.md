@@ -111,6 +111,15 @@ The frontend container waits for `taskflow-api` to pass its health check before 
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Enable production optimizations |
 | `Database__MigrateOnStartup` | `true` | Apply migrations automatically on startup |
 
+#### Frontend Runtime Variables
+
+These variables are read by `vite.preview.config.js` at container startup and are not baked into the image.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `API_TARGET` | `http://localhost:8080` | Backend API URL the preview server proxies `/api` and `/openapi` to |
+| `ALLOWED_HOSTS` | *(unset — allows all hosts)* | Comma-separated list of hostnames the preview server accepts requests from (e.g. `taskflow.skalaforge.com`). When unset, all hostnames are accepted. |
+
 ### Volume Mounts
 
 **Both environments use named Docker volumes:**

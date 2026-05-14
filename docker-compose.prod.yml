@@ -11,6 +11,9 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_HTTP_PORTS=8080
       - DOTNET_RUNNING_IN_CONTAINER=true
+      # Production now applies database migrations automatically on startup.
+      # Do not follow older manual-migration guidance that used
+      # Database__MigrateOnStartup=false for this compose deployment.
       - Database__MigrateOnStartup=true
     volumes:
       - taskflow-data-prod:/app/data

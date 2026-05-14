@@ -6,16 +6,18 @@ export function Nav() {
   const isJournal = pathname.startsWith('/journal')
   const isTasks = pathname.startsWith('/tasks')
 
-  const base = 'px-3 py-1.5 rounded text-sm font-medium transition-colors'
-  const active = 'bg-blue-600 text-white'
-  const inactive = 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-
   return (
-    <nav aria-label="Primary navigation" className="flex gap-1 px-4 py-2 border-b border-slate-200 bg-white">
-      <Link to={`/journal/${todayUrlDate()}`} className={`${base} ${isJournal ? active : inactive}`}>
+    <nav aria-label="Primary navigation" className="app-nav">
+      <Link
+        to={`/journal/${todayUrlDate()}`}
+        className={`app-nav-link${isJournal ? ' is-active' : ''}`}
+      >
         Journal
       </Link>
-      <Link to="/tasks" className={`${base} ${isTasks ? active : inactive}`}>
+      <Link
+        to="/tasks"
+        className={`app-nav-link${isTasks ? ' is-active' : ''}`}
+      >
         Tasks
       </Link>
     </nav>

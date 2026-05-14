@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useOutletContext } from 'react-router-dom'
 import { useEnsureJournalEntry, useJournalEntries, useJournalTodos } from '@/hooks/useJournal'
 import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
 import { urlDateToISO, todayISO, isValidISODate } from '@/lib/journal-utils'
@@ -8,20 +8,12 @@ import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
 import { DailyLogSection } from '@/components/journal/DailyLogSection'
 import { NotesSection } from '@/components/journal/NotesSection'
+import type { AppContext } from '@/components/Layout'
+import { loadPrefs, savePrefs } from '@/lib/prefs'
 import '@/journal.css'
 
 type SortMode = 'manual' | 'open first' | 'done last'
 type HeaderStyle = 'stat' | 'minimal'
-
-const PREFS_KEY = 'taskflow_journal_prefs_v1'
-
-function loadPrefs() {
-  try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
-}
 
 export function JournalPage() {
   const { date: urlDate } = useParams<{ date: string }>()
@@ -43,20 +35,16 @@ export function JournalPage() {
   const todayTodosQuery = useJournalTodos(todayEntry?.id)
   const todayTodos = (todayTodosQuery.data?.data as TaskItemResponseDto[] | undefined) ?? []
 
+  const { isDark, setIsDark } = useOutletContext<AppContext>()
+
   // User preferences (persisted to localStorage)
   const [headerStyle, setHeaderStyle] = useState<HeaderStyle>(() => loadPrefs().headerStyle ?? 'stat')
   const [todoSort, setTodoSort] = useState<SortMode>(() => loadPrefs().todoSort ?? 'manual')
-  const [isDark, setIsDark] = useState<boolean>(() => {
-    const saved = loadPrefs().dark
-    if (saved != null) return saved
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
   const [projectStart, setProjectStart] = useState<string>(() => loadPrefs().projectStart ?? '2026-05-09')
 
   useEffect(() => {
-    const prefs = loadPrefs()
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefs, headerStyle, todoSort, dark: isDark, projectStart }))
-  }, [headerStyle, todoSort, isDark, projectStart])
+    savePrefs({ headerStyle, todoSort, projectStart })
+  }, [headerStyle, todoSort, projectStart])
 
   return (
     <div className={'journal-page' + (isDark ? ' is-dark' : '')}>

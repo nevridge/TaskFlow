@@ -179,6 +179,12 @@ The Vite dev server proxy can be redirected via environment variable:
 API_TARGET=http://taskflow-api:8080 npm run dev
 ```
 
+The `vite preview` server also supports an `ALLOWED_HOSTS` environment variable (comma-separated hostnames). When unset, all hostnames are accepted. Set this in your deployment environment to restrict which hostnames the preview server responds to:
+
+```bash
+ALLOWED_HOSTS=taskflow.skalaforge.com API_TARGET=http://taskflow-api:8080 vite preview
+```
+
 ## Testing
 
 ```bash
@@ -220,6 +226,13 @@ CMD ["node_modules/.bin/vite", "preview", "--config", "vite.preview.config.js", 
 ```
 
 The `vite preview` server handles SPA fallback routing and proxies `/api` and `/openapi` requests to `$API_TARGET` (set to `http://taskflow-api:8080` in Docker Compose). This removes the need for CORS since all requests appear same-origin to the browser.
+
+**Runtime environment variables** (read at container startup, not baked into the image):
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `API_TARGET` | `http://localhost:8080` | API URL the preview server proxies to |
+| `ALLOWED_HOSTS` | *(unset — allows all)* | Comma-separated allowed hostnames (e.g. `taskflow.skalaforge.com`) |
 
 ## Related Documentation
 

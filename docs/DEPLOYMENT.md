@@ -1,11 +1,11 @@
 # Deployment Guide
 
-Comprehensive guide for deploying TaskFlow.Api locally with Docker and to Azure cloud environments.
+Comprehensive guide for deploying TaskFlow locally with Docker and to production via Portainer GitOps.
 
 ## Table of Contents
 
 - [Docker Deployment](#docker-deployment)
-- [Azure Deployment](#azure-deployment)
+- [Production Deployment](#production-deployment)
 - [CI/CD Workflows](#cicd-workflows)
 - [Environment Configuration](#environment-configuration)
 - [Troubleshooting](#troubleshooting)
@@ -19,16 +19,16 @@ Comprehensive guide for deploying TaskFlow.Api locally with Docker and to Azure 
 docker compose up
 ```
 
-**Production-like (manual migrations):**
+**Production-like (auto-migrations):**
 ```bash
 docker compose -f docker-compose.prod.yml up
 ```
 
 ### Docker Configuration Overview
 
-TaskFlow.Api provides two Docker configurations for different deployment scenarios.
+TaskFlow provides two Docker configurations for different deployment scenarios.
 
-> **📖 For detailed Docker configuration, see:**
+> **For detailed Docker configuration, see:**
 > - [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md) - Comprehensive dev vs prod comparison
 > - [VOLUMES.md](VOLUMES.md) - Volume configuration and persistence
 > - [HEALTH_CHECK_TESTING.md](HEALTH_CHECK_TESTING.md) - Health check setup and testing
@@ -37,8 +37,8 @@ TaskFlow.Api provides two Docker configurations for different deployment scenari
 
 | Configuration | Use Case | Auto-migrations | Scalar UI |
 |--------------|----------|----------------|-----------|
-| **Development** (`docker-compose.yml`) | Local dev, fast iteration | ✅ Enabled | ✅ Enabled |
-| **Production** (`docker-compose.prod.yml`) | Production builds, Azure | ❌ Manual | ❌ Disabled |
+| **Development** (`docker-compose.yml`) | Local dev, fast iteration | Enabled | Enabled |
+| **Production** (`docker-compose.prod.yml`) | Production builds | Enabled | Disabled |
 
 ### Development Deployment
 
@@ -61,148 +61,103 @@ docker compose down
 docker compose down -v
 ```
 
-> **📖 For detailed instructions, see [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md)**
+> **For detailed instructions, see [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md)**
 
 ### Production Deployment
 
 **Quick start:**
 ```bash
-# Apply migrations first (one-time)
-dotnet ef database update --project TaskFlow.Api
-
-# Start production containers
+# Start production containers (migrations run automatically on startup)
 docker compose -f docker-compose.prod.yml up -d
 
 # Verify
 curl http://localhost:8080/health
 ```
 
-> **📖 For detailed instructions including Docker CLI usage, see [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md)**
+> **For detailed instructions including Docker CLI usage, see [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md)**
 
-## Azure Deployment
+## Production Deployment
 
-TaskFlow.Api supports automated Azure deployment using GitHub Actions workflows.
+TaskFlow deploys to a Docker Host using Portainer GitOps with images hosted on GitHub Container Registry (GHCR).
 
-### Prerequisites
+### Architecture
 
-1. **Azure subscription** with appropriate permissions
-2. **Service principal** with Contributor access
-3. **GitHub repository secrets** configured for OIDC authentication:
-   - `AZURE_CLIENT_ID` - Application (client) ID
-   - `AZURE_TENANT_ID` - Directory (tenant) ID  
-   - `AZURE_SUBSCRIPTION_ID` - Azure subscription ID
-4. **GitHub environments** configured: `qa` and `production`
+```
+Push to main (TaskFlow repo)
+    │
+    ▼
+GitHub Actions: ghcr-deploy.yml
+    │
+    ▼
+Build Docker images (API + Web)
+    │
+    ▼
+Push to GHCR:
+  - ghcr.io/nevridge/taskflow-api:sha-<commit>
+  - ghcr.io/nevridge/taskflow-web:sha-<commit>
+    │
+    ▼
+Update image tags in nevridge/taskflow-deploy repo
+    │
+    ▼
+Commit & push to taskflow-deploy
+    │
+    ▼
+Portainer GitOps detects change and deploys stack
+```
 
-### Setting Up Azure OIDC Authentication
+### Services
 
-TaskFlow.Api uses OpenID Connect (OIDC) for secure, passwordless authentication to Azure.
+| Service | URL | Description |
+|---------|-----|-------------|
+| Web Frontend | https://taskflow.skalaforge.com | Vite-based React frontend |
+| API | https://taskflow-api.skalaforge.com | .NET API backend |
+| Seq | https://taskflow-seq.skalaforge.com | Structured logging UI |
 
-**Quick setup:**
-1. Create Azure service principal with Contributor role
-2. Configure federated credentials for GitHub Actions
-3. Add secrets to GitHub: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-4. Create GitHub environments: `qa` and `production`
+### How It Works
 
-> **📖 For detailed OIDC setup with complete commands, see [AZURE_OIDC_AUTHENTICATION.md](AZURE_OIDC_AUTHENTICATION.md)**
+1. **Push to main** - Any push to the `main` branch triggers the deployment workflow
+2. **Build images** - GitHub Actions builds both `taskflow-api` and `taskflow-web` Docker images
+3. **Push to GHCR** - Images are pushed to GitHub Container Registry with immutable SHA tags
+4. **Update GitOps repo** - The workflow updates image tags in the `nevridge/taskflow-deploy` repository
+5. **Portainer deploys** - Portainer detects the change and redeploys the stack
 
-### Production Deployment to Azure Container Instances
+### GitOps Repository
 
-The production deployment workflow deploys to Azure Container Instances (ACI), providing a cost-effective solution without App Service Plan quota limitations.
+Production compose configuration lives in a separate repository: [nevridge/taskflow-deploy](https://github.com/nevridge/taskflow-deploy)
 
-**Trigger deployment:**
+This separation allows:
+- Clean audit trail of deployments
+- Easy rollback by reverting commits
+- Portainer GitOps integration
 
-Option 1: Tag-based (recommended)
+### Triggering a Deployment
+
+Simply push to the `main` branch:
 ```bash
-git tag -a v1.0.0 -m "Release version 1.0.0"
-git push origin v1.0.0
+git push origin main
 ```
 
-Option 2: Manual trigger
-1. Go to **Actions** tab in GitHub
-2. Select **Deploy to Azure Production** workflow
-3. Click **Run workflow**
+The workflow automatically:
+1. Builds both images
+2. Tags with `sha-<commit>` and `latest`
+3. Updates the deploy repo
+4. Portainer picks up the change
 
-**What gets deployed:**
-- **Resource Group:** `nevridge-taskflow-prod-rg`
-- **Azure Container Registry:** `nevridgetaskflowprodacr`
-- **ACI Container:** `nevridge-taskflow-prod-aci`
-- **DNS Label:** `taskflow-prod`
-- **Public URL:** `http://taskflow-prod.eastus.azurecontainer.io:8080`
+### Manual Rollback
 
-**Workflow steps:**
-1. Builds Docker image via Azure Container Registry
-2. Creates Azure resources (resource group and ACR if they don't exist)
-3. Deletes existing ACI container (if present)
-4. Creates new ACI container with latest image
-5. Verifies deployment via health check
+To rollback to a previous version:
+1. Go to `nevridge/taskflow-deploy` repository
+2. Find the commit with the desired image tags
+3. Revert the compose file to that commit
+4. Portainer will redeploy the previous version
 
-**Benefits:**
-- **No App Service Plan quota requirements**
-- **Cost-effective for deploy/test/teardown workflows**
-- **Fast deployment and teardown cycles**
-- **Consistent with QA environment approach**
+### Secrets Required
 
-### QA Deployment to Azure Container Instances
-
-The QA workflow creates ephemeral test environments with **fixed, predictable DNS names** for consistent testing.
-
-**Quick start:**
-1. Go to **Actions** → **Ephemeral ACI deploy - create test teardown**
-2. Click **Run workflow** with `action: deploy`
-3. Access QA endpoint: `http://taskflow-qa.{region}.azurecontainer.io:8080`
-
-**Use cases:**
-- Postman collections with static QA URLs
-- Automated test suites with consistent endpoints
-- Demo environments
-
-> **📖 For detailed QA deployment instructions, Postman setup, and troubleshooting, see [QA_DEPLOYMENT.md](QA_DEPLOYMENT.md)**
-
-### Production Teardown
-
-A separate workflow safely tears down production resources.
-
-⚠️ **WARNING:** This permanently deletes all production resources and data.
-
-**To teardown:**
-1. Go to **Actions** tab
-2. Select **Production Teardown** workflow
-3. Click **Run workflow**
-4. Type **"CONFIRM"** exactly in the confirmation field
-5. Click **Run workflow**
-
-**What gets deleted:**
-- Entire production resource group
-- ACI Container
-- Container Registry
-- All data, logs, and configurations
-
-**Safety features:**
-- Manual trigger only
-- Confirmation required
-- Separate workflow file
-- Clear logging of resources to be deleted
-
-### Azure Naming Convention
-
-All Azure resources follow a standardized naming pattern:
-
-```
-{org}-{app}-{env}-{resourceType}
-```
-
-**Example:**
-- Resource Group: `nevridge-taskflow-prod-rg`
-- Web App: `nevridge-taskflow-prod-web`
-- App Service Plan: `nevridge-taskflow-prod-plan`
-- ACR: `nevridgetaskflowprodacr` (no hyphens for ACR)
-
-To customize, edit the workflow files and update these variables:
-- `ORG_NAME` - Organization identifier (e.g., `nevridge`)
-- `APP_NAME` - Application name (e.g., `taskflow`)
-- `ENV` - Environment (e.g., `prod`, `qa`)
-
-For complete naming convention details, see [DEPLOY.md](DEPLOY.md).
+| Secret | Location | Purpose |
+|--------|----------|---------|
+| `DEPLOY_REPO_TOKEN` | TaskFlow repo | PAT to push to taskflow-deploy |
+| Portainer registry credential | Portainer | PAT with `read:packages` to pull from GHCR |
 
 ## CI/CD Workflows
 
@@ -240,25 +195,15 @@ For complete naming convention details, see [DEPLOY.md](DEPLOY.md).
 
 For detailed security scanning documentation, see [SECURITY_SCANNING.md](SECURITY_SCANNING.md).
 
-### Deployment Workflows
+### Deployment Workflow
 
-**Production Deploy:**
-- File: `.github/workflows/prod-deploy.yaml`
-- Triggers: Tags matching `v*`, manual
-- Environment: `production`
-- Deploys to Azure Container Instances (ACI)
+**File:** `.github/workflows/ghcr-deploy.yml`
 
-**QA Deploy:**
-- File: `.github/workflows/qa-deploy.yaml`
-- Triggers: Manual only
-- Environment: `qa`
-- Deploys to Azure Container Instances (ACI)
+**Triggers:** Push to `main` branch
 
-**Production Teardown:**
-- File: `.github/workflows/prod-teardown.yaml`
-- Triggers: Manual only with confirmation
-- Environment: `production`
-- Deletes all production resources
+**Jobs:**
+1. **build-and-push** - Builds API and Web images, pushes to GHCR
+2. **update-gitops** - Updates image tags in taskflow-deploy repo
 
 ## Environment Configuration
 
@@ -270,7 +215,7 @@ For detailed security scanning documentation, see [SECURITY_SCANNING.md](SECURIT
 |----------|---------|--------|
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Controls environment-specific behavior |
 | `ConnectionStrings__DefaultConnection` | `Data Source=/app/data/tasks.db` | SQLite database path |
-| `Database__MigrateOnStartup` | `false` (true in Development) | Enable automatic migrations |
+| `Database__MigrateOnStartup` | `true` | Enable automatic migrations |
 
 **OpenTelemetry Settings:**
 
@@ -280,12 +225,6 @@ For detailed security scanning documentation, see [SECURITY_SCANNING.md](SECURIT
 | `OpenTelemetry__Endpoint` | `http://localhost:5341/ingest/otlp` | OTLP collector endpoint |
 | `OpenTelemetry__Header` | *(none)* | Optional auth header for OTLP exporter |
 | `OpenTelemetry__Protocol` | `http/protobuf` | Export protocol |
-
-**Azure Settings:**
-
-| Variable | Purpose |
-|----------|---------|
-| `ASPNETCORE_URLS` | Configure Kestrel listen URLs |
 
 ### Configuration Files
 
@@ -308,12 +247,21 @@ environment:
   - Database__MigrateOnStartup=true
 ```
 
-**docker-compose.prod.yml (Production):**
+**docker-compose.prod.yml (Production compose):**
 ```yaml
 environment:
   - ASPNETCORE_ENVIRONMENT=Production
-  - ASPNETCORE_URLS=http://+:8080
-  - Database__MigrateOnStartup=false
+  - ASPNETCORE_HTTP_PORTS=8080
+  - Database__MigrateOnStartup=true
+```
+
+**Production (taskflow-deploy):**
+```yaml
+environment:
+  - ASPNETCORE_ENVIRONMENT=Production
+  - ASPNETCORE_HTTP_PORTS=8080
+  - Database__MigrateOnStartup=true
+  - OpenTelemetry__Endpoint=http://seq:5341/ingest/otlp/v1/logs
 ```
 
 ## Troubleshooting
@@ -360,27 +308,29 @@ curl http://localhost:8080/health
 docker logs taskflow-api --tail 100
 ```
 
-### Azure Deployment Issues
+### Production Deployment Issues
 
-**Authentication failures:**
-- Verify OIDC secrets are correct: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
-- Ensure service principal has Contributor role
-- Check federated credentials match GitHub environment names
+**Images not appearing in GHCR:**
+- Check GitHub Actions workflow completed successfully
+- Verify `GITHUB_TOKEN` has `packages: write` permission
+- Check workflow logs for push errors
 
-**Health check failures post-deployment:**
-```bash
-# View ACI logs
-az container logs --name {ACI_NAME} --resource-group {RESOURCE_GROUP}
+**GitOps repo not updated:**
+- Verify `DEPLOY_REPO_TOKEN` secret is set correctly
+- Ensure PAT has `repo` scope or Contents read/write permission
+- Check workflow logs for commit/push errors
 
-# Get detailed container info
-az container show --name {ACI_NAME} --resource-group {RESOURCE_GROUP}
-```
+**Portainer not deploying:**
+- Verify GitOps is enabled on the stack
+- Check Portainer has registry credentials for GHCR
+- Verify polling interval or trigger webhook manually
+- Check Portainer logs for pull errors
 
-**Container deployment issues:**
-- Verify ACR credentials are accessible
-- Confirm image exists: `az acr repository show -n {ACR_NAME} --image taskflowapi:latest`
-- Check ACI container state: `az container show --name {ACI_NAME} --query instanceView.state`
-- View container events: `az container show --name {ACI_NAME} --query instanceView.events`
+**Service not accessible:**
+- Verify Traefik labels are correct
+- Check DNS records point to Docker host
+- Verify `traefik-public` network exists
+- Check Traefik dashboard for router status
 
 ### Migration Issues
 
@@ -428,8 +378,8 @@ docker logs taskflow-api --follow
 # Docker Compose
 docker compose logs -f taskflow-api
 
-# Azure Container Instances
-az container logs --name {ACI_NAME} --resource-group {RESOURCE_GROUP} --follow
+# Production (via Seq)
+# Visit https://taskflow-seq.skalaforge.com
 ```
 
 **Check health check logs:**
@@ -445,10 +395,8 @@ For comprehensive logging documentation, see [LOGGING.md](LOGGING.md).
 
 - [Docker Configuration Details](DOCKER_CONFIGURATION.md) - Detailed Docker configuration comparison
 - [Volume Configuration](VOLUMES.md) - Docker volume management
-- [Azure OIDC Authentication](AZURE_OIDC_AUTHENTICATION.md) - Detailed OIDC setup
-- [QA Deployment Guide](QA_DEPLOYMENT.md) - Ephemeral QA environment details
-- [Resource Naming Convention](DEPLOY.md) - Azure naming standards
 - [Security Scanning](SECURITY_SCANNING.md) - CodeQL and Trivy configuration
+- [Design Spec](superpowers/specs/2026-05-12-portainer-gitops-deployment-design.md) - Original deployment design
 
 ---
 

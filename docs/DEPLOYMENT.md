@@ -19,7 +19,7 @@ Comprehensive guide for deploying TaskFlow locally with Docker and to production
 docker compose up
 ```
 
-**Production-like (manual migrations):**
+**Production-like (auto-migrations):**
 ```bash
 docker compose -f docker-compose.prod.yml up
 ```
@@ -38,7 +38,7 @@ TaskFlow provides two Docker configurations for different deployment scenarios.
 | Configuration | Use Case | Auto-migrations | Scalar UI |
 |--------------|----------|----------------|-----------|
 | **Development** (`docker-compose.yml`) | Local dev, fast iteration | Enabled | Enabled |
-| **Production** (`docker-compose.prod.yml`) | Production builds | Manual | Disabled |
+| **Production** (`docker-compose.prod.yml`) | Production builds | Enabled | Disabled |
 
 ### Development Deployment
 
@@ -67,10 +67,7 @@ docker compose down -v
 
 **Quick start:**
 ```bash
-# Apply migrations first (one-time)
-dotnet ef database update --project TaskFlow.Api
-
-# Start production containers
+# Start production containers (migrations run automatically on startup)
 docker compose -f docker-compose.prod.yml up -d
 
 # Verify
@@ -218,7 +215,7 @@ For detailed security scanning documentation, see [SECURITY_SCANNING.md](SECURIT
 |----------|---------|--------|
 | `ASPNETCORE_ENVIRONMENT` | `Production` | Controls environment-specific behavior |
 | `ConnectionStrings__DefaultConnection` | `Data Source=/app/data/tasks.db` | SQLite database path |
-| `Database__MigrateOnStartup` | `false` (true in Development) | Enable automatic migrations |
+| `Database__MigrateOnStartup` | `true` | Enable automatic migrations |
 
 **OpenTelemetry Settings:**
 
@@ -250,12 +247,20 @@ environment:
   - Database__MigrateOnStartup=true
 ```
 
+**docker-compose.prod.yml (Production compose):**
+```yaml
+environment:
+  - ASPNETCORE_ENVIRONMENT=Production
+  - ASPNETCORE_HTTP_PORTS=8080
+  - Database__MigrateOnStartup=true
+```
+
 **Production (taskflow-deploy):**
 ```yaml
 environment:
   - ASPNETCORE_ENVIRONMENT=Production
   - ASPNETCORE_HTTP_PORTS=8080
-  - Database__MigrateOnStartup=false
+  - Database__MigrateOnStartup=true
   - OpenTelemetry__Endpoint=http://seq:5341/ingest/otlp/v1/logs
 ```
 

@@ -159,17 +159,9 @@ html.is-dark .t-select { color-scheme: dark; }
 }
 .t-badge-draft    { background: var(--line-soft); color: var(--muted); }
 .t-badge-todo     { background: var(--accent-soft); color: var(--accent-ink); }
-.t-badge-completed {
-  background: color-mix(in oklab, #22c55e 15%, transparent);
-  color: #15803d;
-}
-html.is-dark .t-badge-completed { color: #4ade80; }
-.t-badge-low    { background: var(--line-soft); color: var(--muted); }
-.t-badge-medium {
-  background: color-mix(in oklab, #f59e0b 15%, transparent);
-  color: #b45309;
-}
-html.is-dark .t-badge-medium { color: #fbbf24; }
+.t-badge-completed { background: var(--success-bg); color: var(--success-ink); }
+.t-badge-low       { background: var(--line-soft);  color: var(--muted); }
+.t-badge-medium    { background: var(--warn-bg);    color: var(--warn-ink); }
 .t-badge-high   { background: var(--danger-bg); color: var(--danger-ink); }
 
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */

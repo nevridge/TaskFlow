@@ -1,14 +1,17 @@
 import { useEffect, useRef } from 'react'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
+import { THEMES } from '@/lib/themes'
 
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
   isDark: boolean
+  theme: string
   headerStyle: HeaderStyle
   todoSort: SortMode
   projectStart: string
   onDark: (v: boolean) => void
+  onTheme: (v: string) => void
   onHeaderStyle: (v: HeaderStyle) => void
   onTodoSort: (v: SortMode) => void
   onProjectStart: (v: string) => void
@@ -16,12 +19,11 @@ interface SettingsDrawerProps {
 
 export function SettingsDrawer({
   open, onClose,
-  isDark, headerStyle, todoSort, projectStart,
-  onDark, onHeaderStyle, onTodoSort, onProjectStart,
+  isDark, theme, headerStyle, todoSort, projectStart,
+  onDark, onTheme, onHeaderStyle, onTodoSort, onProjectStart,
 }: SettingsDrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null)
 
-  // Close on Escape key
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -29,21 +31,18 @@ export function SettingsDrawer({
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
-  // Trap focus inside drawer when open
   useEffect(() => {
     if (open) drawerRef.current?.focus()
   }, [open])
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className={`settings-backdrop${open ? ' is-open' : ''}`}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer panel */}
       <div
         ref={drawerRef}
         role="dialog"
@@ -108,6 +107,30 @@ export function SettingsDrawer({
                 <span className="settings-toggle-thumb" style={{ left: isDark ? 16 : 2 }} />
               </button>
             </DrawerRow>
+
+            <div className="settings-theme-label">Theme</div>
+            <div className="settings-theme-grid">
+              {THEMES.map(t => (
+                <button
+                  key={t.id}
+                  className={`settings-theme-swatch${t.id === theme ? ' is-active' : ''}`}
+                  title={t.label}
+                  aria-label={t.label}
+                  aria-pressed={t.id === theme}
+                  onClick={() => onTheme(t.id)}
+                  style={{
+                    background: isDark ? t.bgDark : t.bgLight,
+                    borderColor: isDark ? t.accentDark : t.accentLight,
+                  }}
+                >
+                  <span
+                    className="settings-theme-swatch-dot"
+                    style={{ background: isDark ? t.accentDark : t.accentLight }}
+                  />
+                  <span className="settings-theme-swatch-name">{t.label}</span>
+                </button>
+              ))}
+            </div>
           </section>
         </div>
       </div>

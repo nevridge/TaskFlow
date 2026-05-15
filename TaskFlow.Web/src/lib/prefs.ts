@@ -3,16 +3,23 @@ export const PREFS_KEY = 'taskflow_journal_prefs_v1'
 export type SortMode = 'manual' | 'open first' | 'done last'
 export type HeaderStyle = 'stat' | 'minimal'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function loadPrefs(): Record<string, any> {
+export interface Prefs {
+  dark?: boolean
+  theme?: string
+  headerStyle?: HeaderStyle
+  todoSort?: SortMode
+  projectStart?: string
+}
+
+export function loadPrefs(): Prefs {
   try {
-    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}')
+    return JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as Prefs
   } catch {
     return {}
   }
 }
 
-export function savePrefs(patch: Record<string, unknown>): void {
+export function savePrefs(patch: Partial<Prefs>): void {
   try {
     const current = loadPrefs()
     localStorage.setItem(PREFS_KEY, JSON.stringify({ ...current, ...patch }))

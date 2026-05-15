@@ -47,7 +47,9 @@ export function SettingsDrawer({
         ref={drawerRef}
         role="dialog"
         aria-label="Settings"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
+        aria-hidden={!open}
+        inert={!open}
         className={`settings-drawer${open ? ' is-open' : ''}`}
         tabIndex={-1}
       >

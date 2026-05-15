@@ -18,17 +18,13 @@ export interface AppContext {
   setProjectStart: (v: string) => void
 }
 
-function loadDark(): boolean {
-  const saved = loadPrefs().dark
-  return typeof saved === 'boolean' ? saved : true
-}
-
 export function Layout() {
-  const [isDark, setIsDark] = useState<boolean>(loadDark)
-  const [theme, setTheme] = useState<string>(() => loadPrefs().theme ?? 'default')
-  const [headerStyle, setHeaderStyle] = useState<HeaderStyle>(() => loadPrefs().headerStyle ?? 'stat')
-  const [todoSort, setTodoSort] = useState<SortMode>(() => loadPrefs().todoSort ?? 'manual')
-  const [projectStart, setProjectStart] = useState<string>(() => loadPrefs().projectStart ?? '2026-05-09')
+  const [initialPrefs] = useState(() => loadPrefs())
+  const [isDark, setIsDark] = useState<boolean>(() => typeof initialPrefs.dark === 'boolean' ? initialPrefs.dark : true)
+  const [theme, setTheme] = useState<string>(() => initialPrefs.theme ?? 'default')
+  const [headerStyle, setHeaderStyle] = useState<HeaderStyle>(() => initialPrefs.headerStyle ?? 'stat')
+  const [todoSort, setTodoSort] = useState<SortMode>(() => initialPrefs.todoSort ?? 'manual')
+  const [projectStart, setProjectStart] = useState<string>(() => initialPrefs.projectStart ?? '2026-05-09')
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {

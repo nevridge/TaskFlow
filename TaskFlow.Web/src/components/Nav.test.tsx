@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Nav } from './Nav'
@@ -6,7 +6,7 @@ import { Nav } from './Nav'
 function renderNav(initialPath: string) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <Nav />
+      <Nav onMenuClick={vi.fn()} />
     </MemoryRouter>
   )
 }

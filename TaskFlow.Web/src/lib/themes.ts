@@ -43,7 +43,7 @@ export const THEMES: Theme[] = [
   {
     id: 'dracula',
     label: 'Dracula',
-    accentLight: '#6272a4',
+    accentLight: '#7c54d4',
     accentDark: '#bd93f9',
     bgLight: '#f8f8f2',
     bgDark: '#282a36',
@@ -59,7 +59,7 @@ export const THEMES: Theme[] = [
   {
     id: 'gruvbox',
     label: 'Gruvbox',
-    accentLight: '#b57614',
+    accentLight: '#d79921',
     accentDark: '#d79921',
     bgLight: '#fbf1c7',
     bgDark: '#282828',

@@ -47,7 +47,7 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
       </td>
       <td className="t-list-cell t-list-cell--journal">
         {isOnTodayJournal && (
-          <span className="t-journal-dot" title="On today's journal" aria-label="On today's journal">
+          <span className="t-journal-dot" title="On today's journal" role="img" aria-label="On today's journal">
             📔
           </span>
         )}

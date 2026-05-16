@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Nav } from '@/components/Nav'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
-import { usePrefs } from '@/context/PrefsContext'
+import { usePrefs } from '@/context/usePrefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 
 export interface AppContext {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { usePrefs } from '@/context/PrefsContext'
+import { usePrefs } from '@/context/usePrefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 import { THEMES } from '@/lib/themes'
 

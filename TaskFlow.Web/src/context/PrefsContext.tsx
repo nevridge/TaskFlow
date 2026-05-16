@@ -1,21 +1,7 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { loadPrefs, savePrefs, DEFAULT_PROJECT_START } from '@/lib/prefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
-
-interface PrefsContextValue {
-  isDark: boolean
-  setIsDark: (v: boolean | ((prev: boolean) => boolean)) => void
-  theme: string
-  setTheme: (v: string) => void
-  headerStyle: HeaderStyle
-  setHeaderStyle: (v: HeaderStyle) => void
-  todoSort: SortMode
-  setTodoSort: (v: SortMode) => void
-  projectStart: string
-  setProjectStart: (v: string) => void
-}
-
-const PrefsContext = createContext<PrefsContextValue | null>(null)
+import { PrefsContext } from './PrefsContextDef'
 
 export function PrefsProvider({ children }: { children: React.ReactNode }) {
   const [initialPrefs] = useState(() => loadPrefs())
@@ -68,10 +54,4 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
       {children}
     </PrefsContext.Provider>
   )
-}
-
-export function usePrefs(): PrefsContextValue {
-  const ctx = useContext(PrefsContext)
-  if (!ctx) throw new Error('usePrefs must be used within PrefsProvider')
-  return ctx
 }

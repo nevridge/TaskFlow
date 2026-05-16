@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import type { SortMode, HeaderStyle } from '@/lib/prefs'
+import type { SortMode, HeaderStyle, TaskSortKey, TaskSortDir } from '@/lib/prefs'
 
 export interface PrefsContextValue {
   isDark: boolean
@@ -12,6 +12,10 @@ export interface PrefsContextValue {
   setTodoSort: (v: SortMode) => void
   projectStart: string
   setProjectStart: (v: string) => void
+  taskSortKey: TaskSortKey
+  setTaskSortKey: (v: TaskSortKey) => void
+  taskSortDir: TaskSortDir
+  setTaskSortDir: (v: TaskSortDir) => void
 }
 
 export const PrefsContext = createContext<PrefsContextValue | null>(null)

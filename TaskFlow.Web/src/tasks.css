@@ -91,12 +91,138 @@
 .t-select:focus { border-color: var(--accent); }
 html.is-dark .t-select { color-scheme: dark; }
 
-/* ─── Task card grid ──────────────────────────────────────────────────────── */
+/* ─── Task list table ─────────────────────────────────────────────────────── */
 
-.t-card-grid {
-  display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+.t-list-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+
+.t-list-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.t-list-head-row {
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.t-list-th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.t-list-th--journal { width: 72px; text-align: center; }
+.t-list-th--actions { width: 120px; }
+
+.t-col-sort {
+  cursor: pointer;
+  transition: color .12s;
+}
+.t-col-sort:hover { color: var(--ink); }
+.t-col-sort--active { color: var(--accent-ink); }
+
+.t-list-row {
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--paper);
+  transition: background .1s;
+}
+.t-list-row:last-child { border-bottom: none; }
+.t-list-row:hover { background: var(--hover-soft); }
+
+.t-list-cell {
+  padding: 11px 14px;
+  vertical-align: middle;
+}
+
+.t-list-cell--title {
+  min-width: 200px;
+}
+
+.t-list-cell--due {
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.t-list-cell--journal {
+  text-align: center;
+}
+
+.t-list-cell--actions {
+  text-align: right;
+}
+
+
+.t-col-sort-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .12s;
+}
+.t-list-th .t-col-sort-btn:hover { color: var(--ink); }
+.t-col-sort--active .t-col-sort-btn { color: var(--accent-ink); }
+
+.t-list-empty {
+  color: var(--muted-2);
+}
+
+/* ─── Overdue indicator ───────────────────────────────────────────────────── */
+
+.t-overdue {
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
+.t-overdue-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  font-size: 10px;
+  font-weight: 800;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+/* ─── Journal indicator ───────────────────────────────────────────────────── */
+
+.t-journal-dot {
+  font-size: 15px;
+  cursor: default;
+}
+
+/* ─── Filter count ────────────────────────────────────────────────────────── */
+
+.t-filter-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── Task card ───────────────────────────────────────────────────────────── */

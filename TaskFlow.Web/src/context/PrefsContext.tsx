@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { loadPrefs, savePrefs, DEFAULT_PROJECT_START } from '@/lib/prefs'
-import type { SortMode, HeaderStyle } from '@/lib/prefs'
+import type { SortMode, HeaderStyle, TaskSortKey, TaskSortDir } from '@/lib/prefs'
 import { PrefsContext } from './PrefsContextDef'
 
 export function PrefsProvider({ children }: { children: React.ReactNode }) {
@@ -15,6 +15,12 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
   const [todoSort, setTodoSort] = useState<SortMode>(() => initialPrefs.todoSort ?? 'manual')
   const [projectStart, setProjectStart] = useState<string>(
     () => initialPrefs.projectStart ?? DEFAULT_PROJECT_START,
+  )
+  const [taskSortKey, setTaskSortKey] = useState<TaskSortKey>(
+    () => initialPrefs.taskSortKey ?? 'title',
+  )
+  const [taskSortDir, setTaskSortDir] = useState<TaskSortDir>(
+    () => initialPrefs.taskSortDir ?? 'asc',
   )
 
   useEffect(() => {
@@ -36,6 +42,10 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
     savePrefs({ headerStyle, todoSort, projectStart })
   }, [headerStyle, todoSort, projectStart])
 
+  useEffect(() => {
+    savePrefs({ taskSortKey, taskSortDir })
+  }, [taskSortKey, taskSortDir])
+
   return (
     <PrefsContext.Provider
       value={{
@@ -49,6 +59,10 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
         setTodoSort,
         projectStart,
         setProjectStart,
+        taskSortKey,
+        setTaskSortKey,
+        taskSortDir,
+        setTaskSortDir,
       }}
     >
       {children}

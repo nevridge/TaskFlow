@@ -1,42 +1,74 @@
 import { useState } from 'react'
 import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
-import { TaskCard } from '@/components/TaskCard'
+import { useJournalEntries } from '@/hooks/useJournal'
+import { usePrefs } from '@/context/usePrefs'
+import { TaskListRow } from '@/components/TaskListRow'
 import { TaskForm } from '@/components/TaskForm'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
+import type { TaskSortKey } from '@/lib/prefs'
+import type { JournalEntryResponseDto } from '@/api/journal'
+import { todayISO } from '@/lib/journal-utils'
 import '@/tasks.css'
 
 type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
 type PriorityFilter = 'all' | 'low' | 'medium' | 'high'
-type SortKey = 'title' | 'dueDate' | 'priority'
 
 const priorityOrder = { high: 0, medium: 1, low: 2 }
 
+interface ColHeader {
+  key: TaskSortKey
+  label: string
+}
+
+const COLUMNS: ColHeader[] = [
+  { key: 'title', label: 'Title' },
+  { key: 'status', label: 'Status' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'dueDate', label: 'Due Date' },
+]
+
 export function TasksPage() {
   const { data, isLoading, error } = useTasksQuery()
+  const { data: journalData } = useJournalEntries()
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
   const deleteMutation = useDeleteTaskMutation()
+  const { taskSortKey, setTaskSortKey, taskSortDir, setTaskSortDir } = usePrefs()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
-  const [sortKey, setSortKey] = useState<SortKey>('title')
   const [editingTask, setEditingTask] = useState<TaskItemResponseDto | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
   const tasks: TaskItemResponseDto[] = (data?.data as TaskItemResponseDto[] | undefined) ?? []
 
+  const todayEntry = ((journalData?.data as JournalEntryResponseDto[] | undefined) ?? [])
+    .find(e => e.date === todayISO())
+  const todayTaskIds = new Set<number>(todayEntry?.todoTaskItemIds ?? [])
+
+  function handleSortClick(key: TaskSortKey) {
+    if (key === taskSortKey) {
+      setTaskSortDir(taskSortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setTaskSortKey(key)
+      setTaskSortDir('asc')
+    }
+  }
+
   const filtered = tasks
     .filter(t => statusFilter === 'all' || t.status?.toLowerCase() === statusFilter)
     .filter(t => priorityFilter === 'all' || t.priority?.toLowerCase() === priorityFilter)
     .sort((a, b) => {
-      if (sortKey === 'title') return a.title.localeCompare(b.title)
-      if (sortKey === 'dueDate') return (a.dueDate ?? '').localeCompare(b.dueDate ?? '')
-      if (sortKey === 'priority') {
+      let cmp = 0
+      if (taskSortKey === 'title') cmp = a.title.localeCompare(b.title)
+      else if (taskSortKey === 'dueDate') cmp = (a.dueDate ?? '').localeCompare(b.dueDate ?? '')
+      else if (taskSortKey === 'status') cmp = (a.status ?? '').localeCompare(b.status ?? '')
+      else if (taskSortKey === 'priority') {
         const pa = priorityOrder[(a.priority ?? '').toLowerCase() as keyof typeof priorityOrder] ?? 2
         const pb = priorityOrder[(b.priority ?? '').toLowerCase() as keyof typeof priorityOrder] ?? 2
-        return pa - pb
+        cmp = pa - pb
       }
-      return 0
+      return taskSortDir === 'asc' ? cmp : -cmp
     })
 
   function handleCreate(data: CreateTaskItemDto) {
@@ -55,6 +87,11 @@ export function TasksPage() {
     if (window.confirm(`Delete "${task.title}"?`)) {
       deleteMutation.mutate(Number(task.id))
     }
+  }
+
+  function sortIcon(key: TaskSortKey): string {
+    if (key !== taskSortKey) return ''
+    return taskSortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks…</p></div></div>
@@ -106,31 +143,47 @@ export function TasksPage() {
             <option value="high">High</option>
           </select>
 
-          <label htmlFor="sort-key" className="t-filter-label">Sort</label>
-          <select
-            id="sort-key"
-            className="t-select"
-            value={sortKey}
-            onChange={e => setSortKey(e.target.value as SortKey)}
-          >
-            <option value="title">Title</option>
-            <option value="dueDate">Due Date</option>
-            <option value="priority">Priority</option>
-          </select>
+          <span className="t-filter-count">{filtered.length} task{filtered.length !== 1 ? 's' : ''}</span>
         </div>
 
         {filtered.length === 0 ? (
           <p className="t-empty">No tasks match your filters.</p>
         ) : (
-          <div className="t-card-grid">
-            {filtered.map(task => (
-              <TaskCard
-                key={String(task.id)}
-                task={task}
-                onEdit={setEditingTask}
-                onDelete={handleDelete}
-              />
-            ))}
+          <div className="t-list-wrap">
+            <table className="t-list-table">
+              <thead>
+                <tr className="t-list-head-row">
+                  {COLUMNS.map(col => (
+                    <th
+                      key={col.key}
+                      className={`t-list-th${col.key === taskSortKey ? ' t-col-sort--active' : ''}`}
+                      aria-sort={col.key === taskSortKey ? (taskSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button
+                        type="button"
+                        className="t-col-sort-btn"
+                        onClick={() => handleSortClick(col.key)}
+                      >
+                        {col.label}{sortIcon(col.key)}
+                      </button>
+                    </th>
+                  ))}
+                  <th className="t-list-th t-list-th--journal" title="On today's journal">Journal</th>
+                  <th className="t-list-th t-list-th--actions" aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(task => (
+                  <TaskListRow
+                    key={String(task.id)}
+                    task={task}
+                    isOnTodayJournal={todayTaskIds.has(Number(task.id))}
+                    onEdit={setEditingTask}
+                    onDelete={handleDelete}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

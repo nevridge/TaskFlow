@@ -3,6 +3,8 @@ export const DEFAULT_PROJECT_START = '2026-05-09'
 
 export type SortMode = 'manual' | 'open first' | 'done last'
 export type HeaderStyle = 'stat' | 'minimal'
+export type TaskSortKey = 'title' | 'dueDate' | 'priority' | 'status'
+export type TaskSortDir = 'asc' | 'desc'
 
 export interface Prefs {
   dark?: boolean
@@ -10,6 +12,8 @@ export interface Prefs {
   headerStyle?: HeaderStyle
   todoSort?: SortMode
   projectStart?: string
+  taskSortKey?: TaskSortKey
+  taskSortDir?: TaskSortDir
 }
 
 export function loadPrefs(): Prefs {

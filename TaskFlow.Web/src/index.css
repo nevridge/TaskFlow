@@ -330,9 +330,9 @@ html[data-theme="gruvbox"] {
   --line: #d5c4a1;
   --line-2: #c0a87c;
   --line-soft: #ede0b6;
-  --accent: #d79921;
-  --accent-soft: color-mix(in oklab, #d79921 22%, white);
-  --accent-ink: color-mix(in oklab, #d79921 85%, #3c3836);
+  --accent: #8f5c00;
+  --accent-soft: color-mix(in oklab, #8f5c00 22%, white);
+  --accent-ink: color-mix(in oklab, #8f5c00 85%, #3c3836);
   --hover-soft: #e8d896;
   --danger-bg: color-mix(in oklab, #cc241d 18%, #fbf1c7);
   --danger-ink: #9d0006;

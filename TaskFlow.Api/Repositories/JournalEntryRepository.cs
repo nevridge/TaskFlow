@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
@@ -6,6 +7,8 @@ namespace TaskFlow.Api.Repositories;
 
 public class JournalEntryRepository(TaskDbContext context) : IJournalEntryRepository
 {
+    private const int SqliteConstraintErrorCode = 19;
+    private const int SqliteUniqueConstraintErrorCode = 2067;
     private readonly TaskDbContext _context = context;
 
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
@@ -31,7 +34,14 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     {
         entry.CreatedAt = DateTime.UtcNow;
         _context.JournalEntries.Add(entry);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+        {
+            throw new DuplicateJournalDateException(entry.Date);
+        }
         return entry;
     }
 
@@ -70,37 +80,51 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         return entry?.Todos.Any(t => t.Id == taskItemId) ?? false;
     }
 
-    public async Task AddTodoAsync(int entryId, int taskItemId)
-    {
-        var entry = await _context.JournalEntries
-            .Include(e => e.Todos)
-            .FirstOrDefaultAsync(e => e.Id == entryId)
-            ?? throw new InvalidOperationException($"Journal entry {entryId} not found.");
-
-        var task = await _context.TaskItems.FindAsync(taskItemId)
-            ?? throw new InvalidOperationException($"Task {taskItemId} not found.");
-
-        entry.Todos.Add(task);
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task RemoveTodoAsync(int entryId, int taskItemId)
+    public async Task<bool> AddTodoAsync(int entryId, int taskItemId)
     {
         var entry = await _context.JournalEntries
             .Include(e => e.Todos)
             .FirstOrDefaultAsync(e => e.Id == entryId);
         if (entry is null)
         {
-            return;
+            return false;
+        }
+
+        var task = await _context.TaskItems.FindAsync(taskItemId);
+        if (task is null)
+        {
+            return false;
+        }
+
+        entry.Todos.Add(task);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RemoveTodoAsync(int entryId, int taskItemId)
+    {
+        var entry = await _context.JournalEntries
+            .Include(e => e.Todos)
+            .FirstOrDefaultAsync(e => e.Id == entryId);
+        if (entry is null)
+        {
+            return false;
         }
 
         var task = entry.Todos.FirstOrDefault(t => t.Id == taskItemId);
         if (task is null)
         {
-            return;
+            return false;
         }
 
         entry.Todos.Remove(task);
         await _context.SaveChangesAsync();
+        return true;
     }
+
+    private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
+        (ex.InnerException is SqliteException sqliteEx
+            && sqliteEx.SqliteErrorCode == SqliteConstraintErrorCode
+            && sqliteEx.SqliteExtendedErrorCode == SqliteUniqueConstraintErrorCode)
+        || ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
 }

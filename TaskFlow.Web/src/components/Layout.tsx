@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { Nav } from '@/components/Nav'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
-import { loadPrefs, savePrefs } from '@/lib/prefs'
+import { usePrefs } from '@/context/PrefsContext'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 
 export interface AppContext {
@@ -19,57 +19,14 @@ export interface AppContext {
 }
 
 export function Layout() {
-  const [initialPrefs] = useState(() => loadPrefs())
-  const [isDark, setIsDark] = useState<boolean>(() => typeof initialPrefs.dark === 'boolean' ? initialPrefs.dark : true)
-  const [theme, setTheme] = useState<string>(() => initialPrefs.theme ?? 'default')
-  const [headerStyle, setHeaderStyle] = useState<HeaderStyle>(() => initialPrefs.headerStyle ?? 'stat')
-  const [todoSort, setTodoSort] = useState<SortMode>(() => initialPrefs.todoSort ?? 'manual')
-  const [projectStart, setProjectStart] = useState<string>(() => initialPrefs.projectStart ?? '2026-05-09')
+  const prefs = usePrefs()
   const [drawerOpen, setDrawerOpen] = useState(false)
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('is-dark', isDark)
-    savePrefs({ dark: isDark })
-  }, [isDark])
-
-  useEffect(() => {
-    const el = document.documentElement
-    if (theme === 'default') {
-      el.removeAttribute('data-theme')
-    } else {
-      el.setAttribute('data-theme', theme)
-    }
-    savePrefs({ theme })
-  }, [theme])
-
-  useEffect(() => {
-    savePrefs({ headerStyle, todoSort, projectStart })
-  }, [headerStyle, todoSort, projectStart])
 
   return (
     <>
       <Nav onMenuClick={() => setDrawerOpen(true)} />
-      <SettingsDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        isDark={isDark}
-        theme={theme}
-        headerStyle={headerStyle}
-        todoSort={todoSort}
-        projectStart={projectStart}
-        onDark={v => setIsDark(v)}
-        onTheme={setTheme}
-        onHeaderStyle={setHeaderStyle}
-        onTodoSort={setTodoSort}
-        onProjectStart={setProjectStart}
-      />
-      <Outlet context={{
-        isDark, setIsDark,
-        theme, setTheme,
-        headerStyle, setHeaderStyle,
-        todoSort, setTodoSort,
-        projectStart, setProjectStart,
-      } satisfies AppContext} />
+      <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <Outlet context={prefs satisfies AppContext} />
     </>
   )
 }

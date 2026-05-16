@@ -1,4 +1,5 @@
 export const PREFS_KEY = 'taskflow_journal_prefs_v1'
+export const DEFAULT_PROJECT_START = '2026-05-09'
 
 export type SortMode = 'manual' | 'open first' | 'done last'
 export type HeaderStyle = 'stat' | 'minimal'

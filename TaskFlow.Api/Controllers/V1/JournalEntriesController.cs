@@ -1,31 +1,27 @@
 using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class JournalEntriesController(IJournalEntryService journalService, IValidator<JournalEntry> validator) : ControllerBase
+public class JournalEntriesController(IJournalEntryRepository journalRepo, IValidator<JournalEntry> validator) : ControllerBase
 {
-    private const int SqliteConstraintViolationCode = 19;
-    private const int SqliteUniqueConstraintViolationCode = 2067;
     private const string GetRouteEntryName = "GetJournalEntryV1";
     private const string ApiVersionString = "1.0";
-    private readonly IJournalEntryService _journalService = journalService;
+    private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IValidator<JournalEntry> _validator = validator;
 
     // GET: api/v1/JournalEntries
     [HttpGet]
     public async Task<ActionResult<IEnumerable<JournalEntryResponseDto>>> GetAll()
     {
-        var entries = await _journalService.GetAllAsync();
+        var entries = await _journalRepo.GetAllAsync();
         return Ok(entries.Select(ToDto));
     }
 
@@ -33,7 +29,7 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     [HttpGet("{id}", Name = GetRouteEntryName)]
     public async Task<ActionResult<JournalEntryResponseDto>> Get(int id)
     {
-        var entry = await _journalService.GetByIdAsync(id);
+        var entry = await _journalRepo.GetByIdAsync(id);
         if (entry is null)
         {
             return NotFound();
@@ -46,7 +42,7 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     [HttpPost]
     public async Task<ActionResult<JournalEntryResponseDto>> Create([FromBody] CreateJournalEntryDto dto)
     {
-        var existingByDate = await _journalService.GetByDateAsync(dto.Date);
+        var existingByDate = await _journalRepo.GetByDateAsync(dto.Date);
         if (existingByDate is not null)
         {
             return Conflict(new
@@ -66,21 +62,16 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
 
         try
         {
-            var created = await _journalService.CreateAsync(entry);
+            var created = await _journalRepo.AddAsync(entry);
             return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
         }
-        catch (DbUpdateException ex) when (IsJournalDateUniqueConstraintViolation(ex))
+        catch (DuplicateJournalDateException)
         {
-            var existing = await _journalService.GetByDateAsync(dto.Date);
-            if (existing is null)
-            {
-                return Conflict("A journal entry for this date was created by another request.");
-            }
-
+            var existing = await _journalRepo.GetByDateAsync(dto.Date);
             return Conflict(new
             {
                 message = "A journal entry for this date was created by another request.",
-                existingEntry = ToDto(existing)
+                existingEntry = existing is null ? null : ToDto(existing),
             });
         }
     }
@@ -89,7 +80,7 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     [HttpPut("{id}")]
     public async Task<ActionResult<JournalEntryResponseDto>> Update(int id, [FromBody] UpdateJournalEntryDto dto)
     {
-        var existing = await _journalService.GetByIdAsync(id);
+        var existing = await _journalRepo.GetByIdAsync(id);
         if (existing is null)
         {
             return NotFound();
@@ -104,7 +95,7 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
             return BadRequest(validation.Errors);
         }
 
-        await _journalService.UpdateAsync(existing);
+        await _journalRepo.UpdateAsync(existing);
         return Ok(ToDto(existing));
     }
 
@@ -112,13 +103,13 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var existing = await _journalService.GetByIdAsync(id);
+        var existing = await _journalRepo.GetByIdAsync(id);
         if (existing is null)
         {
             return NotFound();
         }
 
-        await _journalService.DeleteAsync(id);
+        await _journalRepo.DeleteAsync(id);
         return NoContent();
     }
 
@@ -140,10 +131,4 @@ public class JournalEntriesController(IJournalEntryService journalService, IVali
             UpdatedAt = l.UpdatedAt,
         }),
     };
-
-    private static bool IsJournalDateUniqueConstraintViolation(DbUpdateException ex) =>
-        (ex.InnerException is SqliteException sqliteEx
-            && sqliteEx.SqliteErrorCode == SqliteConstraintViolationCode
-            && sqliteEx.SqliteExtendedErrorCode == SqliteUniqueConstraintViolationCode)
-        || ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
 }

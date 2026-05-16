@@ -6,23 +6,23 @@ using Moq;
 using TaskFlow.Api.Controllers.V1;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 
 public class NotesControllerV1Tests
 {
-    private readonly Mock<INoteService> _mockNoteService;
-    private readonly Mock<ITaskService> _mockTaskService;
+    private readonly Mock<INoteRepository> _mockNoteRepo;
+    private readonly Mock<ITaskRepository> _mockTaskRepo;
     private readonly Mock<IValidator<Note>> _mockValidator;
     private readonly NotesController _controller;
 
     public NotesControllerV1Tests()
     {
-        _mockNoteService = new Mock<INoteService>();
-        _mockTaskService = new Mock<ITaskService>();
+        _mockNoteRepo = new Mock<INoteRepository>();
+        _mockTaskRepo = new Mock<ITaskRepository>();
         _mockValidator = new Mock<IValidator<Note>>();
-        _controller = new NotesController(_mockNoteService.Object, _mockTaskService.Object, _mockValidator.Object);
+        _controller = new NotesController(_mockNoteRepo.Object, _mockTaskRepo.Object, _mockValidator.Object);
     }
 
     // --- GET all ---
@@ -36,26 +36,26 @@ public class NotesControllerV1Tests
             new() { Id = 1, Content = "Note 1", TaskItemId = 1, CreatedAt = DateTime.UtcNow },
             new() { Id = 2, Content = "Note 2", TaskItemId = 1, CreatedAt = DateTime.UtcNow }
         };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNotesForTaskAsync(1)).ReturnsAsync(notes);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetAllByTaskIdAsync(1)).ReturnsAsync(notes);
 
         var result = await _controller.GetAll(1);
 
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<NoteResponseDto>>().Subject;
         dtos.Should().HaveCount(2);
-        _mockNoteService.Verify(s => s.GetNotesForTaskAsync(1), Times.Once);
+        _mockNoteRepo.Verify(r => r.GetAllByTaskIdAsync(1), Times.Once);
     }
 
     [Fact]
     public async Task GetAll_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskService.Setup(s => s.GetTaskAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.GetAll(99);
 
         result.Result.Should().BeOfType<NotFoundResult>();
-        _mockNoteService.Verify(s => s.GetNotesForTaskAsync(It.IsAny<int>()), Times.Never);
+        _mockNoteRepo.Verify(r => r.GetAllByTaskIdAsync(It.IsAny<int>()), Times.Never);
     }
 
     // --- GET single ---
@@ -65,8 +65,8 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var note = new Note { Id = 5, Content = "My note", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 5)).ReturnsAsync(note);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(note);
 
         var result = await _controller.Get(1, 5);
 
@@ -80,7 +80,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Get_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskService.Setup(s => s.GetTaskAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Get(99, 1);
 
@@ -91,8 +91,8 @@ public class NotesControllerV1Tests
     public async Task Get_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 99)).ReturnsAsync((Note?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Get(1, 99);
 
@@ -107,10 +107,10 @@ public class NotesControllerV1Tests
         var task = new TaskItem { Id = 1, Title = "Task" };
         var createDto = new CreateNoteDto { Content = "New note" };
         var created = new Note { Id = 3, Content = "New note", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockNoteService.Setup(s => s.CreateNoteAsync(It.IsAny<Note>())).ReturnsAsync(created);
+        _mockNoteRepo.Setup(r => r.AddAsync(It.IsAny<Note>())).ReturnsAsync(created);
 
         var result = await _controller.Create(1, createDto);
 
@@ -124,19 +124,19 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Create_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskService.Setup(s => s.GetTaskAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Create(99, new CreateNoteDto { Content = "Note" });
 
         result.Result.Should().BeOfType<NotFoundResult>();
-        _mockNoteService.Verify(s => s.CreateNoteAsync(It.IsAny<Note>()), Times.Never);
+        _mockNoteRepo.Verify(r => r.AddAsync(It.IsAny<Note>()), Times.Never);
     }
 
     [Fact]
     public async Task Create_ShouldReturnBadRequest_WhenValidationFails()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult(
                 [new ValidationFailure("Content", "Content is required.")]));
@@ -144,7 +144,7 @@ public class NotesControllerV1Tests
         var result = await _controller.Create(1, new CreateNoteDto { Content = string.Empty });
 
         result.Result.Should().BeOfType<BadRequestObjectResult>();
-        _mockNoteService.Verify(s => s.CreateNoteAsync(It.IsAny<Note>()), Times.Never);
+        _mockNoteRepo.Verify(r => r.AddAsync(It.IsAny<Note>()), Times.Never);
     }
 
     // --- PUT ---
@@ -154,11 +154,11 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var existing = new Note { Id = 5, Content = "Old", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 5)).ReturnsAsync(existing);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(existing);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockNoteService.Setup(s => s.UpdateNoteAsync(It.IsAny<Note>())).Returns(Task.CompletedTask);
+        _mockNoteRepo.Setup(r => r.UpdateAsync(It.IsAny<Note>())).Returns(Task.CompletedTask);
 
         var result = await _controller.Update(1, 5, new UpdateNoteDto { Content = "Updated" });
 
@@ -170,7 +170,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Update_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskService.Setup(s => s.GetTaskAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Update(99, 1, new UpdateNoteDto { Content = "x" });
 
@@ -181,8 +181,8 @@ public class NotesControllerV1Tests
     public async Task Update_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 99)).ReturnsAsync((Note?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Update(1, 99, new UpdateNoteDto { Content = "x" });
 
@@ -196,20 +196,20 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var note = new Note { Id = 5, Content = "Note", TaskItemId = 1 };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 5)).ReturnsAsync(note);
-        _mockNoteService.Setup(s => s.DeleteNoteAsync(1, 5)).Returns(Task.CompletedTask);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(note);
+        _mockNoteRepo.Setup(r => r.DeleteAsync(1, 5)).Returns(Task.CompletedTask);
 
         var result = await _controller.Delete(1, 5);
 
         result.Should().BeOfType<NoContentResult>();
-        _mockNoteService.Verify(s => s.DeleteNoteAsync(1, 5), Times.Once);
+        _mockNoteRepo.Verify(r => r.DeleteAsync(1, 5), Times.Once);
     }
 
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskService.Setup(s => s.GetTaskAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Delete(99, 1);
 
@@ -220,8 +220,8 @@ public class NotesControllerV1Tests
     public async Task Delete_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockNoteService.Setup(s => s.GetNoteAsync(1, 99)).ReturnsAsync((Note?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Delete(1, 99);
 

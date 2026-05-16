@@ -6,21 +6,21 @@ using Moq;
 using TaskFlow.Api.Controllers.V1;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 
 public class TaskItemsControllerV1Tests
 {
-    private readonly Mock<ITaskService> _mockService;
+    private readonly Mock<ITaskRepository> _mockRepo;
     private readonly Mock<IValidator<TaskItem>> _mockValidator;
     private readonly TaskItemsController _controller;
 
     public TaskItemsControllerV1Tests()
     {
-        _mockService = new Mock<ITaskService>();
+        _mockRepo = new Mock<ITaskRepository>();
         _mockValidator = new Mock<IValidator<TaskItem>>();
-        _controller = new TaskItemsController(_mockService.Object, _mockValidator.Object);
+        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class TaskItemsControllerV1Tests
             new() { Id = 1, Title = "Task 1", Description = "Description 1", IsComplete = false, Status = Status.Todo, Priority = Priority.Low, DueDate = dueDate },
             new() { Id = 2, Title = "Task 2", Description = "Description 2", IsComplete = true, Status = Status.Completed, Priority = Priority.High }
         };
-        _mockService.Setup(s => s.GetAllTasksAsync()).ReturnsAsync(tasks);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
 
         // Act
         var result = await _controller.GetAll();
@@ -44,7 +44,7 @@ public class TaskItemsControllerV1Tests
         dtos.Should().HaveCount(2);
         dtos.Should().Contain(d => d.Id == 1 && d.Title == "Task 1" && d.Status == "Todo" && d.Priority == "Low" && d.DueDate == dueDate);
         dtos.Should().Contain(d => d.Id == 2 && d.Title == "Task 2" && d.Status == "Completed" && d.Priority == "High" && d.DueDate == null);
-        _mockService.Verify(s => s.GetAllTasksAsync(), Times.Once);
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class TaskItemsControllerV1Tests
             Priority = Priority.Medium,
             DueDate = dueDate
         };
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
 
         // Act
         var result = await _controller.Get(1);
@@ -77,21 +77,21 @@ public class TaskItemsControllerV1Tests
         dto.Status.Should().Be("Todo");
         dto.Priority.Should().Be("Medium");
         dto.DueDate.Should().Be(dueDate);
-        _mockService.Verify(s => s.GetTaskAsync(1), Times.Once);
+        _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
     }
 
     [Fact]
     public async Task Get_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((TaskItem?)null);
 
         // Act
         var result = await _controller.Get(1);
 
         // Assert
         result.Result.Should().BeOfType<NotFoundResult>();
-        _mockService.Verify(s => s.GetTaskAsync(1), Times.Once);
+        _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class TaskItemsControllerV1Tests
         };
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockService.Setup(s => s.CreateTaskAsync(It.IsAny<TaskItem>()))
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>()))
             .ReturnsAsync(createdTask);
 
         // Act
@@ -166,10 +166,10 @@ public class TaskItemsControllerV1Tests
             Status = Status.Completed,
             Priority = Priority.Low
         };
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockService.Setup(s => s.UpdateTaskAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _controller.Update(1, updateDto);
@@ -185,7 +185,7 @@ public class TaskItemsControllerV1Tests
         responseDto.Status.Should().Be("Completed");
         responseDto.Priority.Should().Be("Medium");
         responseDto.DueDate.Should().Be(dueDate);
-        _mockService.Verify(s => s.UpdateTaskAsync(It.IsAny<TaskItem>()), Times.Once);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
     [Fact]
@@ -193,36 +193,36 @@ public class TaskItemsControllerV1Tests
     {
         // Arrange
         var task = new TaskItem { Id = 1, Title = "Task 1", Description = "Description", IsComplete = false, Status = Status.Todo };
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(task);
-        _mockService.Setup(s => s.DeleteTaskAsync(1)).Returns(Task.CompletedTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockRepo.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
 
         // Act
         var result = await _controller.Delete(1);
 
         // Assert
         result.Should().BeOfType<NoContentResult>();
-        _mockService.Verify(s => s.DeleteTaskAsync(1), Times.Once);
+        _mockRepo.Verify(r => r.DeleteAsync(1), Times.Once);
     }
 
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((TaskItem?)null);
 
         // Act
         var result = await _controller.Delete(1);
 
         // Assert
         result.Should().BeOfType<NotFoundResult>();
-        _mockService.Verify(s => s.DeleteTaskAsync(It.IsAny<int>()), Times.Never);
+        _mockRepo.Verify(r => r.DeleteAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
     public async Task GetAll_ShouldReturnOkWithEmptyList_WhenNoTasks()
     {
         // Arrange
-        _mockService.Setup(s => s.GetAllTasksAsync()).ReturnsAsync([]);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
 
         // Act
         var result = await _controller.GetAll();
@@ -231,7 +231,7 @@ public class TaskItemsControllerV1Tests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var dtos = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject;
         dtos.Should().BeEmpty();
-        _mockService.Verify(s => s.GetAllTasksAsync(), Times.Once);
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public class TaskItemsControllerV1Tests
         // Assert
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequestResult.Value.Should().BeEquivalentTo(validationFailures);
-        _mockService.Verify(s => s.CreateTaskAsync(It.IsAny<TaskItem>()), Times.Never);
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
     [Fact]
@@ -263,7 +263,7 @@ public class TaskItemsControllerV1Tests
         var createdTask = new TaskItem { Id = 1, Title = "Task", Description = null, IsComplete = false };
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockService.Setup(s => s.CreateTaskAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
 
         // Act
         var result = await _controller.Create(createDto);
@@ -282,15 +282,15 @@ public class TaskItemsControllerV1Tests
     {
         // Arrange
         var updateDto = new UpdateTaskItemDto { Title = "Updated Task", Description = "Updated Description", IsComplete = true };
-        _mockService.Setup(s => s.GetTaskAsync(999)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((TaskItem?)null);
 
         // Act
         var result = await _controller.Update(999, updateDto);
 
         // Assert
         result.Result.Should().BeOfType<NotFoundResult>();
-        _mockService.Verify(s => s.GetTaskAsync(999), Times.Once);
-        _mockService.Verify(s => s.UpdateTaskAsync(It.IsAny<TaskItem>()), Times.Never);
+        _mockRepo.Verify(r => r.GetByIdAsync(999), Times.Once);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
     [Fact]
@@ -303,7 +303,7 @@ public class TaskItemsControllerV1Tests
         {
             new("Title", "Title is required.")
         };
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult(validationFailures));
 
@@ -313,7 +313,7 @@ public class TaskItemsControllerV1Tests
         // Assert
         var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
         badRequestResult.Value.Should().BeEquivalentTo(validationFailures);
-        _mockService.Verify(s => s.UpdateTaskAsync(It.IsAny<TaskItem>()), Times.Never);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
     [Fact]
@@ -337,10 +337,10 @@ public class TaskItemsControllerV1Tests
             Status = Status.Completed,
             Priority = Priority.High
         };
-        _mockService.Setup(s => s.GetTaskAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
-        _mockService.Setup(s => s.UpdateTaskAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
 
         // Act
         var result = await _controller.Update(1, updateDto);
@@ -349,6 +349,6 @@ public class TaskItemsControllerV1Tests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
         responseDto.Priority.Should().Be("High"); // Priority preserved from existing task
-        _mockService.Verify(s => s.UpdateTaskAsync(It.IsAny<TaskItem>()), Times.Once);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 }

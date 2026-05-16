@@ -15,7 +15,7 @@ export function JournalPage() {
   const { date: urlDate } = useParams<{ date: string }>()
 
   const isoDate = useMemo(
-    () => urlDateToISO(urlDate ?? ''),
+    () => (urlDate ? urlDateToISO(urlDate) : todayISO()),
     [urlDate],
   )
 

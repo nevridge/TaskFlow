@@ -3,7 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
@@ -11,27 +11,27 @@ namespace TaskFlow.Api.Controllers.V1;
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/logs")]
 public class JournalLogEntriesController(
-    IJournalEntryService journalService,
-    IJournalLogEntryService logService,
+    IJournalEntryRepository journalRepo,
+    IJournalLogEntryRepository logRepo,
     IValidator<JournalLogEntry> validator) : ControllerBase
 {
     private const string GetLogRouteName = "GetJournalLogEntryV1";
     private const string ApiVersionString = "1.0";
-    private readonly IJournalEntryService _journalService = journalService;
-    private readonly IJournalLogEntryService _logService = logService;
+    private readonly IJournalEntryRepository _journalRepo = journalRepo;
+    private readonly IJournalLogEntryRepository _logRepo = logRepo;
     private readonly IValidator<JournalLogEntry> _validator = validator;
 
     // GET: api/v1/JournalEntries/{entryId}/logs
     [HttpGet]
     public async Task<ActionResult<IEnumerable<JournalLogEntryResponseDto>>> GetAll(int entryId)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
         }
 
-        var logs = await _logService.GetAllByEntryIdAsync(entryId);
+        var logs = await _logRepo.GetAllByEntryIdAsync(entryId);
         return Ok(logs.Select(ToDto));
     }
 
@@ -39,13 +39,13 @@ public class JournalLogEntriesController(
     [HttpGet("{id}", Name = GetLogRouteName)]
     public async Task<ActionResult<JournalLogEntryResponseDto>> Get(int entryId, int id)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
         }
 
-        var log = await _logService.GetByIdAsync(entryId, id);
+        var log = await _logRepo.GetByIdAsync(entryId, id);
         if (log is null)
         {
             return NotFound();
@@ -58,7 +58,7 @@ public class JournalLogEntriesController(
     [HttpPost]
     public async Task<ActionResult<JournalLogEntryResponseDto>> Create(int entryId, [FromBody] CreateJournalLogEntryDto dto)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
@@ -72,7 +72,7 @@ public class JournalLogEntriesController(
             return BadRequest(validation.Errors);
         }
 
-        var created = await _logService.CreateAsync(log);
+        var created = await _logRepo.AddAsync(log);
         return CreatedAtRoute(GetLogRouteName, new { version = ApiVersionString, entryId, id = created.Id }, ToDto(created));
     }
 
@@ -80,13 +80,13 @@ public class JournalLogEntriesController(
     [HttpPut("{id}")]
     public async Task<ActionResult<JournalLogEntryResponseDto>> Update(int entryId, int id, [FromBody] UpdateJournalLogEntryDto dto)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
         }
 
-        var existing = await _logService.GetByIdAsync(entryId, id);
+        var existing = await _logRepo.GetByIdAsync(entryId, id);
         if (existing is null)
         {
             return NotFound();
@@ -100,7 +100,7 @@ public class JournalLogEntriesController(
             return BadRequest(validation.Errors);
         }
 
-        await _logService.UpdateAsync(existing);
+        await _logRepo.UpdateAsync(existing);
         return Ok(ToDto(existing));
     }
 
@@ -108,19 +108,19 @@ public class JournalLogEntriesController(
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int entryId, int id)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
         }
 
-        var existing = await _logService.GetByIdAsync(entryId, id);
+        var existing = await _logRepo.GetByIdAsync(entryId, id);
         if (existing is null)
         {
             return NotFound();
         }
 
-        await _logService.DeleteAsync(entryId, id);
+        await _logRepo.DeleteAsync(entryId, id);
         return NoContent();
     }
 

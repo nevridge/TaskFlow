@@ -26,10 +26,10 @@ export function TasksPage() {
   const tasks: TaskItemResponseDto[] = (data?.data as TaskItemResponseDto[] | undefined) ?? []
 
   const filtered = tasks
-    .filter(t => statusFilter === 'all' || (t.status ?? '').toLowerCase() === statusFilter)
-    .filter(t => priorityFilter === 'all' || (t.priority ?? '').toLowerCase() === priorityFilter)
+    .filter(t => statusFilter === 'all' || t.status?.toLowerCase() === statusFilter)
+    .filter(t => priorityFilter === 'all' || t.priority?.toLowerCase() === priorityFilter)
     .sort((a, b) => {
-      if (sortKey === 'title') return (a.title ?? '').localeCompare(b.title ?? '')
+      if (sortKey === 'title') return a.title.localeCompare(b.title)
       if (sortKey === 'dueDate') return (a.dueDate ?? '').localeCompare(b.dueDate ?? '')
       if (sortKey === 'priority') {
         const pa = priorityOrder[(a.priority ?? '').toLowerCase() as keyof typeof priorityOrder] ?? 2

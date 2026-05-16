@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/utils'
+import { todayISO } from '@/lib/journal-utils'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
 interface Props {
@@ -12,7 +13,8 @@ interface Props {
 function isOverdue(dueDate: string | null | undefined, status: string | undefined): boolean {
   if (!dueDate) return false
   if ((status ?? '').toLowerCase() === 'completed') return false
-  return new Date(dueDate) < new Date(new Date().toDateString())
+  // Compare ISO date strings (YYYY-MM-DD) to avoid timezone offset issues with UTC-stored dates
+  return dueDate.slice(0, 10) < todayISO()
 }
 
 export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props) {

@@ -156,11 +156,16 @@ export function TasksPage() {
                   {COLUMNS.map(col => (
                     <th
                       key={col.key}
-                      className={`t-list-th t-col-sort${col.key === taskSortKey ? ' t-col-sort--active' : ''}`}
-                      onClick={() => handleSortClick(col.key)}
+                      className={`t-list-th${col.key === taskSortKey ? ' t-col-sort--active' : ''}`}
                       aria-sort={col.key === taskSortKey ? (taskSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                     >
-                      {col.label}{sortIcon(col.key)}
+                      <button
+                        type="button"
+                        className="t-col-sort-btn"
+                        onClick={() => handleSortClick(col.key)}
+                      >
+                        {col.label}{sortIcon(col.key)}
+                      </button>
                     </th>
                   ))}
                   <th className="t-list-th t-list-th--journal" title="On today's journal">Journal</th>

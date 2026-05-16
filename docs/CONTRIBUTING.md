@@ -279,33 +279,31 @@ All new features must include tests. TaskFlow.Api uses xUnit for testing.
 ```
 TaskFlow.Api.Tests/
 ├── Controllers/        # Controller tests
-├── Services/           # Service layer tests
 ├── Repositories/       # Repository tests
 ├── Validators/         # Validation tests
+├── HealthChecks/       # Health check tests
 └── Extensions/         # DI registration tests
 ```
 
 **Example unit test:**
 ```csharp
-public class TaskServiceTests
+public class TaskItemsControllerV1Tests
 {
     [Fact]
-    public async Task GetByIdAsync_ReturnsTask_WhenTaskExists()
+    public async Task GetById_ReturnsNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
         var mockRepo = new Mock<ITaskRepository>();
-        var expectedTask = new TaskItem { Id = 1, Title = "Test" };
         mockRepo.Setup(r => r.GetByIdAsync(1))
-                .ReturnsAsync(expectedTask);
-        
-        var service = new TaskService(mockRepo.Object);
-        
+                .ReturnsAsync((TaskItem?)null);
+
+        var controller = new TaskItemsController(mockRepo.Object);
+
         // Act
-        var result = await service.GetByIdAsync(1);
-        
+        var result = await controller.GetById(1);
+
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedTask.Id, result.Id);
+        result.Result.Should().BeOfType<NotFoundResult>();
     }
 }
 ```

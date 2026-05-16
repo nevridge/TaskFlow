@@ -1,27 +1,15 @@
 import { useEffect, useRef } from 'react'
+import { usePrefs } from '@/context/usePrefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 import { THEMES } from '@/lib/themes'
 
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
-  isDark: boolean
-  theme: string
-  headerStyle: HeaderStyle
-  todoSort: SortMode
-  projectStart: string
-  onDark: (v: boolean) => void
-  onTheme: (v: string) => void
-  onHeaderStyle: (v: HeaderStyle) => void
-  onTodoSort: (v: SortMode) => void
-  onProjectStart: (v: string) => void
 }
 
-export function SettingsDrawer({
-  open, onClose,
-  isDark, theme, headerStyle, todoSort, projectStart,
-  onDark, onTheme, onHeaderStyle, onTodoSort, onProjectStart,
-}: SettingsDrawerProps) {
+export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
+  const { isDark, theme, headerStyle, todoSort, projectStart, setIsDark, setTheme, setHeaderStyle, setTodoSort, setProjectStart } = usePrefs()
   const drawerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -72,7 +60,7 @@ export function SettingsDrawer({
               <SegControl
                 options={['stat', 'minimal'] as const}
                 value={headerStyle}
-                onChange={v => onHeaderStyle(v as HeaderStyle)}
+                onChange={v => setHeaderStyle(v as HeaderStyle)}
               />
             </DrawerRow>
 
@@ -80,7 +68,7 @@ export function SettingsDrawer({
               <SegControl
                 options={['manual', 'open first', 'done last'] as const}
                 value={todoSort}
-                onChange={v => onTodoSort(v as SortMode)}
+                onChange={v => setTodoSort(v as SortMode)}
               />
             </DrawerRow>
 
@@ -88,7 +76,7 @@ export function SettingsDrawer({
               <input
                 type="date"
                 value={projectStart}
-                onChange={e => e.target.value && onProjectStart(e.target.value)}
+                onChange={e => e.target.value && setProjectStart(e.target.value)}
                 className="settings-date-input"
               />
             </DrawerRow>
@@ -99,7 +87,7 @@ export function SettingsDrawer({
 
             <DrawerRow label="Dark mode">
               <button
-                onClick={() => onDark(!isDark)}
+                onClick={() => setIsDark(!isDark)}
                 className="settings-toggle"
                 style={{ background: isDark ? '#34c759' : 'rgba(0,0,0,.15)' }}
                 aria-label="Toggle dark mode"
@@ -119,7 +107,7 @@ export function SettingsDrawer({
                   title={t.label}
                   aria-label={t.label}
                   aria-pressed={t.id === theme}
-                  onClick={() => onTheme(t.id)}
+                  onClick={() => setTheme(t.id)}
                   style={{
                     background: isDark ? t.bgDark : t.bgLight,
                     borderColor: isDark ? t.accentDark : t.accentLight,

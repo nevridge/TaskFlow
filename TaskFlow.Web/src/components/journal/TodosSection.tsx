@@ -26,7 +26,10 @@ interface Props {
 
 export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos }: Props) {
   const { data: todosData, isLoading } = useJournalTodos(entryId)
-  const todos: TaskItemResponseDto[] = (todosData?.data as TaskItemResponseDto[] | undefined) ?? []
+  const todos = useMemo<TaskItemResponseDto[]>(
+    () => (todosData?.data as TaskItemResponseDto[] | undefined) ?? [],
+    [todosData],
+  )
 
   const createTodo = useCreateTodoMutation(entryId)
   const toggleTodo = useToggleTodoMutation(entryId)

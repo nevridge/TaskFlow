@@ -28,7 +28,7 @@ export function NotesSection({ entryId, entryTitle, initialValue }: Props) {
     }, 600)
   }
 
-  const wordCount = (value ?? '').trim().split(/\s+/).filter(Boolean).length
+  const wordCount = value.trim().split(/\s+/).filter(Boolean).length
 
   return (
     <section className="card notes-section">

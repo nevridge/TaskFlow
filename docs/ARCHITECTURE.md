@@ -23,8 +23,6 @@ TaskFlow.Api follows a **layered architecture** pattern, separating concerns int
 ┌─────────────────────────────────────┐
 │         Controllers (API)           │  ← REST endpoints
 ├─────────────────────────────────────┤
-│      Services (Business Logic)      │  ← Domain logic
-├─────────────────────────────────────┤
 │    Repositories (Data Access)       │  ← Data operations
 ├─────────────────────────────────────┤
 │     EF Core DbContext (ORM)         │  ← Database mapping
@@ -75,7 +73,6 @@ Environment-specific behavior controlled via configuration:
 TaskFlow.Api/
 ├── Extensions/                 # DI service registration extensions
 │   ├── PersistenceServiceExtensions.cs
-│   ├── ApplicationServiceExtensions.cs
 │   ├── ValidationServiceExtensions.cs
 │   ├── HealthCheckServiceExtensions.cs
 │   ├── ApiVersioningServiceExtensions.cs
@@ -85,7 +82,7 @@ TaskFlow.Api/
 ├── Controllers/                # REST API endpoints
 │   └── V1/
 │       ├── TaskItemsController.cs
-│       └── StatusController.cs
+│       └── NotesController.cs
 ├── Data/                       # EF Core DbContext
 │   └── TaskDbContext.cs
 ├── DTOs/                       # Data transfer objects
@@ -96,23 +93,15 @@ TaskFlow.Api/
 │   └── HealthCheckResponseWriter.cs
 ├── Migrations/                 # EF Core migrations
 ├── Models/                     # Domain entities
-│   ├── TaskItem.cs
-│   └── Status.cs
+│   └── TaskItem.cs
 ├── Providers/                  # Shared providers
 │   └── JsonSerializerOptionsProvider.cs
 ├── Repositories/               # Data access layer
 │   ├── ITaskRepository.cs
 │   ├── TaskRepository.cs
-│   ├── IStatusRepository.cs
-│   └── StatusRepository.cs
-├── Services/                   # Business logic
-│   ├── ITaskService.cs
-│   ├── TaskService.cs
-│   ├── IStatusService.cs
-│   └── StatusService.cs
+│   └── ...
 ├── Validators/                 # FluentValidation validators
-│   ├── TaskItemValidator.cs
-│   └── StatusValidator.cs
+│   └── TaskItemValidator.cs
 └── Program.cs                  # Application entry point
 ```
 
@@ -120,24 +109,15 @@ TaskFlow.Api/
 
 **Controllers (API Layer)**
 - Handle HTTP requests/responses
-- Validate input using DTOs
-- Call service layer methods
+- Validate input using FluentValidation
+- Call repository methods directly
 - Return appropriate HTTP status codes
-- Do NOT contain business logic
-
-**Services (Business Logic Layer)**
-- Implement business rules
-- Coordinate operations across repositories
-- Handle exceptions and error cases
-- Transform between DTOs and domain models
-- Do NOT access database directly
 
 **Repositories (Data Access Layer)**
 - Perform CRUD operations
 - Execute queries
 - Handle EF Core specifics
 - Abstract database implementation details
-- Do NOT contain business logic
 
 ## Design Patterns
 
@@ -155,7 +135,6 @@ builder.Services.AddControllers();
 builder.Services.AddApiVersioningConfiguration();
 OpenApiServiceExtensions.AddOpenApi(builder.Services);
 builder.Services.AddPersistence(builder.Configuration);
-builder.Services.AddApplicationServices();
 builder.Services.AddValidation();
 builder.Services.AddApplicationHealthChecks();
 builder.Services.AddOpenTelemetryObservability(builder.Configuration);

@@ -1,29 +1,32 @@
 using Asp.Versioning;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/todos")]
-public class JournalTodosController(IJournalEntryService journalService, ITaskService taskService) : ControllerBase
+public class JournalTodosController(
+    IJournalEntryRepository journalRepo,
+    IValidator<AddJournalTodoDto> validator) : ControllerBase
 {
-    private readonly IJournalEntryService _journalService = journalService;
-    private readonly ITaskService _taskService = taskService;
+    private readonly IJournalEntryRepository _journalRepo = journalRepo;
+    private readonly IValidator<AddJournalTodoDto> _validator = validator;
 
     // GET: api/v1/JournalEntries/{entryId}/todos
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll(int entryId)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
+        var entry = await _journalRepo.GetByIdAsync(entryId);
         if (entry is null)
         {
             return NotFound();
         }
 
-        var todos = await _journalService.GetTodosAsync(entryId);
+        var todos = await _journalRepo.GetTodosAsync(entryId);
         return Ok(todos.Select(t => new TaskItemResponseDto
         {
             Id = t.Id,
@@ -40,48 +43,30 @@ public class JournalTodosController(IJournalEntryService journalService, ITaskSe
     [HttpPost]
     public async Task<IActionResult> AddTodo(int entryId, [FromBody] AddJournalTodoDto dto)
     {
-        if (dto.TaskItemId <= 0)
+        var validationResult = await _validator.ValidateAsync(dto);
+        if (!validationResult.IsValid)
         {
-            return BadRequest("TaskItemId must be greater than 0.");
+            return BadRequest(validationResult.Errors);
         }
 
-        var entry = await _journalService.GetByIdAsync(entryId);
-        if (entry is null)
+        var result = await _journalRepo.AddTodoAsync(entryId, dto.TaskItemId);
+        return result switch
         {
-            return NotFound();
-        }
-
-        var task = await _taskService.GetTaskAsync(dto.TaskItemId);
-        if (task is null)
-        {
-            return NotFound();
-        }
-
-        if (await _journalService.TodoExistsAsync(entryId, dto.TaskItemId))
-        {
-            return Conflict("This task is already linked to the journal entry.");
-        }
-
-        await _journalService.AddTodoAsync(entryId, dto.TaskItemId);
-        return NoContent();
+            AddTodoResult.EntryNotFound => NotFound(),
+            AddTodoResult.TaskNotFound => NotFound(),
+            AddTodoResult.AlreadyLinked => Conflict(new { message = "This task is already linked to the journal entry." }),
+            _ => NoContent(),
+        };
     }
 
     // DELETE: api/v1/JournalEntries/{entryId}/todos/{taskItemId}
     [HttpDelete("{taskItemId}")]
     public async Task<IActionResult> RemoveTodo(int entryId, int taskItemId)
     {
-        var entry = await _journalService.GetByIdAsync(entryId);
-        if (entry is null)
+        if (!await _journalRepo.RemoveTodoAsync(entryId, taskItemId))
         {
             return NotFound();
         }
-
-        if (!await _journalService.TodoExistsAsync(entryId, taskItemId))
-        {
-            return NotFound();
-        }
-
-        await _journalService.RemoveTodoAsync(entryId, taskItemId);
         return NoContent();
     }
 }

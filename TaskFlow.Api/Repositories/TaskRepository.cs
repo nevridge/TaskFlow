@@ -30,7 +30,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     public async Task DeleteAsync(int id)
     {
         var task = await _context.TaskItems.FindAsync(id);
-        if (task == null)
+        if (task is null)
         {
             return;
         }

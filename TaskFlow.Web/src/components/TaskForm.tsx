@@ -37,7 +37,7 @@ export function TaskForm({ task, onSubmit, onCancel }: Props) {
         <textarea
           id="description"
           className="t-input"
-          value={description ?? ''}
+          value={description}
           onChange={e => setDescription(e.target.value)}
           rows={3}
         />

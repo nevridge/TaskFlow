@@ -3,24 +3,24 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
-using TaskFlow.Api.Services;
+using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> validator) : ControllerBase
+public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator) : ControllerBase
 {
     private const string ApiVersionString = "1.0";
-    private readonly ITaskService _taskService = taskService;
+    private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
 
     // GET: api/v1/TaskItems
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
     {
-        var items = await _taskService.GetAllTasksAsync();
+        var items = await _repo.GetAllAsync();
         var dtos = items.Select(i => new TaskItemResponseDto
         {
             Id = i.Id,
@@ -38,7 +38,7 @@ public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> 
     [HttpGet("{id}", Name = "GetTaskV1")]
     public async Task<ActionResult<TaskItemResponseDto>> Get(int id)
     {
-        var item = await _taskService.GetTaskAsync(id);
+        var item = await _repo.GetByIdAsync(id);
         if (item is null)
         {
             return NotFound();
@@ -77,7 +77,7 @@ public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> 
             return BadRequest(validationResult.Errors);
         }
 
-        var createdItem = await _taskService.CreateTaskAsync(item);
+        var createdItem = await _repo.AddAsync(item);
 
         var responseDto = new TaskItemResponseDto
         {
@@ -97,7 +97,7 @@ public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> 
     [HttpPut("{id}")]
     public async Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto)
     {
-        var existing = await _taskService.GetTaskAsync(id);
+        var existing = await _repo.GetByIdAsync(id);
         if (existing is null)
         {
             return NotFound();
@@ -117,7 +117,7 @@ public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> 
             return BadRequest(validationResult.Errors);
         }
 
-        await _taskService.UpdateTaskAsync(existing);
+        await _repo.UpdateAsync(existing);
 
         var responseDto = new TaskItemResponseDto
         {
@@ -137,13 +137,13 @@ public class TaskItemsController(ITaskService taskService, IValidator<TaskItem> 
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var existing = await _taskService.GetTaskAsync(id);
+        var existing = await _repo.GetByIdAsync(id);
         if (existing is null)
         {
             return NotFound();
         }
 
-        await _taskService.DeleteTaskAsync(id);
+        await _repo.DeleteAsync(id);
         return NoContent();
     }
 }

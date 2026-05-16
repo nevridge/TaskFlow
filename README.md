@@ -173,7 +173,7 @@ TaskFlow/
 If you're evaluating this project for hiring or collaboration, here's what to look for:
 
 ### Architecture & Code Quality
-- **Layered API architecture** — Controller → Service → Repository → EF Core, each with clear responsibilities and test coverage
+- **Layered API architecture** — Controller → Repository → EF Core, each with clear responsibilities and test coverage
 - **Extension method pattern** — `Program.cs` stays minimal; each cross-cutting concern lives in its own `Extensions/` file
 - **Repository pattern** — data access abstracted behind interfaces, enabling in-memory testing without mocks
 - **Generated API client** — `@hey-api/openapi-ts` generates a fully typed fetch client from the live OpenAPI spec, keeping frontend types in sync with the backend contract

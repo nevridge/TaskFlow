@@ -9,7 +9,6 @@ using TaskFlow.Api.Data;
 using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
-using TaskFlow.Api.Services;
 using TaskFlow.Api.Validators;
 
 namespace TaskFlow.Api.Tests.Extensions;
@@ -36,28 +35,6 @@ public class ServiceCollectionExtensionsTests
         serviceProvider.GetService<TaskDbContext>().Should().NotBeNull();
         serviceProvider.GetService<ITaskRepository>().Should().NotBeNull();
         serviceProvider.GetService<ITaskRepository>().Should().BeOfType<TaskRepository>();
-    }
-
-    [Fact]
-    public void AddApplicationServices_ShouldRegisterBusinessLogicServices()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                { "ConnectionStrings:DefaultConnection", "Data Source=:memory:" }
-            })
-            .Build();
-
-        // Act
-        services.AddPersistence(configuration); // TaskService depends on ITaskRepository
-        services.AddApplicationServices();
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Assert
-        serviceProvider.GetService<ITaskService>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskService>().Should().BeOfType<TaskService>();
     }
 
     [Fact]
@@ -189,7 +166,6 @@ public class ServiceCollectionExtensionsTests
         // Act
         services.AddLogging(); // Required for health checks
         services.AddPersistence(configuration);
-        services.AddApplicationServices();
         services.AddValidation();
         services.AddApplicationHealthChecks();
         OpenApiServiceExtensions.AddOpenApi(services);
@@ -200,7 +176,6 @@ public class ServiceCollectionExtensionsTests
         // Assert - verify all critical services are registered
         serviceProvider.GetService<TaskDbContext>().Should().NotBeNull();
         serviceProvider.GetService<ITaskRepository>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskService>().Should().NotBeNull();
         serviceProvider.GetService<IValidator<TaskItem>>().Should().NotBeNull();
         serviceProvider.GetService<HealthCheckService>().Should().NotBeNull();
     }
@@ -222,7 +197,6 @@ public class ServiceCollectionExtensionsTests
         // Act
         services.AddLogging();
         services.AddPersistence(configuration);
-        services.AddApplicationServices();
         services.AddValidation();
         services.AddApplicationHealthChecks();
         services.AddOpenTelemetryObservability(configuration);
@@ -232,7 +206,6 @@ public class ServiceCollectionExtensionsTests
         // Assert - verify all services are registered in the collection
         services.Should().Contain(s => s.ServiceType == typeof(TaskDbContext));
         services.Should().Contain(s => s.ServiceType == typeof(ITaskRepository));
-        services.Should().Contain(s => s.ServiceType == typeof(ITaskService));
         services.Should().Contain(s => s.ServiceType == typeof(IValidator<TaskItem>));
         services.Should().Contain(s => s.ServiceType == typeof(HealthCheckService));
         services.Should().Contain(s => s.ServiceType == typeof(TracerProvider));

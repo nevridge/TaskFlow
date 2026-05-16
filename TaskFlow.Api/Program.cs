@@ -16,7 +16,6 @@ try
     builder.Services.AddApiVersioningConfiguration();
     OpenApiServiceExtensions.AddOpenApi(builder.Services);
     builder.Services.AddPersistence(builder.Configuration);
-    builder.Services.AddApplicationServices();
     builder.Services.AddValidation();
     builder.Services.AddApplicationHealthChecks();
     builder.Services.AddOpenTelemetryObservability(builder.Configuration);

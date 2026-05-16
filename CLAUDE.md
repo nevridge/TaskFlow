@@ -12,7 +12,7 @@ dotnet run --project TaskFlow.Api
 dotnet test
 
 # Test (single)
-dotnet test --filter "FullyQualifiedName~TaskServiceTests.GetAllTasksAsync_ShouldReturnAllTasks"
+dotnet test --filter "FullyQualifiedName~TaskRepositoryTests.GetAllAsync_ShouldReturnAllTasks"
 
 # Test with coverage
 dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
@@ -34,7 +34,7 @@ docker compose -f docker-compose.prod.yml up
 
 **Stack:** .NET 10, EF Core + SQLite, FluentValidation, OpenTelemetry → Seq, xUnit/Moq/FluentAssertions, Scalar/OpenAPI
 
-**Layered flow:** `Controller → Service → Repository → EF Core (SQLite)`
+**Layered flow:** `Controller → Repository → EF Core (SQLite)`
 
 **Extension method pattern** — `Program.cs` stays clean by delegating all service registration to methods in `Extensions/`. Each extension file owns one concern (persistence, versioning, health checks, OpenTelemetry, validation, JSON, OpenAPI). Adding a new cross-cutting concern means a new extension file, not touching `Program.cs`.
 
@@ -83,10 +83,10 @@ cd TaskFlow.Web && npm run gen:api
 
 ## Testing
 
-Tests mirror the main project structure: `Controllers/V1/`, `Services/`, `Repositories/`, `Validators/`, `HealthChecks/`, `Extensions/`.
+Tests mirror the main project structure: `Controllers/V1/`, `Repositories/`, `Validators/`, `HealthChecks/`, `Extensions/`.
 
-- Repository tests use `Microsoft.EntityFrameworkCore.InMemory` — no mocks for the DB layer.
-- Service and controller tests use Moq to mock the layer below.
+- Repository tests use `Microsoft.EntityFrameworkCore.InMemory` for most tests; real in-memory SQLite is used where constraint enforcement is needed (e.g., unique index tests).
+- Controller tests use Moq to mock repositories.
 - CI enforces **75% line coverage** minimum (`ci.yml`).
 
 ## Visual Studio Docker Compose Debugging

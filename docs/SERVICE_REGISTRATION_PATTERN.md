@@ -20,8 +20,7 @@ All service registration extensions are located in the `TaskFlow.Api.Extensions`
 
 | Extension Class | Purpose | Key Services Registered |
 |----------------|---------|------------------------|
-| `PersistenceServiceExtensions` | Database and data access | `TaskDbContext`, `ITaskRepository`, `IStatusRepository` |
-| `ApplicationServiceExtensions` | Business logic services | `ITaskService`, `IStatusService` |
+| `PersistenceServiceExtensions` | Database and data access | `TaskDbContext`, `ITaskRepository`, repository interfaces |
 | `ValidationServiceExtensions` | Input validation | FluentValidation validators |
 | `HealthCheckServiceExtensions` | Health monitoring | Database and self health checks |
 | `ApiVersioningServiceExtensions` | API versioning | Versioning middleware and API explorer |
@@ -46,7 +45,6 @@ builder.Services.AddControllers();
 builder.Services.AddApiVersioningConfiguration();
 OpenApiServiceExtensions.AddOpenApi(builder.Services);
 builder.Services.AddPersistence(builder.Configuration);
-builder.Services.AddApplicationServices();
 builder.Services.AddValidation();
 builder.Services.AddApplicationHealthChecks();
 builder.Services.AddOpenTelemetryObservability(builder.Configuration);
@@ -204,7 +202,6 @@ Always return `IServiceCollection` to enable fluent configuration:
 ```csharp
 builder.Services
     .AddPersistence(builder.Configuration)
-    .AddApplicationServices()
     .AddValidation();
 ```
 
@@ -213,13 +210,13 @@ builder.Services
 Be mindful of service dependencies. Register dependencies first:
 
 ```csharp
-// ✅ Good: Repository registered before service that depends on it
-builder.Services.AddPersistence(builder.Configuration);  // Registers ITaskRepository
-builder.Services.AddApplicationServices();                // Registers ITaskService (depends on ITaskRepository)
+// ✅ Good: Dependencies registered in the correct order
+builder.Services.AddPersistence(builder.Configuration);  // Registers repositories
+builder.Services.AddValidation();                        // Registers validators
 
 // ❌ Bad: Service registered before its dependency
-builder.Services.AddApplicationServices();                // ITaskService depends on ITaskRepository
-builder.Services.AddPersistence(builder.Configuration);  // ITaskRepository registered too late
+builder.Services.AddValidation();
+builder.Services.AddPersistence(builder.Configuration);  // Repositories registered too late
 ```
 
 ### 5. Avoid Overloading
@@ -391,7 +388,7 @@ If you need to add new service registrations to the application:
 ```csharp
 // Register dependencies first
 builder.Services.AddPersistence(builder.Configuration);  // Registers repositories
-builder.Services.AddApplicationServices();                // Registers services that depend on repositories
+builder.Services.AddValidation();                        // Registers validators
 ```
 
 ### Configuration Not Found

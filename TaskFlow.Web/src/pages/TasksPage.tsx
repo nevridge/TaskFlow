@@ -169,7 +169,7 @@ export function TasksPage() {
                     </th>
                   ))}
                   <th className="t-list-th t-list-th--journal" title="On today's journal">Journal</th>
-                  <th className="t-list-th t-list-th--actions"></th>
+                  <th className="t-list-th t-list-th--actions" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>

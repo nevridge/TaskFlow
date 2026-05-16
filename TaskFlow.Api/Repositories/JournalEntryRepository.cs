@@ -80,25 +80,38 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         return entry?.Todos.Any(t => t.Id == taskItemId) ?? false;
     }
 
-    public async Task<bool> AddTodoAsync(int entryId, int taskItemId)
+    public async Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId)
     {
         var entry = await _context.JournalEntries
             .Include(e => e.Todos)
             .FirstOrDefaultAsync(e => e.Id == entryId);
         if (entry is null)
         {
-            return false;
+            return AddTodoResult.EntryNotFound;
         }
 
         var task = await _context.TaskItems.FindAsync(taskItemId);
         if (task is null)
         {
-            return false;
+            return AddTodoResult.TaskNotFound;
+        }
+
+        if (entry.Todos.Any(t => t.Id == taskItemId))
+        {
+            return AddTodoResult.AlreadyLinked;
         }
 
         entry.Todos.Add(task);
-        await _context.SaveChangesAsync();
-        return true;
+        try
+        {
+            await _context.SaveChangesAsync();
+            return AddTodoResult.Success;
+        }
+        catch (DbUpdateException)
+        {
+            // Race condition: another request linked the same task between our check and save.
+            return AddTodoResult.AlreadyLinked;
+        }
     }
 
     public async Task<bool> RemoveTodoAsync(int entryId, int taskItemId)

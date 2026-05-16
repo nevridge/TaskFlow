@@ -13,7 +13,6 @@ namespace TaskFlow.Api.Tests.Controllers.V1;
 public class JournalTodosControllerV1Tests
 {
     private readonly Mock<IJournalEntryRepository> _journalRepo = new();
-    private readonly Mock<ITaskRepository> _taskRepo = new();
     private readonly Mock<IValidator<AddJournalTodoDto>> _mockValidator = new();
     private readonly JournalTodosController _controller;
 
@@ -22,7 +21,7 @@ public class JournalTodosControllerV1Tests
         _mockValidator
             .Setup(v => v.ValidateAsync(It.IsAny<AddJournalTodoDto>(), default))
             .ReturnsAsync(new ValidationResult());
-        _controller = new JournalTodosController(_journalRepo.Object, _taskRepo.Object, _mockValidator.Object);
+        _controller = new JournalTodosController(_journalRepo.Object, _mockValidator.Object);
     }
 
     [Fact]
@@ -65,10 +64,19 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task AddTodo_ShouldReturnNotFound_WhenEntryMissing()
+    {
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 9)).ReturnsAsync(AddTodoResult.EntryNotFound);
+
+        var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 9 });
+
+        result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnNotFound_WhenTaskMissing()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "May 10", Date = new DateOnly(2026, 5, 10) });
-        _taskRepo.Setup(s => s.GetByIdAsync(9)).ReturnsAsync((TaskItem?)null);
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 9)).ReturnsAsync(AddTodoResult.TaskNotFound);
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 9 });
 
@@ -78,23 +86,17 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task AddTodo_ShouldReturnConflict_WhenAlreadyLinked()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "May 10", Date = new DateOnly(2026, 5, 10) });
-        _taskRepo.Setup(s => s.GetByIdAsync(4)).ReturnsAsync(new TaskItem { Id = 4, Title = "Task", Status = Status.Todo });
-        _journalRepo.Setup(s => s.TodoExistsAsync(1, 4)).ReturnsAsync(true);
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.AlreadyLinked);
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
 
         result.Should().BeOfType<ConflictObjectResult>();
-        _journalRepo.Verify(s => s.AddTodoAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
     public async Task AddTodo_ShouldReturnNoContent_WhenValid()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "May 10", Date = new DateOnly(2026, 5, 10) });
-        _taskRepo.Setup(s => s.GetByIdAsync(4)).ReturnsAsync(new TaskItem { Id = 4, Title = "Task", Status = Status.Todo });
-        _journalRepo.Setup(s => s.TodoExistsAsync(1, 4)).ReturnsAsync(false);
-        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(true);
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.Success);
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
 
@@ -105,8 +107,6 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task RemoveTodo_ShouldReturnNoContent_WhenLinked()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "May 10", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.TodoExistsAsync(1, 4)).ReturnsAsync(true);
         _journalRepo.Setup(s => s.RemoveTodoAsync(1, 4)).ReturnsAsync(true);
 
         var result = await _controller.RemoveTodo(1, 4);
@@ -114,5 +114,14 @@ public class JournalTodosControllerV1Tests
         result.Should().BeOfType<NoContentResult>();
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 4), Times.Once);
     }
-}
 
+    [Fact]
+    public async Task RemoveTodo_ShouldReturnNotFound_WhenNotLinked()
+    {
+        _journalRepo.Setup(s => s.RemoveTodoAsync(1, 4)).ReturnsAsync(false);
+
+        var result = await _controller.RemoveTodo(1, 4);
+
+        result.Should().BeOfType<NotFoundResult>();
+    }
+}

@@ -11,11 +11,9 @@ namespace TaskFlow.Api.Controllers.V1;
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/todos")]
 public class JournalTodosController(
     IJournalEntryRepository journalRepo,
-    ITaskRepository taskRepo,
     IValidator<AddJournalTodoDto> validator) : ControllerBase
 {
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
-    private readonly ITaskRepository _taskRepo = taskRepo;
     private readonly IValidator<AddJournalTodoDto> _validator = validator;
 
     // GET: api/v1/JournalEntries/{entryId}/todos
@@ -51,45 +49,20 @@ public class JournalTodosController(
             return BadRequest(validationResult.Errors);
         }
 
-        var entry = await _journalRepo.GetByIdAsync(entryId);
-        if (entry is null)
+        var result = await _journalRepo.AddTodoAsync(entryId, dto.TaskItemId);
+        return result switch
         {
-            return NotFound();
-        }
-
-        var task = await _taskRepo.GetByIdAsync(dto.TaskItemId);
-        if (task is null)
-        {
-            return NotFound();
-        }
-
-        if (await _journalRepo.TodoExistsAsync(entryId, dto.TaskItemId))
-        {
-            return Conflict(new { message = "This task is already linked to the journal entry." });
-        }
-
-        if (!await _journalRepo.AddTodoAsync(entryId, dto.TaskItemId))
-        {
-            return NotFound();
-        }
-        return NoContent();
+            AddTodoResult.EntryNotFound => NotFound(),
+            AddTodoResult.TaskNotFound => NotFound(),
+            AddTodoResult.AlreadyLinked => Conflict(new { message = "This task is already linked to the journal entry." }),
+            _ => NoContent(),
+        };
     }
 
     // DELETE: api/v1/JournalEntries/{entryId}/todos/{taskItemId}
     [HttpDelete("{taskItemId}")]
     public async Task<IActionResult> RemoveTodo(int entryId, int taskItemId)
     {
-        var entry = await _journalRepo.GetByIdAsync(entryId);
-        if (entry is null)
-        {
-            return NotFound();
-        }
-
-        if (!await _journalRepo.TodoExistsAsync(entryId, taskItemId))
-        {
-            return NotFound();
-        }
-
         if (!await _journalRepo.RemoveTodoAsync(entryId, taskItemId))
         {
             return NotFound();

@@ -37,7 +37,10 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
       </td>
       <td className="t-list-cell t-list-cell--due">
         {task.dueDate ? (
-          <span className={overdue ? 't-overdue' : ''}>
+          <span
+            className={overdue ? 't-overdue' : ''}
+            aria-label={overdue ? `Overdue, ${formatDate(task.dueDate)}` : undefined}
+          >
             {overdue && <span className="t-overdue-icon" aria-hidden="true">!</span>}
             {formatDate(task.dueDate)}
           </span>

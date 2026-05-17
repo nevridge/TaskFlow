@@ -13,6 +13,7 @@ interface Props {
   task: TaskRowModel
   isOnTodayJournal: boolean
   onEdit: (task: TaskRowModel) => void
+  onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
 }
 
@@ -23,7 +24,7 @@ function isOverdue(dueDate: string | null | undefined, status: string | undefine
   return dueDate.slice(0, 10) < todayISO()
 }
 
-export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props) {
+export function TaskListRow({ task, isOnTodayJournal, onEdit, onHistory, onDelete }: Props) {
   const status = (task.status ?? 'draft').toLowerCase()
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
@@ -80,6 +81,7 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
       </td>
       <td className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
+          <button className="t-btn" aria-label="History" onClick={() => onHistory(task)}>History</button>
           <button className="t-btn" aria-label="Edit" onClick={() => onEdit(task)}>Edit</button>
           <button className="t-btn-danger" aria-label="Delete" onClick={() => onDelete(task)}>Delete</button>
         </div>

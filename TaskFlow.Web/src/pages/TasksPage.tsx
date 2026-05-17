@@ -3,6 +3,7 @@ import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteT
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskListRow } from '@/components/TaskListRow'
+import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm } from '@/components/TaskForm'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import type { TaskSortKey } from '@/lib/prefs'
@@ -46,6 +47,7 @@ export function TasksPage() {
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
+  const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
 
@@ -135,6 +137,22 @@ export function TasksPage() {
           </div>
         )}
 
+        {historyTask && (
+          <>
+            <div className="t-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+            <div className="t-modal" role="dialog" aria-modal="true" aria-label="Task history">
+              <div className="t-modal-header">
+                <div>
+                  <h2 className="t-panel-title t-panel-title--tight">Task history</h2>
+                  <div className="t-modal-subtitle">{historyTask.title}</div>
+                </div>
+                <button className="t-btn" onClick={() => setHistoryTask(null)}>Close</button>
+              </div>
+              <TaskHistoryPanel taskId={Number(historyTask.id)} />
+            </div>
+          </>
+        )}
+
         <div className="t-filter-row">
           <div className="t-chip-group" aria-label="Task view filters">
             <button type="button" className={`t-chip${viewFilter === 'all' ? ' is-active' : ''}`} onClick={() => setViewFilter('all')}>All</button>
@@ -207,6 +225,7 @@ export function TasksPage() {
                     task={task}
                     isOnTodayJournal={todayTaskIds.has(Number(task.id))}
                     onEdit={setEditingTask}
+                    onHistory={setHistoryTask}
                     onDelete={handleDelete}
                   />
                 ))}

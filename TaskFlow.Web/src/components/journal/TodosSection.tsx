@@ -6,9 +6,7 @@ import {
   useToggleTodoMutation,
   useEditTodoMutation,
   useRemoveTodoMutation,
-  useCarryOverMutation,
   openTodoCount,
-  yesterdayOf,
 } from '@/hooks/useJournal'
 import { todayISO } from '@/lib/journal-utils'
 
@@ -18,13 +16,9 @@ interface Props {
   entryId: number
   isoDate: string
   sort: SortMode
-  /** Today's entry ID — needed for carry-forward from past days */
-  todayEntryId: number | undefined
-  /** Today's current todos — used for deduplication during carry-over */
-  todayTodos: TaskItemResponseDto[]
 }
 
-export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos }: Props) {
+export function TodosSection({ entryId, isoDate, sort }: Props) {
   const { data: todosData, isLoading } = useJournalTodos(entryId)
   const todos = useMemo<TaskItemResponseDto[]>(
     () => (todosData?.data as TaskItemResponseDto[] | undefined) ?? [],
@@ -35,7 +29,6 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
   const toggleTodo = useToggleTodoMutation(entryId)
   const editTodo = useEditTodoMutation(entryId)
   const removeTodo = useRemoveTodoMutation(entryId)
-  const carryOver = useCarryOverMutation()
 
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -44,8 +37,6 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
 
   const today = todayISO()
   const isPastDay = isoDate < today
-  const isToday = isoDate === today
-  const yesterday = yesterdayOf(isoDate)
 
   const sorted = useMemo(() => {
     const arr = [...todos]
@@ -95,34 +86,12 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
     setEditingText('')
   }
 
-  function handleCarryOver() {
-    if (isToday) {
-      // Pull from yesterday into today
-      carryOver.mutate({ fromIsoDate: yesterday, toEntryId: entryId, toExistingTodos: todos })
-    } else if (todayEntryId != null) {
-      // Push this day's open todos into today
-      carryOver.mutate({ fromIsoDate: isoDate, toEntryId: todayEntryId, toExistingTodos: todayTodos })
-    }
-  }
-
-  const canCarryForward = !isToday && remaining > 0 && todayEntryId != null
-
   return (
     <section className="card todos">
       <div className="card-hdr">
         <h2 className="card-title">TODOs</h2>
         <div className="card-meta">
           <span className="todo-count">{total - remaining}/{total}</span>
-          {isToday && (
-            <button className="link-btn" onClick={handleCarryOver} disabled={carryOver.isPending}>
-              ← Pull from yesterday
-            </button>
-          )}
-          {canCarryForward && (
-            <button className="link-btn" onClick={handleCarryOver} disabled={carryOver.isPending}>
-              Carry over to today →
-            </button>
-          )}
         </div>
       </div>
 

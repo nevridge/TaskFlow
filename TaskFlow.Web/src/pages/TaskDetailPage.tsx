@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useTaskQuery, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import { useTaskQuery, useTaskHistoryQuery, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { TaskForm } from '@/components/TaskForm'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
+import type { TaskItemEventResponseDto } from '@/api/tasks'
+import { formatShort } from '@/lib/journal-utils'
 import type { TaskItemResponseDto, NoteResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
@@ -14,6 +16,7 @@ export function TaskDetailPage() {
   const taskId = Number(id)
 
   const { data: taskData, isLoading: taskLoading, error: taskError } = useTaskQuery(taskId)
+  const { data: historyData, isLoading: historyLoading } = useTaskHistoryQuery(taskId)
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
   const updateTask = useUpdateTaskMutation()
   const deleteTask = useDeleteTaskMutation()
@@ -28,6 +31,7 @@ export function TaskDetailPage() {
   const [editingNote, setEditingNote] = useState<NoteResponseDto | null>(null)
 
   const task = taskData?.data as TaskItemResponseDto | undefined
+  const history: TaskItemEventResponseDto[] = (historyData?.data as TaskItemEventResponseDto[] | undefined) ?? []
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
 
   if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
@@ -89,6 +93,29 @@ export function TaskDetailPage() {
 
         <div>
           <div className="t-section-hdr">
+            <h2 className="t-section-title">Task history</h2>
+          </div>
+
+          {historyLoading ? (
+            <p className="t-empty">Loading history…</p>
+          ) : history.length === 0 ? (
+            <p className="t-empty">No history yet.</p>
+          ) : (
+            <div className="t-panel">
+              <ol className="t-history-list">
+                {history.map(event => (
+                  <li key={event.id} className="t-history-item">
+                    <div className="t-history-line">{describeEvent(event)}</div>
+                    <div className="t-history-time">{formatDateTime(event.occurredAtUtc)}</div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="t-section-hdr">
             <h2 className="t-section-title">Notes</h2>
             {!showNoteForm && !editingNote && (
               <button className="t-btn-primary" onClick={() => setShowNoteForm(true)}>Add Note</button>
@@ -137,4 +164,28 @@ export function TaskDetailPage() {
       </div>
     </div>
   )
+}
+
+function describeEvent(event: TaskItemEventResponseDto): string {
+  if (event.changeSummary) return event.changeSummary
+
+  switch (event.eventType) {
+    case 'AssignedToJournalDay':
+      return event.toJournalDate ? `Assigned to ${formatShort(event.toJournalDate)}` : 'Assigned to a journal day'
+    case 'ReassignedToJournalDay':
+      return event.fromJournalDate && event.toJournalDate
+        ? `Moved from ${formatShort(event.fromJournalDate)} to ${formatShort(event.toJournalDate)}`
+        : 'Moved to a different journal day'
+    case 'RemovedFromJournalDay':
+      return event.fromJournalDate ? `Removed from ${formatShort(event.fromJournalDate)}` : 'Removed from a journal day'
+    default:
+      return event.eventType
+  }
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value))
 }

@@ -42,6 +42,44 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         {
             throw new DuplicateJournalDateException(entry.Date);
         }
+
+        var previousDate = entry.Date.AddDays(-1);
+        var previousEntry = await _context.JournalEntries
+            .Include(e => e.Todos)
+            .FirstOrDefaultAsync(e => e.Date == previousDate);
+
+        if (previousEntry is not null)
+        {
+            var tasksToMove = previousEntry.Todos
+                .Where(t => t.CurrentJournalEntryId == previousEntry.Id && t.Status != Status.Completed && !t.IsComplete)
+                .ToList();
+
+            foreach (var task in tasksToMove)
+            {
+                previousEntry.Todos.Remove(task);
+                entry.Todos.Add(task);
+                task.CurrentJournalEntryId = entry.Id;
+                task.FirstTaggedDate ??= previousEntry.Date;
+                task.MoveCount += 1;
+                _context.TaskItemEvents.Add(new TaskItemEvent
+                {
+                    TaskItemId = task.Id,
+                    EventType = "ReassignedToJournalDay",
+                    OccurredAtUtc = DateTime.UtcNow,
+                    FromJournalEntryId = previousEntry.Id,
+                    ToJournalEntryId = entry.Id,
+                    FromJournalDate = previousEntry.Date,
+                    ToJournalDate = entry.Date,
+                    ChangeSummary = "Automatically moved forward to the next journal day."
+                });
+            }
+
+            if (tasksToMove.Count > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+        }
+
         return entry;
     }
 
@@ -108,6 +146,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         }
 
         var previousEntryId = task.CurrentJournalEntryId;
+        DateOnly? previousEntryDate = null;
         if (previousEntryId.HasValue && previousEntryId.Value != entryId)
         {
             var previousEntry = await _context.JournalEntries
@@ -115,6 +154,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
                 .FirstOrDefaultAsync(e => e.Id == previousEntryId.Value);
             if (previousEntry is not null)
             {
+                previousEntryDate = previousEntry.Date;
                 var existingLink = previousEntry.Todos.FirstOrDefault(t => t.Id == taskItemId);
                 if (existingLink is not null)
                 {
@@ -129,6 +169,19 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         task.FirstTaggedDate ??= entry.Date;
 
         entry.Todos.Add(task);
+        _context.TaskItemEvents.Add(new TaskItemEvent
+        {
+            TaskItemId = task.Id,
+            EventType = previousEntryId.HasValue && previousEntryId.Value != entryId ? "ReassignedToJournalDay" : "AssignedToJournalDay",
+            OccurredAtUtc = DateTime.UtcNow,
+            FromJournalEntryId = previousEntryId,
+            ToJournalEntryId = entryId,
+            FromJournalDate = previousEntryDate,
+            ToJournalDate = entry.Date,
+            ChangeSummary = previousEntryId.HasValue && previousEntryId.Value != entryId
+                ? "Task was moved to a different journal day."
+                : "Task was assigned to a journal day."
+        });
         try
         {
             await _context.SaveChangesAsync();
@@ -162,6 +215,15 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         {
             task.CurrentJournalEntryId = null;
         }
+        _context.TaskItemEvents.Add(new TaskItemEvent
+        {
+            TaskItemId = task.Id,
+            EventType = "RemovedFromJournalDay",
+            OccurredAtUtc = DateTime.UtcNow,
+            FromJournalEntryId = entryId,
+            FromJournalDate = entry.Date,
+            ChangeSummary = "Task was removed from the journal day."
+        });
         await _context.SaveChangesAsync();
         return true;
     }

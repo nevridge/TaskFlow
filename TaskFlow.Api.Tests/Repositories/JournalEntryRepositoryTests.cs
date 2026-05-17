@@ -195,4 +195,72 @@ public class JournalEntryRepositoryTests
 
         (await repo.GetByIdAsync(entry.Id)).Should().BeNull();
     }
+
+    [Fact]
+    public async Task AddAsync_ShouldAutomaticallyInheritIncompleteTasks_FromPreviousDay()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var previousEntry = await repo.AddAsync(new JournalEntry { Title = "Previous", Date = today.AddDays(1) });
+        var openTask = new TaskItem { Title = "Open task", Status = Status.Todo };
+        context.TaskItems.Add(openTask);
+        await context.SaveChangesAsync();
+        await repo.AddTodoAsync(previousEntry.Id, openTask.Id);
+
+        var nextEntry = await repo.AddAsync(new JournalEntry { Title = "Next", Date = today.AddDays(2) });
+
+        (await repo.GetTodosAsync(previousEntry.Id)).Should().BeEmpty();
+        (await repo.GetTodosAsync(nextEntry.Id)).Should().ContainSingle(t => t.Id == openTask.Id);
+        openTask.CurrentJournalEntryId.Should().Be(nextEntry.Id);
+        openTask.MoveCount.Should().Be(1);
+        openTask.FirstTaggedDate.Should().Be(previousEntry.Date);
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldNotInheritCompletedTasks_FromPreviousDay()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var previousEntry = await repo.AddAsync(new JournalEntry { Title = "Previous", Date = today.AddDays(1) });
+        var completedTask = new TaskItem { Title = "Done task", Status = Status.Completed, IsComplete = true };
+        context.TaskItems.Add(completedTask);
+        await context.SaveChangesAsync();
+        await repo.AddTodoAsync(previousEntry.Id, completedTask.Id);
+
+        var nextEntry = await repo.AddAsync(new JournalEntry { Title = "Next", Date = today.AddDays(2) });
+
+        (await repo.GetTodosAsync(previousEntry.Id)).Should().ContainSingle(t => t.Id == completedTask.Id);
+        (await repo.GetTodosAsync(nextEntry.Id)).Should().BeEmpty();
+        completedTask.CurrentJournalEntryId.Should().Be(previousEntry.Id);
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_AndRemoveTodoAsync_ShouldWriteTaskHistoryEvents()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var task = new TaskItem { Title = "Task 1", Status = Status.Todo };
+        context.TaskItems.Add(task);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, task.Id);
+        await repo.RemoveTodoAsync(entry.Id, task.Id);
+
+        var events = await context.TaskItemEvents
+            .Where(e => e.TaskItemId == task.Id)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
+        events.Should().HaveCount(2);
+        events[0].EventType.Should().Be("AssignedToJournalDay");
+        events[0].ToJournalEntryId.Should().Be(entry.Id);
+        events[1].EventType.Should().Be("RemovedFromJournalDay");
+        events[1].FromJournalEntryId.Should().Be(entry.Id);
+    }
 }

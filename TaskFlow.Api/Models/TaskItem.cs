@@ -13,5 +13,6 @@ public class TaskItem
     public int MoveCount { get; set; }
     public int? CurrentJournalEntryId { get; set; }
     public JournalEntry? CurrentJournalEntry { get; set; }
+    public ICollection<TaskItemEvent> Events { get; set; } = [];
     public ICollection<Note> Notes { get; set; } = [];
 }

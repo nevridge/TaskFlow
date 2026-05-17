@@ -424,4 +424,38 @@ public class TaskItemsControllerV1Tests
         result.Result.Should().BeOfType<OkObjectResult>();
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
+
+    [Fact]
+    public async Task GetHistory_ShouldReturnNotFound_WhenTaskDoesNotExist()
+    {
+        _mockRepo.Setup(r => r.GetByIdAsync(7)).ReturnsAsync((TaskItem?)null);
+
+        var result = await _controller.GetHistory(7);
+
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task GetHistory_ShouldReturnOk_WhenTaskExists()
+    {
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "Task" });
+        _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync([
+            new TaskItemEvent
+            {
+                Id = 10,
+                TaskItemId = 1,
+                EventType = "AssignedToJournalDay",
+                OccurredAtUtc = DateTime.UtcNow,
+                ToJournalEntryId = 3,
+                ToJournalDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                ChangeSummary = "Task was assigned to a journal day."
+            }
+        ]);
+
+        var result = await _controller.GetHistory(1);
+
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var history = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemEventResponseDto>>().Subject;
+        history.Should().ContainSingle(e => e.Id == 10 && e.EventType == "AssignedToJournalDay");
+    }
 }

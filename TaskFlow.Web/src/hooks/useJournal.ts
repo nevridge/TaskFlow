@@ -134,51 +134,6 @@ export function useRemoveTodoMutation(entryId: number) {
   })
 }
 
-/**
- * Pulls uncompleted todos from a source date's entry into a target entry.
- * Used for both "pull from yesterday" (today view) and "carry over to today" (past view).
- * toEntryId and toExistingTodos must be provided per-call (they vary by navigation context).
- */
-export function useCarryOverMutation() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      fromIsoDate,
-      toEntryId,
-      toExistingTodos,
-    }: {
-      fromIsoDate: string
-      toEntryId: number
-      toExistingTodos: TaskItemResponseDto[]
-    }) => {
-      const allEntries =
-        (qc.getQueryData<{ data: JournalEntryResponseDto[] }>(journalKeys.all)?.data) ?? []
-      const fromEntry = allEntries.find(e => e.date === fromIsoDate)
-      if (!fromEntry) return
-
-      const cached = qc.getQueryData<{ data: TaskItemResponseDto[] }>(journalKeys.todos(fromEntry.id))
-      const fromTodos: TaskItemResponseDto[] = cached?.data
-        ?? ((await getJournalTodos(fromEntry.id)).data as TaskItemResponseDto[])
-
-      const open = fromTodos.filter(t => t.status !== 'Completed' && !t.isComplete)
-      const existingTitles = new Set(toExistingTodos.map(t => t.title))
-      const toAdd = open.filter(t => !existingTitles.has(t.title))
-
-      for (const todo of toAdd) {
-        const res = await postApiV1TaskItems({ body: { title: todo.title, status: 'todo' } })
-        const taskId = Number((res.data as TaskItemResponseDto).id)
-        await addJournalTodo(toEntryId, taskId)
-      }
-
-      return toEntryId
-    },
-    onSuccess: (_result, { toEntryId }) => {
-      qc.invalidateQueries({ queryKey: journalKeys.todos(toEntryId) })
-      qc.invalidateQueries({ queryKey: taskKeys.all })
-    },
-  })
-}
-
 // ─── Log mutations ────────────────────────────────────────────────────────────
 
 export function useAddLogEntryMutation(entryId: number) {

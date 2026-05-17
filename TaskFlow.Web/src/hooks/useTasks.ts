@@ -7,10 +7,12 @@ import {
   deleteApiV1TaskItemsById,
 } from '@/api/client/sdk.gen'
 import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
+import { getTaskHistory } from '@/api/tasks'
 
 export const taskKeys = {
   all: ['tasks'] as const,
   detail: (id: number) => ['tasks', id] as const,
+  history: (id: number) => ['tasks', id, 'history'] as const,
 }
 
 export function useTasksQuery() {
@@ -24,6 +26,14 @@ export function useTaskQuery(id: number) {
   return useQuery({
     queryKey: taskKeys.detail(id),
     queryFn: () => getTaskV1({ path: { id } }),
+    enabled: Number.isFinite(id),
+  })
+}
+
+export function useTaskHistoryQuery(id: number) {
+  return useQuery({
+    queryKey: taskKeys.history(id),
+    queryFn: () => getTaskHistory(id),
     enabled: Number.isFinite(id),
   })
 }

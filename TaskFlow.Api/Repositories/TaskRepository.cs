@@ -20,6 +20,12 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
             .Select(t => t.CurrentJournalEntry == null ? (DateOnly?)null : t.CurrentJournalEntry.Date)
             .SingleOrDefaultAsync();
 
+    public async Task<IEnumerable<TaskItemEvent>> GetHistoryAsync(int taskId) =>
+        await _context.TaskItemEvents
+            .Where(e => e.TaskItemId == taskId)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
     public async Task<TaskItem> AddAsync(TaskItem task)
     {
         _context.TaskItems.Add(task);

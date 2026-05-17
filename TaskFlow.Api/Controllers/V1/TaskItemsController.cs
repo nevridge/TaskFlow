@@ -64,6 +64,31 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         return Ok(dto);
     }
 
+    // GET: api/v1/TaskItems/5/history
+    [HttpGet("{id}/history")]
+    public async Task<ActionResult<IEnumerable<TaskItemEventResponseDto>>> GetHistory(int id)
+    {
+        var item = await _repo.GetByIdAsync(id);
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        var history = await _repo.GetHistoryAsync(id);
+        return Ok(history.Select(e => new TaskItemEventResponseDto
+        {
+            Id = e.Id,
+            TaskItemId = e.TaskItemId,
+            EventType = e.EventType,
+            OccurredAtUtc = e.OccurredAtUtc,
+            FromJournalEntryId = e.FromJournalEntryId,
+            ToJournalEntryId = e.ToJournalEntryId,
+            FromJournalDate = e.FromJournalDate,
+            ToJournalDate = e.ToJournalDate,
+            ChangeSummary = e.ChangeSummary,
+        }));
+    }
+
     // POST: api/v1/TaskItems
     [HttpPost]
     public async Task<ActionResult<TaskItemResponseDto>> Create([FromBody] CreateTaskItemDto createDto)

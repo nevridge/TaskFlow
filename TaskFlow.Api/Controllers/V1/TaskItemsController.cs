@@ -31,7 +31,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = i.DueDate,
             Status = i.Status.ToString(),
             Priority = i.Priority.ToString(),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(i.Id)
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(i.Id),
+            MoveCount = i.MoveCount,
+            DaysTagged = GetDaysTagged(i.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(i.Id))
         });
         return Ok(await Task.WhenAll(dtoTasks));
     }
@@ -55,7 +57,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = item.DueDate,
             Status = item.Status.ToString(),
             Priority = item.Priority.ToString(),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id)
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id),
+            MoveCount = item.MoveCount,
+            DaysTagged = GetDaysTagged(item.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(item.Id))
         };
         return Ok(dto);
     }
@@ -91,7 +95,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = createdItem.DueDate,
             Status = createdItem.Status.ToString(),
             Priority = createdItem.Priority.ToString(),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(createdItem.Id)
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(createdItem.Id),
+            MoveCount = createdItem.MoveCount,
+            DaysTagged = GetDaysTagged(createdItem.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(createdItem.Id))
         };
 
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersionString, id = createdItem.Id }, responseDto);
@@ -150,7 +156,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = existing.DueDate,
             Status = existing.Status.ToString(),
             Priority = existing.Priority.ToString(),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(existing.Id)
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(existing.Id),
+            MoveCount = existing.MoveCount,
+            DaysTagged = GetDaysTagged(existing.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(existing.Id))
         };
 
         return Ok(responseDto); // Return 200 OK with the updated resource
@@ -158,6 +166,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
     private static bool IsCompleted(bool isComplete, Status status) =>
         isComplete || status == Status.Completed;
+
+    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
+    {
+        if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, currentJournalDate.Value.DayNumber - firstTaggedDate.Value.DayNumber + 1);
+    }
 
     // DELETE: api/v1/TaskItems/5
     [HttpDelete("{id}")]

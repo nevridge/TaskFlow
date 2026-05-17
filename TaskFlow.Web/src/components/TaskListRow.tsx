@@ -62,7 +62,7 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
         {assignedDate ? (
           <div>
             <div>{formatShort(assignedDate)}</div>
-            {isScheduledFuture && <span className="t-badge t-badge-scheduled">scheduled</span>}
+            {isScheduledFuture && <span className="t-badge t-badge-scheduled">scheduled for {formatShort(assignedDate)}</span>}
           </div>
         ) : (
           <span className="t-list-empty">—</span>

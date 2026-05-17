@@ -69,7 +69,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var entry = await _context.JournalEntries
             .Include(e => e.Todos)
             .FirstOrDefaultAsync(e => e.Id == entryId);
-        return entry?.Todos ?? [];
+        return entry?.Todos.Where(t => t.CurrentJournalEntryId == entryId) ?? [];
     }
 
     public async Task<bool> TodoExistsAsync(int entryId, int taskItemId)
@@ -77,7 +77,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var entry = await _context.JournalEntries
             .Include(e => e.Todos)
             .FirstOrDefaultAsync(e => e.Id == entryId);
-        return entry?.Todos.Any(t => t.Id == taskItemId) ?? false;
+        return entry?.Todos.Any(t => t.Id == taskItemId && t.CurrentJournalEntryId == entryId) ?? false;
     }
 
     public async Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId)
@@ -106,6 +106,27 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         {
             return AddTodoResult.AlreadyLinked;
         }
+
+        var previousEntryId = task.CurrentJournalEntryId;
+        if (previousEntryId.HasValue && previousEntryId.Value != entryId)
+        {
+            var previousEntry = await _context.JournalEntries
+                .Include(e => e.Todos)
+                .FirstOrDefaultAsync(e => e.Id == previousEntryId.Value);
+            if (previousEntry is not null)
+            {
+                var existingLink = previousEntry.Todos.FirstOrDefault(t => t.Id == taskItemId);
+                if (existingLink is not null)
+                {
+                    previousEntry.Todos.Remove(existingLink);
+                }
+            }
+
+            task.MoveCount += 1;
+        }
+
+        task.CurrentJournalEntryId = entryId;
+        task.FirstTaggedDate ??= entry.Date;
 
         entry.Todos.Add(task);
         try
@@ -137,6 +158,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         }
 
         entry.Todos.Remove(task);
+        if (task.CurrentJournalEntryId == entryId)
+        {
+            task.CurrentJournalEntryId = null;
+        }
         await _context.SaveChangesAsync();
         return true;
     }

@@ -38,6 +38,8 @@ public class JournalTodosController(
             Status = t.Status.ToString(),
             Priority = t.Priority.ToString(),
             CurrentJournalDate = entry.Date,
+            MoveCount = t.MoveCount,
+            DaysTagged = GetDaysTagged(t.FirstTaggedDate, entry.Date),
         }));
     }
 
@@ -75,5 +77,15 @@ public class JournalTodosController(
             return NotFound();
         }
         return NoContent();
+    }
+
+    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly currentJournalDate)
+    {
+        if (!firstTaggedDate.HasValue)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, currentJournalDate.DayNumber - firstTaggedDate.Value.DayNumber + 1);
     }
 }

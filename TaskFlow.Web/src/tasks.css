@@ -69,6 +69,36 @@
   align-items: center;
 }
 
+.t-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+.t-chip {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+}
+
+.t-chip:hover {
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+
+.t-chip.is-active {
+  background: var(--accent-soft);
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--paper));
+  color: var(--accent-ink);
+}
+
 .t-filter-label {
   font-size: 10.5px;
   font-weight: 700;

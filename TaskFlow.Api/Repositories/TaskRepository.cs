@@ -15,9 +15,9 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         await _context.TaskItems.FirstOrDefaultAsync(t => t.Id == id);
 
     public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
-        await _context.JournalEntries
-            .Where(e => e.Todos.Any(t => t.Id == taskId))
-            .Select(e => (DateOnly?)e.Date)
+        await _context.TaskItems
+            .Where(t => t.Id == taskId)
+            .Select(t => t.CurrentJournalEntry == null ? (DateOnly?)null : t.CurrentJournalEntry.Date)
             .SingleOrDefaultAsync();
 
     public async Task<TaskItem> AddAsync(TaskItem task)

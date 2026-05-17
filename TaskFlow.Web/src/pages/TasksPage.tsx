@@ -12,6 +12,7 @@ import '@/tasks.css'
 
 type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
 type PriorityFilter = 'all' | 'low' | 'medium' | 'high'
+type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 
 const priorityOrder = { high: 0, medium: 1, low: 2 }
 
@@ -43,6 +44,7 @@ export function TasksPage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
@@ -62,6 +64,7 @@ export function TasksPage() {
   }
 
   const filtered = tasks
+    .filter(t => matchesViewFilter(t, viewFilter))
     .filter(t => statusFilter === 'all' || t.status?.toLowerCase() === statusFilter)
     .filter(t => priorityFilter === 'all' || t.priority?.toLowerCase() === priorityFilter)
     .sort((a, b) => {
@@ -123,6 +126,13 @@ export function TasksPage() {
         )}
 
         <div className="t-filter-row">
+          <div className="t-chip-group" aria-label="Task view filters">
+            <button type="button" className={`t-chip${viewFilter === 'all' ? ' is-active' : ''}`} onClick={() => setViewFilter('all')}>All</button>
+            <button type="button" className={`t-chip${viewFilter === 'activeToday' ? ' is-active' : ''}`} onClick={() => setViewFilter('activeToday')}>Active today</button>
+            <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
+            <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
+          </div>
+
           <label htmlFor="status-filter" className="t-filter-label">Status</label>
           <select
             id="status-filter"
@@ -197,4 +207,21 @@ export function TasksPage() {
       </div>
     </div>
   )
+}
+
+function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {
+  const assignedDate = task.currentJournalDate ?? null
+  const status = (task.status ?? '').toLowerCase()
+  const isCompleted = status === 'completed' || !!task.isComplete
+
+  switch (viewFilter) {
+    case 'activeToday':
+      return assignedDate === todayISO() && !isCompleted
+    case 'scheduledFuture':
+      return assignedDate != null && assignedDate > todayISO()
+    case 'completedHistory':
+      return isCompleted && assignedDate != null && assignedDate < todayISO()
+    default:
+      return true
+  }
 }

@@ -18,6 +18,11 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
         {
             entity.Property(t => t.Status)
                   .HasConversion<int>();
+
+            entity.HasOne(t => t.CurrentJournalEntry)
+                .WithMany()
+                .HasForeignKey(t => t.CurrentJournalEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<Note>(entity =>

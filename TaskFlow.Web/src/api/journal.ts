@@ -35,6 +35,7 @@ export type TaskItemResponseDto = ClientTaskItemResponseDto & {
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number
+  parentTaskItemId?: number | null
 }
 
 const J = { 'Content-Type': 'application/json' }

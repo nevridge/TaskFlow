@@ -36,13 +36,13 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-          modelBuilder.Entity<TaskItemEvent>(entity =>
-          {
+        modelBuilder.Entity<TaskItemEvent>(entity =>
+        {
             entity.Property(e => e.EventType)
                 .HasMaxLength(64);
 
             entity.HasIndex(e => new { e.TaskItemId, e.OccurredAtUtc });
-          });
+        });
 
         modelBuilder.Entity<Note>(entity =>
         {

@@ -96,7 +96,12 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
     setActionError(null)
     const isDone = todo.status === 'Completed' || !!todo.isComplete
     toggleTodo.mutate(
-      { id: Number(todo.id), title: todo.title, done: !isDone },
+      {
+        id: Number(todo.id),
+        title: todo.title,
+        done: !isDone,
+        parentTaskItemId: todo.parentTaskItemId ?? null,
+      },
       { onError: err => setActionError(getTaskActionErrorMessage(err)) }
     )
   }
@@ -104,7 +109,14 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
   function commitEdit() {
     if (editingId == null) return
     const text = editingText.trim()
-    if (text) editTodo.mutate({ id: editingId, title: text })
+    if (text) {
+      const current = todos.find(t => Number(t.id) === editingId)
+      editTodo.mutate({
+        id: editingId,
+        title: text,
+        parentTaskItemId: current?.parentTaskItemId ?? null,
+      })
+    }
     setEditingId(null)
     setEditingText('')
   }

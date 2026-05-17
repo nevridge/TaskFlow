@@ -617,6 +617,58 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenTaskWithChildrenIsAssignedParent()
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Existing Parent",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 12
+        };
+
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Existing Parent",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+
+        var parentCandidate = new TaskItem
+        {
+            Id = 12,
+            Title = "New Parent",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+
+        var existingChild = new TaskItem
+        {
+            Id = 2,
+            Title = "Child",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 1
+        };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(parentCandidate);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([existingTask, parentCandidate, existingChild]);
+
+        var result = await _controller.Update(1, updateDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Update_ShouldReturnUnprocessableEntity_WhenCompletingParentWithOpenChildren()
     {
         var updateDto = new UpdateTaskItemDto

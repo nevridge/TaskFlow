@@ -10,6 +10,7 @@ import {
   deleteLogEntry,
 } from '@/api/journal'
 import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
+import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
 import { addDays, formatEntryTitle } from '@/lib/journal-utils'
@@ -88,7 +89,7 @@ export function useCreateTodoMutation(entryId: number, isoDate: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (title: string) =>
-      postApiV1TaskItems({ body: { title, status: 'todo', journalDate: isoDate } }),
+      postApiV1TaskItems({ body: { title, status: 'todo', journalDate: isoDate } as CreateTaskItemDto }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })
@@ -100,14 +101,15 @@ export function useToggleTodoMutation(entryId: number) {
   const qc = useQueryClient()
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title, done }: { id: number; title: string; done: boolean }) =>
+    mutationFn: ({ id, title, done, parentTaskItemId }: { id: number; title: string; done: boolean; parentTaskItemId?: number | null }) =>
       putApiV1TaskItemsById({
         path: { id },
         body: {
           title,
           status: done ? 'completed' : 'todo',
+          parentTaskItemId,
           autoCompleteParentWhenChildrenDone,
-        },
+        } as UpdateTaskItemDto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
@@ -120,10 +122,10 @@ export function useEditTodoMutation(entryId: number) {
   const qc = useQueryClient()
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title }: { id: number; title: string }) =>
+    mutationFn: ({ id, title, parentTaskItemId }: { id: number; title: string; parentTaskItemId?: number | null }) =>
       putApiV1TaskItemsById({
         path: { id },
-        body: { title, autoCompleteParentWhenChildrenDone },
+        body: { title, parentTaskItemId, autoCompleteParentWhenChildrenDone } as UpdateTaskItemDto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })

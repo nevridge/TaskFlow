@@ -62,7 +62,10 @@ describe('useUpdateTaskMutation', () => {
     const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper() })
     result.current.mutate({ id: 2, data: { title: 'U' } })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({ path: { id: 2 }, body: { title: 'U' } }))
+    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({
+      path: { id: 2 },
+      body: expect.objectContaining({ title: 'U' }),
+    }))
   })
 })
 

@@ -30,6 +30,40 @@ namespace TaskFlow.Api.Migrations
                 nullable: false,
                 defaultValue: 0);
 
+            migrationBuilder.Sql(@"
+UPDATE TaskItems
+SET
+    CurrentJournalEntryId = (
+        SELECT jeti.JournalEntryId
+        FROM JournalEntryTaskItem AS jeti
+        INNER JOIN JournalEntries AS je ON je.Id = jeti.JournalEntryId
+        WHERE jeti.TodosId = TaskItems.Id
+        ORDER BY je.Date DESC, jeti.JournalEntryId DESC
+        LIMIT 1
+    ),
+    FirstTaggedDate = (
+        SELECT je.Date
+        FROM JournalEntryTaskItem AS jeti
+        INNER JOIN JournalEntries AS je ON je.Id = jeti.JournalEntryId
+        WHERE jeti.TodosId = TaskItems.Id
+        ORDER BY je.Date ASC, jeti.JournalEntryId ASC
+        LIMIT 1
+    ),
+    MoveCount = (
+        SELECT CASE
+            WHEN COUNT(*) > 0 THEN COUNT(*) - 1
+            ELSE 0
+        END
+        FROM JournalEntryTaskItem AS jeti
+        WHERE jeti.TodosId = TaskItems.Id
+    )
+WHERE EXISTS (
+    SELECT 1
+    FROM JournalEntryTaskItem AS jeti
+    WHERE jeti.TodosId = TaskItems.Id
+);
+");
+
             migrationBuilder.CreateIndex(
                 name: "IX_TaskItems_CurrentJournalEntryId",
                 table: "TaskItems",

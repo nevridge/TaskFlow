@@ -22,6 +22,7 @@ vi.mock('@/context/usePrefs', () => ({
 import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
+import type { PrefsContextValue } from '@/context/PrefsContextDef'
 
 const taskMutations = {
   mutate: vi.fn(),
@@ -30,17 +31,30 @@ const taskMutations = {
 
 describe('TasksPage', () => {
   beforeEach(() => {
-    vi.mocked(usePrefs).mockReturnValue({
+    const mockPrefs: PrefsContextValue = {
+      isDark: false,
+      setIsDark: vi.fn(),
+      theme: 'default',
+      setTheme: vi.fn(),
+      headerStyle: 'stat',
+      setHeaderStyle: vi.fn(),
+      todoSort: 'manual',
+      setTodoSort: vi.fn(),
+      projectStart: '2026-05-09',
+      setProjectStart: vi.fn(),
       taskSortKey: 'title',
       setTaskSortKey: vi.fn(),
       taskSortDir: 'asc',
       setTaskSortDir: vi.fn(),
       autoCompleteParentWhenChildrenDone: false,
-    })
+      setAutoCompleteParentWhenChildrenDone: vi.fn(),
+    }
 
-    vi.mocked(useCreateTaskMutation).mockReturnValue(taskMutations)
-    vi.mocked(useUpdateTaskMutation).mockReturnValue(taskMutations)
-    vi.mocked(useDeleteTaskMutation).mockReturnValue(taskMutations)
+    vi.mocked(usePrefs).mockReturnValue(mockPrefs)
+
+    vi.mocked(useCreateTaskMutation).mockReturnValue(taskMutations as never)
+    vi.mocked(useUpdateTaskMutation).mockReturnValue(taskMutations as never)
+    vi.mocked(useDeleteTaskMutation).mockReturnValue(taskMutations as never)
 
     vi.mocked(useJournalEntries).mockReturnValue({
       data: {

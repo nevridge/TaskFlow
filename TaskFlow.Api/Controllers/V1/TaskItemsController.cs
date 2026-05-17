@@ -202,6 +202,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
                     details = new { parentTaskItemId = updateDto.ParentTaskItemId }
                 });
             }
+
+            if (await HasChildrenAsync(id))
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentDepthNotAllowedErrorCode,
+                    message = "Only one subtask level is supported.",
+                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                });
+            }
         }
 
         var wasCompleted = IsCompleted(existing.IsComplete, existing.Status);
@@ -267,8 +277,14 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
     private async Task<bool> HasIncompleteChildrenAsync(int taskId)
     {
-        var allTasks = await _repo.GetAllAsync();
+        var allTasks = await _repo.GetAllAsync() ?? [];
         return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.IsComplete, t.Status));
+    }
+
+    private async Task<bool> HasChildrenAsync(int taskId)
+    {
+        var allTasks = await _repo.GetAllAsync() ?? [];
+        return allTasks.Any(t => t.ParentTaskItemId == taskId);
     }
 
     private async Task<int> GetChildTaskCountAsync(int taskId)

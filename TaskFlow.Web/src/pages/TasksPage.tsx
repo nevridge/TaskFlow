@@ -85,7 +85,10 @@ export function TasksPage() {
     }
   }, [historyTask])
 
-  const tasks: TaskListModel[] = (data?.data as TaskListModel[] | undefined) ?? []
+  const tasks: TaskListModel[] = useMemo(
+    () => (data?.data as TaskListModel[] | undefined) ?? [],
+    [data],
+  )
 
   const todayEntry = ((journalData?.data as JournalEntryResponseDto[] | undefined) ?? [])
     .find(e => e.date === todayISO())
@@ -230,7 +233,10 @@ export function TasksPage() {
 
   function handleDelete(task: TaskListModel) {
     if (window.confirm(`Delete "${task.title}"?`)) {
-      deleteMutation.mutate(Number(task.id))
+      setMutationError(null)
+      deleteMutation.mutate(Number(task.id), {
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      })
     }
   }
 

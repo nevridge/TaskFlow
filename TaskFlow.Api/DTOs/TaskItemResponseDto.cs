@@ -10,6 +10,11 @@ public class TaskItemResponseDto
     public string Status { get; set; } = "Draft";
     public string Priority { get; set; } = "Low"; // String representation of the priority
     public int? ParentTaskItemId { get; set; }
+    public int? CurrentJournalEntryId { get; set; }
+    public DateOnly? FirstTaggedDate { get; set; }
+    public DateOnly? LastMovedDate { get; set; }
+    public bool IsScheduledFuture { get; set; }
+    public int ChildCount { get; set; }
     public int ChildTaskCount { get; set; }
     public DateOnly? CurrentJournalDate { get; set; }
     public int MoveCount { get; set; }

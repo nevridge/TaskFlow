@@ -14,15 +14,18 @@ public class TaskItemsControllerV1Tests
 {
     private readonly Mock<ITaskRepository> _mockRepo;
     private readonly Mock<IValidator<TaskItem>> _mockValidator;
+    private readonly Mock<IJournalEntryRepository> _mockJournalRepo;
     private readonly TaskItemsController _controller;
 
     public TaskItemsControllerV1Tests()
     {
         _mockRepo = new Mock<ITaskRepository>();
         _mockValidator = new Mock<IValidator<TaskItem>>();
+        _mockJournalRepo = new Mock<IJournalEntryRepository>();
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
-        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object);
+        _mockRepo.Setup(r => r.GetHistoryAsync(It.IsAny<int>())).ReturnsAsync([]);
+        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object);
     }
 
     [Fact]
@@ -161,6 +164,52 @@ public class TaskItemsControllerV1Tests
 
         result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnUnprocessableEntity_WhenJournalDateIsPast()
+    {
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "Task",
+            JournalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1))
+        };
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldAssignToJournalDate_WhenJournalDateIsProvided()
+    {
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "Scheduled task",
+            JournalDate = targetDate
+        };
+
+        var createdTask = new TaskItem
+        {
+            Id = 77,
+            Title = "Scheduled task",
+            Status = Status.Todo
+        };
+        var entry = new JournalEntry { Id = 12, Date = targetDate, Title = "Journal" };
+
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(77)).ReturnsAsync(createdTask);
+        _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync(entry);
+        _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, createdTask.Id)).ReturnsAsync(AddTodoResult.Success);
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id), Times.Once);
     }
 
     [Fact]

@@ -10,9 +10,10 @@ namespace TaskFlow.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator) : ControllerBase
+public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator, IJournalEntryRepository? journalRepo = null) : ControllerBase
 {
     private const string ApiVersionString = "1.0";
+    private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
     private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
@@ -22,6 +23,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
+    private readonly IJournalEntryRepository? _journalRepo = journalRepo;
 
     // GET: api/v1/TaskItems
     [HttpGet]
@@ -33,21 +35,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             .GroupBy(t => t.ParentTaskItemId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var dtoTasks = items.Select(async i => new TaskItemResponseDto
-        {
-            Id = i.Id,
-            Title = i.Title,
-            Description = i.Description,
-            IsComplete = i.IsComplete,
-            DueDate = i.DueDate,
-            Status = i.Status.ToString(),
-            Priority = i.Priority.ToString(),
-            ParentTaskItemId = i.ParentTaskItemId,
-            ChildTaskCount = childCounts.GetValueOrDefault(i.Id),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(i.Id),
-            MoveCount = i.MoveCount,
-            DaysTagged = GetDaysTagged(i.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(i.Id))
-        });
+        var dtoTasks = items.Select(i => MapTaskItemResponseAsync(i, childCounts));
         return Ok(await Task.WhenAll(dtoTasks));
     }
 
@@ -61,21 +49,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             return NotFound();
         }
 
-        var dto = new TaskItemResponseDto
-        {
-            Id = item.Id,
-            Title = item.Title,
-            Description = item.Description,
-            IsComplete = item.IsComplete,
-            DueDate = item.DueDate,
-            Status = item.Status.ToString(),
-            Priority = item.Priority.ToString(),
-            ParentTaskItemId = item.ParentTaskItemId,
-            ChildTaskCount = await GetChildTaskCountAsync(item.Id),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id),
-            MoveCount = item.MoveCount,
-            DaysTagged = GetDaysTagged(item.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(item.Id))
-        };
+        var dto = await MapTaskItemResponseAsync(item);
         return Ok(dto);
     }
 
@@ -108,6 +82,20 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     [HttpPost]
     public async Task<ActionResult<TaskItemResponseDto>> Create([FromBody] CreateTaskItemDto createDto)
     {
+        if (createDto.JournalDate.HasValue)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (createDto.JournalDate.Value < today)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = TaskCreationPastDayErrorCode,
+                    message = "You cannot create new tasks on a past journal day.",
+                    details = new { journalDate = createDto.JournalDate }
+                });
+            }
+        }
+
         if (createDto.ParentTaskItemId.HasValue)
         {
             var parent = await _repo.GetByIdAsync(createDto.ParentTaskItemId.Value);
@@ -151,21 +139,13 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
         var createdItem = await _repo.AddAsync(item);
 
-        var responseDto = new TaskItemResponseDto
+        if (createDto.JournalDate.HasValue)
         {
-            Id = createdItem.Id,
-            Title = createdItem.Title,
-            Description = createdItem.Description,
-            IsComplete = createdItem.IsComplete,
-            DueDate = createdItem.DueDate,
-            Status = createdItem.Status.ToString(),
-            Priority = createdItem.Priority.ToString(),
-            ParentTaskItemId = createdItem.ParentTaskItemId,
-            ChildTaskCount = 0,
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(createdItem.Id),
-            MoveCount = createdItem.MoveCount,
-            DaysTagged = GetDaysTagged(createdItem.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(createdItem.Id))
-        };
+            await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value);
+        }
+
+        var refreshed = await _repo.GetByIdAsync(createdItem.Id) ?? createdItem;
+        var responseDto = await MapTaskItemResponseAsync(refreshed);
 
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersionString, id = createdItem.Id }, responseDto);
     }
@@ -277,21 +257,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             await TryAutoCompleteParentAsync(existing.ParentTaskItemId.Value);
         }
 
-        var responseDto = new TaskItemResponseDto
-        {
-            Id = existing.Id,
-            Title = existing.Title,
-            Description = existing.Description,
-            IsComplete = existing.IsComplete,
-            DueDate = existing.DueDate,
-            Status = existing.Status.ToString(),
-            Priority = existing.Priority.ToString(),
-            ParentTaskItemId = existing.ParentTaskItemId,
-            ChildTaskCount = await GetChildTaskCountAsync(existing.Id),
-            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(existing.Id),
-            MoveCount = existing.MoveCount,
-            DaysTagged = GetDaysTagged(existing.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(existing.Id))
-        };
+        var responseDto = await MapTaskItemResponseAsync(existing);
 
         return Ok(responseDto); // Return 200 OK with the updated resource
     }
@@ -400,5 +366,58 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
             cursor = next.Value;
         }
+    }
+
+    private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate)
+    {
+        if (_journalRepo is null)
+        {
+            return;
+        }
+
+        var entry = await _journalRepo.GetByDateAsync(journalDate)
+            ?? await _journalRepo.AddAsync(new JournalEntry
+            {
+                Title = $"Journal {journalDate:MM-dd-yyyy}",
+                Date = journalDate,
+            });
+
+        await _journalRepo.AddTodoAsync(entry.Id, taskId);
+    }
+
+    private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null)
+    {
+        var currentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        return new TaskItemResponseDto
+        {
+            Id = item.Id,
+            Title = item.Title,
+            Description = item.Description,
+            IsComplete = item.IsComplete,
+            DueDate = item.DueDate,
+            Status = item.Status.ToString(),
+            Priority = item.Priority.ToString(),
+            ParentTaskItemId = item.ParentTaskItemId,
+            CurrentJournalEntryId = item.CurrentJournalEntryId,
+            FirstTaggedDate = item.FirstTaggedDate,
+            LastMovedDate = await GetLastMovedDateAsync(item.Id),
+            IsScheduledFuture = currentJournalDate.HasValue && currentJournalDate.Value > today,
+            ChildCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id),
+            ChildTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id),
+            CurrentJournalDate = currentJournalDate,
+            MoveCount = item.MoveCount,
+            DaysTagged = GetDaysTagged(item.FirstTaggedDate, currentJournalDate)
+        };
+    }
+
+    private async Task<DateOnly?> GetLastMovedDateAsync(int taskId)
+    {
+        var history = await _repo.GetHistoryAsync(taskId);
+        return history
+            .OrderByDescending(e => e.OccurredAtUtc)
+            .Select(e => e.ToJournalDate ?? e.FromJournalDate)
+            .FirstOrDefault(d => d.HasValue);
     }
 }

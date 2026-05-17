@@ -9,5 +9,13 @@ public class TaskItem
     public Priority Priority { get; set; } = Priority.Low;
     public Status Status { get; set; } = Status.Draft;
     public DateTime? DueDate { get; set; }
+    public DateOnly? FirstTaggedDate { get; set; }
+    public int MoveCount { get; set; }
+    public int? ParentTaskItemId { get; set; }
+    public TaskItem? ParentTaskItem { get; set; }
+    public ICollection<TaskItem> ChildTaskItems { get; set; } = [];
+    public int? CurrentJournalEntryId { get; set; }
+    public JournalEntry? CurrentJournalEntry { get; set; }
+    public ICollection<TaskItemEvent> Events { get; set; } = [];
     public ICollection<Note> Notes { get; set; } = [];
 }

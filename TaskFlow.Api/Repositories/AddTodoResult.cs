@@ -6,4 +6,5 @@ public enum AddTodoResult
     EntryNotFound,
     TaskNotFound,
     AlreadyLinked,
+    PastDayNotAllowed,
 }

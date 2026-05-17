@@ -13,6 +13,7 @@ public class JournalTodosController(
     IJournalEntryRepository journalRepo,
     IValidator<AddJournalTodoDto> validator) : ControllerBase
 {
+    private const string AssignmentPastDayErrorCode = "TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IValidator<AddJournalTodoDto> _validator = validator;
 
@@ -36,6 +37,9 @@ public class JournalTodosController(
             DueDate = t.DueDate,
             Status = t.Status.ToString(),
             Priority = t.Priority.ToString(),
+            CurrentJournalDate = entry.Date,
+            MoveCount = t.MoveCount,
+            DaysTagged = GetDaysTagged(t.FirstTaggedDate, entry.Date),
         }));
     }
 
@@ -55,6 +59,11 @@ public class JournalTodosController(
             AddTodoResult.EntryNotFound => NotFound(),
             AddTodoResult.TaskNotFound => NotFound(),
             AddTodoResult.AlreadyLinked => Conflict(new { message = "This task is already linked to the journal entry." }),
+            AddTodoResult.PastDayNotAllowed => UnprocessableEntity(new
+            {
+                code = AssignmentPastDayErrorCode,
+                message = "This task cannot be assigned to a past day."
+            }),
             _ => NoContent(),
         };
     }
@@ -68,5 +77,15 @@ public class JournalTodosController(
             return NotFound();
         }
         return NoContent();
+    }
+
+    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly currentJournalDate)
+    {
+        if (!firstTaggedDate.HasValue)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, currentJournalDate.DayNumber - firstTaggedDate.Value.DayNumber + 1);
     }
 }

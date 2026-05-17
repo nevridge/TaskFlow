@@ -30,8 +30,13 @@ export type UpdateJournalEntryDto = {
   summary?: string | null
 }
 
-import type { TaskItemResponseDto } from './client/types.gen'
-export type { TaskItemResponseDto }
+import type { TaskItemResponseDto as ClientTaskItemResponseDto } from './client/types.gen'
+export type TaskItemResponseDto = ClientTaskItemResponseDto & {
+  currentJournalDate?: string | null
+  moveCount?: number
+  daysTagged?: number
+  parentTaskItemId?: number | null
+}
 
 const J = { 'Content-Type': 'application/json' }
 

@@ -5,15 +5,16 @@ import {
   createJournalEntry,
   updateJournalEntry,
   getJournalTodos,
-  addJournalTodo,
   removeJournalTodo,
   createLogEntry,
   deleteLogEntry,
 } from '@/api/journal'
 import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
+import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
 import { addDays, formatEntryTitle } from '@/lib/journal-utils'
+import { usePrefs } from '@/context/usePrefs'
 
 export const journalKeys = {
   all: ['journal'] as const,
@@ -84,14 +85,11 @@ export function useUpdateNotesMutation(entryId: number, entryTitle: string) {
 
 // ─── Todo mutations ───────────────────────────────────────────────────────────
 
-export function useCreateTodoMutation(entryId: number) {
+export function useCreateTodoMutation(entryId: number, isoDate: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (title: string) => {
-      const res = await postApiV1TaskItems({ body: { title, status: 'todo' } })
-      const task = res.data as TaskItemResponseDto
-      await addJournalTodo(entryId, Number(task.id))
-    },
+    mutationFn: (title: string) =>
+      postApiV1TaskItems({ body: { title, status: 'todo', journalDate: isoDate } as CreateTaskItemDto }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })
@@ -101,11 +99,17 @@ export function useCreateTodoMutation(entryId: number) {
 
 export function useToggleTodoMutation(entryId: number) {
   const qc = useQueryClient()
+  const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title, done }: { id: number; title: string; done: boolean }) =>
+    mutationFn: ({ id, title, done, parentTaskItemId }: { id: number; title: string; done: boolean; parentTaskItemId?: number | null }) =>
       putApiV1TaskItemsById({
         path: { id },
-        body: { title, status: done ? 'completed' : 'todo' },
+        body: {
+          title,
+          status: done ? 'completed' : 'todo',
+          parentTaskItemId,
+          autoCompleteParentWhenChildrenDone,
+        } as UpdateTaskItemDto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
@@ -116,9 +120,13 @@ export function useToggleTodoMutation(entryId: number) {
 
 export function useEditTodoMutation(entryId: number) {
   const qc = useQueryClient()
+  const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title }: { id: number; title: string }) =>
-      putApiV1TaskItemsById({ path: { id }, body: { title } }),
+    mutationFn: ({ id, title, parentTaskItemId }: { id: number; title: string; parentTaskItemId?: number | null }) =>
+      putApiV1TaskItemsById({
+        path: { id },
+        body: { title, parentTaskItemId, autoCompleteParentWhenChildrenDone } as UpdateTaskItemDto,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })
@@ -131,51 +139,6 @@ export function useRemoveTodoMutation(entryId: number) {
   return useMutation({
     mutationFn: (taskItemId: number) => removeJournalTodo(entryId, taskItemId),
     onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) }),
-  })
-}
-
-/**
- * Pulls uncompleted todos from a source date's entry into a target entry.
- * Used for both "pull from yesterday" (today view) and "carry over to today" (past view).
- * toEntryId and toExistingTodos must be provided per-call (they vary by navigation context).
- */
-export function useCarryOverMutation() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      fromIsoDate,
-      toEntryId,
-      toExistingTodos,
-    }: {
-      fromIsoDate: string
-      toEntryId: number
-      toExistingTodos: TaskItemResponseDto[]
-    }) => {
-      const allEntries =
-        (qc.getQueryData<{ data: JournalEntryResponseDto[] }>(journalKeys.all)?.data) ?? []
-      const fromEntry = allEntries.find(e => e.date === fromIsoDate)
-      if (!fromEntry) return
-
-      const cached = qc.getQueryData<{ data: TaskItemResponseDto[] }>(journalKeys.todos(fromEntry.id))
-      const fromTodos: TaskItemResponseDto[] = cached?.data
-        ?? ((await getJournalTodos(fromEntry.id)).data as TaskItemResponseDto[])
-
-      const open = fromTodos.filter(t => t.status !== 'Completed' && !t.isComplete)
-      const existingTitles = new Set(toExistingTodos.map(t => t.title))
-      const toAdd = open.filter(t => !existingTitles.has(t.title))
-
-      for (const todo of toAdd) {
-        const res = await postApiV1TaskItems({ body: { title: todo.title, status: 'todo' } })
-        const taskId = Number((res.data as TaskItemResponseDto).id)
-        await addJournalTodo(toEntryId, taskId)
-      }
-
-      return toEntryId
-    },
-    onSuccess: (_result, { toEntryId }) => {
-      qc.invalidateQueries({ queryKey: journalKeys.todos(toEntryId) })
-      qc.invalidateQueries({ queryKey: taskKeys.all })
-    },
   })
 }
 

@@ -1,14 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import type { TaskItemResponseDto } from '@/api/journal'
+import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import {
   useJournalTodos,
   useCreateTodoMutation,
   useToggleTodoMutation,
   useEditTodoMutation,
   useRemoveTodoMutation,
-  useCarryOverMutation,
   openTodoCount,
-  yesterdayOf,
 } from '@/hooks/useJournal'
 import { todayISO } from '@/lib/journal-utils'
 
@@ -18,32 +17,49 @@ interface Props {
   entryId: number
   isoDate: string
   sort: SortMode
-  /** Today's entry ID — needed for carry-forward from past days */
-  todayEntryId: number | undefined
-  /** Today's current todos — used for deduplication during carry-over */
-  todayTodos: TaskItemResponseDto[]
 }
 
-export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos }: Props) {
+export function TodosSection({ entryId, isoDate, sort }: Props) {
   const { data: todosData, isLoading } = useJournalTodos(entryId)
   const todos = useMemo<TaskItemResponseDto[]>(
     () => (todosData?.data as TaskItemResponseDto[] | undefined) ?? [],
     [todosData],
   )
 
-  const createTodo = useCreateTodoMutation(entryId)
+  const createTodo = useCreateTodoMutation(entryId, isoDate)
   const toggleTodo = useToggleTodoMutation(entryId)
   const editTodo = useEditTodoMutation(entryId)
   const removeTodo = useRemoveTodoMutation(entryId)
-  const carryOver = useCarryOverMutation()
 
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!historyTask) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    historyCloseRef.current?.focus()
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHistoryTask(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      window.removeEventListener('keydown', handleEsc)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [historyTask])
 
   const today = todayISO()
-  const isToday = isoDate === today
-  const yesterday = yesterdayOf(isoDate)
+  const isPastDay = isoDate < today
 
   const sorted = useMemo(() => {
     const arr = [...todos]
@@ -62,36 +78,48 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
 
   function addTodo(e: React.FormEvent) {
     e.preventDefault()
+    setActionError(null)
+    if (isPastDay) {
+      setActionError('You cannot create new tasks on a past journal day.')
+      return
+    }
+
     const text = draft.trim()
     if (!text) return
-    createTodo.mutate(text)
-    setDraft('')
+    createTodo.mutate(text, {
+      onSuccess: () => setDraft(''),
+      onError: err => setActionError(getTaskActionErrorMessage(err)),
+    })
   }
 
   function toggle(todo: TaskItemResponseDto) {
+    setActionError(null)
     const isDone = todo.status === 'Completed' || !!todo.isComplete
-    toggleTodo.mutate({ id: Number(todo.id), title: todo.title, done: !isDone })
+    toggleTodo.mutate(
+      {
+        id: Number(todo.id),
+        title: todo.title,
+        done: !isDone,
+        parentTaskItemId: todo.parentTaskItemId ?? null,
+      },
+      { onError: err => setActionError(getTaskActionErrorMessage(err)) }
+    )
   }
 
   function commitEdit() {
     if (editingId == null) return
     const text = editingText.trim()
-    if (text) editTodo.mutate({ id: editingId, title: text })
+    if (text) {
+      const current = todos.find(t => Number(t.id) === editingId)
+      editTodo.mutate({
+        id: editingId,
+        title: text,
+        parentTaskItemId: current?.parentTaskItemId ?? null,
+      })
+    }
     setEditingId(null)
     setEditingText('')
   }
-
-  function handleCarryOver() {
-    if (isToday) {
-      // Pull from yesterday into today
-      carryOver.mutate({ fromIsoDate: yesterday, toEntryId: entryId, toExistingTodos: todos })
-    } else if (todayEntryId != null) {
-      // Push this day's open todos into today
-      carryOver.mutate({ fromIsoDate: isoDate, toEntryId: todayEntryId, toExistingTodos: todayTodos })
-    }
-  }
-
-  const canCarryForward = !isToday && remaining > 0 && todayEntryId != null
 
   return (
     <section className="card todos">
@@ -99,16 +127,6 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
         <h2 className="card-title">TODOs</h2>
         <div className="card-meta">
           <span className="todo-count">{total - remaining}/{total}</span>
-          {isToday && (
-            <button className="link-btn" onClick={handleCarryOver} disabled={carryOver.isPending}>
-              ← Pull from yesterday
-            </button>
-          )}
-          {canCarryForward && (
-            <button className="link-btn" onClick={handleCarryOver} disabled={carryOver.isPending}>
-              Carry over to today →
-            </button>
-          )}
         </div>
       </div>
 
@@ -160,6 +178,18 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
                 )}
 
                 <button
+                  className="todo-history"
+                  onClick={() => setHistoryTask(td)}
+                  aria-label="History"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 8v5l3 2"/>
+                    <path d="M3.05 11a9 9 0 1 1 .5 4"/>
+                    <path d="M3 4v7h7"/>
+                  </svg>
+                </button>
+
+                <button
                   className="todo-x"
                   onClick={() => removeTodo.mutate(Number(td.id))}
                   aria-label="Delete"
@@ -174,16 +204,55 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
         </ul>
       )}
 
+      {actionError && <p className="todo-error">{actionError}</p>}
+
+      {isPastDay && (
+        <p className="todo-helper">Cannot add tasks to past days. Completed tasks remain as history for this date.</p>
+      )}
+
       <form className="add-row" onSubmit={addTodo}>
         <span className="add-plus">+</span>
         <input
           className="add-input"
-          placeholder="Add a TODO and press Enter"
+          placeholder={isPastDay ? 'Adding tasks is disabled for past dates' : 'Add a TODO and press Enter'}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          disabled={createTodo.isPending}
+          disabled={createTodo.isPending || isPastDay}
         />
       </form>
+
+      {historyTask && (
+        <>
+          <div className="j-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+          <div className="j-modal" role="dialog" aria-modal="true" aria-labelledby="journal-task-history-title">
+            <div className="j-modal-header">
+              <div>
+                <h3 id="journal-task-history-title" className="j-modal-title">Task history</h3>
+                <p className="j-modal-subtitle">{historyTask.title}</p>
+              </div>
+              <button ref={historyCloseRef} className="j-modal-close" onClick={() => setHistoryTask(null)}>Close</button>
+            </div>
+            <TaskHistoryPanel taskId={Number(historyTask.id)} />
+          </div>
+        </>
+      )}
     </section>
   )
+}
+
+function getTaskActionErrorMessage(error: unknown): string {
+  const code = getErrorCode(error)
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
+    return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+  if (code === 'TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED') {
+    return 'This task cannot be assigned to a past day.'
+  }
+  return 'Unable to save task changes. Please try again.'
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const maybeCode = (error as { code?: unknown }).code
+  return typeof maybeCode === 'string' ? maybeCode : null
 }

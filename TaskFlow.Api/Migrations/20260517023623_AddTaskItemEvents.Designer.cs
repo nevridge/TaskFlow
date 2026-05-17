@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskFlow.Api.Data;
 
@@ -10,9 +11,11 @@ using TaskFlow.Api.Data;
 namespace TaskFlow.Api.Migrations
 {
     [DbContext(typeof(TaskDbContext))]
-    partial class TaskDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260517023623_AddTaskItemEvents")]
+    partial class AddTaskItemEvents
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -138,9 +141,6 @@ namespace TaskFlow.Api.Migrations
                     b.Property<int>("MoveCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("ParentTaskItemId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
@@ -154,8 +154,6 @@ namespace TaskFlow.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CurrentJournalEntryId");
-
-                    b.HasIndex("ParentTaskItemId");
 
                     b.ToTable("TaskItems");
                 });
@@ -243,14 +241,7 @@ namespace TaskFlow.Api.Migrations
                         .HasForeignKey("CurrentJournalEntryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("TaskFlow.Api.Models.TaskItem", "ParentTaskItem")
-                        .WithMany("ChildTaskItems")
-                        .HasForeignKey("ParentTaskItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("CurrentJournalEntry");
-
-                    b.Navigation("ParentTaskItem");
                 });
 
             modelBuilder.Entity("TaskFlow.Api.Models.TaskItemEvent", b =>
@@ -271,8 +262,6 @@ namespace TaskFlow.Api.Migrations
 
             modelBuilder.Entity("TaskFlow.Api.Models.TaskItem", b =>
                 {
-                    b.Navigation("ChildTaskItems");
-
                     b.Navigation("Events");
 
                     b.Navigation("Notes");

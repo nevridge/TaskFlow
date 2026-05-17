@@ -14,6 +14,7 @@ export interface Prefs {
   projectStart?: string
   taskSortKey?: TaskSortKey
   taskSortDir?: TaskSortDir
+  autoCompleteParentWhenChildrenDone?: boolean
 }
 
 export function loadPrefs(): Prefs {

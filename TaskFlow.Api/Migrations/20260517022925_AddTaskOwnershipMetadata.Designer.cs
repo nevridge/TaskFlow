@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TaskFlow.Api.Data;
 
@@ -10,9 +11,11 @@ using TaskFlow.Api.Data;
 namespace TaskFlow.Api.Migrations
 {
     [DbContext(typeof(TaskDbContext))]
-    partial class TaskDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260517022925_AddTaskOwnershipMetadata")]
+    partial class AddTaskOwnershipMetadata
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -138,9 +141,6 @@ namespace TaskFlow.Api.Migrations
                     b.Property<int>("MoveCount")
                         .HasColumnType("INTEGER");
 
-                    b.Property<int?>("ParentTaskItemId")
-                        .HasColumnType("INTEGER");
-
                     b.Property<int>("Priority")
                         .HasColumnType("INTEGER");
 
@@ -155,48 +155,7 @@ namespace TaskFlow.Api.Migrations
 
                     b.HasIndex("CurrentJournalEntryId");
 
-                    b.HasIndex("ParentTaskItemId");
-
                     b.ToTable("TaskItems");
-                });
-
-            modelBuilder.Entity("TaskFlow.Api.Models.TaskItemEvent", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ChangeSummary")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("EventType")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateOnly?>("FromJournalDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("FromJournalEntryId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("OccurredAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("TaskItemId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateOnly?>("ToJournalDate")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("ToJournalEntryId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaskItemId", "OccurredAtUtc");
-
-                    b.ToTable("TaskItemEvents");
                 });
 
             modelBuilder.Entity("JournalEntryTaskItem", b =>
@@ -243,25 +202,7 @@ namespace TaskFlow.Api.Migrations
                         .HasForeignKey("CurrentJournalEntryId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("TaskFlow.Api.Models.TaskItem", "ParentTaskItem")
-                        .WithMany("ChildTaskItems")
-                        .HasForeignKey("ParentTaskItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("CurrentJournalEntry");
-
-                    b.Navigation("ParentTaskItem");
-                });
-
-            modelBuilder.Entity("TaskFlow.Api.Models.TaskItemEvent", b =>
-                {
-                    b.HasOne("TaskFlow.Api.Models.TaskItem", "TaskItem")
-                        .WithMany("Events")
-                        .HasForeignKey("TaskItemId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("TaskItem");
                 });
 
             modelBuilder.Entity("TaskFlow.Api.Models.JournalEntry", b =>
@@ -271,10 +212,6 @@ namespace TaskFlow.Api.Migrations
 
             modelBuilder.Entity("TaskFlow.Api.Models.TaskItem", b =>
                 {
-                    b.Navigation("ChildTaskItems");
-
-                    b.Navigation("Events");
-
                     b.Navigation("Notes");
                 });
 #pragma warning restore 612, 618

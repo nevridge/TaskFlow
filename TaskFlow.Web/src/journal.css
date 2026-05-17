@@ -276,6 +276,18 @@
   font-style: italic;
 }
 
+.todo-error {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--danger-ink);
+}
+
+.todo-helper {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
 /* ─── TODOs ────────────────────────────────────────────────────────────────── */
 
 .todo-list {
@@ -349,6 +361,80 @@
 }
 .todo:hover .todo-x, .log-entry:hover .todo-x { opacity: 1; }
 .todo-x:hover { background: var(--danger-bg); color: var(--danger-ink); }
+
+.todo-history {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--muted-2);
+  opacity: 0;
+  transition: background .12s, color .12s, opacity .12s;
+}
+
+.todo:hover .todo-history { opacity: 1; }
+.todo-history:hover { background: var(--hover-soft); color: var(--ink); }
+
+.j-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .28);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+.j-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 22px 26px;
+  z-index: 41;
+}
+
+.j-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.j-modal-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.j-modal-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.journal-page .j-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  color: var(--ink);
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.journal-page .j-modal-close:hover { background: var(--hover-soft); }
 
 /* ─── Daily Log ────────────────────────────────────────────────────────────── */
 
@@ -481,4 +567,9 @@
     gap: 14px;
   }
   .hdr-date-block { text-align: left; }
+
+  .j-modal {
+    width: calc(100vw - 20px);
+    padding: 16px;
+  }
 }

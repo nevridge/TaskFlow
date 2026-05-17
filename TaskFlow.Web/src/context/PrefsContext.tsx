@@ -22,6 +22,9 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
   const [taskSortDir, setTaskSortDir] = useState<TaskSortDir>(
     () => initialPrefs.taskSortDir ?? 'asc',
   )
+  const [autoCompleteParentWhenChildrenDone, setAutoCompleteParentWhenChildrenDone] = useState<boolean>(
+    () => initialPrefs.autoCompleteParentWhenChildrenDone ?? false,
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle('is-dark', isDark)
@@ -46,6 +49,10 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
     savePrefs({ taskSortKey, taskSortDir })
   }, [taskSortKey, taskSortDir])
 
+  useEffect(() => {
+    savePrefs({ autoCompleteParentWhenChildrenDone })
+  }, [autoCompleteParentWhenChildrenDone])
+
   return (
     <PrefsContext.Provider
       value={{
@@ -63,6 +70,8 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
         setTaskSortKey,
         taskSortDir,
         setTaskSortDir,
+        autoCompleteParentWhenChildrenDone,
+        setAutoCompleteParentWhenChildrenDone,
       }}
     >
       {children}

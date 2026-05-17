@@ -10,4 +10,6 @@ public class CreateTaskItemDto
     public bool IsComplete { get; set; }
     public Priority Priority { get; set; } = Priority.Low;
     public DateTime? DueDate { get; set; }
+    public DateOnly? JournalDate { get; set; }
+    public int? ParentTaskItemId { get; set; }
 }

@@ -253,6 +253,41 @@ The task detail page. Responsibilities:
 - Delete task — navigates back to `/` on success
 - Inline note creation, editing, and deletion
 
+### Current Tasks + Journal behavior (May 2026)
+
+Recent UX additions that are now part of the app flow:
+
+- Tasks table supports hierarchy rendering (parent row + indented child rows).
+- Parent rows can expand/collapse subtasks.
+- Quick-add subtask is available inline from each row.
+- Task history can be opened from:
+  - Tasks list rows
+  - Task detail page
+  - Journal todo rows
+- History modals support keyboard close (`Escape`) and focus the close action on open.
+- Journal todo creation uses `journalDate` in task create payloads (instead of a manual create-then-link flow).
+
+#### Settings-driven hierarchy behavior
+
+The settings drawer now includes:
+
+- `Auto-complete parent when all subtasks are done` (default off)
+
+When enabled, task update payloads include `autoCompleteParentWhenChildrenDone`, and backend logic auto-completes a parent when the last direct child is completed.
+
+#### Frontend error-code handling
+
+Tasks pages map backend business-rule codes to user-friendly inline errors, including:
+
+- `TASK_CREATION_PAST_DAY_NOT_ALLOWED`
+- `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+- `TASK_PARENT_NOT_FOUND`
+- `TASK_PARENT_SELF_NOT_ALLOWED`
+- `TASK_PARENT_DEPTH_NOT_ALLOWED`
+- `TASK_PARENT_CYCLE_NOT_ALLOWED`
+- `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
+- `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
+
 ### TaskCard
 
 Displays a task summary: title (linked to detail page), status and priority badges, due date. Badge classes are keyed on lowercase values; `task.status` and `task.priority` are normalised via `.toLowerCase()` before indexing the class map.

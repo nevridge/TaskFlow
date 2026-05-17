@@ -16,6 +16,8 @@ export interface PrefsContextValue {
   setTaskSortKey: (v: TaskSortKey) => void
   taskSortDir: TaskSortDir
   setTaskSortDir: (v: TaskSortDir) => void
+  autoCompleteParentWhenChildrenDone: boolean
+  setAutoCompleteParentWhenChildrenDone: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
 export const PrefsContext = createContext<PrefsContextValue | null>(null)

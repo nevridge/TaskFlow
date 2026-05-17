@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useParams, useOutletContext } from 'react-router-dom'
-import { useEnsureJournalEntry, useJournalEntries, useJournalTodos } from '@/hooks/useJournal'
-import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
+import { useEnsureJournalEntry } from '@/hooks/useJournal'
 import { urlDateToISO, todayISO, isValidISODate } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
@@ -23,13 +22,6 @@ export function JournalPage() {
   const effectiveDate = isValidISODate(isoDate) ? isoDate : todayISO()
 
   const { entry, isLoading, error } = useEnsureJournalEntry(effectiveDate)
-
-  // Resolve today's entry (for carry-forward from past days)
-  const allEntriesQuery = useJournalEntries()
-  const allEntries = (allEntriesQuery.data?.data as JournalEntryResponseDto[] | undefined) ?? []
-  const todayEntry = allEntries.find(e => e.date === todayISO())
-  const todayTodosQuery = useJournalTodos(todayEntry?.id)
-  const todayTodos = (todayTodosQuery.data?.data as TaskItemResponseDto[] | undefined) ?? []
 
   const { isDark, headerStyle, todoSort, projectStart } = useOutletContext<AppContext>()
 
@@ -56,8 +48,6 @@ export function JournalPage() {
                   entryId={entry.id}
                   isoDate={effectiveDate}
                   sort={todoSort}
-                  todayEntryId={todayEntry?.id}
-                  todayTodos={todayTodos}
                 />
                 <DailyLogSection
                   entryId={entry.id}

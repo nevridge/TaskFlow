@@ -113,6 +113,9 @@ public class TaskRepositoryTests
         var savedTask = await context.TaskItems.FindAsync(result.Id);
         savedTask.Should().NotBeNull();
         savedTask.Should().BeEquivalentTo(result);
+
+        var createdEvent = await context.TaskItemEvents.SingleAsync(e => e.TaskItemId == result.Id);
+        createdEvent.EventType.Should().Be("TaskCreated");
     }
 
     [Fact]
@@ -203,6 +206,99 @@ public class TaskRepositoryTests
         updatedTask!.Title.Should().Be("Original");
         updatedTask.Description.Should().Be("Description");
         updatedTask.IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteTitleAndPriorityHistoryEvents_WhenValuesChange()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = new TaskItem { Id = 1, Title = "Original", Description = "Description", IsComplete = false, Priority = Priority.Low, Status = Status.Todo };
+        await context.TaskItems.AddAsync(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        tracked.Should().NotBeNull();
+        tracked!.Title = "Updated";
+        tracked.Priority = Priority.High;
+
+        await repository.UpdateAsync(tracked);
+
+        var events = await context.TaskItemEvents
+            .Where(e => e.TaskItemId == tracked.Id)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
+        events.Should().Contain(e => e.EventType == "TitleChanged");
+        events.Should().Contain(e => e.EventType == "PriorityChanged");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteCompletedAndReopenedEvents_WhenCompletionStateChanges()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = new TaskItem { Id = 1, Title = "Task", Description = "Description", IsComplete = false, Status = Status.Todo };
+        await context.TaskItems.AddAsync(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        tracked.Should().NotBeNull();
+        tracked!.IsComplete = true;
+        tracked.Status = Status.Completed;
+        await repository.UpdateAsync(tracked);
+
+        context.ChangeTracker.Clear();
+        tracked = await context.TaskItems.FindAsync(1);
+        tracked.Should().NotBeNull();
+        tracked!.IsComplete = false;
+        tracked.Status = Status.Todo;
+        await repository.UpdateAsync(tracked);
+
+        var events = await context.TaskItemEvents
+            .Where(e => e.TaskItemId == task.Id)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
+        events.Should().Contain(e => e.EventType == "Completed");
+        events.Should().Contain(e => e.EventType == "Reopened");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDescriptionAndDueDateHistoryEvents_WhenValuesChange()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var dueDate = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc);
+        var task = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Initial description",
+            IsComplete = false,
+            Status = Status.Todo,
+            DueDate = dueDate
+        };
+        await context.TaskItems.AddAsync(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        tracked.Should().NotBeNull();
+        tracked!.Description = "Updated description";
+        tracked.DueDate = dueDate.AddDays(3);
+
+        await repository.UpdateAsync(tracked);
+
+        var events = await context.TaskItemEvents
+            .Where(e => e.TaskItemId == tracked.Id)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
+        events.Should().Contain(e => e.EventType == "DescriptionChanged");
+        events.Should().Contain(e => e.EventType == "DueDateChanged");
     }
 
     [Fact]

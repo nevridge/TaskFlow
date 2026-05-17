@@ -24,6 +24,58 @@ All endpoints accept and return `application/json`.
 
 ## Task Items API
 
+### Current v1 Contract Highlights (May 2026)
+
+The snippets below describe the currently implemented contract additions used by the Journal and Tasks screens.
+
+#### Task response projection fields
+
+`TaskItemResponseDto` now includes assignment, movement, and hierarchy metadata in addition to core task fields:
+
+- `currentJournalEntryId: number | null`
+- `currentJournalDate: string | null` (ISO date)
+- `firstTaggedDate: string | null` (ISO date)
+- `lastMovedDate: string | null` (ISO date)
+- `daysTagged: number`
+- `moveCount: number`
+- `isScheduledFuture: boolean`
+- `parentTaskItemId: number | null`
+- `childCount: number`
+- `childTaskCount: number`
+
+#### Create task with optional journal assignment
+
+`POST /api/v1/TaskItems` accepts optional `journalDate`:
+
+```json
+{
+  "title": "Prepare demo",
+  "status": "todo",
+  "journalDate": "2026-05-20"
+}
+```
+
+Behavior:
+
+- If `journalDate` is in the past, returns `422` with `TASK_CREATION_PAST_DAY_NOT_ALLOWED`.
+- If `journalDate` is today/future, the task is automatically assigned to that journal day.
+
+#### Task history endpoint
+
+`GET /api/v1/TaskItems/{id}/history` returns timeline entries (`TaskItemEventResponseDto[]`) in chronological order.
+
+#### Hierarchy validation rules (422)
+
+Task parent/child updates return machine-readable error payloads (`code`, `message`, `details?`) for:
+
+- `TASK_PARENT_NOT_FOUND`
+- `TASK_PARENT_SELF_NOT_ALLOWED`
+- `TASK_PARENT_DEPTH_NOT_ALLOWED` (one subtask level only)
+- `TASK_PARENT_CYCLE_NOT_ALLOWED`
+- `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
+- `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
+- `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+
 ### List All Tasks
 
 Retrieves all task items with status information.

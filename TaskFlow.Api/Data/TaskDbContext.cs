@@ -6,6 +6,7 @@ namespace TaskFlow.Api.Data;
 public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(options)
 {
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
+    public DbSet<TaskItemEvent> TaskItemEvents => Set<TaskItemEvent>();
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLogEntry> JournalLogEntries => Set<JournalLogEntry>();
@@ -18,6 +19,29 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
         {
             entity.Property(t => t.Status)
                   .HasConversion<int>();
+
+            entity.HasOne(t => t.ParentTaskItem)
+                .WithMany(t => t.ChildTaskItems)
+                .HasForeignKey(t => t.ParentTaskItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(t => t.CurrentJournalEntry)
+                .WithMany()
+                .HasForeignKey(t => t.CurrentJournalEntryId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasMany(t => t.Events)
+                .WithOne(e => e.TaskItem)
+                .HasForeignKey(e => e.TaskItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TaskItemEvent>(entity =>
+        {
+            entity.Property(e => e.EventType)
+                .HasMaxLength(64);
+
+            entity.HasIndex(e => new { e.TaskItemId, e.OccurredAtUtc });
         });
 
         modelBuilder.Entity<Note>(entity =>

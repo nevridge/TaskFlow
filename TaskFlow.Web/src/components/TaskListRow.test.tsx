@@ -29,6 +29,7 @@ function renderRow(
             task={task}
             isOnTodayJournal={isOnTodayJournal}
             onEdit={onEdit}
+            onHistory={vi.fn()}
             onDelete={onDelete}
           />
         </tbody>
@@ -81,7 +82,7 @@ describe('TaskListRow', () => {
 
   it('shows em dash when no due date', () => {
     renderRow({ ...baseTask, dueDate: null })
-    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText('—', { selector: '.t-list-cell--due .t-list-empty' })).toBeInTheDocument()
   })
 
   describe('overdue indicator', () => {

@@ -9,7 +9,20 @@ interface SettingsDrawerProps {
 }
 
 export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
-  const { isDark, theme, headerStyle, todoSort, projectStart, setIsDark, setTheme, setHeaderStyle, setTodoSort, setProjectStart } = usePrefs()
+  const {
+    isDark,
+    theme,
+    headerStyle,
+    todoSort,
+    projectStart,
+    autoCompleteParentWhenChildrenDone,
+    setIsDark,
+    setTheme,
+    setHeaderStyle,
+    setTodoSort,
+    setProjectStart,
+    setAutoCompleteParentWhenChildrenDone,
+  } = usePrefs()
   const drawerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -79,6 +92,23 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 onChange={e => e.target.value && setProjectStart(e.target.value)}
                 className="settings-date-input"
               />
+            </DrawerRow>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">Tasks</h3>
+
+            <DrawerRow label="Auto-complete parent when all subtasks are done">
+              <button
+                onClick={() => setAutoCompleteParentWhenChildrenDone(!autoCompleteParentWhenChildrenDone)}
+                className="settings-toggle"
+                style={{ background: autoCompleteParentWhenChildrenDone ? '#34c759' : 'rgba(0,0,0,.15)' }}
+                aria-label="Toggle parent auto-complete"
+                role="switch"
+                aria-checked={autoCompleteParentWhenChildrenDone}
+              >
+                <span className="settings-toggle-thumb" style={{ left: autoCompleteParentWhenChildrenDone ? 16 : 2 }} />
+              </button>
             </DrawerRow>
           </section>
 

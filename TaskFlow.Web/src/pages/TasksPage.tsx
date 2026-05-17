@@ -1,10 +1,18 @@
-import { useState } from 'react'
-import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useTasksQuery,
+  useCreateTaskMutation,
+  useUpdateTaskMutation,
+  useDeleteTaskMutation,
+  type CreateTaskPayload,
+  type TaskItemViewModel,
+  type UpdateTaskPayload,
+} from '@/hooks/useTasks'
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskListRow } from '@/components/TaskListRow'
-import { TaskForm } from '@/components/TaskForm'
-import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
+import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
+import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import type { JournalEntryResponseDto } from '@/api/journal'
 import { todayISO } from '@/lib/journal-utils'
@@ -12,6 +20,7 @@ import '@/tasks.css'
 
 type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
 type PriorityFilter = 'all' | 'low' | 'medium' | 'high'
+type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 
 const priorityOrder = { high: 0, medium: 1, low: 2 }
 
@@ -19,6 +28,8 @@ interface ColHeader {
   key: TaskSortKey
   label: string
 }
+
+type TaskListModel = TaskItemViewModel
 
 const COLUMNS: ColHeader[] = [
   { key: 'title', label: 'Title' },
@@ -33,14 +44,51 @@ export function TasksPage() {
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
   const deleteMutation = useDeleteTaskMutation()
-  const { taskSortKey, setTaskSortKey, taskSortDir, setTaskSortDir } = usePrefs()
+  const {
+    taskSortKey,
+    setTaskSortKey,
+    taskSortDir,
+    setTaskSortDir,
+    autoCompleteParentWhenChildrenDone,
+  } = usePrefs()
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
-  const [editingTask, setEditingTask] = useState<TaskItemResponseDto | null>(null)
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
+  const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
+  const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [mutationError, setMutationError] = useState<string | null>(null)
+  const [expandedParentIds, setExpandedParentIds] = useState<Set<number>>(new Set())
+  const [addingChildForTaskId, setAddingChildForTaskId] = useState<number | null>(null)
+  const [childDraftTitle, setChildDraftTitle] = useState('')
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+  const knownParentIdsRef = useRef<Set<number>>(new Set())
 
-  const tasks: TaskItemResponseDto[] = (data?.data as TaskItemResponseDto[] | undefined) ?? []
+  useEffect(() => {
+    if (!historyTask) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    historyCloseRef.current?.focus()
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHistoryTask(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      window.removeEventListener('keydown', handleEsc)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [historyTask])
+
+  const tasks: TaskListModel[] = useMemo(
+    () => (data?.data as TaskListModel[] | undefined) ?? [],
+    [data],
+  )
 
   const todayEntry = ((journalData?.data as JournalEntryResponseDto[] | undefined) ?? [])
     .find(e => e.date === todayISO())
@@ -56,6 +104,7 @@ export function TasksPage() {
   }
 
   const filtered = tasks
+    .filter(t => matchesViewFilter(t, viewFilter))
     .filter(t => statusFilter === 'all' || t.status?.toLowerCase() === statusFilter)
     .filter(t => priorityFilter === 'all' || t.priority?.toLowerCase() === priorityFilter)
     .sort((a, b) => {
@@ -71,22 +120,163 @@ export function TasksPage() {
       return taskSortDir === 'asc' ? cmp : -cmp
     })
 
-  function handleCreate(data: CreateTaskItemDto) {
-    createMutation.mutate(data, { onSuccess: () => setShowCreate(false) })
+  const filteredById = useMemo(
+    () => new Map(filtered.map(task => [Number(task.id), task])),
+    [filtered],
+  )
+
+  const childStatsByParentId = useMemo(() => {
+    const stats = new Map<number, { done: number; total: number }>()
+    tasks.forEach(task => {
+      const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
+      if (!parentId) return
+
+      const prev = stats.get(parentId) ?? { done: 0, total: 0 }
+      const status = (task.status ?? '').toLowerCase()
+      const isDone = status === 'completed' || !!task.isComplete
+      stats.set(parentId, {
+        total: prev.total + 1,
+        done: prev.done + (isDone ? 1 : 0),
+      })
+    })
+    return stats
+  }, [tasks])
+
+  const childrenByParentId = useMemo(() => {
+    const groups = new Map<number, TaskListModel[]>()
+    filtered.forEach(task => {
+      const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
+      if (!parentId || !filteredById.has(parentId)) return
+      const items = groups.get(parentId) ?? []
+      items.push(task)
+      groups.set(parentId, items)
+    })
+    return groups
+  }, [filtered, filteredById])
+
+  const parentIds = useMemo(
+    () => Array.from(childrenByParentId.keys()),
+    [childrenByParentId],
+  )
+
+  useEffect(() => {
+    setExpandedParentIds(prev => {
+      let changed = false
+      const next = new Set(prev)
+      const known = knownParentIdsRef.current
+      parentIds.forEach(id => {
+        if (!known.has(id)) {
+          next.add(id)
+          known.add(id)
+          changed = true
+        }
+      })
+
+      for (const knownId of Array.from(known)) {
+        if (!parentIds.includes(knownId)) {
+          known.delete(knownId)
+        }
+      }
+
+      return changed ? next : prev
+    })
+  }, [parentIds])
+
+  const hierarchicalRows = useMemo(() => {
+    const rows: Array<{ task: TaskListModel; depth: number }> = []
+    const rootTasks = filtered.filter(task => {
+      const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
+      return !parentId || !filteredById.has(parentId)
+    })
+
+    rootTasks.forEach(parent => {
+      rows.push({ task: parent, depth: 0 })
+      const parentId = Number(parent.id)
+      const children = childrenByParentId.get(parentId) ?? []
+      if (children.length > 0 && expandedParentIds.has(parentId)) {
+        children.forEach(child => rows.push({ task: child, depth: 1 }))
+      }
+    })
+
+    return rows
+  }, [childrenByParentId, expandedParentIds, filtered, filteredById])
+
+  function handleCreate(data: TaskFormPayload) {
+    setMutationError(null)
+    createMutation.mutate(data as CreateTaskPayload, {
+      onSuccess: () => setShowCreate(false),
+      onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+    })
   }
 
-  function handleUpdate(data: CreateTaskItemDto) {
+  function handleUpdate(data: TaskFormPayload) {
     if (!editingTask?.id) return
+    setMutationError(null)
     updateMutation.mutate(
-      { id: Number(editingTask.id), data },
-      { onSuccess: () => setEditingTask(null) }
+      {
+        id: Number(editingTask.id),
+        data: {
+          ...(data as UpdateTaskPayload),
+          autoCompleteParentWhenChildrenDone,
+        } as UpdateTaskPayload,
+      },
+      {
+        onSuccess: () => setEditingTask(null),
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      }
     )
   }
 
-  function handleDelete(task: TaskItemResponseDto) {
+  const parentOptions = tasks
+    .filter(t => !editingTask || Number(t.id) !== Number(editingTask.id))
+    .map(t => ({ id: Number(t.id), title: t.title }))
+
+  function handleDelete(task: TaskListModel) {
     if (window.confirm(`Delete "${task.title}"?`)) {
-      deleteMutation.mutate(Number(task.id))
+      setMutationError(null)
+      deleteMutation.mutate(Number(task.id), {
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      })
     }
+  }
+
+  function toggleChildren(task: TaskListModel) {
+    const parentId = Number(task.id)
+    setExpandedParentIds(prev => {
+      const next = new Set(prev)
+      if (next.has(parentId)) next.delete(parentId)
+      else next.add(parentId)
+      return next
+    })
+  }
+
+  function beginAddChild(task: TaskListModel) {
+    setMutationError(null)
+    setAddingChildForTaskId(Number(task.id))
+    setChildDraftTitle('')
+    setExpandedParentIds(prev => {
+      const next = new Set(prev)
+      next.add(Number(task.id))
+      return next
+    })
+  }
+
+  function submitAddChild() {
+    const parentId = addingChildForTaskId
+    const title = childDraftTitle.trim()
+    if (!parentId || !title) return
+
+    setMutationError(null)
+    createMutation.mutate(
+      { title, status: 'todo', parentTaskItemId: parentId } as CreateTaskPayload,
+      {
+        onSuccess: () => {
+          setAddingChildForTaskId(null)
+          setChildDraftTitle('')
+        },
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      },
+    )
   }
 
   function sortIcon(key: TaskSortKey): string {
@@ -108,15 +298,40 @@ export function TasksPage() {
         {(showCreate || editingTask) && (
           <div className="t-panel">
             <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
+            {mutationError && <p className="t-inline-error">{mutationError}</p>}
             <TaskForm
               task={editingTask ?? undefined}
+              availableParents={parentOptions}
               onSubmit={editingTask ? handleUpdate : handleCreate}
-              onCancel={() => { setShowCreate(false); setEditingTask(null) }}
+              onCancel={() => { setShowCreate(false); setEditingTask(null); setMutationError(null) }}
             />
           </div>
         )}
 
+        {historyTask && (
+          <>
+            <div className="t-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+            <div className="t-modal" role="dialog" aria-modal="true" aria-labelledby="task-history-title">
+              <div className="t-modal-header">
+                <div>
+                  <h2 id="task-history-title" className="t-panel-title t-panel-title--tight">Task history</h2>
+                  <div className="t-modal-subtitle">{historyTask.title}</div>
+                </div>
+                <button ref={historyCloseRef} className="t-btn" onClick={() => setHistoryTask(null)}>Close</button>
+              </div>
+              <TaskHistoryPanel taskId={Number(historyTask.id)} />
+            </div>
+          </>
+        )}
+
         <div className="t-filter-row">
+          <div className="t-chip-group" aria-label="Task view filters">
+            <button type="button" className={`t-chip${viewFilter === 'all' ? ' is-active' : ''}`} onClick={() => setViewFilter('all')}>All</button>
+            <button type="button" className={`t-chip${viewFilter === 'activeToday' ? ' is-active' : ''}`} onClick={() => setViewFilter('activeToday')}>Active today</button>
+            <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
+            <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
+          </div>
+
           <label htmlFor="status-filter" className="t-filter-label">Status</label>
           <select
             id="status-filter"
@@ -168,20 +383,68 @@ export function TasksPage() {
                       </button>
                     </th>
                   ))}
+                  <th className="t-list-th">Assigned Day</th>
+                  <th className="t-list-th t-list-th--movement">Movement</th>
                   <th className="t-list-th t-list-th--journal" title="On today's journal">Journal</th>
                   <th className="t-list-th t-list-th--actions" aria-label="Actions"></th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(task => (
-                  <TaskListRow
-                    key={String(task.id)}
-                    task={task}
-                    isOnTodayJournal={todayTaskIds.has(Number(task.id))}
-                    onEdit={setEditingTask}
-                    onDelete={handleDelete}
-                  />
-                ))}
+                {hierarchicalRows.map(({ task, depth }) => {
+                  const taskId = Number(task.id)
+                  const children = childrenByParentId.get(taskId) ?? []
+                  const hasChildren = children.length > 0
+                  const childStats = childStatsByParentId.get(taskId)
+                  const childProgress = childStats ? `${childStats.done}/${childStats.total} subtasks complete` : null
+
+                  return (
+                    <Fragment key={`row-group-${taskId}`}>
+                      <TaskListRow
+                        key={`task-${taskId}`}
+                        task={task}
+                        depth={depth}
+                        hasChildren={hasChildren}
+                        isExpanded={hasChildren ? expandedParentIds.has(taskId) : undefined}
+                        childProgress={childProgress}
+                        isOnTodayJournal={todayTaskIds.has(taskId)}
+                        onToggleChildren={hasChildren ? toggleChildren : undefined}
+                        onAddChild={beginAddChild}
+                        isAddingChild={addingChildForTaskId === taskId}
+                        onEdit={setEditingTask}
+                        onHistory={setHistoryTask}
+                        onDelete={handleDelete}
+                      />
+
+                      {addingChildForTaskId === taskId && (
+                        <tr key={`add-child-${taskId}`} className="t-list-row t-list-row--child-editor">
+                          <td className="t-list-cell" colSpan={8}>
+                            <div className="t-subtask-editor">
+                              <span className="t-subtask-label">New subtask</span>
+                              <input
+                                className="t-input"
+                                placeholder="Enter subtask title"
+                                value={childDraftTitle}
+                                onChange={e => setChildDraftTitle(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault()
+                                    submitAddChild()
+                                  }
+                                  if (e.key === 'Escape') {
+                                    setAddingChildForTaskId(null)
+                                    setChildDraftTitle('')
+                                  }
+                                }}
+                              />
+                              <button className="t-btn" onClick={() => { setAddingChildForTaskId(null); setChildDraftTitle('') }}>Cancel</button>
+                              <button className="t-btn-primary" onClick={submitAddChild} disabled={!childDraftTitle.trim()}>Add</button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -189,4 +452,64 @@ export function TasksPage() {
       </div>
     </div>
   )
+}
+
+function getTaskMutationErrorMessage(error: unknown): string {
+  const code = getErrorCode(error)
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
+    return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+
+  if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN' || code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
+    return 'Parent tasks cannot be completed while child tasks are still open.'
+  }
+
+  if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') {
+    return 'A task cannot be set as its own parent.'
+  }
+
+  if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') {
+    return 'This parent assignment would create a cycle.'
+  }
+
+  if (code === 'TASK_PARENT_DEPTH_NOT_ALLOWED') {
+    return 'Only one subtask level is supported.'
+  }
+
+  if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') {
+    return 'This task has subtasks. Remove or reassign subtasks before deleting.'
+  }
+
+  if (code === 'TASK_PARENT_NOT_FOUND') {
+    return 'The selected parent task was not found.'
+  }
+
+  if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') {
+    return 'You cannot create new tasks on a past journal day.'
+  }
+
+  return 'Unable to save task changes. Please try again.'
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const maybeCode = (error as { code?: unknown }).code
+  return typeof maybeCode === 'string' ? maybeCode : null
+}
+
+function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {
+  const assignedDate = task.currentJournalDate ?? null
+  const status = (task.status ?? '').toLowerCase()
+  const isCompleted = status === 'completed' || !!task.isComplete
+
+  switch (viewFilter) {
+    case 'activeToday':
+      return assignedDate === todayISO() && !isCompleted
+    case 'scheduledFuture':
+      return assignedDate != null && assignedDate > todayISO()
+    case 'completedHistory':
+      return isCompleted && assignedDate != null && assignedDate < todayISO()
+    default:
+      return true
+  }
 }

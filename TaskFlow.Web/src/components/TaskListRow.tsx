@@ -1,13 +1,30 @@
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/utils'
-import { todayISO } from '@/lib/journal-utils'
+import { formatShort, todayISO } from '@/lib/journal-utils'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
+type TaskRowModel = TaskItemResponseDto & {
+  currentJournalDate?: string | null
+  moveCount?: number
+  daysTagged?: number
+  parentTaskItemId?: number | null
+  childCount?: number
+  childTaskCount?: number
+}
+
 interface Props {
-  task: TaskItemResponseDto
+  task: TaskRowModel
+  depth?: number
+  hasChildren?: boolean
+  isExpanded?: boolean
+  childProgress?: string | null
   isOnTodayJournal: boolean
-  onEdit: (task: TaskItemResponseDto) => void
-  onDelete: (task: TaskItemResponseDto) => void
+  onToggleChildren?: (task: TaskRowModel) => void
+  onAddChild?: (task: TaskRowModel) => void
+  isAddingChild?: boolean
+  onEdit: (task: TaskRowModel) => void
+  onHistory: (task: TaskRowModel) => void
+  onDelete: (task: TaskRowModel) => void
 }
 
 function isOverdue(dueDate: string | null | undefined, status: string | undefined): boolean {
@@ -17,17 +34,49 @@ function isOverdue(dueDate: string | null | undefined, status: string | undefine
   return dueDate.slice(0, 10) < todayISO()
 }
 
-export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props) {
+export function TaskListRow({
+  task,
+  depth = 0,
+  hasChildren = false,
+  isExpanded = false,
+  childProgress,
+  isOnTodayJournal,
+  onToggleChildren,
+  onAddChild,
+  isAddingChild = false,
+  onEdit,
+  onHistory,
+  onDelete,
+}: Props) {
   const status = (task.status ?? 'draft').toLowerCase()
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
+  const assignedDate = task.currentJournalDate ?? null
+  const isScheduledFuture = !!assignedDate && assignedDate > todayISO()
+  const moveCount = task.moveCount ?? 0
+  const daysTagged = task.daysTagged ?? 0
+  const childTaskCount = task.childTaskCount ?? task.childCount ?? 0
 
   return (
     <tr className="t-list-row">
       <td className="t-list-cell t-list-cell--title">
-        <Link to={`/tasks/${task.id}`} className="t-task-link">
-          {task.title}
-        </Link>
+        <div className={`t-title-wrap t-depth-${depth}`}>
+          {hasChildren ? (
+            <button
+              className="t-tree-toggle"
+              onClick={() => onToggleChildren?.(task)}
+              aria-label={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
+              title={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
+            >
+              {isExpanded ? '▾' : '▸'}
+            </button>
+          ) : (
+            <span className="t-tree-spacer" aria-hidden="true" />
+          )}
+          <Link to={`/tasks/${task.id}`} className="t-task-link">
+            {task.title}
+          </Link>
+        </div>
       </td>
       <td className="t-list-cell">
         <span className={`t-badge t-badge-${status}`}>{status}</span>
@@ -49,6 +98,22 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
         )}
       </td>
       <td className="t-list-cell t-list-cell--journal">
+        {assignedDate ? (
+          <div>
+            <div>{formatShort(assignedDate)}</div>
+            {isScheduledFuture && <span className="t-badge t-badge-scheduled">scheduled for {formatShort(assignedDate)}</span>}
+          </div>
+        ) : (
+          <span className="t-list-empty">—</span>
+        )}
+      </td>
+      <td className="t-list-cell t-list-cell--movement">
+        <div className="t-movement-cell">Tagged {daysTagged}d · Moved {moveCount}</div>
+        <div className="t-movement-sub">
+          {childProgress ?? `${task.parentTaskItemId ? `Parent #${task.parentTaskItemId}` : 'No parent'} · ${childTaskCount} child${childTaskCount === 1 ? '' : 'ren'}`}
+        </div>
+      </td>
+      <td className="t-list-cell t-list-cell--journal">
         {isOnTodayJournal && (
           <span className="t-journal-dot" title="On today's journal" role="img" aria-label="On today's journal">
             📔
@@ -57,6 +122,8 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
       </td>
       <td className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
+          <button className={`t-btn${isAddingChild ? ' is-active' : ''}`} aria-label="Add subtask" onClick={() => onAddChild?.(task)}>Subtask</button>
+          <button className="t-btn" aria-label="History" onClick={() => onHistory(task)}>History</button>
           <button className="t-btn" aria-label="Edit" onClick={() => onEdit(task)}>Edit</button>
           <button className="t-btn-danger" aria-label="Delete" onClick={() => onDelete(task)}>Delete</button>
         </div>

@@ -124,6 +124,7 @@ html.is-dark .t-select { color-scheme: dark; }
 }
 
 .t-list-th--journal { width: 72px; text-align: center; }
+.t-list-th--movement { min-width: 170px; }
 .t-list-th--actions { width: 120px; }
 
 .t-col-sort {
@@ -158,6 +159,10 @@ html.is-dark .t-select { color-scheme: dark; }
 
 .t-list-cell--journal {
   text-align: center;
+}
+
+.t-list-cell--movement {
+  white-space: nowrap;
 }
 
 .t-list-cell--actions {
@@ -214,6 +219,11 @@ html.is-dark .t-select { color-scheme: dark; }
 .t-journal-dot {
   font-size: 15px;
   cursor: default;
+}
+
+.t-movement-cell {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* ─── Filter count ────────────────────────────────────────────────────────── */
@@ -289,6 +299,12 @@ html.is-dark .t-select { color-scheme: dark; }
 .t-badge-low       { background: var(--line-soft);  color: var(--muted); }
 .t-badge-medium    { background: var(--warn-bg);    color: var(--warn-ink); }
 .t-badge-high   { background: var(--danger-bg); color: var(--danger-ink); }
+.t-badge-scheduled {
+  margin-top: 4px;
+  display: inline-flex;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
 
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
 

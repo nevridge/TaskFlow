@@ -1,13 +1,19 @@
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/utils'
-import { todayISO } from '@/lib/journal-utils'
+import { formatShort, todayISO } from '@/lib/journal-utils'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
+type TaskRowModel = TaskItemResponseDto & {
+  currentJournalDate?: string | null
+  moveCount?: number
+  daysTagged?: number
+}
+
 interface Props {
-  task: TaskItemResponseDto
+  task: TaskRowModel
   isOnTodayJournal: boolean
-  onEdit: (task: TaskItemResponseDto) => void
-  onDelete: (task: TaskItemResponseDto) => void
+  onEdit: (task: TaskRowModel) => void
+  onDelete: (task: TaskRowModel) => void
 }
 
 function isOverdue(dueDate: string | null | undefined, status: string | undefined): boolean {
@@ -21,6 +27,10 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
   const status = (task.status ?? 'draft').toLowerCase()
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
+  const assignedDate = task.currentJournalDate ?? null
+  const isScheduledFuture = !!assignedDate && assignedDate > todayISO()
+  const moveCount = task.moveCount ?? 0
+  const daysTagged = task.daysTagged ?? 0
 
   return (
     <tr className="t-list-row">
@@ -47,6 +57,19 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onDelete }: Props)
         ) : (
           <span className="t-list-empty">—</span>
         )}
+      </td>
+      <td className="t-list-cell t-list-cell--journal">
+        {assignedDate ? (
+          <div>
+            <div>{formatShort(assignedDate)}</div>
+            {isScheduledFuture && <span className="t-badge t-badge-scheduled">scheduled</span>}
+          </div>
+        ) : (
+          <span className="t-list-empty">—</span>
+        )}
+      </td>
+      <td className="t-list-cell t-list-cell--movement">
+        <span className="t-movement-cell">Tagged {daysTagged}d · Moved {moveCount}</span>
       </td>
       <td className="t-list-cell t-list-cell--journal">
         {isOnTodayJournal && (

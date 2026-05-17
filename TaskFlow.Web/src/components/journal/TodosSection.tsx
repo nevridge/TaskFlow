@@ -40,8 +40,10 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const today = todayISO()
+  const isPastDay = isoDate < today
   const isToday = isoDate === today
   const yesterday = yesterdayOf(isoDate)
 
@@ -62,15 +64,27 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
 
   function addTodo(e: React.FormEvent) {
     e.preventDefault()
+    setActionError(null)
+    if (isPastDay) {
+      setActionError('You cannot create new tasks on a past journal day.')
+      return
+    }
+
     const text = draft.trim()
     if (!text) return
-    createTodo.mutate(text)
-    setDraft('')
+    createTodo.mutate(text, {
+      onSuccess: () => setDraft(''),
+      onError: err => setActionError(getTaskActionErrorMessage(err)),
+    })
   }
 
   function toggle(todo: TaskItemResponseDto) {
+    setActionError(null)
     const isDone = todo.status === 'Completed' || !!todo.isComplete
-    toggleTodo.mutate({ id: Number(todo.id), title: todo.title, done: !isDone })
+    toggleTodo.mutate(
+      { id: Number(todo.id), title: todo.title, done: !isDone },
+      { onError: err => setActionError(getTaskActionErrorMessage(err)) }
+    )
   }
 
   function commitEdit() {
@@ -174,16 +188,39 @@ export function TodosSection({ entryId, isoDate, sort, todayEntryId, todayTodos 
         </ul>
       )}
 
+      {actionError && <p className="todo-error">{actionError}</p>}
+
+      {isPastDay && (
+        <p className="todo-helper">Cannot add tasks to past days. Completed tasks remain as history for this date.</p>
+      )}
+
       <form className="add-row" onSubmit={addTodo}>
         <span className="add-plus">+</span>
         <input
           className="add-input"
-          placeholder="Add a TODO and press Enter"
+          placeholder={isPastDay ? 'Adding tasks is disabled for past dates' : 'Add a TODO and press Enter'}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          disabled={createTodo.isPending}
+          disabled={createTodo.isPending || isPastDay}
         />
       </form>
     </section>
   )
+}
+
+function getTaskActionErrorMessage(error: unknown): string {
+  const code = getErrorCode(error)
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
+    return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+  if (code === 'TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED') {
+    return 'This task cannot be assigned to a past day.'
+  }
+  return 'Unable to save task changes. Please try again.'
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const maybeCode = (error as { code?: unknown }).code
+  return typeof maybeCode === 'string' ? maybeCode : null
 }

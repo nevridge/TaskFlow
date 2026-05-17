@@ -20,6 +20,12 @@ interface ColHeader {
   label: string
 }
 
+type TaskListModel = TaskItemResponseDto & {
+  currentJournalDate?: string | null
+  moveCount?: number
+  daysTagged?: number
+}
+
 const COLUMNS: ColHeader[] = [
   { key: 'title', label: 'Title' },
   { key: 'status', label: 'Status' },
@@ -37,10 +43,10 @@ export function TasksPage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all')
-  const [editingTask, setEditingTask] = useState<TaskItemResponseDto | null>(null)
+  const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
-  const tasks: TaskItemResponseDto[] = (data?.data as TaskItemResponseDto[] | undefined) ?? []
+  const tasks: TaskListModel[] = (data?.data as TaskListModel[] | undefined) ?? []
 
   const todayEntry = ((journalData?.data as JournalEntryResponseDto[] | undefined) ?? [])
     .find(e => e.date === todayISO())
@@ -83,7 +89,7 @@ export function TasksPage() {
     )
   }
 
-  function handleDelete(task: TaskItemResponseDto) {
+  function handleDelete(task: TaskListModel) {
     if (window.confirm(`Delete "${task.title}"?`)) {
       deleteMutation.mutate(Number(task.id))
     }
@@ -168,6 +174,8 @@ export function TasksPage() {
                       </button>
                     </th>
                   ))}
+                  <th className="t-list-th">Assigned Day</th>
+                  <th className="t-list-th t-list-th--movement">Movement</th>
                   <th className="t-list-th t-list-th--journal" title="On today's journal">Journal</th>
                   <th className="t-list-th t-list-th--actions" aria-label="Actions"></th>
                 </tr>

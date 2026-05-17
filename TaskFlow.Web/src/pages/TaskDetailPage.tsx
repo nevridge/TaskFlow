@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import {
+  useTaskQuery,
+  useTasksQuery,
+  useUpdateTaskMutation,
+  useDeleteTaskMutation,
+  type TaskItemViewModel,
+  type UpdateTaskPayload,
+} from '@/hooks/useTasks'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
@@ -9,16 +16,10 @@ import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
 import { formatShort } from '@/lib/journal-utils'
-import type { TaskItemResponseDto, NoteResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
+import type { NoteResponseDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
-type TaskDetailModel = TaskItemResponseDto & {
-  currentJournalDate?: string | null
-  moveCount?: number
-  daysTagged?: number
-  parentTaskItemId?: number | null
-  childTaskCount?: number
-}
+type TaskDetailModel = TaskItemViewModel
 
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -58,9 +59,9 @@ export function TaskDetailPage() {
       {
         id: taskId,
         data: {
-          ...(data as UpdateTaskItemDto),
+          ...(data as UpdateTaskPayload),
           autoCompleteParentWhenChildrenDone,
-        } as UpdateTaskItemDto,
+        } as UpdateTaskPayload,
       },
       {
         onSuccess: () => setEditingTask(false),

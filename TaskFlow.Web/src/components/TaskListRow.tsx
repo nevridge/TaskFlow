@@ -8,6 +8,7 @@ type TaskRowModel = TaskItemResponseDto & {
   moveCount?: number
   daysTagged?: number
   parentTaskItemId?: number | null
+  childCount?: number
   childTaskCount?: number
 }
 
@@ -54,7 +55,7 @@ export function TaskListRow({
   const isScheduledFuture = !!assignedDate && assignedDate > todayISO()
   const moveCount = task.moveCount ?? 0
   const daysTagged = task.daysTagged ?? 0
-  const childTaskCount = task.childTaskCount ?? 0
+  const childTaskCount = task.childTaskCount ?? task.childCount ?? 0
 
   return (
     <tr className="t-list-row">

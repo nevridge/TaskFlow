@@ -1,11 +1,18 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import {
+  useTasksQuery,
+  useCreateTaskMutation,
+  useUpdateTaskMutation,
+  useDeleteTaskMutation,
+  type CreateTaskPayload,
+  type TaskItemViewModel,
+  type UpdateTaskPayload,
+} from '@/hooks/useTasks'
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskListRow } from '@/components/TaskListRow'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
-import type { TaskItemResponseDto, CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import type { TaskSortKey } from '@/lib/prefs'
 import type { JournalEntryResponseDto } from '@/api/journal'
 import { todayISO } from '@/lib/journal-utils'
@@ -22,13 +29,7 @@ interface ColHeader {
   label: string
 }
 
-type TaskListModel = TaskItemResponseDto & {
-  currentJournalDate?: string | null
-  moveCount?: number
-  daysTagged?: number
-  parentTaskItemId?: number | null
-  childTaskCount?: number
-}
+type TaskListModel = TaskItemViewModel
 
 const COLUMNS: ColHeader[] = [
   { key: 'title', label: 'Title' },
@@ -199,7 +200,7 @@ export function TasksPage() {
 
   function handleCreate(data: TaskFormPayload) {
     setMutationError(null)
-    createMutation.mutate(data as CreateTaskItemDto, {
+    createMutation.mutate(data as CreateTaskPayload, {
       onSuccess: () => setShowCreate(false),
       onError: err => setMutationError(getTaskMutationErrorMessage(err)),
     })
@@ -212,9 +213,9 @@ export function TasksPage() {
       {
         id: Number(editingTask.id),
         data: {
-          ...(data as UpdateTaskItemDto),
+          ...(data as UpdateTaskPayload),
           autoCompleteParentWhenChildrenDone,
-        } as UpdateTaskItemDto,
+        } as UpdateTaskPayload,
       },
       {
         onSuccess: () => setEditingTask(null),
@@ -261,7 +262,7 @@ export function TasksPage() {
 
     setMutationError(null)
     createMutation.mutate(
-      { title, status: 'todo', parentTaskItemId: parentId } as CreateTaskItemDto,
+      { title, status: 'todo', parentTaskItemId: parentId } as CreateTaskPayload,
       {
         onSuccess: () => {
           setAddingChildForTaskId(null)

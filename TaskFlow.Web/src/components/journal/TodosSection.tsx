@@ -26,7 +26,7 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
     [todosData],
   )
 
-  const createTodo = useCreateTodoMutation(entryId)
+  const createTodo = useCreateTodoMutation(entryId, isoDate)
   const toggleTodo = useToggleTodoMutation(entryId)
   const editTodo = useEditTodoMutation(entryId)
   const removeTodo = useRemoveTodoMutation(entryId)

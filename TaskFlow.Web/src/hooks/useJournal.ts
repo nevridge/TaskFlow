@@ -5,7 +5,6 @@ import {
   createJournalEntry,
   updateJournalEntry,
   getJournalTodos,
-  addJournalTodo,
   removeJournalTodo,
   createLogEntry,
   deleteLogEntry,
@@ -85,14 +84,11 @@ export function useUpdateNotesMutation(entryId: number, entryTitle: string) {
 
 // ─── Todo mutations ───────────────────────────────────────────────────────────
 
-export function useCreateTodoMutation(entryId: number) {
+export function useCreateTodoMutation(entryId: number, isoDate: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (title: string) => {
-      const res = await postApiV1TaskItems({ body: { title, status: 'todo' } })
-      const task = res.data as TaskItemResponseDto
-      await addJournalTodo(entryId, Number(task.id))
-    },
+    mutationFn: (title: string) =>
+      postApiV1TaskItems({ body: { title, status: 'todo', journalDate: isoDate } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })

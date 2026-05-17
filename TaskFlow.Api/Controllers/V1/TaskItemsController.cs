@@ -16,7 +16,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
     private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
-    private const string ParentIncompleteChildrenErrorCode = "TASK_PARENT_INCOMPLETE_CHILDREN";
+    private const string ParentCycleNotAllowedErrorCode = "TASK_PARENT_CYCLE_NOT_ALLOWED";
+    private const string ParentCompleteBlockedByChildrenErrorCode = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN";
+    private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
 
@@ -189,6 +191,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
                     details = new { parentTaskItemId = updateDto.ParentTaskItemId }
                 });
             }
+
+            if (await WouldCreateCycleAsync(id, updateDto.ParentTaskItemId.Value))
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentCycleNotAllowedErrorCode,
+                    message = "This parent assignment would create a cycle.",
+                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                });
+            }
         }
 
         var wasCompleted = IsCompleted(existing.IsComplete, existing.Status);
@@ -199,7 +211,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         {
             return UnprocessableEntity(new
             {
-                code = ParentIncompleteChildrenErrorCode,
+                code = ParentCompleteBlockedByChildrenErrorCode,
                 message = "Parent tasks cannot be completed while child tasks are still open."
             });
         }
@@ -236,6 +248,14 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
         await _repo.UpdateAsync(existing);
 
+        if (updateDto.AutoCompleteParentWhenChildrenDone &&
+            !wasCompleted &&
+            nowCompleted &&
+            existing.ParentTaskItemId.HasValue)
+        {
+            await TryAutoCompleteParentAsync(existing.ParentTaskItemId.Value);
+        }
+
         var responseDto = new TaskItemResponseDto
         {
             Id = existing.Id,
@@ -270,6 +290,41 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         return allTasks.Count(t => t.ParentTaskItemId == taskId);
     }
 
+    private async Task TryAutoCompleteParentAsync(int parentTaskId)
+    {
+        var parent = await _repo.GetByIdAsync(parentTaskId);
+        if (parent is null || IsCompleted(parent.IsComplete, parent.Status))
+        {
+            return;
+        }
+
+        var allTasks = await _repo.GetAllAsync();
+        var hasChildren = allTasks.Any(t => t.ParentTaskItemId == parentTaskId);
+        if (!hasChildren)
+        {
+            return;
+        }
+
+        var hasIncompleteChildren = allTasks.Any(t =>
+            t.ParentTaskItemId == parentTaskId && !IsCompleted(t.IsComplete, t.Status));
+
+        if (hasIncompleteChildren)
+        {
+            return;
+        }
+
+        parent.IsComplete = true;
+        parent.Status = Status.Completed;
+
+        var validationResult = await _validator.ValidateAsync(parent);
+        if (!validationResult.IsValid)
+        {
+            return;
+        }
+
+        await _repo.UpdateAsync(parent);
+    }
+
     private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
     {
         if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
@@ -290,7 +345,39 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             return NotFound();
         }
 
+        var allTasks = await _repo.GetAllAsync();
+        if (allTasks.Any(t => t.ParentTaskItemId == id))
+        {
+            return UnprocessableEntity(new
+            {
+                code = ParentDeleteBlockedByChildrenErrorCode,
+                message = "This task has subtasks. Remove or reassign subtasks before deleting."
+            });
+        }
+
         await _repo.DeleteAsync(id);
         return NoContent();
+    }
+
+    private async Task<bool> WouldCreateCycleAsync(int taskId, int proposedParentId)
+    {
+        var allTasks = await _repo.GetAllAsync();
+        var parentByTaskId = allTasks.ToDictionary(t => t.Id, t => t.ParentTaskItemId);
+
+        var cursor = proposedParentId;
+        while (true)
+        {
+            if (cursor == taskId)
+            {
+                return true;
+            }
+
+            if (!parentByTaskId.TryGetValue(cursor, out var next) || !next.HasValue)
+            {
+                return false;
+            }
+
+            cursor = next.Value;
+        }
     }
 }

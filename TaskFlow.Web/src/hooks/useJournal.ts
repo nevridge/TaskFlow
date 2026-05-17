@@ -14,6 +14,7 @@ import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal
 import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
 import { addDays, formatEntryTitle } from '@/lib/journal-utils'
+import { usePrefs } from '@/context/usePrefs'
 
 export const journalKeys = {
   all: ['journal'] as const,
@@ -101,11 +102,16 @@ export function useCreateTodoMutation(entryId: number) {
 
 export function useToggleTodoMutation(entryId: number) {
   const qc = useQueryClient()
+  const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
     mutationFn: ({ id, title, done }: { id: number; title: string; done: boolean }) =>
       putApiV1TaskItemsById({
         path: { id },
-        body: { title, status: done ? 'completed' : 'todo' },
+        body: {
+          title,
+          status: done ? 'completed' : 'todo',
+          autoCompleteParentWhenChildrenDone,
+        },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
@@ -116,9 +122,13 @@ export function useToggleTodoMutation(entryId: number) {
 
 export function useEditTodoMutation(entryId: number) {
   const qc = useQueryClient()
+  const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
     mutationFn: ({ id, title }: { id: number; title: string }) =>
-      putApiV1TaskItemsById({ path: { id }, body: { title } }),
+      putApiV1TaskItemsById({
+        path: { id },
+        body: { title, autoCompleteParentWhenChildrenDone },
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })

@@ -11,4 +11,5 @@ public class UpdateTaskItemDto
     public Priority? Priority { get; set; }
     public DateTime? DueDate { get; set; }
     public int? ParentTaskItemId { get; set; }
+    public bool AutoCompleteParentWhenChildrenDone { get; set; }
 }

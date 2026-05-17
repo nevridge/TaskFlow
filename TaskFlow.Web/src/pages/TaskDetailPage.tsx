@@ -4,6 +4,7 @@ import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useDeleteTaskMutati
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
+import { usePrefs } from '@/context/usePrefs'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
@@ -31,6 +32,7 @@ export function TaskDetailPage() {
   const createNote = useCreateNoteMutation(taskId)
   const updateNote = useUpdateNoteMutation(taskId)
   const deleteNote = useDeleteNoteMutation(taskId)
+  const { autoCompleteParentWhenChildrenDone } = usePrefs()
 
   const navigate = useNavigate()
 
@@ -53,7 +55,13 @@ export function TaskDetailPage() {
   function handleUpdateTask(data: TaskFormPayload) {
     setTaskMutationError(null)
     updateTask.mutate(
-      { id: taskId, data: data as UpdateTaskItemDto },
+      {
+        id: taskId,
+        data: {
+          ...(data as UpdateTaskItemDto),
+          autoCompleteParentWhenChildrenDone,
+        } as UpdateTaskItemDto,
+      },
       {
         onSuccess: () => setEditingTask(false),
         onError: err => setTaskMutationError(getTaskMutationErrorMessage(err)),
@@ -180,11 +188,17 @@ function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
     return 'Completed tasks assigned to past days cannot be reopened.'
   }
-  if (code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
+  if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN' || code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
     return 'Parent tasks cannot be completed while child tasks are still open.'
   }
   if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') {
     return 'A task cannot be set as its own parent.'
+  }
+  if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') {
+    return 'This parent assignment would create a cycle.'
+  }
+  if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') {
+    return 'This task has subtasks. Remove or reassign subtasks before deleting.'
   }
   if (code === 'TASK_PARENT_NOT_FOUND') {
     return 'The selected parent task was not found.'

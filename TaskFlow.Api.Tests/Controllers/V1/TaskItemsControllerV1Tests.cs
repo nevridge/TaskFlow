@@ -550,6 +550,33 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenParentAssignmentWouldCreateCycle()
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Root",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 3
+        };
+
+        var root = new TaskItem { Id = 1, Title = "Root", Status = Status.Todo };
+        var child = new TaskItem { Id = 2, Title = "Child", Status = Status.Todo, ParentTaskItemId = 1 };
+        var grandchild = new TaskItem { Id = 3, Title = "Grandchild", Status = Status.Todo, ParentTaskItemId = 2 };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
+        _mockRepo.Setup(r => r.GetByIdAsync(3)).ReturnsAsync(grandchild);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([root, child, grandchild]);
+
+        var result = await _controller.Update(1, updateDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task GetHistory_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         _mockRepo.Setup(r => r.GetByIdAsync(7)).ReturnsAsync((TaskItem?)null);
@@ -581,5 +608,71 @@ public class TaskItemsControllerV1Tests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var history = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemEventResponseDto>>().Subject;
         history.Should().ContainSingle(e => e.Id == 10 && e.EventType == "AssignedToJournalDay");
+    }
+
+    [Fact]
+    public async Task Delete_ShouldReturnUnprocessableEntity_WhenTaskHasChildren()
+    {
+        var parent = new TaskItem { Id = 1, Title = "Parent" };
+        var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([parent, child]);
+
+        var result = await _controller.Delete(1);
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.DeleteAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldAutoCompleteParent_WhenEnabledAndLastChildCompletes()
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Description = "Desc",
+            IsComplete = true,
+            Status = Status.Completed,
+            Priority = Priority.Low,
+            ParentTaskItemId = 10,
+            AutoCompleteParentWhenChildrenDone = true
+        };
+
+        var child = new TaskItem
+        {
+            Id = 2,
+            Title = "Child",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 10
+        };
+        var parent = new TaskItem
+        {
+            Id = 10,
+            Title = "Parent",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
+        _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([
+            parent,
+            new TaskItem { Id = 2, Title = "Child", IsComplete = true, Status = Status.Completed, ParentTaskItemId = 10 }
+        ]);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+
+        var result = await _controller.Update(2, updateDto);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 2)), Times.Once);
+        _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 10 && t.IsComplete && t.Status == Status.Completed)), Times.Once);
     }
 }

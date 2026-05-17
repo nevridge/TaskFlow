@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
@@ -50,6 +50,27 @@ export function TasksPage() {
   const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+
+  useEffect(() => {
+    if (!historyTask) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    historyCloseRef.current?.focus()
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setHistoryTask(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => {
+      window.removeEventListener('keydown', handleEsc)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [historyTask])
 
   const tasks: TaskListModel[] = (data?.data as TaskListModel[] | undefined) ?? []
 
@@ -140,13 +161,13 @@ export function TasksPage() {
         {historyTask && (
           <>
             <div className="t-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
-            <div className="t-modal" role="dialog" aria-modal="true" aria-label="Task history">
+            <div className="t-modal" role="dialog" aria-modal="true" aria-labelledby="task-history-title">
               <div className="t-modal-header">
                 <div>
-                  <h2 className="t-panel-title t-panel-title--tight">Task history</h2>
+                  <h2 id="task-history-title" className="t-panel-title t-panel-title--tight">Task history</h2>
                   <div className="t-modal-subtitle">{historyTask.title}</div>
                 </div>
-                <button className="t-btn" onClick={() => setHistoryTask(null)}>Close</button>
+                <button ref={historyCloseRef} className="t-btn" onClick={() => setHistoryTask(null)}>Close</button>
               </div>
               <TaskHistoryPanel taskId={Number(historyTask.id)} />
             </div>

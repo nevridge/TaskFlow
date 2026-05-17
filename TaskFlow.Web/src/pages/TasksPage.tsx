@@ -47,6 +47,7 @@ export function TasksPage() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [mutationError, setMutationError] = useState<string | null>(null)
 
   const tasks: TaskListModel[] = (data?.data as TaskListModel[] | undefined) ?? []
 
@@ -81,14 +82,22 @@ export function TasksPage() {
     })
 
   function handleCreate(data: CreateTaskItemDto) {
-    createMutation.mutate(data, { onSuccess: () => setShowCreate(false) })
+    setMutationError(null)
+    createMutation.mutate(data, {
+      onSuccess: () => setShowCreate(false),
+      onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+    })
   }
 
   function handleUpdate(data: CreateTaskItemDto) {
     if (!editingTask?.id) return
+    setMutationError(null)
     updateMutation.mutate(
       { id: Number(editingTask.id), data },
-      { onSuccess: () => setEditingTask(null) }
+      {
+        onSuccess: () => setEditingTask(null),
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      }
     )
   }
 
@@ -117,10 +126,11 @@ export function TasksPage() {
         {(showCreate || editingTask) && (
           <div className="t-panel">
             <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
+            {mutationError && <p className="t-inline-error">{mutationError}</p>}
             <TaskForm
               task={editingTask ?? undefined}
               onSubmit={editingTask ? handleUpdate : handleCreate}
-              onCancel={() => { setShowCreate(false); setEditingTask(null) }}
+              onCancel={() => { setShowCreate(false); setEditingTask(null); setMutationError(null) }}
             />
           </div>
         )}
@@ -207,6 +217,25 @@ export function TasksPage() {
       </div>
     </div>
   )
+}
+
+function getTaskMutationErrorMessage(error: unknown): string {
+  const code = getErrorCode(error)
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
+    return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+
+  if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') {
+    return 'You cannot create new tasks on a past journal day.'
+  }
+
+  return 'Unable to save task changes. Please try again.'
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const maybeCode = (error as { code?: unknown }).code
+  return typeof maybeCode === 'string' ? maybeCode : null
 }
 
 function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {

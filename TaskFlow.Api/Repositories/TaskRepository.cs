@@ -29,12 +29,91 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     public async Task<TaskItem> AddAsync(TaskItem task)
     {
         _context.TaskItems.Add(task);
+        _context.TaskItemEvents.Add(new TaskItemEvent
+        {
+            TaskItem = task,
+            EventType = "TaskCreated",
+            OccurredAtUtc = DateTime.UtcNow,
+            ChangeSummary = "Task was created."
+        });
         await _context.SaveChangesAsync();
         return task;
     }
 
     public async Task UpdateAsync(TaskItem task)
     {
+        var entry = _context.Entry(task);
+        TaskItem? persisted = null;
+        if (entry.State == EntityState.Detached)
+        {
+            persisted = await _context.TaskItems
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == task.Id);
+
+            _context.TaskItems.Update(task);
+            entry = _context.Entry(task);
+        }
+
+        var originalTitle = persisted?.Title ?? entry.OriginalValues.GetValue<string>(nameof(TaskItem.Title));
+        var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
+        var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
+        var originalIsComplete = persisted?.IsComplete ?? entry.OriginalValues.GetValue<bool>(nameof(TaskItem.IsComplete));
+
+        if (!string.Equals(originalTitle, task.Title, StringComparison.Ordinal))
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "TitleChanged",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = $"Title changed from '{originalTitle}' to '{task.Title}'."
+            });
+        }
+
+        if (originalPriority != task.Priority)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "PriorityChanged",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = $"Priority changed from {originalPriority} to {task.Priority}."
+            });
+        }
+
+        var wasCompleted = IsCompleted(originalIsComplete, originalStatus);
+        var isCompletedNow = IsCompleted(task.IsComplete, task.Status);
+        if (!wasCompleted && isCompletedNow)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "Completed",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = "Marked complete."
+            });
+        }
+        else if (wasCompleted && !isCompletedNow)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "Reopened",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = "Reopened."
+            });
+        }
+        else if (originalStatus != task.Status)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "StatusChanged",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = $"Status changed from {originalStatus} to {task.Status}."
+            });
+        }
+
         _context.TaskItems.Update(task);
         await _context.SaveChangesAsync();
     }
@@ -50,4 +129,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         _context.TaskItems.Remove(task);
         await _context.SaveChangesAsync();
     }
+
+    private static bool IsCompleted(bool isComplete, Status status) =>
+        isComplete || status == Status.Completed;
 }

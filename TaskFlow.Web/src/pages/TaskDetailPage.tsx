@@ -11,6 +11,12 @@ import { formatShort } from '@/lib/journal-utils'
 import type { TaskItemResponseDto, NoteResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
+type TaskDetailModel = TaskItemResponseDto & {
+  currentJournalDate?: string | null
+  moveCount?: number
+  daysTagged?: number
+}
+
 export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id)
@@ -29,8 +35,9 @@ export function TaskDetailPage() {
   const [editingTask, setEditingTask] = useState(false)
   const [showNoteForm, setShowNoteForm] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteResponseDto | null>(null)
+  const [taskMutationError, setTaskMutationError] = useState<string | null>(null)
 
-  const task = taskData?.data as TaskItemResponseDto | undefined
+  const task = taskData?.data as TaskDetailModel | undefined
   const history: TaskItemEventResponseDto[] = (historyData?.data as TaskItemEventResponseDto[] | undefined) ?? []
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
 
@@ -39,7 +46,14 @@ export function TaskDetailPage() {
   if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
   function handleUpdateTask(data: CreateTaskItemDto) {
-    updateTask.mutate({ id: taskId, data }, { onSuccess: () => setEditingTask(false) })
+    setTaskMutationError(null)
+    updateTask.mutate(
+      { id: taskId, data },
+      {
+        onSuccess: () => setEditingTask(false),
+        onError: err => setTaskMutationError(getTaskMutationErrorMessage(err)),
+      }
+    )
   }
 
   function handleDeleteTask() {
@@ -66,7 +80,8 @@ export function TaskDetailPage() {
           {editingTask ? (
             <>
               <h2 className="t-panel-title">Edit Task</h2>
-              <TaskForm task={task} onSubmit={handleUpdateTask} onCancel={() => setEditingTask(false)} />
+              {taskMutationError && <p className="t-inline-error">{taskMutationError}</p>}
+              <TaskForm task={task} onSubmit={handleUpdateTask} onCancel={() => { setEditingTask(false); setTaskMutationError(null) }} />
             </>
           ) : (
             <>
@@ -81,6 +96,9 @@ export function TaskDetailPage() {
               <div className="t-detail-meta">
                 <span>Status: <strong>{task.status}</strong></span>
                 <span>Priority: <strong>{task.priority}</strong></span>
+                {task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}
+                <span>Tagged: <strong>{task.daysTagged ?? 0}d</strong></span>
+                <span>Moved: <strong>{task.moveCount ?? 0}</strong></span>
                 {task.dueDate && <span>Due: <strong>{formatDate(task.dueDate)}</strong></span>}
               </div>
               <div className="t-detail-badges">
@@ -170,6 +188,8 @@ function describeEvent(event: TaskItemEventResponseDto): string {
   if (event.changeSummary) return event.changeSummary
 
   switch (event.eventType) {
+    case 'TaskCreated':
+      return 'Task was created'
     case 'AssignedToJournalDay':
       return event.toJournalDate ? `Assigned to ${formatShort(event.toJournalDate)}` : 'Assigned to a journal day'
     case 'ReassignedToJournalDay':
@@ -178,6 +198,16 @@ function describeEvent(event: TaskItemEventResponseDto): string {
         : 'Moved to a different journal day'
     case 'RemovedFromJournalDay':
       return event.fromJournalDate ? `Removed from ${formatShort(event.fromJournalDate)}` : 'Removed from a journal day'
+    case 'Completed':
+      return 'Marked complete'
+    case 'Reopened':
+      return 'Reopened'
+    case 'TitleChanged':
+      return 'Title updated'
+    case 'PriorityChanged':
+      return 'Priority changed'
+    case 'StatusChanged':
+      return 'Status changed'
     default:
       return event.eventType
   }
@@ -188,4 +218,19 @@ function formatDateTime(value: string): string {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value))
+}
+
+function getTaskMutationErrorMessage(error: unknown): string {
+  const code = getErrorCode(error)
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
+    return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+
+  return 'Unable to save task changes. Please try again.'
+}
+
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const maybeCode = (error as { code?: unknown }).code
+  return typeof maybeCode === 'string' ? maybeCode : null
 }

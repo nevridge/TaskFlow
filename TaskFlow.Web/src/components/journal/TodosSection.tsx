@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import type { TaskItemResponseDto } from '@/api/journal'
+import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import {
   useJournalTodos,
   useCreateTodoMutation,
@@ -34,6 +35,7 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
+  const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
 
   const today = todayISO()
   const isPastDay = isoDate < today
@@ -143,6 +145,18 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
                 )}
 
                 <button
+                  className="todo-history"
+                  onClick={() => setHistoryTask(td)}
+                  aria-label="History"
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 8v5l3 2"/>
+                    <path d="M3.05 11a9 9 0 1 1 .5 4"/>
+                    <path d="M3 4v7h7"/>
+                  </svg>
+                </button>
+
+                <button
                   className="todo-x"
                   onClick={() => removeTodo.mutate(Number(td.id))}
                   aria-label="Delete"
@@ -173,6 +187,22 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
           disabled={createTodo.isPending || isPastDay}
         />
       </form>
+
+      {historyTask && (
+        <>
+          <div className="j-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+          <div className="j-modal" role="dialog" aria-modal="true" aria-label="Task history">
+            <div className="j-modal-header">
+              <div>
+                <h3 className="j-modal-title">Task history</h3>
+                <p className="j-modal-subtitle">{historyTask.title}</p>
+              </div>
+              <button className="j-modal-close" onClick={() => setHistoryTask(null)}>Close</button>
+            </div>
+            <TaskHistoryPanel taskId={Number(historyTask.id)} />
+          </div>
+        </>
+      )}
     </section>
   )
 }

@@ -55,9 +55,11 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         }
 
         var originalTitle = persisted?.Title ?? entry.OriginalValues.GetValue<string>(nameof(TaskItem.Title));
+        var originalDescription = persisted?.Description ?? entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));
         var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
         var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
         var originalIsComplete = persisted?.IsComplete ?? entry.OriginalValues.GetValue<bool>(nameof(TaskItem.IsComplete));
+        var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateTime?>(nameof(TaskItem.DueDate));
 
         if (!string.Equals(originalTitle, task.Title, StringComparison.Ordinal))
         {
@@ -78,6 +80,28 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
                 EventType = "PriorityChanged",
                 OccurredAtUtc = DateTime.UtcNow,
                 ChangeSummary = $"Priority changed from {originalPriority} to {task.Priority}."
+            });
+        }
+
+        if (!string.Equals(originalDescription, task.Description, StringComparison.Ordinal))
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "DescriptionChanged",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = "Description updated."
+            });
+        }
+
+        if (originalDueDate != task.DueDate)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "DueDateChanged",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = $"Due date changed from {FormatDueDate(originalDueDate)} to {FormatDueDate(task.DueDate)}."
             });
         }
 
@@ -132,4 +156,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
     private static bool IsCompleted(bool isComplete, Status status) =>
         isComplete || status == Status.Completed;
+
+    private static string FormatDueDate(DateTime? value) =>
+        value?.ToString("yyyy-MM-dd") ?? "none";
 }

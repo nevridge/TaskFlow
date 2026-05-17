@@ -55,6 +55,10 @@ function describeEvent(event: TaskItemEventResponseDto): string {
       return 'Title updated'
     case 'PriorityChanged':
       return 'Priority changed'
+    case 'DescriptionChanged':
+      return 'Description updated'
+    case 'DueDateChanged':
+      return 'Due date changed'
     case 'StatusChanged':
       return 'Status changed'
     default:

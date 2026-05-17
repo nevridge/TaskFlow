@@ -267,6 +267,41 @@ public class TaskRepositoryTests
     }
 
     [Fact]
+    public async Task UpdateAsync_ShouldWriteDescriptionAndDueDateHistoryEvents_WhenValuesChange()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var dueDate = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc);
+        var task = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Initial description",
+            IsComplete = false,
+            Status = Status.Todo,
+            DueDate = dueDate
+        };
+        await context.TaskItems.AddAsync(task);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        tracked.Should().NotBeNull();
+        tracked!.Description = "Updated description";
+        tracked.DueDate = dueDate.AddDays(3);
+
+        await repository.UpdateAsync(tracked);
+
+        var events = await context.TaskItemEvents
+            .Where(e => e.TaskItemId == tracked.Id)
+            .OrderBy(e => e.OccurredAtUtc)
+            .ToListAsync();
+
+        events.Should().Contain(e => e.EventType == "DescriptionChanged");
+        events.Should().Contain(e => e.EventType == "DueDateChanged");
+    }
+
+    [Fact]
     public async Task DeleteAsync_ShouldRemoveTask_WhenTaskExists()
     {
         // Arrange

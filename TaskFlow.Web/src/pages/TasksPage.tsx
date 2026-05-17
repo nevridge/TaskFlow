@@ -62,6 +62,7 @@ export function TasksPage() {
   const [addingChildForTaskId, setAddingChildForTaskId] = useState<number | null>(null)
   const [childDraftTitle, setChildDraftTitle] = useState('')
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+  const knownParentIdsRef = useRef<Set<number>>(new Set())
 
   useEffect(() => {
     if (!historyTask) return
@@ -156,11 +157,24 @@ export function TasksPage() {
 
   useEffect(() => {
     setExpandedParentIds(prev => {
+      let changed = false
       const next = new Set(prev)
+      const known = knownParentIdsRef.current
       parentIds.forEach(id => {
-        if (!prev.has(id)) next.add(id)
+        if (!known.has(id)) {
+          next.add(id)
+          known.add(id)
+          changed = true
+        }
       })
-      return next
+
+      for (const knownId of Array.from(known)) {
+        if (!parentIds.includes(knownId)) {
+          known.delete(knownId)
+        }
+      }
+
+      return changed ? next : prev
     })
   }, [parentIds])
 

@@ -14,6 +14,12 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     public async Task<TaskItem?> GetByIdAsync(int id) =>
         await _context.TaskItems.FirstOrDefaultAsync(t => t.Id == id);
 
+    public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
+        await _context.JournalEntries
+            .Where(e => e.Todos.Any(t => t.Id == taskId))
+            .Select(e => (DateOnly?)e.Date)
+            .SingleOrDefaultAsync();
+
     public async Task<TaskItem> AddAsync(TaskItem task)
     {
         _context.TaskItems.Add(task);

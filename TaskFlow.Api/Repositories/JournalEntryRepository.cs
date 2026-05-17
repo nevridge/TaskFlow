@@ -96,6 +96,12 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             return AddTodoResult.TaskNotFound;
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        if (entry.Date < today)
+        {
+            return AddTodoResult.PastDayNotAllowed;
+        }
+
         if (entry.Todos.Any(t => t.Id == taskItemId))
         {
             return AddTodoResult.AlreadyLinked;

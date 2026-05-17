@@ -94,6 +94,16 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task AddTodo_ShouldReturnUnprocessableEntity_WhenEntryIsPastDay()
+    {
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.PastDayNotAllowed);
+
+        var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
+
+        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnNoContent_WhenValid()
     {
         _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.Success);

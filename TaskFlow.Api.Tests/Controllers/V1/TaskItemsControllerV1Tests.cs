@@ -20,6 +20,7 @@ public class TaskItemsControllerV1Tests
     {
         _mockRepo = new Mock<ITaskRepository>();
         _mockValidator = new Mock<IValidator<TaskItem>>();
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
         _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object);
     }
 
@@ -349,6 +350,78 @@ public class TaskItemsControllerV1Tests
         var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
         responseDto.Priority.Should().Be("High"); // Priority preserved from existing task
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenReopeningTaskAssignedToPastDay()
+    {
+        // Arrange
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = true,
+            Status = Status.Completed,
+            Priority = Priority.Low
+        };
+
+        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1));
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(yesterday);
+
+        // Act
+        var result = await _controller.Update(1, updateDto);
+
+        // Assert
+        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        unprocessable.Value.Should().NotBeNull();
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldAllowReopeningTaskAssignedToToday()
+    {
+        // Arrange
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = true,
+            Status = Status.Completed,
+            Priority = Priority.Low
+        };
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(today);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _controller.Update(1, updateDto);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 }

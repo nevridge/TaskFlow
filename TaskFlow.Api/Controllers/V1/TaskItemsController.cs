@@ -13,6 +13,7 @@ namespace TaskFlow.Api.Controllers.V1;
 public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator) : ControllerBase
 {
     private const string ApiVersionString = "1.0";
+    private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
 
@@ -21,7 +22,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
     {
         var items = await _repo.GetAllAsync();
-        var dtos = items.Select(i => new TaskItemResponseDto
+        var dtoTasks = items.Select(async i => new TaskItemResponseDto
         {
             Id = i.Id,
             Title = i.Title,
@@ -29,9 +30,10 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             IsComplete = i.IsComplete,
             DueDate = i.DueDate,
             Status = i.Status.ToString(),
-            Priority = i.Priority.ToString()
+            Priority = i.Priority.ToString(),
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(i.Id)
         });
-        return Ok(dtos);
+        return Ok(await Task.WhenAll(dtoTasks));
     }
 
     // GET: api/v1/TaskItems/5
@@ -52,7 +54,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             IsComplete = item.IsComplete,
             DueDate = item.DueDate,
             Status = item.Status.ToString(),
-            Priority = item.Priority.ToString()
+            Priority = item.Priority.ToString(),
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id)
         };
         return Ok(dto);
     }
@@ -87,7 +90,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             IsComplete = createdItem.IsComplete,
             DueDate = createdItem.DueDate,
             Status = createdItem.Status.ToString(),
-            Priority = createdItem.Priority.ToString()
+            Priority = createdItem.Priority.ToString(),
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(createdItem.Id)
         };
 
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersionString, id = createdItem.Id }, responseDto);
@@ -101,6 +105,24 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         if (existing is null)
         {
             return NotFound();
+        }
+
+        var wasCompleted = IsCompleted(existing.IsComplete, existing.Status);
+        var nextStatus = updateDto.Status ?? existing.Status;
+        var nowCompleted = IsCompleted(updateDto.IsComplete, nextStatus);
+        if (wasCompleted && !nowCompleted)
+        {
+            var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (assignedDate.HasValue && assignedDate.Value < today)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ReopenPastDayErrorCode,
+                    message = "Completed tasks assigned to past days cannot be reopened.",
+                    details = new { assignedDate }
+                });
+            }
         }
 
         // Apply incoming changes
@@ -127,11 +149,15 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             IsComplete = existing.IsComplete,
             DueDate = existing.DueDate,
             Status = existing.Status.ToString(),
-            Priority = existing.Priority.ToString()
+            Priority = existing.Priority.ToString(),
+            CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(existing.Id)
         };
 
         return Ok(responseDto); // Return 200 OK with the updated resource
     }
+
+    private static bool IsCompleted(bool isComplete, Status status) =>
+        isComplete || status == Status.Completed;
 
     // DELETE: api/v1/TaskItems/5
     [HttpDelete("{id}")]

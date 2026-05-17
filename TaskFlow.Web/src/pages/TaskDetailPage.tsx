@@ -197,6 +197,9 @@ function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') {
     return 'This parent assignment would create a cycle.'
   }
+  if (code === 'TASK_PARENT_DEPTH_NOT_ALLOWED') {
+    return 'Only one subtask level is supported.'
+  }
   if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') {
     return 'This task has subtasks. Remove or reassign subtasks before deleting.'
   }

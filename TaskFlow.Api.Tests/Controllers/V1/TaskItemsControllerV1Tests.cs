@@ -164,6 +164,29 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_ShouldReturnUnprocessableEntity_WhenParentWouldExceedOneLevelDepth()
+    {
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "New Task",
+            Description = "Desc",
+            ParentTaskItemId = 5
+        };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(new TaskItem
+        {
+            Id = 5,
+            Title = "Existing Child",
+            ParentTaskItemId = 1
+        });
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Update_ShouldReturnOkWithUpdatedTask_WhenValid()
     {
         // Arrange
@@ -500,6 +523,43 @@ public class TaskItemsControllerV1Tests
 
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
         _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync((TaskItem?)null);
+
+        var result = await _controller.Update(1, updateDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenParentWouldExceedOneLevelDepth()
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 12
+        };
+
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(new TaskItem
+        {
+            Id = 12,
+            Title = "Existing Child",
+            ParentTaskItemId = 4
+        });
 
         var result = await _controller.Update(1, updateDto);
 

@@ -16,6 +16,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
     private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
+    private const string ParentDepthNotAllowedErrorCode = "TASK_PARENT_DEPTH_NOT_ALLOWED";
     private const string ParentCycleNotAllowedErrorCode = "TASK_PARENT_CYCLE_NOT_ALLOWED";
     private const string ParentCompleteBlockedByChildrenErrorCode = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN";
     private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
@@ -119,6 +120,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
                     details = new { parentTaskItemId = createDto.ParentTaskItemId }
                 });
             }
+
+            if (parent.ParentTaskItemId.HasValue)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentDepthNotAllowedErrorCode,
+                    message = "Only one subtask level is supported.",
+                    details = new { parentTaskItemId = createDto.ParentTaskItemId }
+                });
+            }
         }
 
         var item = new TaskItem
@@ -188,6 +199,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
                 {
                     code = ParentTaskNotFoundErrorCode,
                     message = "The selected parent task was not found.",
+                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                });
+            }
+
+            if (parent.ParentTaskItemId.HasValue)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentDepthNotAllowedErrorCode,
+                    message = "Only one subtask level is supported.",
                     details = new { parentTaskItemId = updateDto.ParentTaskItemId }
                 });
             }

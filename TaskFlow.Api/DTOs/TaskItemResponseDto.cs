@@ -9,6 +9,8 @@ public class TaskItemResponseDto
     public DateTime? DueDate { get; set; }
     public string Status { get; set; } = "Draft";
     public string Priority { get; set; } = "Low"; // String representation of the priority
+    public int? ParentTaskItemId { get; set; }
+    public int ChildTaskCount { get; set; }
     public DateOnly? CurrentJournalDate { get; set; }
     public int MoveCount { get; set; }
     public int DaysTagged { get; set; }

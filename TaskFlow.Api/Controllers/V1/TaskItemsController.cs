@@ -14,6 +14,9 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 {
     private const string ApiVersionString = "1.0";
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
+    private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
+    private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
+    private const string ParentIncompleteChildrenErrorCode = "TASK_PARENT_INCOMPLETE_CHILDREN";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
 
@@ -22,6 +25,11 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
     {
         var items = await _repo.GetAllAsync();
+        var childCounts = items
+            .Where(t => t.ParentTaskItemId.HasValue)
+            .GroupBy(t => t.ParentTaskItemId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
         var dtoTasks = items.Select(async i => new TaskItemResponseDto
         {
             Id = i.Id,
@@ -31,6 +39,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = i.DueDate,
             Status = i.Status.ToString(),
             Priority = i.Priority.ToString(),
+            ParentTaskItemId = i.ParentTaskItemId,
+            ChildTaskCount = childCounts.GetValueOrDefault(i.Id),
             CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(i.Id),
             MoveCount = i.MoveCount,
             DaysTagged = GetDaysTagged(i.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(i.Id))
@@ -57,6 +67,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = item.DueDate,
             Status = item.Status.ToString(),
             Priority = item.Priority.ToString(),
+            ParentTaskItemId = item.ParentTaskItemId,
+            ChildTaskCount = await GetChildTaskCountAsync(item.Id),
             CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id),
             MoveCount = item.MoveCount,
             DaysTagged = GetDaysTagged(item.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(item.Id))
@@ -93,6 +105,20 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     [HttpPost]
     public async Task<ActionResult<TaskItemResponseDto>> Create([FromBody] CreateTaskItemDto createDto)
     {
+        if (createDto.ParentTaskItemId.HasValue)
+        {
+            var parent = await _repo.GetByIdAsync(createDto.ParentTaskItemId.Value);
+            if (parent is null)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentTaskNotFoundErrorCode,
+                    message = "The selected parent task was not found.",
+                    details = new { parentTaskItemId = createDto.ParentTaskItemId }
+                });
+            }
+        }
+
         var item = new TaskItem
         {
             Title = createDto.Title,
@@ -100,7 +126,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             Status = createDto.Status,
             IsComplete = createDto.IsComplete,
             Priority = createDto.Priority,
-            DueDate = createDto.DueDate
+            DueDate = createDto.DueDate,
+            ParentTaskItemId = createDto.ParentTaskItemId
         };
 
         var validationResult = await _validator.ValidateAsync(item);
@@ -120,6 +147,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = createdItem.DueDate,
             Status = createdItem.Status.ToString(),
             Priority = createdItem.Priority.ToString(),
+            ParentTaskItemId = createdItem.ParentTaskItemId,
+            ChildTaskCount = 0,
             CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(createdItem.Id),
             MoveCount = createdItem.MoveCount,
             DaysTagged = GetDaysTagged(createdItem.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(createdItem.Id))
@@ -138,9 +167,43 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             return NotFound();
         }
 
+        if (updateDto.ParentTaskItemId.HasValue)
+        {
+            if (updateDto.ParentTaskItemId.Value == id)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentSelfNotAllowedErrorCode,
+                    message = "A task cannot be its own parent.",
+                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                });
+            }
+
+            var parent = await _repo.GetByIdAsync(updateDto.ParentTaskItemId.Value);
+            if (parent is null)
+            {
+                return UnprocessableEntity(new
+                {
+                    code = ParentTaskNotFoundErrorCode,
+                    message = "The selected parent task was not found.",
+                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                });
+            }
+        }
+
         var wasCompleted = IsCompleted(existing.IsComplete, existing.Status);
         var nextStatus = updateDto.Status ?? existing.Status;
         var nowCompleted = IsCompleted(updateDto.IsComplete, nextStatus);
+
+        if (!wasCompleted && nowCompleted && await HasIncompleteChildrenAsync(id))
+        {
+            return UnprocessableEntity(new
+            {
+                code = ParentIncompleteChildrenErrorCode,
+                message = "Parent tasks cannot be completed while child tasks are still open."
+            });
+        }
+
         if (wasCompleted && !nowCompleted)
         {
             var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
@@ -163,6 +226,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         existing.Status = updateDto.Status ?? existing.Status;
         existing.Priority = updateDto.Priority ?? existing.Priority;
         existing.DueDate = updateDto.DueDate;
+        existing.ParentTaskItemId = updateDto.ParentTaskItemId;
 
         var validationResult = await _validator.ValidateAsync(existing);
         if (!validationResult.IsValid)
@@ -181,6 +245,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DueDate = existing.DueDate,
             Status = existing.Status.ToString(),
             Priority = existing.Priority.ToString(),
+            ParentTaskItemId = existing.ParentTaskItemId,
+            ChildTaskCount = await GetChildTaskCountAsync(existing.Id),
             CurrentJournalDate = await _repo.GetAssignedJournalDateAsync(existing.Id),
             MoveCount = existing.MoveCount,
             DaysTagged = GetDaysTagged(existing.FirstTaggedDate, await _repo.GetAssignedJournalDateAsync(existing.Id))
@@ -191,6 +257,18 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
     private static bool IsCompleted(bool isComplete, Status status) =>
         isComplete || status == Status.Completed;
+
+    private async Task<bool> HasIncompleteChildrenAsync(int taskId)
+    {
+        var allTasks = await _repo.GetAllAsync();
+        return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.IsComplete, t.Status));
+    }
+
+    private async Task<int> GetChildTaskCountAsync(int taskId)
+    {
+        var allTasks = await _repo.GetAllAsync();
+        return allTasks.Count(t => t.ParentTaskItemId == taskId);
+    }
 
     private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
     {

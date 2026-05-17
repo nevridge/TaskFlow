@@ -4,8 +4,8 @@ import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskListRow } from '@/components/TaskListRow'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
-import { TaskForm } from '@/components/TaskForm'
-import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
+import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
+import type { TaskItemResponseDto, CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import type { TaskSortKey } from '@/lib/prefs'
 import type { JournalEntryResponseDto } from '@/api/journal'
 import { todayISO } from '@/lib/journal-utils'
@@ -104,25 +104,29 @@ export function TasksPage() {
       return taskSortDir === 'asc' ? cmp : -cmp
     })
 
-  function handleCreate(data: CreateTaskItemDto) {
+  function handleCreate(data: TaskFormPayload) {
     setMutationError(null)
-    createMutation.mutate(data, {
+    createMutation.mutate(data as CreateTaskItemDto, {
       onSuccess: () => setShowCreate(false),
       onError: err => setMutationError(getTaskMutationErrorMessage(err)),
     })
   }
 
-  function handleUpdate(data: CreateTaskItemDto) {
+  function handleUpdate(data: TaskFormPayload) {
     if (!editingTask?.id) return
     setMutationError(null)
     updateMutation.mutate(
-      { id: Number(editingTask.id), data },
+      { id: Number(editingTask.id), data: data as UpdateTaskItemDto },
       {
         onSuccess: () => setEditingTask(null),
         onError: err => setMutationError(getTaskMutationErrorMessage(err)),
       }
     )
   }
+
+  const parentOptions = tasks
+    .filter(t => !editingTask || Number(t.id) !== Number(editingTask.id))
+    .map(t => ({ id: Number(t.id), title: t.title }))
 
   function handleDelete(task: TaskListModel) {
     if (window.confirm(`Delete "${task.title}"?`)) {
@@ -152,6 +156,7 @@ export function TasksPage() {
             {mutationError && <p className="t-inline-error">{mutationError}</p>}
             <TaskForm
               task={editingTask ?? undefined}
+              availableParents={parentOptions}
               onSubmit={editingTask ? handleUpdate : handleCreate}
               onCancel={() => { setShowCreate(false); setEditingTask(null); setMutationError(null) }}
             />
@@ -263,6 +268,18 @@ function getTaskMutationErrorMessage(error: unknown): string {
   const code = getErrorCode(error)
   if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
     return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+
+  if (code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
+    return 'Parent tasks cannot be completed while child tasks are still open.'
+  }
+
+  if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') {
+    return 'A task cannot be set as its own parent.'
+  }
+
+  if (code === 'TASK_PARENT_NOT_FOUND') {
+    return 'The selected parent task was not found.'
   }
 
   if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') {

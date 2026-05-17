@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
-import { useTaskQuery, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
-import { TaskForm } from '@/components/TaskForm'
+import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
 import { formatShort } from '@/lib/journal-utils'
-import type { TaskItemResponseDto, NoteResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
+import type { TaskItemResponseDto, NoteResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
 type TaskDetailModel = TaskItemResponseDto & {
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number
+  parentTaskItemId?: number | null
+  childTaskCount?: number
 }
 
 export function TaskDetailPage() {
@@ -22,6 +24,7 @@ export function TaskDetailPage() {
   const taskId = Number(id)
 
   const { data: taskData, isLoading: taskLoading, error: taskError } = useTaskQuery(taskId)
+  const { data: allTasksData } = useTasksQuery()
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
   const updateTask = useUpdateTaskMutation()
   const deleteTask = useDeleteTaskMutation()
@@ -38,15 +41,19 @@ export function TaskDetailPage() {
 
   const task = taskData?.data as TaskDetailModel | undefined
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
+  const allTasks: TaskDetailModel[] = (allTasksData?.data as TaskDetailModel[] | undefined) ?? []
+  const parentOptions = allTasks
+    .filter(t => Number(t.id) !== taskId)
+    .map(t => ({ id: Number(t.id), title: t.title }))
 
   if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
   if (taskLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading…</p></div></div>
   if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
-  function handleUpdateTask(data: CreateTaskItemDto) {
+  function handleUpdateTask(data: TaskFormPayload) {
     setTaskMutationError(null)
     updateTask.mutate(
-      { id: taskId, data },
+      { id: taskId, data: data as UpdateTaskItemDto },
       {
         onSuccess: () => setEditingTask(false),
         onError: err => setTaskMutationError(getTaskMutationErrorMessage(err)),
@@ -79,7 +86,7 @@ export function TaskDetailPage() {
             <>
               <h2 className="t-panel-title">Edit Task</h2>
               {taskMutationError && <p className="t-inline-error">{taskMutationError}</p>}
-              <TaskForm task={task} onSubmit={handleUpdateTask} onCancel={() => { setEditingTask(false); setTaskMutationError(null) }} />
+              <TaskForm task={task} availableParents={parentOptions} onSubmit={handleUpdateTask} onCancel={() => { setEditingTask(false); setTaskMutationError(null) }} />
             </>
           ) : (
             <>
@@ -94,6 +101,8 @@ export function TaskDetailPage() {
               <div className="t-detail-meta">
                 <span>Status: <strong>{task.status}</strong></span>
                 <span>Priority: <strong>{task.priority}</strong></span>
+                <span>Parent: <strong>{task.parentTaskItemId ? `#${task.parentTaskItemId}` : 'None'}</strong></span>
+                <span>Children: <strong>{task.childTaskCount ?? 0}</strong></span>
                 {task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}
                 <span>Tagged: <strong>{task.daysTagged ?? 0}d</strong></span>
                 <span>Moved: <strong>{task.moveCount ?? 0}</strong></span>
@@ -170,6 +179,15 @@ function getTaskMutationErrorMessage(error: unknown): string {
   const code = getErrorCode(error)
   if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
     return 'Completed tasks assigned to past days cannot be reopened.'
+  }
+  if (code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
+    return 'Parent tasks cannot be completed while child tasks are still open.'
+  }
+  if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') {
+    return 'A task cannot be set as its own parent.'
+  }
+  if (code === 'TASK_PARENT_NOT_FOUND') {
+    return 'The selected parent task was not found.'
   }
 
   return 'Unable to save task changes. Please try again.'

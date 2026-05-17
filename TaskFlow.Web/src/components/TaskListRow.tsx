@@ -7,6 +7,8 @@ type TaskRowModel = TaskItemResponseDto & {
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number
+  parentTaskItemId?: number | null
+  childTaskCount?: number
 }
 
 interface Props {
@@ -32,6 +34,7 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onHistory, onDelet
   const isScheduledFuture = !!assignedDate && assignedDate > todayISO()
   const moveCount = task.moveCount ?? 0
   const daysTagged = task.daysTagged ?? 0
+  const childTaskCount = task.childTaskCount ?? 0
 
   return (
     <tr className="t-list-row">
@@ -70,7 +73,10 @@ export function TaskListRow({ task, isOnTodayJournal, onEdit, onHistory, onDelet
         )}
       </td>
       <td className="t-list-cell t-list-cell--movement">
-        <span className="t-movement-cell">Tagged {daysTagged}d · Moved {moveCount}</span>
+        <div className="t-movement-cell">Tagged {daysTagged}d · Moved {moveCount}</div>
+        <div className="t-movement-sub">
+          {task.parentTaskItemId ? `Parent #${task.parentTaskItemId}` : 'No parent'} · {childTaskCount} child{childTaskCount === 1 ? '' : 'ren'}
+        </div>
       </td>
       <td className="t-list-cell t-list-cell--journal">
         {isOnTodayJournal && (

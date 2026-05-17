@@ -1,18 +1,33 @@
 import { type FormEvent, useState } from 'react'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 
+export type TaskFormPayload = CreateTaskItemDto & {
+  parentTaskItemId?: number | null
+}
+
+type ParentTaskOption = {
+  id: number
+  title: string
+}
+
+type TaskFormModel = TaskItemResponseDto & {
+  parentTaskItemId?: number | null
+}
+
 interface Props {
-  task?: TaskItemResponseDto
-  onSubmit: (data: CreateTaskItemDto) => void
+  task?: TaskFormModel
+  availableParents?: ParentTaskOption[]
+  onSubmit: (data: TaskFormPayload) => void
   onCancel: () => void
 }
 
-export function TaskForm({ task, onSubmit, onCancel }: Props) {
+export function TaskForm({ task, availableParents = [], onSubmit, onCancel }: Props) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
   const [status, setStatus] = useState<string>((task?.status ?? 'draft').toLowerCase())
   const [priority, setPriority] = useState<string>((task?.priority ?? 'low').toLowerCase())
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '')
+  const [parentTaskId, setParentTaskId] = useState<string>(task?.parentTaskItemId ? String(task.parentTaskItemId) : '')
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -23,6 +38,7 @@ export function TaskForm({ task, onSubmit, onCancel }: Props) {
       priority: priority as 'low' | 'medium' | 'high',
       // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
       dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
+      parentTaskItemId: parentTaskId ? Number(parentTaskId) : null,
     })
   }
 
@@ -63,6 +79,15 @@ export function TaskForm({ task, onSubmit, onCancel }: Props) {
       <div className="t-field">
         <label htmlFor="dueDate" className="t-label">Due Date</label>
         <input id="dueDate" type="date" className="t-input" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+      </div>
+      <div className="t-field">
+        <label htmlFor="parentTaskId" className="t-label">Parent Task</label>
+        <select id="parentTaskId" className="t-input" value={parentTaskId} onChange={e => setParentTaskId(e.target.value)}>
+          <option value="">None</option>
+          {availableParents.map(parent => (
+            <option key={parent.id} value={String(parent.id)}>{parent.title}</option>
+          ))}
+        </select>
       </div>
       <div className="t-form-actions">
         <button type="button" className="t-btn" onClick={onCancel}>Cancel</button>

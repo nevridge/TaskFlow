@@ -20,6 +20,11 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
             entity.Property(t => t.Status)
                   .HasConversion<int>();
 
+            entity.HasOne(t => t.ParentTaskItem)
+                .WithMany(t => t.ChildTaskItems)
+                .HasForeignKey(t => t.ParentTaskItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             entity.HasOne(t => t.CurrentJournalEntry)
                 .WithMany()
                 .HasForeignKey(t => t.CurrentJournalEntryId)

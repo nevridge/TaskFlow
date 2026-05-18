@@ -217,24 +217,19 @@ This configuration:
      taskflow-api:latest
    ```
 
-### Azure App Service
+### Docker Compose (Recommended for production Docker deployments)
 
-When deploying to Azure App Service, the `/home` directory is persistent across restarts. You have two options:
+When deploying with Docker Compose to an on-premises Docker Host (via Portainer GitOps), use named volumes for persistence:
 
-**Option 1: Use Azure persistent storage (recommended)**
-
-Override the database path to use `/home`:
 ```bash
-az webapp config appsettings set \
-  --resource-group TaskFlowRG \
-  --name taskflowapi \
-  --settings \
-    ConnectionStrings__DefaultConnection="Data Source=/home/data/tasks.db"
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-**Option 2: Use default paths with volume mounts**
-
-The default `/app/data` and `/app/logs` paths will work, but data will only persist as long as the container is running. For production, use Option 1 or configure Azure File Storage mounts.
+This configuration automatically:
+- Creates and manages named volumes (`taskflow-data`, `taskflow-logs`)
+- Persists data across container restarts
+- Provides consistent paths across environments
+- Supports backup and restore operations
 
 ## Managing Docker Volumes
 
@@ -445,16 +440,12 @@ docker compose down -v
 docker compose up --build
 ```
 
-### Different behavior in Azure vs. local
+### Different behavior in different environments
 
-**Symptom**: Application works locally but fails in Azure App Service.
-
-**Solutions:**
-- Azure App Service persists `/home` by default, not `/app`
-- Override paths using environment variables in Azure:
-  - `LOG_PATH=/home/logs/log.txt`
-  - `ConnectionStrings__DefaultConnection="Data Source=/home/data/tasks.db"`
-- Or mount Azure File Storage to `/app/data` and `/app/logs`
+**Local Development vs. Docker Host:**
+- Local: Docker Desktop manages volumes automatically
+- Docker Host: Portainer GitOps handles volume lifecycle
+- Both: Same Docker named volumes configuration, consistent behavior across environments
 
 ## Migration Guide
 
@@ -579,30 +570,33 @@ If you're upgrading from a previous version that used `/home/logs` and `/home/ta
 
 The new configuration will create Docker named volumes automatically.
 
-### For Azure Deployment
+### For Docker Host Deployment (Production)
 
-Azure App Service uses `/home` for persistent storage. To maintain compatibility:
+Docker Host (Portainer GitOps) uses Docker Compose with named volumes, but with different volume names than development to prevent data conflicts:
 
-1. **Set environment variables in Azure Portal:**
-   - `LOG_PATH=/home/logs/log.txt`
-   - `ConnectionStrings__DefaultConnection="Data Source=/home/data/tasks.db"`
+**Volume Names:**
+- **Development** (docker-compose.yml): `taskflow-data`, `taskflow-logs`
+- **Production** (docker-compose.prod.yml): `taskflow-data-prod`, `taskflow-logs-prod`
 
-2. **Or update your deployment workflow** to include these settings.
+**Configuration:**
+1. **Configuration is automatic** - `docker-compose.prod.yml` creates and manages volumes
+2. **Separate volumes** - Production volumes are isolated from development (prevents accidental overwrites)
+3. **Consistent paths** - Container paths are `/app/data` and `/app/logs` in both environments
+4. **Data persists** - Volumes outlive container lifecycle
 
-Your existing data and logs in `/home` will continue to work without migration.
+Your data in volumes will automatically persist when using the standard compose configuration. When migrating data between environments, ensure you're using the correct volume names for each environment.
 
 ## Summary
 
 - **Volume Type**: Docker named volumes (default) or bind mounts (alternative)
 - **Default container paths**: `/app/logs` for logs, `/app/data` for database
+- **Development volumes**: `taskflow-data` and `taskflow-logs` (docker-compose.yml)
+- **Production volumes**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml)
 - **Environment variables**: `LOG_PATH` and `ConnectionStrings__DefaultConnection` for customization
-- **Docker Compose**: Uses named volumes `taskflow-data` and `taskflow-logs` for persistence
 - **Persistence**: Data persists across container removal/recreation until volumes are explicitly deleted
 - **Management**: Use `docker volume` commands to manage, backup, and restore volumes
-- **Azure App Service**: Override paths to use `/home` for persistent storage
 - **Best practice**: Use Docker named volumes for most scenarios, bind mounts for advanced debugging
 - **Migration**: Follow the migration guide above if upgrading from bind mounts
-
 ---
 
 [← Back to README](../README.md) | [Docker Configuration](DOCKER_CONFIGURATION.md) | [Volume Testing →](VOLUME_TESTING.md)

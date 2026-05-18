@@ -1,8 +1,8 @@
 # TaskFlow
 
-A full-stack task management application demonstrating modern development practices and cloud deployment patterns. The project consists of a **production-ready .NET 10 REST API** and a **React TypeScript frontend**, both containerised and deployed to Azure.
+A full-stack task management application demonstrating modern development practices and containerized deployment patterns. The project consists of a **production-ready .NET 10 REST API** and a **React TypeScript frontend**, both containerised and deployed via Docker and Portainer GitOps.
 
-While functional as a task management system, this project serves as a portfolio piece showcasing professional engineering practices across the full stack — from API design and automated testing to CI/CD pipelines and cloud-native deployment.
+While functional as a task management system, this project serves as a portfolio piece showcasing professional engineering practices across the full stack — from API design and automated testing to CI/CD pipelines and on-premises Docker deployment.
 
 ## Overview
 
@@ -35,8 +35,9 @@ While functional as a task management system, this project serves as a portfolio
 
 **DevOps**
 - 🐳 Docker Compose for local full-stack development
-- ☁️ Azure deployment automation via GitHub Actions + OIDC (no stored credentials)
+- 🎯 Portainer GitOps deployment to on-premises Docker host
 - 🔁 CI pipeline: lint → type-check → test → build → smoke test (parallel API and Web jobs)
+- 📦 GitHub Container Registry (GHCR) for image hosting
 
 ## Quick Start
 
@@ -91,7 +92,7 @@ See **[Getting Started](docs/GETTING_STARTED.md)** for the full setup walkthroug
 - **[API Reference](docs/API.md)** — Complete endpoint documentation with examples
 - **[API Versioning](docs/API_VERSIONING.md)** — Versioning strategy and migration guide
 - **[Architecture](docs/ARCHITECTURE.md)** — Design decisions, patterns, and quality practices
-- **[Deployment](docs/DEPLOYMENT.md)** — Docker, Azure, and CI/CD workflows
+- **[Deployment](docs/DEPLOYMENT.md)** — Docker, Portainer GitOps, and CI/CD workflows
 - **[Contributing](docs/CONTRIBUTING.md)** — Development workflow and standards
 
 ### Reference Documentation
@@ -99,9 +100,7 @@ See **[Getting Started](docs/GETTING_STARTED.md)** for the full setup walkthroug
 - **[Docker Configuration](docs/DOCKER_CONFIGURATION.md)** — Dev vs prod Docker comparison (all three services)
 - **[Volumes](docs/VOLUMES.md)** — Volume configuration and persistence
 - **[Health Checks](docs/HEALTH_CHECK_TESTING.md)** — Health check setup and testing
-- **[Azure OIDC](docs/AZURE_OIDC_AUTHENTICATION.md)** — Azure authentication setup
-- **[QA Deployment](docs/QA_DEPLOYMENT.md)** — Ephemeral QA environments
-- **[Resource Naming](docs/DEPLOY.md)** — Azure naming standards
+- **[Image & Deployment Naming](docs/DEPLOY.md)** — GHCR image tagging and deployment conventions
 - **[Service Registration](docs/SERVICE_REGISTRATION_PATTERN.md)** — .NET DI extension pattern
 - **[Security Scanning](docs/SECURITY_SCANNING.md)** — CodeQL and Trivy
 - **[Logging](docs/LOGGING.md)** — OpenTelemetry configuration
@@ -154,7 +153,7 @@ TaskFlow/
 | Observability | OpenTelemetry (traces, metrics, logs → Seq) |
 | API docs | OpenAPI + Scalar UI |
 | Testing | xUnit, Moq, FluentAssertions, Coverlet |
-| Deployment | Docker, Azure Container Instances (ACI) |
+| Deployment | Docker, Portainer GitOps |
 | CI/CD | GitHub Actions |
 
 ### Frontend
@@ -182,7 +181,7 @@ If you're evaluating this project for hiring or collaboration, here's what to lo
 ### DevOps & Deployment
 - **Multi-stage Docker builds** — optimised production images for both API and frontend
 - **GitHub Actions workflows** — parallel CI jobs for API and frontend (lint, type-check, test, build, smoke test)
-- **Azure deployment via OIDC** — no stored credentials; federated identity with Azure
+- **Portainer GitOps deployment** — images in GHCR, configuration in separate `nevridge/taskflow-deploy` repo, automatic Portainer redeploys
 - **Environment-specific configuration** — `.env.development` / `.env.production` for frontend; `appsettings.*.json` and env vars for the API
 
 ### Testing & Quality

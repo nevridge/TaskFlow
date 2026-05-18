@@ -212,8 +212,8 @@ Test both URL versioning (`/api/v1/TaskItems`) and header versioning (`x-api-ver
 
 - [Microsoft API Versioning GitHub](https://github.com/dotnet/aspnet-api-versioning)
 - [Microsoft Learn: API Versioning](https://learn.microsoft.com/en-us/aspnet/core/web-api/advanced/versioning)
-- [Azure API Design Best Practices](https://learn.microsoft.com/en-us/azure/architecture/best-practices/api-design#versioning)
 - [RESTful API Design Guidelines](https://restfulapi.net/versioning/)
+- [Semantic Versioning](https://semver.org/)
 
 ## Summary
 

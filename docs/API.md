@@ -8,11 +8,9 @@ Complete reference for TaskFlow.Api REST endpoints.
 - Direct run: `https://localhost:{port}` (port shown in console)
 - Docker: `http://localhost:8080`
 
-**Azure Production:**
-- `https://nevridge-taskflow-prod-web.azurewebsites.net`
-
-**Azure QA:**
-- `http://taskflow-qa.eastus.azurecontainer.io:8080`
+**Production:**
+- API: `https://taskflow-api.skalaforge.com`
+- Web: `https://taskflow.skalaforge.com`
 
 ## Authentication
 

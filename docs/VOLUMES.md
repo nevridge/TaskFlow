@@ -572,20 +572,27 @@ The new configuration will create Docker named volumes automatically.
 
 ### For Docker Host Deployment (Production)
 
-Docker Host (Portainer GitOps) uses the same named volumes configuration as local development:
+Docker Host (Portainer GitOps) uses Docker Compose with named volumes, but with different volume names than development to prevent data conflicts:
 
-1. **Configuration is automatic** - `docker-compose.prod.yml` defines volumes
-2. **Data persists across restarts** - Volumes outlive container lifecycle  
-3. **No path overrides needed** - Consistent `/app/data` and `/app/logs` paths work everywhere
+**Volume Names:**
+- **Development** (docker-compose.yml): `taskflow-data`, `taskflow-logs`
+- **Production** (docker-compose.prod.yml): `taskflow-data-prod`, `taskflow-logs-prod`
 
-Your data in volumes will automatically persist when using the standard compose configuration.
+**Configuration:**
+1. **Configuration is automatic** - `docker-compose.prod.yml` creates and manages volumes
+2. **Separate volumes** - Production volumes are isolated from development (prevents accidental overwrites)
+3. **Consistent paths** - Container paths are `/app/data` and `/app/logs` in both environments
+4. **Data persists** - Volumes outlive container lifecycle
+
+Your data in volumes will automatically persist when using the standard compose configuration. When migrating data between environments, ensure you're using the correct volume names for each environment.
 
 ## Summary
 
 - **Volume Type**: Docker named volumes (default) or bind mounts (alternative)
 - **Default container paths**: `/app/logs` for logs, `/app/data` for database
+- **Development volumes**: `taskflow-data` and `taskflow-logs` (docker-compose.yml)
+- **Production volumes**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml)
 - **Environment variables**: `LOG_PATH` and `ConnectionStrings__DefaultConnection` for customization
-- **Docker Compose**: Uses named volumes `taskflow-data` and `taskflow-logs` for persistence
 - **Persistence**: Data persists across container removal/recreation until volumes are explicitly deleted
 - **Management**: Use `docker volume` commands to manage, backup, and restore volumes
 - **Best practice**: Use Docker named volumes for most scenarios, bind mounts for advanced debugging

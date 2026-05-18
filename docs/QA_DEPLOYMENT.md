@@ -1,103 +1,27 @@
-# QA Deployment Guide
+# QA Deployment Guide (ARCHIVED)
 
-> **📖 Reference Documentation** - This is a detailed QA deployment guide. For general deployment, see the [Deployment Guide](DEPLOYMENT.md).
+> **⚠️ Deprecated** — This document describes the legacy Azure Container Instances (ACI) QA deployment workflow which has been archived.
+>
+> TaskFlow now uses a unified **Portainer GitOps deployment pattern** for all environments. See [DEPLOY.md](DEPLOY.md) and [Deployment Guide](DEPLOYMENT.md) for current deployment information.
 
+## Legacy Azure QA Environment
 
-This document provides detailed information about the TaskFlow.Api QA deployment workflow using Azure Container Instances (ACI) with a fixed DNS name.
+This file is retained for reference only. The ephemeral QA deployment on Azure Container Instances has been replaced with a production-style deployment using Docker and Portainer on an on-premises Docker host.
 
-## Overview
+### Migration Notes
 
-The ephemeral QA deployment workflow creates a predictable test environment using Azure Container Instances. Unlike typical ephemeral deployments that use unique DNS names, this workflow uses a **fixed DNS name label** (`taskflow-qa`) to provide a consistent endpoint for QA testing.
+- **Previous QA Endpoint:** `http://taskflow-qa.eastus.azurecontainer.io:8080` (no longer active)
+- **Current Production Endpoint:** `https://taskflow-api.skalaforge.com` and `https://taskflow.skalaforge.com`
+- **Deployment Method:** Portainer GitOps with images from GitHub Container Registry (GHCR)
 
-## Key Features
+For current deployment procedures, refer to:
+- [Deployment Guide](DEPLOYMENT.md) — Full deployment walkthrough
+- [DEPLOY.md](DEPLOY.md) — Image naming and deployment naming conventions
+- [Docker Configuration](DOCKER_CONFIGURATION.md) — Docker Compose setup
 
-### Fixed DNS Name
+---
 
-The QA environment uses a **standardized naming convention** for all Azure resources. See [DEPLOY.md](DEPLOY.md) for complete details.
-
-**QA Resource Names**:
-- **Resource Group**: `nevridge-taskflow-qa-rg`
-- **Container Registry**: `nevridgetaskflowqaacr`
-- **ACI Container**: `nevridge-taskflow-qa-aci`
-- **DNS Name Label**: `taskflow-qa`
-
-**QA Endpoint Details**:
-- **DNS Name Label**: `taskflow-qa`
-- **Full DNS Format**: `taskflow-qa.{region}.azurecontainer.io`
-- **Port**: 8080
-- **Example URLs**:
-  - API Endpoint (East US): `http://taskflow-qa.eastus.azurecontainer.io:8080`
-  - Health Check (East US): `http://taskflow-qa.eastus.azurecontainer.io:8080/health`
-
-### Automatic Deployment Management
-
-The workflow automatically handles conflicts by:
-1. Checking if a container with the name `taskflow-qa` already exists in the resource group
-2. Deleting the existing container if found (to free up the DNS name)
-3. Creating a new container with the same fixed DNS name
-4. Verifying the deployment via health check
-
-This ensures that:
-- The QA endpoint always uses the same predictable URL
-- Previous deployments are automatically replaced without manual intervention
-- DNS conflicts are avoided
-- Each deployment serves the latest version of the application
-
-## Workflow Configuration
-
-### Workflow File
-`.github/workflows/qa-deploy.yaml`
-
-### Trigger Method
-Manual trigger via GitHub Actions workflow_dispatch
-
-### Input Parameters
-
-| Parameter | Description | Required | Default |
-|-----------|-------------|----------|---------|
-| `action` | Deploy or teardown the environment | Yes | `deploy` |
-| `resource_group` | Azure resource group name (overrides computed name) | No | `nevridge-taskflow-qa-rg` (computed) |
-| `location` | Azure region for deployment | No | `eastus` |
-| `acr_name` | Azure Container Registry name (overrides computed name) | No | `nevridgetaskflowqaacr` (computed) |
-| `image_tag` | Docker image tag to deploy | No | `latest` |
-
-### Environment Variables Set by Workflow
-
-The workflow follows the [Resource Naming Convention](DEPLOY.md) and computes resource names automatically.
-
-| Variable | Computed Value | Description |
-|----------|----------------|-------------|
-| `RG_NAME` | `nevridge-taskflow-qa-rg` | Resource group name (can be overridden by input) |
-| `ACR_NAME` | `nevridgetaskflowqaacr` | Container registry name (can be overridden by input) |
-| `ACI_NAME` | `nevridge-taskflow-qa-aci` | Container instance name (fixed) |
-| `DNS_NAME_LABEL` | `taskflow-qa` | DNS label for predictable endpoint (fixed) |
-| `LOCATION` | `eastus` | Azure region (from input or default) |
-| `IMAGE_TAG` | `latest` | Image tag (from input or default) |
-
-**Note**: Input parameters allow overriding computed names for testing purposes, but standard deployments should use the computed names for consistency.
-
-## Deployment Process
-
-### Deploy Action Steps
-
-1. **Checkout Code**: Clones the repository
-2. **Azure Login**: Authenticates with Azure using service principal
-3. **Verify Subscription**: Sets the correct Azure subscription
-4. **Register Provider**: Ensures Microsoft.ContainerInstance provider is registered
-5. **Compute Names**: Sets environment variables for resources
-6. **Ensure Resource Group**: Creates resource group if it doesn't exist
-7. **Ensure ACR**: Creates Azure Container Registry if it doesn't exist
-8. **Build and Push Image**: Builds Docker image using ACR build
-9. **Delete Existing ACI**: Removes previous QA container if present
-10. **Create ACI**: Deploys new container with fixed DNS name `taskflow-qa`
-11. **Wait for Ready**: Polls for FQDN and confirms container is running
-12. **Smoke Test**: Validates deployment via `/health` endpoint
-
-### Teardown Action Steps
-
-1. **Checkout Code**: Clones the repository
-2. **Azure Login**: Authenticates with Azure
-3. **Delete Resource Group**: Removes the entire resource group (including ACI and ACR if not shared)
+**Archive Note:** The original QA deployment used Azure's workflow_dispatch trigger to create and destroy containers automatically. This approach has been replaced with a GitOps model where all deployments are version-controlled in the `nevridge/taskflow-deploy` repository.
 
 ## Using the QA Endpoint
 

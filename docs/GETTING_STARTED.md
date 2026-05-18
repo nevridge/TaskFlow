@@ -408,7 +408,7 @@ See [Frontend Guide](FRONTEND.md) for the full frontend reference.
 - **Explore the UI:** http://localhost:5173 (dev) or http://localhost:3000 (Docker)
 - **Explore the API:** Scalar UI at http://localhost:8080/scalar/v1
 - **Review the code:** [Architecture](ARCHITECTURE.md) for design decisions
-- **Deploy to Azure:** [Deployment Guide](DEPLOYMENT.md)
+- **Deploy to production:** [Deployment Guide](DEPLOYMENT.md) — Portainer GitOps setup
 - **Run tests:** `dotnet test` and `cd TaskFlow.Web && npm run test -- --run`
 - **Add features:** [Contributing Guide](CONTRIBUTING.md)
 

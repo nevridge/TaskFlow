@@ -114,8 +114,8 @@ docker logs <container-name> | grep "Health check FAILED"
 All logs are exported via OTLP and can be directed to any compatible backend by changing the `OpenTelemetry__Endpoint` setting:
 
 - **Seq**: Default configuration targets `http://localhost:5341/ingest/otlp`
-- **Azure Monitor / Application Insights**: Use the `Azure.Monitor.OpenTelemetry.AspNetCore` package or configure the OTLP endpoint
 - **Grafana / Loki**: Point the endpoint at your Loki OTLP receiver
+- **Any OTLP-compatible backend**: Configure the endpoint in your environment
 
 Configure alerts for health check failures by filtering on "Health check FAILED" log messages in your chosen backend.
 

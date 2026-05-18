@@ -11,7 +11,7 @@ The health check configurations have been designed to accommodate database migra
 
 - **Docker Compose**: `start_period: 40s`
 - **Kubernetes**: `initialDelaySeconds: 45s` (readiness), `60s` (liveness)
-- **Azure App Service**: Built-in grace period + workflow verification with 30s initial delay
+- **Docker Host (Portainer)**: Uses same Docker Compose configuration
 
 ## Testing Docker Compose Health Checks
 
@@ -153,66 +153,39 @@ kubectl set env deployment/taskflow-api ConnectionStrings__DefaultConnection="in
 - **Cause**: Readiness probe `initialDelaySeconds` too long
 - **Solution**: Decrease slightly, but ensure migrations complete first
 
-## Testing Azure App Service Health Checks
+## Testing Docker Host (Portainer) Health Checks
 
-### Prerequisites
-- Azure subscription
-- Azure CLI installed and logged in
-- Deployment workflow successfully run
+> **Note:** Docker Host deployments use the same Docker Compose health check configuration as local development.
 
-### Test Procedure
+### Verification in Production
 
-1. **Verify health check configuration**:
-   ```bash
-   az webapp config show \
-     --resource-group <your-resource-group> \
-     --name <your-webapp-name> \
-     --query 'healthCheckPath'
-   ```
-   **Expected output**: `"/health"`
-
-2. **Monitor during deployment**:
-   - Go to GitHub Actions and trigger the deployment workflow
-   - Watch the "Verify health check" step output
-   - Should see initial 30 second wait, then health check attempts
-
-3. **Check App Service health in Azure Portal**:
-   - Navigate to your App Service
-   - Go to **Health check** under Monitoring
-   - View health check history and status
-
-4. **Manual health check**:
-   ```bash
-   curl https://<your-webapp-name>.azurewebsites.net/health
-   ```
-
-### Test Scenarios
-
-#### Scenario 1: Deploy with clean database
 ```bash
-# Clear database from Azure Portal or using Azure CLI
-# Then trigger deployment
-git tag -a v1.0.1 -m "Test deployment"
-git push origin v1.0.1
-```
-**Expected**: Workflow waits 30s, then successfully verifies health within 10 attempts (50s)
+# SSH to the Docker Host
+ssh user@docker-host
 
-#### Scenario 2: Monitor continuous health checks
-```bash
-# Continuously monitor health endpoint
-watch -n 5 'curl -s -o /dev/null -w "%{http_code}\n" https://<your-webapp-name>.azurewebsites.net/health'
+# Check container health
+docker ps --filter "name=taskflow-api" --format "table {{.Names}}\t{{.Status}}"
+
+# View health check details
+docker inspect --format '{{.State.Health.Status}}' taskflow-api
+
+# Manual health check
+curl https://taskflow-api.skalaforge.com/health
 ```
-**Expected**: Should return 200 consistently after initial startup period
+
+### Monitoring via Portainer
+
+1. **Access Portainer UI**
+2. **Navigate to Containers**
+3. **Find taskflow-api container**
+4. **Check Health column** - Should show "healthy"
 
 ### Troubleshooting
 
-**Problem**: Workflow health verification fails
-- **Cause**: App not ready within 30s initial delay + 10 retries
-- **Solution**: Increase sleep time or retry count in workflow
-
-**Problem**: Azure marks instance as unhealthy
-- **Cause**: Health check path not configured or migrations taking too long
-- **Solution**: Verify health check path configuration and check App Service logs
+**Problem**: Container shows "unhealthy"
+- **Check logs**: `docker logs taskflow-api`
+- **Verify DB connection**: Ensure volume mounts are correct
+- **Check network**: Ensure container can reach database
 
 ## General Testing Best Practices
 
@@ -241,15 +214,6 @@ readinessProbe:
   initialDelaySeconds: 45  # Adjust based on testing
 livenessProbe:
   initialDelaySeconds: 60  # Should be >= readiness + buffer
-```
-
-### Azure Workflow
-Edit `.github/workflows/prod-deploy.yaml`:
-```yaml
-- name: Verify health check
-  run: |
-    sleep 30  # Adjust based on testing
-    # ... retry logic
 ```
 
 ## Monitoring in Production

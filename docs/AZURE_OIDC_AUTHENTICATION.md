@@ -1,53 +1,47 @@
-# Azure OIDC Authentication Setup
+# Azure OIDC Authentication Setup (ARCHIVED)
 
-This guide covers how to set up Azure authentication for TaskFlow.Api GitHub Actions using OpenID Connect (OIDC) with federated credentials. This replaces the deprecated `--sdk-auth` method and eliminates the need to store client secrets.
+> **⚠️ Deprecated** — This document describes the legacy Azure authentication setup which has been archived.
+>
+> TaskFlow now deploys to on-premises infrastructure using Docker and Portainer GitOps. GitHub Actions workflows use the automatic `GITHUB_TOKEN` environment variable to push images to GitHub Container Registry (GHCR).
 
-## Prerequisites
+## Legacy Azure Authentication
 
-- Azure subscription with permissions to create service principals
-- Azure CLI installed
-- Contributor or Owner role on the Azure subscription or resource group
+This file is retained for reference only. The Azure OIDC authentication workflow has been replaced with a simpler GitHub Actions approach that uses GHCR for image hosting.
 
-## Quick Setup
+### What Changed
 
-### 1. Create Service Principal
+- **Previous:** GitHub Actions authenticated to Azure using OIDC with federated credentials
+- **Current:** GitHub Actions use the automatic `GITHUB_TOKEN` to push images to GHCR; no Azure authentication needed
 
-```bash
-az ad sp create-for-rbac \
-  --name "TaskFlowGitHubActions" \
-  --role contributor \
-  --scopes /subscriptions/YOUR_SUBSCRIPTION_ID
+### Migration Notes
+
+- **Removed:** Azure service principals, Azure CLI commands, Azure OIDC federated credentials
+- **Removed:** `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` GitHub secrets
+- **Added:** `DEPLOY_REPO_TOKEN` GitHub secret for updating the `nevridge/taskflow-deploy` repository
+- **Deployment Method:** Portainer GitOps with images from GitHub Container Registry (GHCR)
+
+### Current Authentication Flow
+
+```
+Push to main (TaskFlow repo)
+    ↓
+GitHub Actions builds images
+    ↓
+Push to GHCR (using automatic GITHUB_TOKEN)
+    ↓
+Update taskflow-deploy repo (using DEPLOY_REPO_TOKEN)
+    ↓
+Portainer detects change and deploys
 ```
 
-Save the output - you'll need `appId` (client ID) and `tenant` (tenant ID).
+For current deployment procedures, refer to:
+- [DEPLOY.md](DEPLOY.md) — Image naming and deployment conventions
+- [Deployment Guide](DEPLOYMENT.md) — Full deployment walkthrough
+- [Docker Configuration](DOCKER_CONFIGURATION.md) — Docker Compose setup
 
-### 2. Configure Federated Credentials
+---
 
-Replace `nevridge/TaskFlow.Api` with your repository if different:
-
-```bash
-APP_ID=$(az ad app list --display-name "TaskFlowGitHubActions" --query "[0].appId" -o tsv)
-
-# For QA environment deployments
-az ad app federated-credential create --id $APP_ID --parameters '{
-  "name": "TaskFlowQA",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:nevridge/TaskFlow.Api:environment:qa",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
-
-# For production environment deployments
-az ad app federated-credential create --id $APP_ID --parameters '{
-  "name": "TaskFlowProduction",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:nevridge/TaskFlow.Api:environment:production",
-  "audiences": ["api://AzureADTokenExchange"]
-}'
-```
-
-### 3. Add GitHub Secrets
-
-In GitHub repository **Settings → Secrets and variables → Actions**, add:
+**Archive Note:** The original Azure OIDC setup enabled GitHub Actions to authenticate directly to Azure services without storing credentials. This approach was used when deployments targeted Azure App Service and Container Instances. The current on-premises deployment model simplifies authentication by using GitHub's built-in GITHUB_TOKEN for GHCR and a simple PAT for the GitOps repository.
 
 - `AZURE_CLIENT_ID` - The `appId` from step 1
 - `AZURE_TENANT_ID` - The `tenant` from step 1

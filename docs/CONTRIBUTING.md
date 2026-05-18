@@ -472,7 +472,7 @@ When updating documentation:
 | `README.md` | Overview, quick start, highlights | Everyone |
 | `GETTING_STARTED.md` | Detailed setup instructions | Developers |
 | `ARCHITECTURE.md` | Design decisions, patterns | Developers, Reviewers |
-| `DEPLOYMENT.md` | Docker, Azure, CI/CD | DevOps, Developers |
+| `DEPLOYMENT.md` | Docker, Portainer GitOps, CI/CD | DevOps, Developers |
 | `API.md` | Endpoint reference | Developers, API Users |
 | `CONTRIBUTING.md` | Development workflow | Contributors |
 | `SECURITY_SCANNING.md` | CodeQL, Trivy setup | DevOps, Security |

@@ -153,7 +153,7 @@ TaskFlow/
 | Observability | OpenTelemetry (traces, metrics, logs → Seq) |
 | API docs | OpenAPI + Scalar UI |
 | Testing | xUnit, Moq, FluentAssertions, Coverlet |
-| Deployment | Docker, Azure Container Instances (ACI) |
+| Deployment | Docker, Portainer GitOps |
 | CI/CD | GitHub Actions |
 
 ### Frontend
@@ -181,7 +181,7 @@ If you're evaluating this project for hiring or collaboration, here's what to lo
 ### DevOps & Deployment
 - **Multi-stage Docker builds** — optimised production images for both API and frontend
 - **GitHub Actions workflows** — parallel CI jobs for API and frontend (lint, type-check, test, build, smoke test)
-- **Azure deployment via OIDC** — no stored credentials; federated identity with Azure
+- **Portainer GitOps deployment** — images in GHCR, configuration in separate `nevridge/taskflow-deploy` repo, automatic Portainer redeploys
 - **Environment-specific configuration** — `.env.development` / `.env.production` for frontend; `appsettings.*.json` and env vars for the API
 
 ### Testing & Quality

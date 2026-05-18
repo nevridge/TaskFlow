@@ -163,11 +163,11 @@ kubectl set env deployment/taskflow-api ConnectionStrings__DefaultConnection="in
 # SSH to the Docker Host
 ssh user@docker-host
 
-# Check container health
-docker ps --filter "name=taskflow-api" --format "table {{.Names}}\t{{.Status}}"
+# Check container health (production container is named taskflow-api-prod)
+docker ps --filter "name=taskflow-api-prod" --format "table {{.Names}}\t{{.Status}}"
 
 # View health check details
-docker inspect --format '{{.State.Health.Status}}' taskflow-api
+docker inspect --format '{{.State.Health.Status}}' taskflow-api-prod
 
 # Manual health check
 curl https://taskflow-api.skalaforge.com/health

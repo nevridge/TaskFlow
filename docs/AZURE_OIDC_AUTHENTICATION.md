@@ -41,48 +41,22 @@ For current deployment procedures, refer to:
 
 ---
 
-**Archive Note:** The original Azure OIDC setup enabled GitHub Actions to authenticate directly to Azure services without storing credentials. This approach was used when deployments targeted Azure App Service and Container Instances. The current on-premises deployment model simplifies authentication by using GitHub's built-in GITHUB_TOKEN for GHCR and a simple PAT for the GitOps repository.
+## Legacy Azure OIDC Instructions (ARCHIVED)
 
-- `AZURE_CLIENT_ID` - The `appId` from step 1
-- `AZURE_TENANT_ID` - The `tenant` from step 1
-- `AZURE_SUBSCRIPTION_ID` - Run `az account show --query id -o tsv`
+> **⚠️ Do not follow these instructions.** Azure OIDC authentication is no longer used. The sections below are retained for historical reference only.
 
-### 4. Configure GitHub Environments
+The following sections describe how the legacy Azure OIDC authentication workflow was configured. These instructions should not be used for any new deployments.
 
-Create GitHub Environments that match the federated credential subjects. In GitHub repository **Settings → Environments**, create:
+For current GitHub Actions authentication procedures, see [DEPLOY.md](DEPLOY.md) which covers the current GITHUB_TOKEN and DEPLOY_REPO_TOKEN setup.
 
-- `qa` - For QA deployments
-- `production` - For production deployments
+---
 
-**Important**: The environment names must exactly match the subjects configured in step 2:
-- QA subject: `repo:nevridge/TaskFlow.Api:environment:qa`
-- Production subject: `repo:nevridge/TaskFlow.Api:environment:production`
+### Legacy: Azure Service Principal Setup
 
-The workflows reference these environments:
-- `.github/workflows/qa-deploy.yaml` uses `environment: qa`
-- `.github/workflows/prod-deploy.yaml` uses `environment: production`
-- `.github/workflows/prod-teardown.yaml` uses `environment: production`
+*This section is archived. Azure authentication is no longer needed.*
 
-### 5. Verify Workflows
-
-The workflows in this repository already have the correct configuration:
-- `permissions.id-token: write` is set (required for OIDC)
-- `azure/login@v2` uses individual parameters (not JSON creds)
-- Each workflow specifies the appropriate `environment` that matches the federated credential subject
-
-## Common Issues
-
-**"AADSTS70021: No matching federated identity record found"**
-- Verify the subject claim matches your repository name exactly
-- Check federated credentials: `az ad app federated-credential list --id $(az ad app list --display-name "TaskFlowGitHubActions" --query "[0].appId" -o tsv)`
-
-**"ClientAuthenticationFailed"**
-- Ensure workflow has `permissions.id-token: write`
-
-**"The subscription ... could not be found"**
-- Verify service principal has Contributor role: `az role assignment list --assignee $(az ad app list --display-name "TaskFlowGitHubActions" --query "[0].appId" -o tsv)`
-
-## Additional Resources
-
-- [GitHub Docs - OIDC in Azure](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-azure)
-- [Azure Workload Identity Federation](https://learn.microsoft.com/en-us/azure/active-directory/develop/workload-identity-federation)
+The Azure OIDC setup previously required:
+- Azure service principals
+- Azure CLI commands
+- Azure OIDC federated credentials
+- `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID` GitHub secrets (now removed)

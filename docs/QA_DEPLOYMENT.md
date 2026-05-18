@@ -21,20 +21,25 @@ For current deployment procedures, refer to:
 
 ---
 
-**Archive Note:** The original QA deployment used Azure's workflow_dispatch trigger to create and destroy containers automatically. This approach has been replaced with a GitOps model where all deployments are version-controlled in the `nevridge/taskflow-deploy` repository.
+## Legacy QA Instructions (ARCHIVED)
 
-## Using the QA Endpoint
+> **⚠️ Do not follow these instructions.** The QA endpoint is no longer active. The sections below are retained for historical reference only.
 
-### For Manual Testing
+The following sections describe how the legacy Azure Container Instances QA deployment worked. These instructions should not be used for any new deployments or testing.
 
-The QA endpoint is always available at the same URL:
+For current deployment and testing procedures, use the production Docker Host deployment via Portainer GitOps:
+- See [DEPLOYMENT.md](DEPLOYMENT.md) for deployment procedures
+- See [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md) for Docker Compose setup
+
+---
+
+### Legacy: Using the QA Endpoint
+
+*This section is archived. The QA endpoint is no longer active.*
+
+The Azure QA endpoint was available at:
 ```
 http://taskflow-qa.{region}.azurecontainer.io:8080
-```
-
-Example for East US region:
-```
-http://taskflow-qa.eastus.azurecontainer.io:8080
 ```
 
 ### For Postman Testing

@@ -117,21 +117,25 @@ export function TasksPage() {
       .filter(t => !debouncedSearch || t.title.toLowerCase().includes(debouncedSearch.toLowerCase()))
   }, [tasks, viewFilter, statusFilter, debouncedSearch])
 
-  // Sort comparator for within-group sorting
+  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
+
   function compareWithinGroup(a: TaskListModel, b: TaskListModel): number {
-    // Default: due date ascending (overdue first, then soonest, no-date last)
+    let cmp = 0
     const aDue = a.dueDate ?? ''
     const bDue = b.dueDate ?? ''
-    if (!aDue && bDue) return 1
-    if (aDue && !bDue) return -1
-    let cmp = aDue.localeCompare(bDue)
 
-    // If user has set a custom sort, use it as secondary
-    if (taskSortKey === 'title') cmp = a.title.localeCompare(b.title)
-    else if (taskSortKey === 'status') cmp = (a.status ?? '').localeCompare(b.status ?? '')
-    else if (taskSortKey === 'dueDate') {
-      if (!aDue && bDue) return 1
-      if (aDue && !bDue) return -1
+    if (taskSortKey === 'title') {
+      cmp = a.title.localeCompare(b.title)
+    } else if (taskSortKey === 'status') {
+      cmp = (a.status ?? '').localeCompare(b.status ?? '')
+    } else if (taskSortKey === 'priority') {
+      const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 2
+      const pb = PRIORITY_ORDER[(b.priority ?? '').toLowerCase()] ?? 2
+      cmp = pa - pb
+    } else {
+      // Default: due date — no-date items sort last in asc, first in desc
+      if (!aDue && bDue) return taskSortDir === 'asc' ? 1 : -1
+      if (aDue && !bDue) return taskSortDir === 'asc' ? -1 : 1
       cmp = aDue.localeCompare(bDue)
     }
 
@@ -378,7 +382,7 @@ export function TasksPage() {
             <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
             <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
           </div>
-          <span className="t-filter-label">Status</span>
+          <label htmlFor="status-filter" className="t-filter-label">Status</label>
           <select id="status-filter" className="t-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
             <option value="all">All</option>
             <option value="draft">Draft</option>

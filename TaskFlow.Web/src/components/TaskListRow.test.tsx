@@ -15,17 +15,19 @@ const baseTask: TaskItemResponseDto = {
   isComplete: false,
 }
 
+type TaskHandler = (task: TaskItemResponseDto) => void
+
 function renderRow(
   task: TaskItemResponseDto = baseTask,
   overrides: {
-    onEdit?: ReturnType<typeof vi.fn>
-    onDelete?: ReturnType<typeof vi.fn>
-    onStatusCycle?: ReturnType<typeof vi.fn>
+    onEdit?: TaskHandler
+    onDelete?: TaskHandler
+    onStatusCycle?: TaskHandler
   } = {},
 ) {
-  const onEdit = overrides.onEdit ?? vi.fn()
-  const onDelete = overrides.onDelete ?? vi.fn()
-  const onStatusCycle = overrides.onStatusCycle ?? vi.fn()
+  const onEdit = overrides.onEdit ?? vi.fn<TaskHandler>()
+  const onDelete = overrides.onDelete ?? vi.fn<TaskHandler>()
+  const onStatusCycle = overrides.onStatusCycle ?? vi.fn<TaskHandler>()
   return render(
     <MemoryRouter>
       <table>
@@ -33,7 +35,7 @@ function renderRow(
           <TaskListRow
             task={task}
             onEdit={onEdit}
-            onHistory={vi.fn()}
+            onHistory={vi.fn<TaskHandler>()}
             onDelete={onDelete}
             onStatusCycle={onStatusCycle}
           />

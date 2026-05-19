@@ -717,3 +717,184 @@ html.is-dark .t-input option { background: var(--paper); }
     align-items: stretch;
   }
 }
+
+/* --- Group headers --- */
+
+.t-group-header td {
+  padding: 10px 14px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+}
+
+.t-group-header--high td { color: var(--danger-ink); border-left: 3px solid var(--danger-ink); }
+.t-group-header--medium td { color: var(--warn-ink); border-left: 3px solid var(--warn-ink); }
+.t-group-header--low td { color: var(--muted); border-left: 3px solid var(--muted-2); }
+.t-group-header--draft td { color: var(--muted-2); border-left: 3px solid var(--line); }
+
+.t-group-count {
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 6px;
+  opacity: .7;
+}
+
+.t-group-chevron {
+  margin-right: 6px;
+  font-size: 10px;
+  display: inline-block;
+  transition: transform .15s;
+}
+
+.t-group-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.t-group-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+/* --- Urgency cues --- */
+
+.t-row--overdue {
+  border-left: 3px solid var(--danger-ink);
+}
+
+.t-row--high-deferral {
+  border-left: 3px solid var(--warn-ink);
+}
+
+.t-row--completed {
+  opacity: .55;
+}
+
+.t-row--completed .t-task-link {
+  text-decoration: line-through;
+}
+
+.t-title-bold {
+  font-weight: 700;
+}
+
+.t-deferral-line {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.t-deferral-badge {
+  color: var(--warn-ink);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* --- Icon buttons --- */
+
+.t-btn-icon {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background .12s, color .12s, border-color .12s;
+  padding: 0;
+}
+
+.t-btn-icon:hover {
+  background: var(--hover-soft);
+  color: var(--ink);
+  border-color: var(--line-2);
+}
+
+.t-btn-icon--danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+  border-color: color-mix(in oklab, var(--danger-ink) 30%, transparent);
+}
+
+.t-btn-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* --- Clickable status badge --- */
+
+.t-badge-clickable {
+  cursor: pointer;
+  transition: transform .1s;
+  user-select: none;
+}
+
+.t-badge-clickable:hover {
+  transform: scale(1.08);
+}
+
+.t-badge-clickable:active {
+  transform: scale(.95);
+}
+
+/* --- Search input --- */
+
+.t-search-input {
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+  color: var(--ink);
+  padding: 6px 12px;
+  font-size: 13px;
+  outline: none;
+  width: 220px;
+  transition: border-color .12s;
+}
+
+.t-search-input:focus {
+  border-color: var(--accent);
+}
+
+.t-search-input::placeholder {
+  color: var(--muted-2);
+}
+
+.t-search-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.t-search-clear {
+  position: absolute;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  line-height: 1;
+}
+
+.t-search-clear:hover {
+  color: var(--ink);
+}

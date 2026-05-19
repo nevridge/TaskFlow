@@ -17,20 +17,25 @@ const baseTask: TaskItemResponseDto = {
 
 function renderRow(
   task: TaskItemResponseDto = baseTask,
-  isOnTodayJournal = false,
-  onEdit = vi.fn(),
-  onDelete = vi.fn(),
+  overrides: {
+    onEdit?: ReturnType<typeof vi.fn>
+    onDelete?: ReturnType<typeof vi.fn>
+    onStatusCycle?: ReturnType<typeof vi.fn>
+  } = {},
 ) {
+  const onEdit = overrides.onEdit ?? vi.fn()
+  const onDelete = overrides.onDelete ?? vi.fn()
+  const onStatusCycle = overrides.onStatusCycle ?? vi.fn()
   return render(
     <MemoryRouter>
       <table>
         <tbody>
           <TaskListRow
             task={task}
-            isOnTodayJournal={isOnTodayJournal}
             onEdit={onEdit}
             onHistory={vi.fn()}
             onDelete={onDelete}
+            onStatusCycle={onStatusCycle}
           />
         </tbody>
       </table>
@@ -52,26 +57,23 @@ describe('TaskListRow', () => {
 
   it('calls onEdit when edit button is clicked', async () => {
     const onEdit = vi.fn()
-    renderRow(baseTask, false, onEdit)
+    renderRow(baseTask, { onEdit })
     await userEvent.click(screen.getByRole('button', { name: /edit/i }))
     expect(onEdit).toHaveBeenCalledWith(baseTask)
   })
 
   it('calls onDelete when delete button is clicked', async () => {
     const onDelete = vi.fn()
-    renderRow(baseTask, false, vi.fn(), onDelete)
+    renderRow(baseTask, { onDelete })
     await userEvent.click(screen.getByRole('button', { name: /delete/i }))
     expect(onDelete).toHaveBeenCalledWith(baseTask)
   })
 
-  it('shows journal indicator when task is on today journal', () => {
-    renderRow(baseTask, true)
-    expect(screen.getByLabelText("On today's journal")).toBeInTheDocument()
-  })
-
-  it('does not show journal indicator when task is not on today journal', () => {
-    renderRow(baseTask, false)
-    expect(screen.queryByLabelText("On today's journal")).not.toBeInTheDocument()
+  it('calls onStatusCycle when status badge is clicked', async () => {
+    const onStatusCycle = vi.fn()
+    renderRow(baseTask, { onStatusCycle })
+    await userEvent.click(screen.getByRole('button', { name: /todo/i }))
+    expect(onStatusCycle).toHaveBeenCalledWith(baseTask)
   })
 
   it('shows formatted due date when present', () => {
@@ -91,7 +93,6 @@ describe('TaskListRow', () => {
     it('marks past-due incomplete tasks as overdue', () => {
       const task = { ...baseTask, dueDate: pastDate, status: 'todo' }
       renderRow(task)
-      // The overdue icon (!) should be present
       expect(screen.getByText('!', { selector: '.t-overdue-icon' })).toBeInTheDocument()
     })
 

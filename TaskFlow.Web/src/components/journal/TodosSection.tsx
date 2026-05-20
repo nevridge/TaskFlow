@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import type { TaskItemResponseDto } from '@/api/journal'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import {
@@ -19,7 +19,11 @@ interface Props {
   sort: SortMode
 }
 
-export function TodosSection({ entryId, isoDate, sort }: Props) {
+export interface TodosSectionHandle {
+  focusDraftInput: () => void
+}
+
+export const TodosSection = forwardRef<TodosSectionHandle, Props>(function TodosSection({ entryId, isoDate, sort }, ref) {
   const { data: todosData, isLoading } = useJournalTodos(entryId)
   const todos = useMemo<TaskItemResponseDto[]>(
     () => (todosData?.data as TaskItemResponseDto[] | undefined) ?? [],
@@ -37,6 +41,11 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+  const draftInputRef = useRef<HTMLInputElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    focusDraftInput: () => draftInputRef.current?.focus(),
+  }))
 
   useEffect(() => {
     if (!historyTask) return
@@ -213,11 +222,15 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
       <form className="add-row" onSubmit={addTodo}>
         <span className="add-plus">+</span>
         <input
+          ref={draftInputRef}
           className="add-input"
           placeholder={isPastDay ? 'Adding tasks is disabled for past dates' : 'Add a TODO and press Enter'}
           value={draft}
           onChange={e => setDraft(e.target.value)}
           disabled={createTodo.isPending || isPastDay}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setDraft(''); draftInputRef.current?.blur() }
+          }}
         />
       </form>
 
@@ -238,7 +251,7 @@ export function TodosSection({ entryId, isoDate, sort }: Props) {
       )}
     </section>
   )
-}
+})
 
 function getTaskActionErrorMessage(error: unknown): string {
   const code = getErrorCode(error)

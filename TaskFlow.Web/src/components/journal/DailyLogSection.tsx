@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 import { useAddLogEntryMutation, useDeleteLogEntryMutation } from '@/hooks/useJournal'
 import { formatTime } from '@/lib/journal-utils'
@@ -8,12 +8,20 @@ interface Props {
   logEntries: JournalLogEntryResponseDto[]
 }
 
-export function DailyLogSection({ entryId, logEntries }: Props) {
+export interface DailyLogSectionHandle {
+  focusDraftInput: () => void
+}
+
+export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function DailyLogSection({ entryId, logEntries }, ref) {
   const addLog = useAddLogEntryMutation(entryId)
   const deleteLog = useDeleteLogEntryMutation(entryId)
 
   const [draft, setDraft] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    focusDraftInput: () => inputRef.current?.focus(),
+  }))
 
   function addEntry(e: React.FormEvent) {
     e.preventDefault()
@@ -64,8 +72,11 @@ export function DailyLogSection({ entryId, logEntries }: Props) {
           value={draft}
           onChange={e => setDraft(e.target.value)}
           disabled={addLog.isPending}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+          }}
         />
       </form>
     </section>
   )
-}
+})

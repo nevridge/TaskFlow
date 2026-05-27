@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 
 export interface JournalShortcutHandlers {
   onNewTodo: () => void
@@ -27,7 +27,9 @@ function isInputFocused(): boolean {
 export function useJournalKeyboardShortcuts(handlers: JournalShortcutHandlers) {
   // Use a ref so the effect closure always sees the latest handlers
   const handlersRef = useRef(handlers)
-  handlersRef.current = handlers
+  useLayoutEffect(() => {
+    handlersRef.current = handlers
+  })
 
   // Track pending chord: null = no chord, 'g' = waiting for second key
   const pendingChordRef = useRef<string | null>(null)

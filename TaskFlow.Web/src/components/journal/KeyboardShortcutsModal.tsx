@@ -35,6 +35,7 @@ export function KeyboardShortcutsModal({ onClose }: Props) {
   const closeRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null
     closeRef.current?.focus()
 
     const previousOverflow = document.body.style.overflow
@@ -45,12 +46,17 @@ export function KeyboardShortcutsModal({ onClose }: Props) {
         e.preventDefault()
         onClose()
       }
+      if (e.key === 'Tab') {
+        e.preventDefault()
+        closeRef.current?.focus()
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = previousOverflow
+      previouslyFocused?.focus()
     }
   }, [onClose])
 

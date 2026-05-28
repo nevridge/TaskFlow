@@ -1,6 +1,6 @@
 ---
 name: explore-then-build
-description: Orchestrates a full feature build using four subagents in sequence: branch check → codebase-researcher → spec-writer → human approval → backend-feature-implementer → implementation-validator. Trigger with phrases like "build a feature", "implement this", "ship a feature", or "feature factory".
+description: Orchestrates a full feature build using five subagents in sequence: branch check → codebase-researcher → spec-writer → human approval → backend-builder → frontend-builder → implementation-validator. Trigger with phrases like "build a feature", "implement this", "ship a feature", or "feature factory".
 ---
 
 # Explore-Then-Build Skill
@@ -15,7 +15,7 @@ Trigger when the user asks to build, implement, or ship a feature. Key phrases: 
 
 ## Step 1 — Branch Check and Creation (Bash)
 
-Announce: "Step 1/7 — Checking branch status and creating feature branch."
+Announce: "Step 1/8 — Checking branch status and creating feature branch."
 
 Run these commands:
 
@@ -44,11 +44,11 @@ If the branch creation fails, stop and ask the user to manually create a branch 
 
 ## Step 2 — Map the Codebase (codebase-researcher)
 
-Announce: "Step 2/7 — Mapping the codebase with codebase-researcher."
+Announce: "Step 2/8 — Mapping the codebase with codebase-researcher."
 
 Launch the `codebase-researcher` agent with the user's feature description as the question. Ask it to identify:
-- Relevant files grouped by role
-- Existing patterns and conventions
+- Relevant files grouped by role (backend and frontend separately)
+- Existing patterns and conventions for each layer
 - Similar features already in the codebase
 - Any fragile areas the new feature could disturb
 
@@ -66,7 +66,7 @@ Do not proceed to Step 3 until the gate exits (either approved or no open questi
 
 ## Step 3 — Write the Spec (spec-writer)
 
-Announce: "Step 3/7 — Writing the technical spec with spec-writer."
+Announce: "Step 3/8 — Writing the technical spec with spec-writer."
 
 Launch the `spec-writer` agent. Pass it:
 - The user's original feature description
@@ -86,7 +86,7 @@ Do not proceed to Step 4 until the gate exits. Present the finalized Technical B
 
 ## Step 4 — Human Spec Approval (GATE)
 
-Announce: "Step 4/7 — Spec Approval Gate."
+Announce: "Step 4/8 — Spec Approval Gate."
 
 Ask the user: **"Does this spec look good to proceed with implementation? Reply with: (1) Approved, (2) Changes needed — describe them, or (3) Rejected."**
 
@@ -100,33 +100,57 @@ Use `AskUserQuestion` with three options: "Approved", "Changes needed", "Rejecte
 
 ---
 
-## Step 5 — Implement the Backend (backend-feature-implementer)
+## Step 5 — Implement the Backend (backend-builder)
 
-Announce: "Step 5/7 — Implementing with backend-feature-implementer."
+Announce: "Step 5/8 — Implementing the backend with backend-builder."
 
-Launch the `backend-feature-implementer` agent. Pass it:
+Launch the `backend-builder` agent. Pass it:
 - The approved Technical Brief (full text)
-- The codebase-researcher findings (relevant file paths, patterns, similar examples)
+- The codebase-researcher findings (relevant backend file paths, patterns, similar examples)
+
+Wait for the agent to complete and return a summary of what was built, including the **API contract summary** (new/changed endpoints, request/response shapes, status codes).
+
+**After the agent returns:** invoke the `open-questions-gate` skill with:
+- Agent output: the implementation summary
+- Agent ID: from the result
+- Agent type: `backend-builder`
+- Output label: `backend implementation summary`
+
+Do not proceed to Step 6 until the gate exits.
+
+---
+
+## Step 6 — Implement the Frontend (frontend-builder)
+
+Announce: "Step 6/8 — Implementing the frontend with frontend-builder."
+
+**First, check whether this feature has frontend work.** Read the approved spec. If the spec explicitly states this is a backend-only change (e.g., a migration, an internal API used by other services, no UI changes), skip this step and proceed directly to Step 7, noting the skip.
+
+If frontend work is required, launch the `frontend-builder` agent. Pass it:
+- The approved Technical Brief (full text)
+- The codebase-researcher findings (relevant frontend file paths, patterns, similar examples)
+- The API contract summary from the backend-builder (the new/changed endpoints, request/response shapes, status codes)
 
 Wait for the agent to complete and return a summary of what was built.
 
 **After the agent returns:** invoke the `open-questions-gate` skill with:
 - Agent output: the implementation summary
 - Agent ID: from the result
-- Agent type: `backend-feature-implementer`
-- Output label: `implementation summary`
+- Agent type: `frontend-builder`
+- Output label: `frontend implementation summary`
 
-Do not proceed to Step 6 until the gate exits.
+Do not proceed to Step 7 until the gate exits.
 
 ---
 
-## Step 6 — Validate the Implementation (implementation-validator)
+## Step 7 — Validate the Implementation (implementation-validator)
 
-Announce: "Step 6/7 — Validating with implementation-validator."
+Announce: "Step 7/8 — Validating with implementation-validator."
 
 Launch the `implementation-validator` agent. Pass it:
 - The approved Technical Brief as the spec document
-- The list of files created or modified by the backend-feature-implementer
+- The list of files created or modified by the backend-builder
+- The list of files created or modified by the frontend-builder (if Step 6 ran)
 
 Wait for the agent to return its Spec Compliance Review Report.
 
@@ -136,30 +160,30 @@ Wait for the agent to return its Spec Compliance Review Report.
 - Agent type: `implementation-validator`
 - Output label: `validation report`
 
-Do not proceed to the CRITICAL findings check or Step 7 until the gate exits.
+Do not proceed to the CRITICAL findings check or Step 8 until the gate exits.
 
 **If the report contains CRITICAL findings:**
 
-Announce: "CRITICAL issues found — sending back to backend-feature-implementer for fixes."
+Announce: "CRITICAL issues found — sending back for fixes."
 
-Re-launch `backend-feature-implementer` with:
-- The original approved spec
-- The full validator report, emphasising the CRITICAL findings
+For each CRITICAL finding, determine which layer it belongs to:
+- **Backend CRITICAL findings** → re-launch `backend-builder` with the original approved spec and the full validator report, emphasising the backend CRITICAL findings.
+- **Frontend CRITICAL findings** → re-launch `frontend-builder` with the original approved spec, the API contract from the backend, and the full validator report, emphasising the frontend CRITICAL findings.
 
-Then re-launch `implementation-validator` with the same spec and the updated file list. Run the `open-questions-gate` on the new validator output before evaluating findings.
+Then re-launch `implementation-validator` with the same spec and the updated file lists. Run the `open-questions-gate` on the new validator output before evaluating findings.
 
 Repeat this loop a maximum of **two times**. If CRITICAL findings remain after two fix cycles, stop and surface all findings to the user with a clear statement: "Automated fix cycles exhausted. Human review required before proceeding."
 
-**If the report contains only IMPORTANT or MINOR findings (no CRITICALs):** proceed to Step 7, surfacing the findings alongside the final review request.
+**If the report contains only IMPORTANT or MINOR findings (no CRITICALs):** proceed to Step 8, surfacing the findings alongside the final review request.
 
 ---
 
-## Step 7 — Final Human Review (GATE)
+## Step 8 — Final Human Review (GATE)
 
-Announce: "Step 7/7 — Final Review and PR Preparation."
+Announce: "Step 8/8 — Final Review and PR Preparation."
 
 Present to the user:
-- A summary of what was built (files created/modified)
+- A summary of what was built (backend files created/modified, frontend files created/modified)
 - The validator's findings (severity counts and any IMPORTANT/MINOR items)
 - The proposed next action: open a PR
 - The current feature branch name
@@ -191,11 +215,13 @@ spec-writer → [open-questions-gate]
       ↓
 [HUMAN SPEC APPROVAL GATE]
       ↓
-backend-feature-implementer → [open-questions-gate]
+backend-builder → [open-questions-gate]
+      ↓
+frontend-builder → [open-questions-gate]  ← skipped for backend-only features
       ↓
 implementation-validator → [open-questions-gate]
       ↓
-[CRITICAL loop if needed, gate on each re-validation]
+[CRITICAL loop if needed, routed to backend-builder or frontend-builder, gate on each re-validation]
       ↓
 [HUMAN FINAL REVIEW GATE]
       ↓
@@ -206,9 +232,9 @@ git push + PR
 
 - Always announce which step you are on before launching each agent or running a command.
 - Always run the `open-questions-gate` after every agent returns — it exits immediately if there are no open questions, so there is no cost to running it when not needed.
-- Never skip the human gates at Steps 4 and 7.
+- Never skip the human gates at Steps 4 and 8.
 - Never merge or combine two agent launches into one message.
-- Always pass the full spec text to both the implementer and the validator — never summarise it.
+- Always pass the full spec text to both the builders and the validator — never summarise it.
 - Always use the finalized (post-gate) agent output when passing findings forward to the next stage.
 - If any agent returns an error or produces no output, stop and tell the user what failed before continuing.
 - If any Bash command fails, stop and ask the user to resolve the issue before proceeding.

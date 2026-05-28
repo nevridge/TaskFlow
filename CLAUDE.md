@@ -49,6 +49,22 @@ docker compose up -d
 docker compose -f docker-compose.prod.yml up
 ```
 
+## Shell & Command Execution
+
+Two execution tools are available on this Windows machine:
+
+- **Bash tool** — runs POSIX shell (WSL/Git Bash). Use for cross-platform CLIs: `git`, `npm`, `dotnet`, `docker`, `gh`, `node`, `python3`.
+- **PowerShell tool** — runs `pwsh`. Use for Windows operations requiring PowerShell cmdlets.
+
+**Never mix them:** Do not run `Get-ChildItem`, `Test-Path`, or `Select-String` through the Bash tool. Do not run `grep`, `find`, `xargs`, `sed`, `awk`, or `head`/`tail` through the PowerShell tool.
+
+**`rg` (ripgrep) is installed natively on Windows** — works in both Bash and PowerShell without WSL. Use it when a shell-level content search is needed and the Grep tool is not appropriate.
+
+**Prefer dedicated tools over shell commands:**
+- Find files → Glob tool (not `find` or `Get-ChildItem`)
+- Search content → Grep tool (not `grep` or `Select-String`); shell fallback: `rg`
+- Read files → Read tool (not `cat` or `Get-Content`)
+
 ## Architecture
 
 **Layered flow:** `Controller → Repository → EF Core (SQLite)`

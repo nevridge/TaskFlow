@@ -423,7 +423,7 @@
   color: var(--muted);
 }
 
-.journal-page .j-modal-close {
+.j-modal-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -434,7 +434,7 @@
   padding: 6px 10px;
   font-size: 13px;
 }
-.journal-page .j-modal-close:hover { background: var(--hover-soft); }
+.j-modal-close:hover { background: var(--hover-soft); }
 
 /* ─── Keyboard shortcuts modal ─────────────────────────────────────────────── */
 

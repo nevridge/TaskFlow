@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
 import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate } from '@/lib/journal-utils'
@@ -10,7 +10,6 @@ import { DailyLogSection } from '@/components/journal/DailyLogSection'
 import type { DailyLogSectionHandle } from '@/components/journal/DailyLogSection'
 import { NotesSection } from '@/components/journal/NotesSection'
 import type { NotesSectionHandle } from '@/components/journal/NotesSection'
-import { KeyboardShortcutsModal } from '@/components/journal/KeyboardShortcutsModal'
 import { useJournalKeyboardShortcuts } from '@/hooks/useJournalKeyboardShortcuts'
 import type { AppContext } from '@/components/Layout'
 import '@/journal.css'
@@ -31,8 +30,6 @@ export function JournalPage() {
 
   const { isDark, headerStyle, todoSort, projectStart } = useOutletContext<AppContext>()
 
-  const [showShortcuts, setShowShortcuts] = useState(false)
-
   const todosSectionRef = useRef<TodosSectionHandle>(null)
   const logSectionRef = useRef<DailyLogSectionHandle>(null)
   const notesSectionRef = useRef<NotesSectionHandle>(null)
@@ -43,9 +40,6 @@ export function JournalPage() {
     onNewNote: () => notesSectionRef.current?.focusNewNote(),
     onPrevDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, -1))}`),
     onNextDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, 1))}`),
-    onGoHome: () => navigate(`/journal/${isoToUrlDate(todayISO())}`),
-    onGoTasks: () => navigate('/tasks'),
-    onShowHelp: () => setShowShortcuts(prev => !prev),
   })
 
   return (
@@ -90,9 +84,6 @@ export function JournalPage() {
         </article>
       </div>
 
-      {showShortcuts && (
-        <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
-      )}
     </div>
   )
 }

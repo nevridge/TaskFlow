@@ -79,3 +79,31 @@ export const deleteLogEntry = (entryId: number, logId: number) =>
   client.delete<{ 204: unknown }, unknown, true>(
     { url: '/api/v1/JournalEntries/{entryId}/logs/{id}', path: { entryId, id: logId } },
   )
+
+export type JournalNoteResponseDto = {
+  id: number
+  content: string
+  journalEntryId: number
+  createdAt: string
+  updatedAt?: string | null
+}
+
+export const getJournalNotes = (entryId: number) =>
+  client.get<{ 200: JournalNoteResponseDto[] }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{entryId}/notes', path: { entryId } },
+  )
+
+export const createJournalNote = (entryId: number, content: string) =>
+  client.post<{ 201: JournalNoteResponseDto }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{entryId}/notes', path: { entryId }, body: { content }, headers: J },
+  )
+
+export const updateJournalNote = (entryId: number, id: number, content: string) =>
+  client.put<{ 200: JournalNoteResponseDto }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{entryId}/notes/{id}', path: { entryId, id }, body: { content }, headers: J },
+  )
+
+export const deleteJournalNote = (entryId: number, id: number) =>
+  client.delete<{ 204: unknown }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{entryId}/notes/{id}', path: { entryId, id } },
+  )

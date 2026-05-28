@@ -10,6 +10,7 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLogEntry> JournalLogEntries => Set<JournalLogEntry>();
+    public DbSet<JournalNote> JournalNotes => Set<JournalNote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -64,6 +65,11 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
             entity.HasMany(e => e.Todos)
                   .WithMany()
                   .UsingEntity("JournalEntryTaskItem");
+
+            entity.HasMany(e => e.Notes)
+                  .WithOne(n => n.JournalEntry)
+                  .HasForeignKey(n => n.JournalEntryId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -10,4 +10,5 @@ public class JournalEntry
     public DateTime? UpdatedAt { get; set; }
     public ICollection<TaskItem> Todos { get; set; } = [];
     public ICollection<JournalLogEntry> LogEntries { get; set; } = [];
+    public ICollection<JournalNote> Notes { get; set; } = [];
 }

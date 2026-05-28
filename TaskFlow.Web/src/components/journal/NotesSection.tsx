@@ -1,63 +1,114 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
-import { useUpdateNotesMutation } from '@/hooks/useJournal'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
+import type { JournalNoteResponseDto } from '@/api/journal'
+import {
+  useJournalNotes,
+  useCreateJournalNoteMutation,
+  useUpdateJournalNoteMutation,
+  useDeleteJournalNoteMutation,
+} from '@/hooks/useJournal'
+import { formatTime } from '@/lib/journal-utils'
 
 interface Props {
   entryId: number
-  entryTitle: string
-  initialValue: string | null | undefined
 }
 
 export interface NotesSectionHandle {
-  focusNotes: () => void
+  focusNewNote: () => void
 }
 
-export const NotesSection = forwardRef<NotesSectionHandle, Props>(function NotesSection({ entryId, entryTitle, initialValue }, ref) {
-  const [value, setValue] = useState(initialValue ?? '')
-  const [savedAt, setSavedAt] = useState<number | null>(null)
-  const updateNotes = useUpdateNotesMutation(entryId, entryTitle)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+export const NotesSection = forwardRef<NotesSectionHandle, Props>(function NotesSection({ entryId }, ref) {
+  const { data: notes = [] } = useJournalNotes(entryId)
+  const createNote = useCreateJournalNoteMutation(entryId)
+  const updateNote = useUpdateJournalNoteMutation(entryId)
+  const deleteNote = useDeleteJournalNoteMutation(entryId)
+
+  const [draft, setDraft] = useState('')
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useImperativeHandle(ref, () => ({
-    focusNotes: () => textareaRef.current?.focus(),
+    focusNewNote: () => inputRef.current?.focus(),
   }))
 
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-    }
-  }, [entryId])
-
-  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
-    const next = e.target.value
-    setValue(next)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      updateNotes.mutate(next, { onSuccess: () => setSavedAt(Date.now()) })
-    }, 600)
+  function addNote(e: React.FormEvent) {
+    e.preventDefault()
+    const text = draft.trim()
+    if (!text) return
+    createNote.mutate(text, { onSuccess: () => inputRef.current?.focus() })
+    setDraft('')
   }
 
-  const wordCount = value.trim().split(/\s+/).filter(Boolean).length
+  function startEdit(note: JournalNoteResponseDto) {
+    setEditingId(note.id)
+    setEditingText(note.content)
+  }
+
+  function commitEdit(noteId: number, original: string) {
+    const text = editingText.trim()
+    if (text && text !== original) {
+      updateNote.mutate({ id: noteId, content: text })
+    }
+    setEditingId(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+  }
 
   return (
     <section className="card notes-section">
-      <div className="card-hdr">
-        <h2 className="card-title">Notes</h2>
-        <div className="card-meta">
-          <span className="word-count">{wordCount} words</span>
-          {savedAt && <span className="saved">Saved</span>}
-        </div>
-      </div>
-      <textarea
-        ref={textareaRef}
-        className="notes-area"
-        placeholder="Free-form notes for the day — observations, decisions, follow-ups, anything."
-        value={value}
-        onChange={handleChange}
-        onKeyDown={e => {
-          if (e.key === 'Escape') textareaRef.current?.blur()
-        }}
-      />
+      <ol className="log-list">
+        {notes.length === 0 && (
+          <li className="j-empty">No notes yet — capture anything below.</li>
+        )}
+        {notes.map(note => (
+          <li key={note.id} className="log-entry">
+            <div className="log-time">{formatTime(note.createdAt)}</div>
+            {editingId === note.id ? (
+              <input
+                className="note-edit"
+                value={editingText}
+                autoFocus
+                onChange={e => setEditingText(e.target.value)}
+                onBlur={() => commitEdit(note.id, note.content)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitEdit(note.id, note.content) }
+                  if (e.key === 'Escape') cancelEdit()
+                }}
+              />
+            ) : (
+              <div className="note-text" onDoubleClick={() => startEdit(note)}>
+                {note.content}
+              </div>
+            )}
+            <button
+              className="todo-x"
+              onClick={() => deleteNote.mutate(note.id)}
+              aria-label="Delete note"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </li>
+        ))}
+      </ol>
+
+      <form className="add-row" onSubmit={addNote}>
+        <span className="add-plus">›</span>
+        <input
+          ref={inputRef}
+          className="add-input"
+          placeholder="Add a note… Press Enter to save"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          disabled={createNote.isPending}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+          }}
+        />
+      </form>
     </section>
   )
 })

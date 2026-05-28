@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getJournalEntries,
   createJournalEntry,
-  updateJournalEntry,
   getJournalTodos,
   removeJournalTodo,
   createLogEntry,

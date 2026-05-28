@@ -6,21 +6,26 @@ interface Props {
 
 const SHORTCUTS = [
   {
-    group: 'Actions',
+    group: 'Navigation (all pages)',
     items: [
-      { keys: ['t'], description: 'New todo' },
-      { keys: ['l'], description: 'New log entry' },
-      { keys: ['n'], description: 'Focus notes' },
+      { keys: ['g', 'h'], description: 'Go to today (home)' },
+      { keys: ['g', 't'], description: 'Go to tasks page' },
       { keys: ['?'], description: 'Show / hide this help' },
     ],
   },
   {
-    group: 'Navigation',
+    group: 'Journal — Day Navigation',
     items: [
       { keys: ['['], description: 'Previous day' },
       { keys: [']'], description: 'Next day' },
-      { keys: ['g', 'h'], description: 'Go to today (home)' },
-      { keys: ['g', 't'], description: 'Go to tasks page' },
+    ],
+  },
+  {
+    group: 'Journal — Actions',
+    items: [
+      { keys: ['t'], description: 'New todo' },
+      { keys: ['l'], description: 'New log entry' },
+      { keys: ['n'], description: 'Focus notes' },
     ],
   },
   {

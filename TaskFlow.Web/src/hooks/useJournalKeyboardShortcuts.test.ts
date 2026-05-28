@@ -10,9 +10,6 @@ function makeHandlers(): JournalShortcutHandlers {
     onNewNote: vi.fn(),
     onPrevDay: vi.fn(),
     onNextDay: vi.fn(),
-    onGoHome: vi.fn(),
-    onGoTasks: vi.fn(),
-    onShowHelp: vi.fn(),
   }
 }
 
@@ -63,12 +60,6 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNextDay).toHaveBeenCalledOnce()
   })
 
-  it('fires onShowHelp when ? is pressed', () => {
-    renderHook(() => useJournalKeyboardShortcuts(handlers))
-    fireKey('?')
-    expect(handlers.onShowHelp).toHaveBeenCalledOnce()
-  })
-
   it('does not fire shortcuts when an input is focused', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
@@ -80,14 +71,12 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('n')
     fireKey('[')
     fireKey(']')
-    fireKey('?')
 
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
     expect(handlers.onNewLog).not.toHaveBeenCalled()
     expect(handlers.onNewNote).not.toHaveBeenCalled()
     expect(handlers.onPrevDay).not.toHaveBeenCalled()
     expect(handlers.onNextDay).not.toHaveBeenCalled()
-    expect(handlers.onShowHelp).not.toHaveBeenCalled()
   })
 
   it('does not fire shortcuts when a textarea is focused', () => {
@@ -108,52 +97,15 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
   })
 
-  it('g then h within 1.5s triggers onGoHome', () => {
+  it('does not start a chord when g is pressed', () => {
     renderHook(() => useJournalKeyboardShortcuts(handlers))
     fireKey('g')
-    vi.advanceTimersByTime(500)
     fireKey('h')
-    expect(handlers.onGoHome).toHaveBeenCalledOnce()
-    expect(handlers.onGoTasks).not.toHaveBeenCalled()
-  })
-
-  it('g then t within 1.5s triggers onGoTasks', () => {
-    renderHook(() => useJournalKeyboardShortcuts(handlers))
-    fireKey('g')
-    vi.advanceTimersByTime(500)
-    fireKey('t')
-    expect(handlers.onGoTasks).toHaveBeenCalledOnce()
-    expect(handlers.onGoHome).not.toHaveBeenCalled()
-  })
-
-  it('chord times out after 1.5s and subsequent h does not trigger onGoHome', () => {
-    renderHook(() => useJournalKeyboardShortcuts(handlers))
-    fireKey('g')
-    vi.advanceTimersByTime(1500)
-    fireKey('h')
-    expect(handlers.onGoHome).not.toHaveBeenCalled()
-  })
-
-  it('g then unknown key silently cancels the chord', () => {
-    renderHook(() => useJournalKeyboardShortcuts(handlers))
-    fireKey('g')
-    fireKey('x')
-    expect(handlers.onGoHome).not.toHaveBeenCalled()
-    expect(handlers.onGoTasks).not.toHaveBeenCalled()
-    // Subsequent shortcuts should still work
-    fireKey('t')
-    expect(handlers.onNewTodo).toHaveBeenCalledOnce()
-  })
-
-  it('chord fires even while an input is focused (second key)', () => {
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-
-    renderHook(() => useJournalKeyboardShortcuts(handlers))
-    fireKey('g')
-    input.focus()
-    fireKey('h')
-    expect(handlers.onGoHome).toHaveBeenCalledOnce()
+    expect(handlers.onNewTodo).not.toHaveBeenCalled()
+    expect(handlers.onNewLog).not.toHaveBeenCalled()
+    expect(handlers.onNewNote).not.toHaveBeenCalled()
+    expect(handlers.onPrevDay).not.toHaveBeenCalled()
+    expect(handlers.onNextDay).not.toHaveBeenCalled()
   })
 
   it('removes the keydown listener on unmount', () => {

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 export interface JournalShortcutHandlers {
   onNewTodo: () => void
   onNewLog: () => void
-  onFocusNotes: () => void
+  onNewNote: () => void
   onPrevDay: () => void
   onNextDay: () => void
   onGoHome: () => void
@@ -80,7 +80,7 @@ export function useJournalKeyboardShortcuts(handlers: JournalShortcutHandlers) {
           break
         case 'n':
           e.preventDefault()
-          handlersRef.current.onFocusNotes()
+          handlersRef.current.onNewNote()
           break
         case '[':
           e.preventDefault()

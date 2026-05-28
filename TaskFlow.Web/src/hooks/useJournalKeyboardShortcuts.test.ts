@@ -7,7 +7,7 @@ function makeHandlers(): JournalShortcutHandlers {
   return {
     onNewTodo: vi.fn(),
     onNewLog: vi.fn(),
-    onFocusNotes: vi.fn(),
+    onNewNote: vi.fn(),
     onPrevDay: vi.fn(),
     onNextDay: vi.fn(),
     onGoHome: vi.fn(),
@@ -45,10 +45,10 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNewLog).toHaveBeenCalledOnce()
   })
 
-  it('fires onFocusNotes when n is pressed', () => {
+  it('fires onNewNote when n is pressed', () => {
     renderHook(() => useJournalKeyboardShortcuts(handlers))
     fireKey('n')
-    expect(handlers.onFocusNotes).toHaveBeenCalledOnce()
+    expect(handlers.onNewNote).toHaveBeenCalledOnce()
   })
 
   it('fires onPrevDay when [ is pressed', () => {
@@ -84,7 +84,7 @@ describe('useJournalKeyboardShortcuts', () => {
 
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
     expect(handlers.onNewLog).not.toHaveBeenCalled()
-    expect(handlers.onFocusNotes).not.toHaveBeenCalled()
+    expect(handlers.onNewNote).not.toHaveBeenCalled()
     expect(handlers.onPrevDay).not.toHaveBeenCalled()
     expect(handlers.onNextDay).not.toHaveBeenCalled()
     expect(handlers.onShowHelp).not.toHaveBeenCalled()

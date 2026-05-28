@@ -40,7 +40,7 @@ export function JournalPage() {
   useJournalKeyboardShortcuts({
     onNewTodo: () => todosSectionRef.current?.focusDraftInput(),
     onNewLog: () => logSectionRef.current?.focusDraftInput(),
-    onFocusNotes: () => notesSectionRef.current?.focusNotes(),
+    onNewNote: () => notesSectionRef.current?.focusNewNote(),
     onPrevDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, -1))}`),
     onNextDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, 1))}`),
     onGoHome: () => navigate(`/journal/${isoToUrlDate(todayISO())}`),
@@ -84,8 +84,6 @@ export function JournalPage() {
                 ref={notesSectionRef}
                 key={entry.id}
                 entryId={entry.id}
-                entryTitle={entry.title}
-                initialValue={entry.summary}
               />
             </>
           ) : null}

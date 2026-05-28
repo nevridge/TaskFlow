@@ -3,13 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getJournalEntries,
   createJournalEntry,
-  updateJournalEntry,
   getJournalTodos,
   removeJournalTodo,
   createLogEntry,
   deleteLogEntry,
+  getJournalNotes,
+  createJournalNote,
+  updateJournalNote,
+  deleteJournalNote,
 } from '@/api/journal'
-import type { JournalEntryResponseDto, TaskItemResponseDto } from '@/api/journal'
+import type { JournalEntryResponseDto, TaskItemResponseDto, JournalNoteResponseDto } from '@/api/journal'
 import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
@@ -19,6 +22,7 @@ import { usePrefs } from '@/context/usePrefs'
 export const journalKeys = {
   all: ['journal'] as const,
   todos: (entryId: number) => ['journal', entryId, 'todos'] as const,
+  notes: (entryId: number) => ['journal', entryId, 'notes'] as const,
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -72,14 +76,38 @@ export function useEnsureJournalEntry(isoDate: string) {
   }
 }
 
-// ─── Journal entry mutations ──────────────────────────────────────────────────
+// ─── Journal notes queries and mutations ─────────────────────────────────────
 
-export function useUpdateNotesMutation(entryId: number, entryTitle: string) {
+export function useJournalNotes(entryId: number) {
+  return useQuery({
+    queryKey: journalKeys.notes(entryId),
+    queryFn: () => getJournalNotes(entryId),
+    select: (res) => (res.data as JournalNoteResponseDto[] | undefined) ?? [],
+  })
+}
+
+export function useCreateJournalNoteMutation(entryId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (summary: string) =>
-      updateJournalEntry(entryId, { title: entryTitle, summary }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+    mutationFn: (content: string) => createJournalNote(entryId, content),
+    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.notes(entryId) }),
+  })
+}
+
+export function useUpdateJournalNoteMutation(entryId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, content }: { id: number; content: string }) =>
+      updateJournalNote(entryId, id, content),
+    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.notes(entryId) }),
+  })
+}
+
+export function useDeleteJournalNoteMutation(entryId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => deleteJournalNote(entryId, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.notes(entryId) }),
   })
 }
 

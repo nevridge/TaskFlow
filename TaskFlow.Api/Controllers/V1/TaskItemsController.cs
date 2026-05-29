@@ -84,7 +84,14 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     {
         if (createDto.JournalDate.HasValue)
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            // Use timezone offset if provided, otherwise fallback to UTC
+            DateTime utcNow = DateTime.UtcNow;
+            DateTime userNow = utcNow;
+            if (createDto.TimezoneOffsetMinutes.HasValue)
+            {
+                userNow = utcNow.AddMinutes(-createDto.TimezoneOffsetMinutes.Value);
+            }
+            var today = DateOnly.FromDateTime(userNow);
             if (createDto.JournalDate.Value < today)
             {
                 return UnprocessableEntity(new

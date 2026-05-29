@@ -15,6 +15,9 @@ export type CreateTaskItemDto = {
     isComplete?: boolean;
     priority?: Priority;
     dueDate?: null | string;
+    journalDate?: string;
+    parentTaskItemId?: number;
+    timezoneOffsetMinutes?: number;
 };
 
 export type NoteResponseDto = {

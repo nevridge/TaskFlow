@@ -13,9 +13,9 @@ describe('KeyboardShortcutsModal', () => {
     document.body.style.overflow = ''
   })
 
-  it('renders the Navigation (all pages) group with g→h, g→t, and ? shortcuts', () => {
+  it('renders the Navigation — All Pages group with g→h, g→t, and ? shortcuts', () => {
     renderModal()
-    expect(screen.getByText('Navigation (all pages)')).toBeInTheDocument()
+    expect(screen.getByText('Navigation — All Pages')).toBeInTheDocument()
     expect(screen.getByText('Go to today (home)')).toBeInTheDocument()
     expect(screen.getByText('Go to tasks page')).toBeInTheDocument()
     expect(screen.getByText('Show / hide this help')).toBeInTheDocument()
@@ -28,7 +28,7 @@ describe('KeyboardShortcutsModal', () => {
     expect(screen.getByText('Next day')).toBeInTheDocument()
   })
 
-  it('renders the Journal — Actions group with t, l, and n shortcuts', () => {
+  it('renders the Journal — Actions group with t, l, n, and j shortcuts', () => {
     renderModal()
     expect(screen.getByText('Journal — Actions')).toBeInTheDocument()
     expect(screen.getByText('New todo')).toBeInTheDocument()
@@ -36,9 +36,19 @@ describe('KeyboardShortcutsModal', () => {
     expect(screen.getByText('Focus notes')).toBeInTheDocument()
   })
 
-  it('renders the Inputs group with Esc shortcut', () => {
+  it('renders the j shortcut in the Journal — Actions group', () => {
     renderModal()
-    expect(screen.getByText('Inputs')).toBeInTheDocument()
+    expect(screen.getByText('Go to today')).toBeInTheDocument()
+    const journalActionsGroup = screen.getByText('Journal — Actions').closest('.kb-group')
+    expect(journalActionsGroup).not.toBeNull()
+    const kbds = journalActionsGroup!.querySelectorAll('kbd')
+    const jKbd = Array.from(kbds).find(kbd => kbd.textContent === 'j')
+    expect(jKbd).toBeDefined()
+  })
+
+  it('renders the Inputs — All Pages group with Esc shortcut', () => {
+    renderModal()
+    expect(screen.getByText('Inputs — All Pages')).toBeInTheDocument()
     expect(screen.getByText('Cancel / deselect focused field')).toBeInTheDocument()
   })
 

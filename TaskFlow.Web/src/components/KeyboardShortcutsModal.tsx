@@ -6,7 +6,7 @@ interface Props {
 
 const SHORTCUTS = [
   {
-    group: 'Navigation (all pages)',
+    group: 'Navigation — All Pages',
     items: [
       { keys: ['g', 'h'], description: 'Go to today (home)' },
       { keys: ['g', 't'], description: 'Go to tasks page' },
@@ -26,10 +26,11 @@ const SHORTCUTS = [
       { keys: ['t'], description: 'New todo' },
       { keys: ['l'], description: 'New log entry' },
       { keys: ['n'], description: 'Focus notes' },
+      { keys: ['j'], description: 'Go to today' },
     ],
   },
   {
-    group: 'Inputs',
+    group: 'Inputs — All Pages',
     items: [
       { keys: ['Esc'], description: 'Cancel / deselect focused field' },
     ],

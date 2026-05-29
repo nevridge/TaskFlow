@@ -10,6 +10,7 @@ function makeHandlers(): JournalShortcutHandlers {
     onNewNote: vi.fn(),
     onPrevDay: vi.fn(),
     onNextDay: vi.fn(),
+    onJumpToToday: vi.fn(),
   }
 }
 
@@ -60,6 +61,12 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNextDay).toHaveBeenCalledOnce()
   })
 
+  it('fires onJumpToToday when j is pressed with no input focused', () => {
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    fireKey('j')
+    expect(handlers.onJumpToToday).toHaveBeenCalledOnce()
+  })
+
   it('does not fire shortcuts when an input is focused', () => {
     const input = document.createElement('input')
     document.body.appendChild(input)
@@ -71,12 +78,14 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('n')
     fireKey('[')
     fireKey(']')
+    fireKey('j')
 
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
     expect(handlers.onNewLog).not.toHaveBeenCalled()
     expect(handlers.onNewNote).not.toHaveBeenCalled()
     expect(handlers.onPrevDay).not.toHaveBeenCalled()
     expect(handlers.onNextDay).not.toHaveBeenCalled()
+    expect(handlers.onJumpToToday).not.toHaveBeenCalled()
   })
 
   it('does not fire shortcuts when a textarea is focused', () => {
@@ -94,7 +103,11 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('t', { ctrlKey: true })
     fireKey('t', { altKey: true })
     fireKey('t', { metaKey: true })
+    fireKey('j', { ctrlKey: true })
+    fireKey('j', { altKey: true })
+    fireKey('j', { metaKey: true })
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
+    expect(handlers.onJumpToToday).not.toHaveBeenCalled()
   })
 
   it('does not start a chord when g is pressed', () => {
@@ -114,4 +127,5 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('t')
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
   })
+
 })

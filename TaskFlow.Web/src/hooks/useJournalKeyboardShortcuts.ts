@@ -7,6 +7,7 @@ export interface JournalShortcutHandlers {
   onNewNote: () => void
   onPrevDay: () => void
   onNextDay: () => void
+  onJumpToToday: () => void
 }
 
 /**
@@ -50,6 +51,10 @@ export function useJournalKeyboardShortcuts(handlers: JournalShortcutHandlers) {
         case ']':
           e.preventDefault()
           handlersRef.current.onNextDay()
+          break
+        case 'j':
+          e.preventDefault()
+          handlersRef.current.onJumpToToday()
           break
       }
     }

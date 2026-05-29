@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
-import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate } from '@/lib/journal-utils'
+import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate, todayUrlDate } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
@@ -40,6 +40,7 @@ export function JournalPage() {
     onNewNote: () => notesSectionRef.current?.focusNewNote(),
     onPrevDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, -1))}`),
     onNextDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, 1))}`),
+    onJumpToToday: () => { if (effectiveDate !== todayISO()) navigate(`/journal/${todayUrlDate()}`) },
   })
 
   return (

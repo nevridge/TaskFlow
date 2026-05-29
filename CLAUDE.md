@@ -39,6 +39,18 @@ cd TaskFlow.Web && npm run dev
 # Frontend — type-check
 cd TaskFlow.Web && npx tsc --noEmit
 
+# Frontend — test (all, single run)
+cd TaskFlow.Web && npm run test -- --run
+
+# Frontend — test (watch mode, for development)
+cd TaskFlow.Web && npm run test
+
+# Frontend — test (single file)
+cd TaskFlow.Web && npm run test -- --run src/hooks/useJournal.test.ts
+
+# Frontend — test with coverage (enforces 80% line threshold)
+cd TaskFlow.Web && npm run test -- --run --coverage
+
 # Frontend — regenerate typed API client from live OpenAPI spec (API must be running)
 cd TaskFlow.Web && npm run gen:api
 
@@ -109,17 +121,35 @@ Two execution tools are available on this Windows machine:
 
 ## Testing
 
+### Backend
+
 Tests mirror the main project structure: `Controllers/V1/`, `Repositories/`, `Validators/`, `HealthChecks/`, `Extensions/`.
 
 - Repository tests use `Microsoft.EntityFrameworkCore.InMemory` for most cases; real in-memory SQLite is used where constraint enforcement is needed (e.g., unique index tests)
 - Controller tests use Moq to mock repositories
 - CI enforces **75% line coverage** minimum (`ci.yml`)
 
+### Frontend
+
+**Framework:** Vitest + `@testing-library/react` + `@testing-library/user-event`, jsdom environment. Test files are colocated with their source (`Foo.tsx` → `Foo.test.tsx`).
+
+**CI enforces 80% line coverage** — configured in `vite.config.ts` (`coverage.thresholds.lines: 80`), enforced by the `taskflow-web` CI job via `--coverage`.
+
+**Key patterns:**
+- Hook tests wrap `renderHook` in a fresh `QueryClient` via a `makeWrapper()` helper — see `useTasks.test.ts` for the canonical example
+- Component tests use role-based queries (`getByRole`, `getByLabelText`) over text or selector queries
+- `vi.clearAllMocks()` in `beforeEach` on every test file
+- `useJournal.ts` requires **two separate mocks**: `vi.mock('@/api/journal')` for journal-specific functions AND `vi.mock('@/api/client/sdk.gen')` for todo create/toggle mutations that call the SDK directly
+- `PrefsContext` tests must clean up DOM side-effects in `afterEach`: `document.documentElement.removeAttribute('data-theme')`, `document.documentElement.classList.remove('is-dark')`, `localStorage.clear()`
+- Keyboard shortcut tests use `vi.useFakeTimers()` for chord sequences; clean up with `document.body.innerHTML = ''` in `afterEach`
+
+**Gotcha — enum PascalCase:** Backend serializes status as PascalCase (`'Completed'`, `'Todo'`). Always use PascalCase in test fixtures. The component compares `status === 'Completed'` — a lowercase `'completed'` fixture will silently produce wrong behaviour.
+
 ## Repository Etiquette
 
 - **Branches:** `feature/description` or `bugfix/description`
 - **Commits:** Conventional Commits format (`feat:`, `fix:`, `chore:`, `docs:`, etc.)
-- **PRs:** Must include updated or new tests; CI will fail below 75% line coverage
+- **PRs:** Must include updated or new tests; CI enforces 75% line coverage (backend) and 80% line coverage (frontend)
 
 ## CI/CD
 

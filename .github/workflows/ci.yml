@@ -57,7 +57,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run type-check
-      - run: npm run test -- --run
+      - run: npm run test -- --run --coverage
       - run: npm run build
 
   smoke-test:

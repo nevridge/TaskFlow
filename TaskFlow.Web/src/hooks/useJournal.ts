@@ -116,8 +116,18 @@ export function useDeleteJournalNoteMutation(entryId: number) {
 export function useCreateTodoMutation(entryId: number, isoDate: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (title: string) =>
-      postApiV1TaskItems({ body: { title, status: 'todo', journalDate: isoDate } as CreateTaskItemDto }),
+    mutationFn: (title: string) => {
+      // Pass browser timezone offset in minutes (e.g. -420 for PDT)
+      const timezoneOffsetMinutes = new Date().getTimezoneOffset() * -1;
+      return postApiV1TaskItems({
+        body: {
+          title,
+          status: 'todo',
+          journalDate: isoDate,
+          timezoneOffsetMinutes,
+        } as CreateTaskItemDto,
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })

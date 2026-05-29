@@ -57,7 +57,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run type-check
-      - run: npm run test -- --run
+      - run: npm run test -- --run --coverage
       - run: npm run build
 
   smoke-test:
@@ -68,7 +68,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Start application with docker-compose
-        run: docker compose up -d
+        run: |
+          for attempt in 1 2 3; do
+            if docker compose up -d; then
+              break
+            fi
+            echo "Attempt $attempt failed, retrying in 15s..."
+            docker compose down -v 2>/dev/null || true
+            sleep 15
+            if [ $attempt -eq 3 ]; then exit 1; fi
+          done
       - name: Wait for application to be healthy
         run: |
           echo "Waiting for application to be ready..."

@@ -12,4 +12,8 @@ public class CreateTaskItemDto
     public DateTime? DueDate { get; set; }
     public DateOnly? JournalDate { get; set; }
     public int? ParentTaskItemId { get; set; }
+    /// <summary>
+    /// The user's timezone offset in minutes (e.g. -420 for PDT, 0 for UTC). Optional.
+    /// </summary>
+    public int? TimezoneOffsetMinutes { get; set; }
 }

@@ -107,6 +107,7 @@ Announce: "Step 5/8 — Implementing the backend with backend-builder."
 Launch the `backend-builder` agent. Pass it:
 - The approved Technical Brief (full text)
 - The codebase-researcher findings (relevant backend file paths, patterns, similar examples)
+- This instruction: "Follow TDD — write the failing test first, watch it fail, then write minimal production code to make it pass. Do not write production code before the test exists. Verify all tests pass before returning. Do not claim success without running the test suite and confirming the output."
 
 Wait for the agent to complete and return a summary of what was built, including the **API contract summary** (new/changed endpoints, request/response shapes, status codes).
 
@@ -124,12 +125,13 @@ Do not proceed to Step 6 until the gate exits.
 
 Announce: "Step 6/8 — Implementing the frontend with frontend-builder."
 
-**First, check whether this feature has frontend work.** Read the approved spec. If the spec explicitly states this is a backend-only change (e.g., a migration, an internal API used by other services, no UI changes), skip this step and proceed directly to Step 7, noting the skip.
+**First, check whether this feature has frontend work.** Only skip this step if the spec explicitly and unambiguously states that no UI changes are needed AND no new/changed API endpoints are consumed by the frontend. When in doubt, launch the frontend-builder — do not skip it and make frontend changes yourself.
 
 If frontend work is required, launch the `frontend-builder` agent. Pass it:
 - The approved Technical Brief (full text)
 - The codebase-researcher findings (relevant frontend file paths, patterns, similar examples)
 - The API contract summary from the backend-builder (the new/changed endpoints, request/response shapes, status codes)
+- This instruction: "Verify all tests pass and the dev server compiles without errors before returning. Do not claim success without running the test suite and confirming the output."
 
 Wait for the agent to complete and return a summary of what was built.
 
@@ -190,7 +192,28 @@ Present to the user:
 
 Use `AskUserQuestion`: **"Implementation is complete. How would you like to proceed?"** with options: "Open a PR", "I have feedback — hold on", "Reject and discard".
 
-**If Open a PR:** Announce that you are pushing the branch and opening a PR. Run:
+**If Open a PR:** Announce that you are committing, pushing, and opening a PR. Run the following in order:
+
+```bash
+# 1. Check for uncommitted changes
+git status --porcelain
+```
+
+If there are uncommitted changes, stage the files that were created or modified by the backend-builder and frontend-builder (use the file lists from their summaries — do not blindly `git add -A`) and commit:
+
+```bash
+git add <specific files from builder summaries>
+git commit -m "$(cat <<'EOF'
+<type>: <short description matching the feature>
+
+<one or two sentences summarising what was built>
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+EOF
+)"
+```
+
+Then push and open the PR:
 
 ```bash
 git push -u origin "$(git rev-parse --abbrev-ref HEAD)"
@@ -225,6 +248,8 @@ implementation-validator → [open-questions-gate]
       ↓
 [HUMAN FINAL REVIEW GATE]
       ↓
+git add + git commit (if uncommitted changes)
+      ↓
 git push + PR
 ```
 
@@ -238,3 +263,6 @@ git push + PR
 - Always use the finalized (post-gate) agent output when passing findings forward to the next stage.
 - If any agent returns an error or produces no output, stop and tell the user what failed before continuing.
 - If any Bash command fails, stop and ask the user to resolve the issue before proceeding.
+- **Never modify source files directly.** The skill orchestrator must not call Edit, Write, or Bash to modify application source files. All code changes must go through backend-builder or frontend-builder subagents. The only Bash commands the orchestrator runs are git commands (branch creation, status, add, commit, push) and the branch check in Step 1.
+- **When in doubt about frontend scope, launch the frontend-builder.** Only skip Step 6 when the spec explicitly and unambiguously states no UI changes are needed. Do not infer backend-only scope — require the spec to state it.
+- **Commit before pushing.** Always check `git status --porcelain` before pushing in Step 8. If uncommitted changes exist, stage the specific files from the builder summaries and commit them before running `git push`.

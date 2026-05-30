@@ -19,7 +19,7 @@ Before entering this gate, you must have in context:
 
 - **Agent output** — the full text the agent returned
 - **Agent ID** — the identifier returned at the end of the agent result (format: `agentId: <id>`)
-- **Agent type** — human-readable label: `codebase-researcher`, `spec-writer`, `backend-feature-implementer`, or `implementation-validator`
+- **Agent type** — human-readable label: `codebase-researcher`, `spec-writer`, `backend-builder`, `frontend-builder`, or `implementation-validator`
 - **Output label** — what the agent was asked to produce: `research findings`, `Technical Brief`, `implementation`, or `validation report`
 
 ---
@@ -33,63 +33,59 @@ Scan the agent's full output for a section headed "Open Questions" or equivalent
 
 ---
 
-## Step B — Present Questions
+## Step B — Resolve Questions One by One
 
-Announce: "Open Questions Gate — [agent-type] returned [N] open question(s). Resolving before proceeding."
+Count the items listed under the Open Questions heading in the agent output. This is N — the total number of questions to resolve.
 
-Present the questions clearly, numbered, preserving any context or sub-options the agent included:
+Announce: "Open Questions Gate — [agent-type] returned [N] open question(s). Resolving now."
 
-```
-Open Question 1: [Question text]
-  Agent context: [Any tradeoff or background the agent noted]
+First, offer the up-front escape hatch using `AskUserQuestion`:
 
-Open Question 2: [Question text]
-  Agent context: [Any tradeoff or background the agent noted]
-```
-
-Then ask the user using `AskUserQuestion`:
-
-- **Question:** "How would you like to handle these open questions?"
+- **Question:** "How would you like to handle [N] open question(s) from the [agent-type]?"
 - **Options:**
-  - "Answer them now" — user will provide decisions in the next message
-  - "Discuss some first" — user wants to talk through tradeoffs before deciding
-  - "Accept agent defaults" — trust whatever assumptions the agent already stated
+  - "Resolve them one by one" — step through each question interactively
+  - "Accept all agent defaults" — trust whatever assumptions the agent stated
 
----
+If "Accept all agent defaults": see the **Accept Defaults Rule** in the Rules section and exit this gate.
 
-## Step C — Collect Answers
+If "Resolve them one by one": proceed through each question in sequence.
 
-### If "Answer them now"
+**For each question (loop: Question 1 of N, Question 2 of N, …):**
 
-Re-present the questions as a numbered list and ask the user to reply with one decision per question. Wait for their response.
+Display the question and its context as plain text before the `AskUserQuestion` call:
 
-Once all answers are received, compile a resolution summary:
+```
+Question [n] of [total]: [Full question text from agent output]
+Agent context: [Tradeoff or background the agent noted, if any — omit line if none]
+```
+
+Then call `AskUserQuestion`:
+
+- **Question:** "[Full question text from agent output]"
+- **Options:** Use the explicit choices the agent listed in its output for this question, if any. If the agent listed no choices, use:
+  - "Yes"
+  - "No"
+  - "Tell me more before I decide"
+  - "Accept agent default for this question"
+
+If the user selects "Accept agent default for this question": record the agent's stated default for that question (from the agent context line) as the answer, and advance to the next question.
+
+If the user selects "Tell me more before I decide": explain the tradeoff in your next message (cite codebase implications if relevant), then re-present the same `AskUserQuestion` with its original options. Do not advance to the next question until a non-"Tell me more" option is selected.
+
+Once the user selects a final answer, record it — noting whether it was an explicit choice or "Accept agent default for this question" — and advance to the next question.
+
+After all [N] questions are resolved:
+
+- **If ALL answers were "Accept agent default for this question":** apply the **Accept Defaults Rule** (see Rules section) — exit this gate without revision.
+- **If ANY answer was an explicit choice:** compile the resolution summary including only the explicit answers (do not include questions left at agent default — the agent's output already reflects those choices):
 
 ```
 Resolved Answers:
-1. [Brief question label]: [User's answer]
-2. [Brief question label]: [User's answer]
+1. [Brief question label]: [User's explicit answer]
+2. [Brief question label]: [User's explicit answer]
 ```
 
-Proceed to Step D.
-
----
-
-### If "Discuss some first"
-
-Ask: "Which question would you like to discuss first?"
-
-Engage in focused discussion — explain tradeoffs, surface codebase implications, reference prior research findings if relevant. One question at a time. When the user decides, note the answer and ask: "Any other questions to discuss, or ready to submit all answers?"
-
-Once all questions are resolved, compile the resolution summary as above. Proceed to Step D.
-
----
-
-### If "Accept agent defaults"
-
-Announce: "Accepting agent's stated defaults for all open questions. Proceeding without revision."
-
-Exit this gate. Continue the pipeline using the original unrevised output.
+Proceed to Step D. (There is no Step C — it was consolidated into this step.)
 
 ---
 
@@ -103,7 +99,7 @@ Use `SendMessage` with the agent's ID to continue the **same agent** (do not lau
 The user has resolved the open questions listed in your output. Please revise your [output label] to incorporate these decisions. Only update the sections affected by the answers below — do not change anything else.
 
 RESOLVED QUESTIONS:
-[Paste the resolution summary from Step C verbatim]
+[Paste the resolution summary compiled in Step B verbatim]
 
 Return the complete revised [output label] with these decisions reflected.
 ```
@@ -140,7 +136,13 @@ Ask the user to describe what is still wrong. Compile the new feedback (treating
 
 Present the result and repeat Step E.
 
-**Maximum two additional revision cycles.** If the output is still not approved after two extra rounds, stop and surface this message: "Revision cycles exhausted — human review of the [agent-type] output is required before the pipeline can continue."
+**Maximum revision cycles by agent type:**
+- `spec-writer`: 5 cycles — specs often need multiple rounds of design feedback
+- `codebase-researcher`: 3 cycles
+- `backend-builder` or `frontend-builder`: 2 cycles — fixes should be targeted
+- `implementation-validator`: 2 cycles
+
+If the applicable cap is reached, stop and surface: "Revision cycles exhausted — human review of the [agent-type] output is required before the pipeline can continue."
 
 ---
 
@@ -160,28 +162,38 @@ Agent output received
 Open Questions present?
   No  → exit gate immediately
   Yes ↓
-Present questions to user
+AskUserQuestion: "Accept all agent defaults" or "Resolve them one by one"
+  "Accept all agent defaults" → warn if early stage → exit gate (no revision)
+  "Resolve them one by one"  ↓
+For each question:
+  AskUserQuestion with agent options (or fallback: Yes/No/Tell me more/Accept default)
+  "Tell me more" → explain tradeoff → re-present same question
+  Final answer recorded (explicit or default) → advance to next question
         ↓
-User choice:
-  "Accept defaults" → exit gate (no revision)
-  "Answer now" / "Discuss first"
-        ↓
-Collect all answers
+All questions resolved:
+  All answers = agent default → Apply Accept Defaults Rule → exit gate (no revision)
+  Any answer = explicit       → compile explicit Resolved Answers summary
         ↓
 SendMessage → same agent → revised output
         ↓
 User approves revised output?
-  "Approved"        → exit gate → continue pipeline
-  "Still has issues" → one more revision cycle (max 2)
-  "Rejected"        → stop pipeline
+  "Approved"         → exit gate → continue pipeline
+  "Still has issues" → one more revision cycle (up to agent-type cap)
+  "Rejected"         → stop pipeline
 ```
 
 ---
 
 ## Rules
 
+### Accept Defaults Rule
+
+When the user selects "Accept all agent defaults" (Step B up-front escape), or when ALL per-question answers resolve as "Accept agent default for this question" (every question resolved via the default option with no explicit choices made): announce "Accepting agent's stated defaults. Proceeding without revision." Do not send answers back to the agent. Exit this gate and continue the pipeline using the original unrevised output.
+
+**Early-stage risk:** When accepting defaults for a `codebase-researcher` or `spec-writer` output, display this warning before exiting the gate: "Warning: defaults accepted at this stage propagate to the backend-builder, frontend-builder, and implementation-validator. If an assumption is wrong, it may not surface until the final validation stage." Then exit normally. Do not block — this is informational only.
+
 - **Never skip this gate when open questions exist.** Unresolved questions passed to the next stage cause spec drift and implementation surprises.
-- **Never fabricate answers on the user's behalf.** Only the user's stated decisions go back to the agent. If the user skips, pass only what the agent already stated as its own default.
+- **Never fabricate answers on the user's behalf.** Only explicit user decisions go back to the agent. Questions where the user accepted the agent default are not included in the resolution summary — the agent's output already reflects those choices.
 - **Always use `SendMessage`, not a new agent launch.** The existing agent retains its full output in context; a new agent would start cold.
 - **Pass user answers verbatim.** Do not paraphrase in ways that alter meaning or intent.
 - **One question at a time in discussion mode.** Keep focused — this is a decision gate, not a design session.

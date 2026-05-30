@@ -89,7 +89,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DateTime userNow = utcNow;
             if (createDto.TimezoneOffsetMinutes.HasValue)
             {
-                userNow = utcNow.AddMinutes(-createDto.TimezoneOffsetMinutes.Value);
+                userNow = utcNow.AddMinutes(createDto.TimezoneOffsetMinutes.Value);
             }
             var today = DateOnly.FromDateTime(userNow);
             if (createDto.JournalDate.Value < today)
@@ -148,7 +148,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
         if (createDto.JournalDate.HasValue)
         {
-            await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value);
+            await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value, createDto.TimezoneOffsetMinutes);
         }
 
         var refreshed = await _repo.GetByIdAsync(createdItem.Id) ?? createdItem;
@@ -237,7 +237,10 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         if (wasCompleted && !nowCompleted)
         {
             var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var userNow = updateDto.TimezoneOffsetMinutes.HasValue
+                ? DateTime.UtcNow.AddMinutes(updateDto.TimezoneOffsetMinutes.Value)
+                : DateTime.UtcNow;
+            var today = DateOnly.FromDateTime(userNow);
             if (assignedDate.HasValue && assignedDate.Value < today)
             {
                 return UnprocessableEntity(new
@@ -391,7 +394,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         }
     }
 
-    private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate)
+    private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate, int? timezoneOffsetMinutes = null)
     {
         if (_journalRepo is null)
         {
@@ -405,7 +408,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
                 Date = journalDate,
             });
 
-        await _journalRepo.AddTodoAsync(entry.Id, taskId);
+        await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
     }
 
     private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null)

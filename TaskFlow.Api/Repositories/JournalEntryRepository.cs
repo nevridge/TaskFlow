@@ -118,7 +118,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         return entry?.Todos.Any(t => t.Id == taskItemId && t.CurrentJournalEntryId == entryId) ?? false;
     }
 
-    public async Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId)
+    public async Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId, int? timezoneOffsetMinutes = null)
     {
         var entry = await _context.JournalEntries
             .Include(e => e.Todos)
@@ -134,7 +134,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             return AddTodoResult.TaskNotFound;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var userNow = timezoneOffsetMinutes.HasValue
+            ? DateTime.UtcNow.AddMinutes(timezoneOffsetMinutes.Value)
+            : DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(userNow);
         if (entry.Date < today)
         {
             return AddTodoResult.PastDayNotAllowed;

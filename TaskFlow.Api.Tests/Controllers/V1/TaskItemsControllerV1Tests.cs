@@ -182,6 +182,27 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_ShouldReturnUnprocessableEntity_WhenJournalDateIsYesterdayInUserTimezone()
+    {
+        // timezoneOffsetMinutes uses UTC-offset convention (negative = west of UTC)
+        // User's "today" = utcNow + offset; a negative offset shifts the date earlier
+        const int offsetMinutes = -300; // UTC-5 (e.g. CDT)
+        var userYesterday = DateOnly.FromDateTime(DateTime.UtcNow.AddMinutes(offsetMinutes).AddDays(-1));
+
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "Task",
+            JournalDate = userYesterday,
+            TimezoneOffsetMinutes = offsetMinutes
+        };
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Create_ShouldAssignToJournalDate_WhenJournalDateIsProvided()
     {
         var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));

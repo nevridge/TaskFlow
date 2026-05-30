@@ -89,7 +89,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             DateTime userNow = utcNow;
             if (createDto.TimezoneOffsetMinutes.HasValue)
             {
-                userNow = utcNow.AddMinutes(-createDto.TimezoneOffsetMinutes.Value);
+                userNow = utcNow.AddMinutes(createDto.TimezoneOffsetMinutes.Value);
             }
             var today = DateOnly.FromDateTime(userNow);
             if (createDto.JournalDate.Value < today)

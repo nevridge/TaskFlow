@@ -53,7 +53,7 @@ public class JournalTodosController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await _journalRepo.AddTodoAsync(entryId, dto.TaskItemId);
+        var result = await _journalRepo.AddTodoAsync(entryId, dto.TaskItemId, dto.TimezoneOffsetMinutes);
         return result switch
         {
             AddTodoResult.EntryNotFound => NotFound(),

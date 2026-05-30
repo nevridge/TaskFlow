@@ -234,6 +234,38 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_ShouldForwardTimezoneOffsetToAddTodoAsync_WhenJournalDateIsToday()
+    {
+        // User in UTC-5 (timezoneOffsetMinutes = -300). Their "today" = utcNow - 5h.
+        // Before the fix, AddTodoAsync received no timezone offset and saw today as UTC today,
+        // causing it to silently return PastDayNotAllowed and drop the journal link.
+        const int offsetMinutes = -300;
+        var userToday = DateOnly.FromDateTime(DateTime.UtcNow.AddMinutes(offsetMinutes));
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "Task for today",
+            JournalDate = userToday,
+            TimezoneOffsetMinutes = offsetMinutes
+        };
+
+        var createdTask = new TaskItem { Id = 55, Title = "Task for today", Status = Status.Todo };
+        var entry = new JournalEntry { Id = 8, Date = userToday, Title = "Journal" };
+
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(55)).ReturnsAsync(createdTask);
+        _mockJournalRepo.Setup(r => r.GetByDateAsync(userToday)).ReturnsAsync(entry);
+        _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, createdTask.Id, offsetMinutes))
+            .ReturnsAsync(AddTodoResult.Success);
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id, offsetMinutes), Times.Once);
+    }
+
+    [Fact]
     public async Task Create_ShouldReturnUnprocessableEntity_WhenParentWouldExceedOneLevelDepth()
     {
         var createDto = new CreateTaskItemDto

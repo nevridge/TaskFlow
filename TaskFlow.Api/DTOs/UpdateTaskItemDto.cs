@@ -12,4 +12,5 @@ public class UpdateTaskItemDto
     public DateTime? DueDate { get; set; }
     public int? ParentTaskItemId { get; set; }
     public bool AutoCompleteParentWhenChildrenDone { get; set; }
+    public int? TimezoneOffsetMinutes { get; set; }
 }

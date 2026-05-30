@@ -1,10 +1,13 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TaskForm } from './TaskForm'
-import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
-function renderForm(task?: TaskItemResponseDto, onSubmit = vi.fn(), onCancel = vi.fn()) {
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+function renderForm(task?: Parameters<typeof TaskForm>[0]['task'], onSubmit = vi.fn(), onCancel = vi.fn()) {
   return render(<TaskForm task={task} onSubmit={onSubmit} onCancel={onCancel} />)
 }
 
@@ -15,7 +18,7 @@ describe('TaskForm', () => {
   })
 
   it('pre-fills fields when editing an existing task', () => {
-    const task: TaskItemResponseDto = {
+    const task = {
       id: 1, title: 'Existing task', description: 'Some desc', status: 'todo', priority: 'medium', isComplete: false,
     }
     renderForm(task)

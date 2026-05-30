@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetNoteV1Data, GetNoteV1Responses, GetTaskV1Data, GetTaskV1Responses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
+import type { DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetTaskV1Data, GetTaskV1Responses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,91 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: Record<string, unknown>;
 };
+
+export const getApiV1JournalEntries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1JournalEntriesData, ThrowOnError>) => (options?.client ?? client).get<GetApiV1JournalEntriesResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries', ...options });
+
+export const postApiV1JournalEntries = <ThrowOnError extends boolean = false>(options: Options<PostApiV1JournalEntriesData, ThrowOnError>) => (options.client ?? client).post<PostApiV1JournalEntriesResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1JournalEntriesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1JournalEntriesByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteApiV1JournalEntriesByIdResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{id}', ...options });
+
+export const getJournalEntryV1 = <ThrowOnError extends boolean = false>(options: Options<GetJournalEntryV1Data, ThrowOnError>) => (options.client ?? client).get<GetJournalEntryV1Responses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{id}', ...options });
+
+export const putApiV1JournalEntriesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1JournalEntriesByIdData, ThrowOnError>) => (options.client ?? client).put<PutApiV1JournalEntriesByIdResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getApiV1JournalEntriesByEntryIdLogs = <ThrowOnError extends boolean = false>(options: Options<GetApiV1JournalEntriesByEntryIdLogsData, ThrowOnError>) => (options.client ?? client).get<GetApiV1JournalEntriesByEntryIdLogsResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/logs', ...options });
+
+export const postApiV1JournalEntriesByEntryIdLogs = <ThrowOnError extends boolean = false>(options: Options<PostApiV1JournalEntriesByEntryIdLogsData, ThrowOnError>) => (options.client ?? client).post<PostApiV1JournalEntriesByEntryIdLogsResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{entryId}/logs',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1JournalEntriesByEntryIdLogsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1JournalEntriesByEntryIdLogsByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/logs/{id}', ...options });
+
+export const getJournalLogEntryV1 = <ThrowOnError extends boolean = false>(options: Options<GetJournalLogEntryV1Data, ThrowOnError>) => (options.client ?? client).get<GetJournalLogEntryV1Responses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/logs/{id}', ...options });
+
+export const putApiV1JournalEntriesByEntryIdLogsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1JournalEntriesByEntryIdLogsByIdData, ThrowOnError>) => (options.client ?? client).put<PutApiV1JournalEntriesByEntryIdLogsByIdResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{entryId}/logs/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getApiV1JournalEntriesByEntryIdNotes = <ThrowOnError extends boolean = false>(options: Options<GetApiV1JournalEntriesByEntryIdNotesData, ThrowOnError>) => (options.client ?? client).get<GetApiV1JournalEntriesByEntryIdNotesResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/notes', ...options });
+
+export const postApiV1JournalEntriesByEntryIdNotes = <ThrowOnError extends boolean = false>(options: Options<PostApiV1JournalEntriesByEntryIdNotesData, ThrowOnError>) => (options.client ?? client).post<PostApiV1JournalEntriesByEntryIdNotesResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{entryId}/notes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1JournalEntriesByEntryIdNotesById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1JournalEntriesByEntryIdNotesByIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/notes/{id}', ...options });
+
+export const getJournalNoteV1 = <ThrowOnError extends boolean = false>(options: Options<GetJournalNoteV1Data, ThrowOnError>) => (options.client ?? client).get<GetJournalNoteV1Responses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/notes/{id}', ...options });
+
+export const putApiV1JournalEntriesByEntryIdNotesById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1JournalEntriesByEntryIdNotesByIdData, ThrowOnError>) => (options.client ?? client).put<PutApiV1JournalEntriesByEntryIdNotesByIdResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{entryId}/notes/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const getApiV1JournalEntriesByEntryIdTodos = <ThrowOnError extends boolean = false>(options: Options<GetApiV1JournalEntriesByEntryIdTodosData, ThrowOnError>) => (options.client ?? client).get<GetApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/todos', ...options });
+
+export const postApiV1JournalEntriesByEntryIdTodos = <ThrowOnError extends boolean = false>(options: Options<PostApiV1JournalEntriesByEntryIdTodosData, ThrowOnError>) => (options.client ?? client).post<PostApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError>({
+    url: '/api/v1/JournalEntries/{entryId}/todos',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1JournalEntriesByEntryIdTodosByTaskItemId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, ThrowOnError>) => (options.client ?? client).delete<DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}', ...options });
 
 export const getApiV1TaskItemsByTaskIdNotes = <ThrowOnError extends boolean = false>(options: Options<GetApiV1TaskItemsByTaskIdNotesData, ThrowOnError>) => (options.client ?? client).get<GetApiV1TaskItemsByTaskIdNotesResponses, unknown, ThrowOnError>({ url: '/api/v1/TaskItems/{taskId}/notes', ...options });
 
@@ -65,3 +150,5 @@ export const putApiV1TaskItemsById = <ThrowOnError extends boolean = false>(opti
         ...options.headers
     }
 });
+
+export const getApiV1TaskItemsByIdHistory = <ThrowOnError extends boolean = false>(options: Options<GetApiV1TaskItemsByIdHistoryData, ThrowOnError>) => (options.client ?? client).get<GetApiV1TaskItemsByIdHistoryResponses, unknown, ThrowOnError>({ url: '/api/v1/TaskItems/{id}/history', ...options });

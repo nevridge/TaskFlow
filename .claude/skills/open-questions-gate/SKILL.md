@@ -72,14 +72,17 @@ If the user selects "Accept agent default for this question": record the agent's
 
 If the user selects "Tell me more before I decide": explain the tradeoff in your next message (cite codebase implications if relevant), then re-present the same `AskUserQuestion` with its original options. Do not advance to the next question until a non-"Tell me more" option is selected.
 
-Once the user selects a final answer, record it and advance to the next question.
+Once the user selects a final answer, record it — noting whether it was an explicit choice or "Accept agent default for this question" — and advance to the next question.
 
-After all [N] questions are resolved, compile the resolution summary:
+After all [N] questions are resolved:
+
+- **If ALL answers were "Accept agent default for this question":** apply the **Accept Defaults Rule** (see Rules section) — exit this gate without revision.
+- **If ANY answer was an explicit choice:** compile the resolution summary including only the explicit answers (do not include questions left at agent default — the agent's output already reflects those choices):
 
 ```
 Resolved Answers:
-1. [Brief question label]: [User's answer]
-2. [Brief question label]: [User's answer]
+1. [Brief question label]: [User's explicit answer]
+2. [Brief question label]: [User's explicit answer]
 ```
 
 Proceed to Step D. (There is no Step C — it was consolidated into this step.)
@@ -165,9 +168,11 @@ AskUserQuestion: "Accept all agent defaults" or "Resolve them one by one"
 For each question:
   AskUserQuestion with agent options (or fallback: Yes/No/Tell me more/Accept default)
   "Tell me more" → explain tradeoff → re-present same question
-  Final answer recorded → advance to next question
+  Final answer recorded (explicit or default) → advance to next question
         ↓
-All questions resolved → compile Resolved Answers summary
+All questions resolved:
+  All answers = agent default → Apply Accept Defaults Rule → exit gate (no revision)
+  Any answer = explicit       → compile explicit Resolved Answers summary
         ↓
 SendMessage → same agent → revised output
         ↓
@@ -183,12 +188,12 @@ User approves revised output?
 
 ### Accept Defaults Rule
 
-When the user selects "Accept all agent defaults" (Step B up-front escape) or "Accept agent default for this question" (per-question option): announce "Accepting agent's stated defaults. Proceeding without revision." Do not send answers back to the agent. Exit this gate and continue the pipeline using the original unrevised output.
+When the user selects "Accept all agent defaults" (Step B up-front escape), or when ALL per-question answers resolve as "Accept agent default for this question" (every question resolved via the default option with no explicit choices made): announce "Accepting agent's stated defaults. Proceeding without revision." Do not send answers back to the agent. Exit this gate and continue the pipeline using the original unrevised output.
 
 **Early-stage risk:** When accepting defaults for a `codebase-researcher` or `spec-writer` output, display this warning before exiting the gate: "Warning: defaults accepted at this stage propagate to the backend-builder, frontend-builder, and implementation-validator. If an assumption is wrong, it may not surface until the final validation stage." Then exit normally. Do not block — this is informational only.
 
 - **Never skip this gate when open questions exist.** Unresolved questions passed to the next stage cause spec drift and implementation surprises.
-- **Never fabricate answers on the user's behalf.** Only the user's stated decisions go back to the agent. If the user accepts defaults instead of answering, pass only what the agent already stated as its own default.
+- **Never fabricate answers on the user's behalf.** Only explicit user decisions go back to the agent. Questions where the user accepted the agent default are not included in the resolution summary — the agent's output already reflects those choices.
 - **Always use `SendMessage`, not a new agent launch.** The existing agent retains its full output in context; a new agent would start cold.
 - **Pass user answers verbatim.** Do not paraphrase in ways that alter meaning or intent.
 - **One question at a time in discussion mode.** Keep focused — this is a decision gate, not a design session.

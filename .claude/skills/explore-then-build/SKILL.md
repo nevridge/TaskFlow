@@ -179,7 +179,7 @@ Announce: "Step 5.5/8 — Verifying backend builds and tests pass before proceed
 Run the backend build:
 
 ```bash
-dotnet build TaskFlow.Api --no-incremental
+dotnet build
 ```
 
 If the build fails: stop the pipeline. Display the full build error output. Ask using `AskUserQuestion`:
@@ -199,7 +199,7 @@ If "Abort the pipeline": stop immediately.
 If the build succeeds, run the tests:
 
 ```bash
-dotnet test TaskFlow.Api.Tests --no-build
+dotnet test --no-build
 ```
 
 If tests fail: stop the pipeline, display the test failure output, and present the same three options above (substituting test failure output for build errors).

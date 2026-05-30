@@ -3,9 +3,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { TaskListRow } from './TaskListRow'
-import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
-const baseTask: TaskItemResponseDto = {
+type TaskProp = Parameters<typeof TaskListRow>[0]['task']
+type TaskHandler = Parameters<typeof TaskListRow>[0]['onEdit']
+
+const baseTask: TaskProp = {
   id: 42,
   title: 'Fix login bug',
   description: 'Users cannot log in',
@@ -15,19 +17,17 @@ const baseTask: TaskItemResponseDto = {
   isComplete: false,
 }
 
-type TaskHandler = (task: TaskItemResponseDto) => void
-
 function renderRow(
-  task: TaskItemResponseDto = baseTask,
+  task: TaskProp = baseTask,
   overrides: {
     onEdit?: TaskHandler
     onDelete?: TaskHandler
     onStatusCycle?: TaskHandler
   } = {},
 ) {
-  const onEdit = overrides.onEdit ?? vi.fn<TaskHandler>()
-  const onDelete = overrides.onDelete ?? vi.fn<TaskHandler>()
-  const onStatusCycle = overrides.onStatusCycle ?? vi.fn<TaskHandler>()
+  const onEdit = overrides.onEdit ?? vi.fn()
+  const onDelete = overrides.onDelete ?? vi.fn()
+  const onStatusCycle = overrides.onStatusCycle ?? vi.fn()
   return render(
     <MemoryRouter>
       <table>

@@ -5,6 +5,7 @@ import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
 type TaskRowModel = TaskItemResponseDto & {
   currentJournalDate?: string | null
+  currentJournalEntryId?: number | null
   moveCount?: number
   daysTagged?: number
   parentTaskItemId?: number | null

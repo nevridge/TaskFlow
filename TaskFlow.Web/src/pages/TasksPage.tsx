@@ -120,7 +120,7 @@ export function TasksPage() {
   const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
   function compareWithinGroup(a: TaskListModel, b: TaskListModel): number {
-    let cmp = 0
+    let cmp: number
     const aDue = a.dueDate ?? ''
     const bDue = b.dueDate ?? ''
 

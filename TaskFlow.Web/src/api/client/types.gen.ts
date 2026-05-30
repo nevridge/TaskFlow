@@ -4,6 +4,25 @@ export type ClientOptions = {
     baseUrl: 'http://localhost:8080/' | (string & {});
 };
 
+export type AddJournalTodoDto = {
+    taskItemId?: number | string;
+    timezoneOffsetMinutes?: null | number | string;
+};
+
+export type CreateJournalEntryDto = {
+    title: string;
+    summary?: null | string;
+    date?: string;
+};
+
+export type CreateJournalLogEntryDto = {
+    content: string;
+};
+
+export type CreateJournalNoteDto = {
+    content: string;
+};
+
 export type CreateNoteDto = {
     content: string;
 };
@@ -15,9 +34,36 @@ export type CreateTaskItemDto = {
     isComplete?: boolean;
     priority?: Priority;
     dueDate?: null | string;
-    journalDate?: string;
-    parentTaskItemId?: number;
-    timezoneOffsetMinutes?: number;
+    journalDate?: null | string;
+    parentTaskItemId?: null | number | string;
+    timezoneOffsetMinutes?: null | number | string;
+};
+
+export type JournalEntryResponseDto = {
+    id?: number | string;
+    title: string;
+    summary?: null | string;
+    date?: string;
+    createdAt?: string;
+    updatedAt?: null | string;
+    todoTaskItemIds?: Array<number | string>;
+    logEntries?: Array<JournalLogEntryResponseDto>;
+};
+
+export type JournalLogEntryResponseDto = {
+    id?: number | string;
+    content: string;
+    journalEntryId?: number | string;
+    createdAt?: string;
+    updatedAt?: null | string;
+};
+
+export type JournalNoteResponseDto = {
+    id?: number | string;
+    content: string;
+    journalEntryId?: number | string;
+    createdAt?: string;
+    updatedAt?: null | string;
 };
 
 export type NoteResponseDto = {
@@ -32,6 +78,18 @@ export type Priority = 'low' | 'medium' | 'high';
 
 export type Status = 'draft' | 'todo' | 'completed';
 
+export type TaskItemEventResponseDto = {
+    id?: number | string;
+    taskItemId?: number | string;
+    eventType?: string;
+    occurredAtUtc?: string;
+    fromJournalEntryId?: null | number | string;
+    toJournalEntryId?: null | number | string;
+    fromJournalDate?: null | string;
+    toJournalDate?: null | string;
+    changeSummary?: null | string;
+};
+
 export type TaskItemResponseDto = {
     id?: number | string;
     title: string;
@@ -40,6 +98,29 @@ export type TaskItemResponseDto = {
     dueDate?: null | string;
     status?: string;
     priority?: string;
+    parentTaskItemId?: null | number | string;
+    currentJournalEntryId?: null | number | string;
+    firstTaggedDate?: null | string;
+    lastMovedDate?: null | string;
+    isScheduledFuture?: boolean;
+    childCount?: number | string;
+    childTaskCount?: number | string;
+    currentJournalDate?: null | string;
+    moveCount?: number | string;
+    daysTagged?: number | string;
+};
+
+export type UpdateJournalEntryDto = {
+    title: string;
+    summary?: null | string;
+};
+
+export type UpdateJournalLogEntryDto = {
+    content: string;
+};
+
+export type UpdateJournalNoteDto = {
+    content: string;
 };
 
 export type UpdateNoteDto = {
@@ -53,6 +134,326 @@ export type UpdateTaskItemDto = {
     isComplete?: boolean;
     priority?: null | Priority;
     dueDate?: null | string;
+    parentTaskItemId?: null | number | string;
+    autoCompleteParentWhenChildrenDone?: boolean;
+    timezoneOffsetMinutes?: null | number | string;
+};
+
+export type GetApiV1JournalEntriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/JournalEntries';
+};
+
+export type GetApiV1JournalEntriesResponses = {
+    /**
+     * OK
+     */
+    200: Array<JournalEntryResponseDto>;
+};
+
+export type GetApiV1JournalEntriesResponse = GetApiV1JournalEntriesResponses[keyof GetApiV1JournalEntriesResponses];
+
+export type PostApiV1JournalEntriesData = {
+    body: CreateJournalEntryDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/JournalEntries';
+};
+
+export type PostApiV1JournalEntriesResponses = {
+    /**
+     * OK
+     */
+    200: JournalEntryResponseDto;
+};
+
+export type PostApiV1JournalEntriesResponse = PostApiV1JournalEntriesResponses[keyof PostApiV1JournalEntriesResponses];
+
+export type DeleteApiV1JournalEntriesByIdData = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{id}';
+};
+
+export type DeleteApiV1JournalEntriesByIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type GetJournalEntryV1Data = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{id}';
+};
+
+export type GetJournalEntryV1Responses = {
+    /**
+     * OK
+     */
+    200: JournalEntryResponseDto;
+};
+
+export type GetJournalEntryV1Response = GetJournalEntryV1Responses[keyof GetJournalEntryV1Responses];
+
+export type PutApiV1JournalEntriesByIdData = {
+    body: UpdateJournalEntryDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{id}';
+};
+
+export type PutApiV1JournalEntriesByIdResponses = {
+    /**
+     * OK
+     */
+    200: JournalEntryResponseDto;
+};
+
+export type PutApiV1JournalEntriesByIdResponse = PutApiV1JournalEntriesByIdResponses[keyof PutApiV1JournalEntriesByIdResponses];
+
+export type GetApiV1JournalEntriesByEntryIdLogsData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/logs';
+};
+
+export type GetApiV1JournalEntriesByEntryIdLogsResponses = {
+    /**
+     * OK
+     */
+    200: Array<JournalLogEntryResponseDto>;
+};
+
+export type GetApiV1JournalEntriesByEntryIdLogsResponse = GetApiV1JournalEntriesByEntryIdLogsResponses[keyof GetApiV1JournalEntriesByEntryIdLogsResponses];
+
+export type PostApiV1JournalEntriesByEntryIdLogsData = {
+    body: CreateJournalLogEntryDto;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/logs';
+};
+
+export type PostApiV1JournalEntriesByEntryIdLogsResponses = {
+    /**
+     * OK
+     */
+    200: JournalLogEntryResponseDto;
+};
+
+export type PostApiV1JournalEntriesByEntryIdLogsResponse = PostApiV1JournalEntriesByEntryIdLogsResponses[keyof PostApiV1JournalEntriesByEntryIdLogsResponses];
+
+export type DeleteApiV1JournalEntriesByEntryIdLogsByIdData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/logs/{id}';
+};
+
+export type DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type GetJournalLogEntryV1Data = {
+    body?: never;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/logs/{id}';
+};
+
+export type GetJournalLogEntryV1Responses = {
+    /**
+     * OK
+     */
+    200: JournalLogEntryResponseDto;
+};
+
+export type GetJournalLogEntryV1Response = GetJournalLogEntryV1Responses[keyof GetJournalLogEntryV1Responses];
+
+export type PutApiV1JournalEntriesByEntryIdLogsByIdData = {
+    body: UpdateJournalLogEntryDto;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/logs/{id}';
+};
+
+export type PutApiV1JournalEntriesByEntryIdLogsByIdResponses = {
+    /**
+     * OK
+     */
+    200: JournalLogEntryResponseDto;
+};
+
+export type PutApiV1JournalEntriesByEntryIdLogsByIdResponse = PutApiV1JournalEntriesByEntryIdLogsByIdResponses[keyof PutApiV1JournalEntriesByEntryIdLogsByIdResponses];
+
+export type GetApiV1JournalEntriesByEntryIdNotesData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/notes';
+};
+
+export type GetApiV1JournalEntriesByEntryIdNotesResponses = {
+    /**
+     * OK
+     */
+    200: Array<JournalNoteResponseDto>;
+};
+
+export type GetApiV1JournalEntriesByEntryIdNotesResponse = GetApiV1JournalEntriesByEntryIdNotesResponses[keyof GetApiV1JournalEntriesByEntryIdNotesResponses];
+
+export type PostApiV1JournalEntriesByEntryIdNotesData = {
+    body: CreateJournalNoteDto;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/notes';
+};
+
+export type PostApiV1JournalEntriesByEntryIdNotesResponses = {
+    /**
+     * OK
+     */
+    200: JournalNoteResponseDto;
+};
+
+export type PostApiV1JournalEntriesByEntryIdNotesResponse = PostApiV1JournalEntriesByEntryIdNotesResponses[keyof PostApiV1JournalEntriesByEntryIdNotesResponses];
+
+export type DeleteApiV1JournalEntriesByEntryIdNotesByIdData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/notes/{id}';
+};
+
+export type DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type GetJournalNoteV1Data = {
+    body?: never;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/notes/{id}';
+};
+
+export type GetJournalNoteV1Responses = {
+    /**
+     * OK
+     */
+    200: JournalNoteResponseDto;
+};
+
+export type GetJournalNoteV1Response = GetJournalNoteV1Responses[keyof GetJournalNoteV1Responses];
+
+export type PutApiV1JournalEntriesByEntryIdNotesByIdData = {
+    body: UpdateJournalNoteDto;
+    path: {
+        entryId: number | string;
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/notes/{id}';
+};
+
+export type PutApiV1JournalEntriesByEntryIdNotesByIdResponses = {
+    /**
+     * OK
+     */
+    200: JournalNoteResponseDto;
+};
+
+export type PutApiV1JournalEntriesByEntryIdNotesByIdResponse = PutApiV1JournalEntriesByEntryIdNotesByIdResponses[keyof PutApiV1JournalEntriesByEntryIdNotesByIdResponses];
+
+export type GetApiV1JournalEntriesByEntryIdTodosData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/todos';
+};
+
+export type GetApiV1JournalEntriesByEntryIdTodosResponses = {
+    /**
+     * OK
+     */
+    200: Array<TaskItemResponseDto>;
+};
+
+export type GetApiV1JournalEntriesByEntryIdTodosResponse = GetApiV1JournalEntriesByEntryIdTodosResponses[keyof GetApiV1JournalEntriesByEntryIdTodosResponses];
+
+export type PostApiV1JournalEntriesByEntryIdTodosData = {
+    body: AddJournalTodoDto;
+    path: {
+        entryId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/todos';
+};
+
+export type PostApiV1JournalEntriesByEntryIdTodosResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData = {
+    body?: never;
+    path: {
+        entryId: number | string;
+        taskItemId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}';
+};
+
+export type DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
 };
 
 export type GetApiV1TaskItemsByTaskIdNotesData = {
@@ -229,3 +630,21 @@ export type PutApiV1TaskItemsByIdResponses = {
 };
 
 export type PutApiV1TaskItemsByIdResponse = PutApiV1TaskItemsByIdResponses[keyof PutApiV1TaskItemsByIdResponses];
+
+export type GetApiV1TaskItemsByIdHistoryData = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/TaskItems/{id}/history';
+};
+
+export type GetApiV1TaskItemsByIdHistoryResponses = {
+    /**
+     * OK
+     */
+    200: Array<TaskItemEventResponseDto>;
+};
+
+export type GetApiV1TaskItemsByIdHistoryResponse = GetApiV1TaskItemsByIdHistoryResponses[keyof GetApiV1TaskItemsByIdHistoryResponses];

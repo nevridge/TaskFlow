@@ -109,6 +109,10 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
           />
           <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} />
         </div>
+        {/* Hidden submit button so Enter in the log text input submits the form
+            even though the TaskTypeahead adds a second <input> to the form.
+            Without this, the HTML implicit-submission rule blocks Enter. */}
+        <button type="submit" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
       </form>
     </section>
   )

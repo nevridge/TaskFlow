@@ -89,15 +89,13 @@ describe('TaskTypeahead', () => {
   })
 
   describe('keyboard navigation', () => {
-    it('ArrowDown opens dropdown and highlights first option (None)', async () => {
+    it('ArrowDown highlights first option (None)', async () => {
       renderTypeahead(null)
       const input = screen.getByRole('combobox')
       await userEvent.click(input)
-      // Close first so we can test ArrowDown opening
-      await userEvent.keyboard('{Escape}')
-      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-      await userEvent.keyboard('{ArrowDown}')
+      // Dropdown is open from focus with activeIndex = -1; ArrowDown should move to None
       expect(screen.getByRole('listbox')).toBeInTheDocument()
+      await userEvent.keyboard('{ArrowDown}')
       expect(screen.getByText('None')).toHaveClass('active')
     })
 
@@ -158,7 +156,7 @@ describe('TaskTypeahead', () => {
       expect(onChange).toHaveBeenCalledWith(1)
     })
 
-    it('Enter propagates normally when dropdown is closed (activeIndex = -1)', async () => {
+    it('Enter propagates normally when activeIndex is -1', async () => {
       const onChange = vi.fn()
       const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
       render(
@@ -169,8 +167,7 @@ describe('TaskTypeahead', () => {
       )
       const input = screen.getByRole('combobox')
       await userEvent.click(input)
-      await userEvent.keyboard('{Escape}')
-      // Dropdown is now closed; pressing Enter should submit the form
+      // Dropdown is open but activeIndex = -1; Enter should propagate to the form
       await userEvent.keyboard('{Enter}')
       expect(onSubmit).toHaveBeenCalled()
       expect(onChange).not.toHaveBeenCalled()

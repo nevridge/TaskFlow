@@ -14,20 +14,20 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
         await _context.JournalEntries
             .Include(e => e.Todos)
-            .Include(e => e.LogEntries)
+            .Include(e => e.LogEntries).ThenInclude(l => l.TaskItem)
             .OrderByDescending(e => e.Date)
             .ToListAsync();
 
     public async Task<JournalEntry?> GetByIdAsync(int id) =>
         await _context.JournalEntries
             .Include(e => e.Todos)
-            .Include(e => e.LogEntries)
+            .Include(e => e.LogEntries).ThenInclude(l => l.TaskItem)
             .FirstOrDefaultAsync(e => e.Id == id);
 
     public async Task<JournalEntry?> GetByDateAsync(DateOnly date) =>
         await _context.JournalEntries
             .Include(e => e.Todos)
-            .Include(e => e.LogEntries)
+            .Include(e => e.LogEntries).ThenInclude(l => l.TaskItem)
             .FirstOrDefaultAsync(e => e.Date == date);
 
     public async Task<JournalEntry> AddAsync(JournalEntry entry)

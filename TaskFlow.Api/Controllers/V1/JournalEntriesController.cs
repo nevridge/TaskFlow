@@ -129,6 +129,9 @@ public class JournalEntriesController(IJournalEntryRepository journalRepo, IVali
             JournalEntryId = l.JournalEntryId,
             CreatedAt = l.CreatedAt,
             UpdatedAt = l.UpdatedAt,
+            TaskItemId = l.TaskItemId,
+            LinkedTaskTitle = l.TaskItem?.Title ?? l.LinkedTaskTitleSnapshot,
+            LinkedTaskDeleted = l.TaskItemId is null && l.LinkedTaskTitleSnapshot is not null,
         }),
     };
 }

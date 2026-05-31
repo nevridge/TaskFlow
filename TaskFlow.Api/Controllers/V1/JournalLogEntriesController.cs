@@ -74,16 +74,10 @@ public class JournalLogEntriesController(
             return BadRequest(validation.Errors);
         }
 
-        if (dto.TaskItemId.HasValue)
+        var linkError = await ApplyTaskLinkAsync(log, dto.TaskItemId);
+        if (linkError is not null)
         {
-            var task = await _taskRepo.GetByIdAsync(dto.TaskItemId.Value);
-            if (task is null)
-            {
-                return BadRequest($"TaskItem with id {dto.TaskItemId.Value} was not found.");
-            }
-
-            log.TaskItemId = task.Id;
-            log.LinkedTaskTitleSnapshot = task.Title;
+            return linkError;
         }
 
         var created = await _logRepo.AddAsync(log);
@@ -107,29 +101,19 @@ public class JournalLogEntriesController(
         }
 
         existing.Content = dto.Content;
-        existing.TaskItemId = dto.TaskItemId;
 
-        var validation = await _validator.ValidateAsync(existing);
+        // Validate on a non-tracked draft so the change tracker stays clean if validation fails.
+        var draft = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId, TaskItemId = dto.TaskItemId };
+        var validation = await _validator.ValidateAsync(draft);
         if (!validation.IsValid)
         {
             return BadRequest(validation.Errors);
         }
 
-        if (dto.TaskItemId.HasValue)
+        var linkError = await ApplyTaskLinkAsync(existing, dto.TaskItemId);
+        if (linkError is not null)
         {
-            var task = await _taskRepo.GetByIdAsync(dto.TaskItemId.Value);
-            if (task is null)
-            {
-                return BadRequest($"TaskItem with id {dto.TaskItemId.Value} was not found.");
-            }
-
-            existing.TaskItemId = task.Id;
-            existing.LinkedTaskTitleSnapshot = task.Title;
-        }
-        else
-        {
-            existing.TaskItemId = null;
-            existing.LinkedTaskTitleSnapshot = null;
+            return linkError;
         }
 
         await _logRepo.UpdateAsync(existing);
@@ -154,6 +138,26 @@ public class JournalLogEntriesController(
 
         await _logRepo.DeleteAsync(entryId, id);
         return NoContent();
+    }
+
+    private async Task<ActionResult?> ApplyTaskLinkAsync(JournalLogEntry entity, int? taskItemId)
+    {
+        if (taskItemId.HasValue)
+        {
+            var task = await _taskRepo.GetByIdAsync(taskItemId.Value);
+            if (task is null)
+            {
+                return BadRequest($"TaskItem with id {taskItemId.Value} was not found.");
+            }
+            entity.TaskItemId = task.Id;
+            entity.LinkedTaskTitleSnapshot = task.Title;
+        }
+        else
+        {
+            entity.TaskItemId = null;
+            entity.LinkedTaskTitleSnapshot = null;
+        }
+        return null;
     }
 
     private static JournalLogEntryResponseDto ToDto(JournalLogEntry l) => new()

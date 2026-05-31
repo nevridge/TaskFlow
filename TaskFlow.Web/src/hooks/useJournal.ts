@@ -198,6 +198,7 @@ export function useUpdateLogEntryMutation(entryId: number) {
     mutationFn: ({ id, content, taskItemId }: { id: number; content: string; taskItemId?: number | null }) =>
       updateLogEntry(entryId, id, content, taskItemId),
     onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+    onError: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
   })
 }
 

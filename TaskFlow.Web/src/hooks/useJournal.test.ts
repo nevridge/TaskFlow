@@ -281,7 +281,7 @@ describe('useUpdateLogEntryMutation', () => {
 
   it('calls updateLogEntry with entryId, logId, content, and taskItemId', async () => {
     const mockUpdated = { id: 5, content: 'updated work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false, taskItemId: 7, linkedTaskTitle: 'Some Task' }
-    vi.mocked(journalApi.updateLogEntry).mockResolvedValue(mockUpdated)
+    vi.mocked(journalApi.updateLogEntry).mockResolvedValue({ data: mockUpdated } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper: makeWrapper() })
     act(() => { result.current.mutate({ id: 5, content: 'updated work', taskItemId: 7 }) })
@@ -291,7 +291,7 @@ describe('useUpdateLogEntryMutation', () => {
 
   it('invalidates journalKeys.all on success', async () => {
     const mockUpdated = { id: 5, content: 'updated work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false }
-    vi.mocked(journalApi.updateLogEntry).mockResolvedValue(mockUpdated)
+    vi.mocked(journalApi.updateLogEntry).mockResolvedValue({ data: mockUpdated } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')

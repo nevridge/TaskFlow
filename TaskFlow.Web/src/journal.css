@@ -631,6 +631,10 @@
 .task-typeahead-option:hover {
   background: var(--hover-soft);
 }
+.task-typeahead-option.active {
+  background: var(--color-accent, #6b4fbb);
+  color: white;
+}
 .task-typeahead-option[aria-selected="true"] {
   background: color-mix(in oklab, var(--accent) 10%, transparent);
   color: var(--accent);

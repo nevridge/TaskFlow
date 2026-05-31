@@ -87,4 +87,105 @@ describe('TaskTypeahead', () => {
     await userEvent.type(input, 'zzznomatch')
     expect(screen.getByText('No matching tasks')).toBeInTheDocument()
   })
+
+  describe('keyboard navigation', () => {
+    it('ArrowDown opens dropdown and highlights first option (None)', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      // Close first so we can test ArrowDown opening
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      await userEvent.keyboard('{ArrowDown}')
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(screen.getByText('None')).toHaveClass('active')
+    })
+
+    it('ArrowDown moves highlight through options', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.keyboard('{ArrowDown}')
+      // activeIndex = 0 → "None" is active
+      expect(screen.getByText('None')).toHaveClass('active')
+      await userEvent.keyboard('{ArrowDown}')
+      // activeIndex = 1 → first task option is active
+      const options = screen.getAllByRole('option')
+      expect(options[1]).toHaveClass('active')
+    })
+
+    it('ArrowUp does not go below index 0', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.keyboard('{ArrowDown}')
+      // activeIndex = 0
+      await userEvent.keyboard('{ArrowUp}')
+      // should stay at 0
+      expect(screen.getByText('None')).toHaveClass('active')
+    })
+
+    it('Escape closes dropdown and clears active index', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    it('Enter selects None when activeIndex is 0', async () => {
+      const onChange = vi.fn()
+      render(<TaskTypeahead value={1} onChange={onChange} />)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.keyboard('{ArrowDown}')
+      // activeIndex = 0 → None
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).toHaveBeenCalledWith(null)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    it('Enter selects highlighted task option', async () => {
+      const onChange = vi.fn()
+      render(<TaskTypeahead value={null} onChange={onChange} />)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      // ArrowDown x2: index 0 = None, index 1 = Fix login bug
+      await userEvent.keyboard('{ArrowDown}')
+      await userEvent.keyboard('{ArrowDown}')
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).toHaveBeenCalledWith(1)
+    })
+
+    it('Enter propagates normally when dropdown is closed (activeIndex = -1)', async () => {
+      const onChange = vi.fn()
+      const onSubmit = vi.fn((e: React.FormEvent) => e.preventDefault())
+      render(
+        <form onSubmit={onSubmit}>
+          <TaskTypeahead value={null} onChange={onChange} />
+          <button type="submit">Submit</button>
+        </form>
+      )
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.keyboard('{Escape}')
+      // Dropdown is now closed; pressing Enter should submit the form
+      await userEvent.keyboard('{Enter}')
+      expect(onSubmit).toHaveBeenCalled()
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('filtering resets activeIndex to -1', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.keyboard('{ArrowDown}')
+      // activeIndex = 0, None is active
+      expect(screen.getByText('None')).toHaveClass('active')
+      // Now type to filter — activeIndex should reset
+      await userEvent.type(input, 'test')
+      expect(screen.getByText('None')).not.toHaveClass('active')
+    })
+  })
 })

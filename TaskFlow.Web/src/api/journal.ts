@@ -6,6 +6,9 @@ export type JournalLogEntryResponseDto = {
   journalEntryId: number
   createdAt: string
   updatedAt?: string | null
+  taskItemId?: number | null
+  linkedTaskTitle?: string | null
+  linkedTaskDeleted: boolean
 }
 
 export type JournalEntryResponseDto = {
@@ -70,10 +73,25 @@ export const removeJournalTodo = (entryId: number, taskItemId: number) =>
     { url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}', path: { entryId, taskItemId } },
   )
 
-export const createLogEntry = (entryId: number, content: string) =>
+export const createLogEntry = (entryId: number, content: string, taskItemId?: number | null) =>
   client.post<{ 201: JournalLogEntryResponseDto }, unknown, true>(
-    { url: '/api/v1/JournalEntries/{entryId}/logs', path: { entryId }, body: { content }, headers: J },
+    { url: '/api/v1/JournalEntries/{entryId}/logs', path: { entryId }, body: { content, taskItemId }, headers: J },
   )
+
+export async function updateLogEntry(
+  entryId: number,
+  logId: number,
+  content: string,
+  taskItemId?: number | null
+): Promise<JournalLogEntryResponseDto> {
+  const response = await client.put<{ 200: JournalLogEntryResponseDto }, unknown, true>({
+    url: '/api/v1/JournalEntries/{entryId}/logs/{id}',
+    path: { entryId, id: logId },
+    body: { content, taskItemId },
+    headers: J,
+  })
+  return response.data as JournalLogEntryResponseDto
+}
 
 export const deleteLogEntry = (entryId: number, logId: number) =>
   client.delete<{ 204: unknown }, unknown, true>(

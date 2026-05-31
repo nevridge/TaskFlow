@@ -16,6 +16,7 @@ import {
   useRemoveTodoMutation,
   useAddLogEntryMutation,
   useDeleteLogEntryMutation,
+  useUpdateLogEntryMutation,
   openTodoCount,
   yesterdayOf,
 } from './useJournal'
@@ -27,6 +28,7 @@ vi.mock('@/api/journal', () => ({
   removeJournalTodo: vi.fn(),
   createLogEntry: vi.fn(),
   deleteLogEntry: vi.fn(),
+  updateLogEntry: vi.fn(),
   getJournalNotes: vi.fn(),
   createJournalNote: vi.fn(),
   updateJournalNote: vi.fn(),
@@ -247,12 +249,49 @@ describe('useAddLogEntryMutation', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('calls createLogEntry with entryId and content', async () => {
-    vi.mocked(journalApi.createLogEntry).mockResolvedValue({ data: { id: 1, content: 'did work', journalEntryId: 10, createdAt: '' }, response: new Response() } as never)
+    vi.mocked(journalApi.createLogEntry).mockResolvedValue({ data: { id: 1, content: 'did work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useAddLogEntryMutation(10), { wrapper: makeWrapper() })
-    act(() => { result.current.mutate('did work') })
+    act(() => { result.current.mutate({ content: 'did work' }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(journalApi.createLogEntry).toHaveBeenCalledWith(10, 'did work')
+    expect(journalApi.createLogEntry).toHaveBeenCalledWith(10, 'did work', undefined)
+  })
+
+  it('passes taskItemId to createLogEntry when provided', async () => {
+    vi.mocked(journalApi.createLogEntry).mockResolvedValue({ data: { id: 2, content: 'linked work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useAddLogEntryMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ content: 'linked work', taskItemId: 42 }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(journalApi.createLogEntry).toHaveBeenCalledWith(10, 'linked work', 42)
+  })
+})
+
+describe('useUpdateLogEntryMutation', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('calls updateLogEntry with entryId, logId, content, and taskItemId', async () => {
+    const mockUpdated = { id: 5, content: 'updated work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false, taskItemId: 7, linkedTaskTitle: 'Some Task' }
+    vi.mocked(journalApi.updateLogEntry).mockResolvedValue(mockUpdated)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ id: 5, content: 'updated work', taskItemId: 7 }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(journalApi.updateLogEntry).toHaveBeenCalledWith(10, 5, 'updated work', 7)
+  })
+
+  it('invalidates journalKeys.all on success', async () => {
+    const mockUpdated = { id: 5, content: 'updated work', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false }
+    vi.mocked(journalApi.updateLogEntry).mockResolvedValue(mockUpdated)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
+    act(() => { result.current.mutate({ id: 5, content: 'updated work', taskItemId: null }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
   })
 })
 

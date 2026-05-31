@@ -1,7 +1,8 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
-import { useAddLogEntryMutation, useDeleteLogEntryMutation } from '@/hooks/useJournal'
+import { useAddLogEntryMutation, useDeleteLogEntryMutation, useUpdateLogEntryMutation } from '@/hooks/useJournal'
 import { formatTime } from '@/lib/journal-utils'
+import { TaskTypeahead } from './TaskTypeahead'
 
 interface Props {
   entryId: number
@@ -15,8 +16,10 @@ export interface DailyLogSectionHandle {
 export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function DailyLogSection({ entryId, logEntries }, ref) {
   const addLog = useAddLogEntryMutation(entryId)
   const deleteLog = useDeleteLogEntryMutation(entryId)
+  const updateLog = useUpdateLogEntryMutation(entryId)
 
   const [draft, setDraft] = useState('')
+  const [draftTaskItemId, setDraftTaskItemId] = useState<number | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useImperativeHandle(ref, () => ({
@@ -27,8 +30,20 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
-    addLog.mutate(text, { onSuccess: () => inputRef.current?.focus() })
+    addLog.mutate(
+      { content: text, taskItemId: draftTaskItemId },
+      {
+        onSuccess: () => {
+          inputRef.current?.focus()
+          setDraftTaskItemId(null)
+        },
+      },
+    )
     setDraft('')
+  }
+
+  function handleTaskLink(logEntry: JournalLogEntryResponseDto, taskItemId: number | null) {
+    updateLog.mutate({ id: logEntry.id, content: logEntry.content, taskItemId })
   }
 
   return (
@@ -49,7 +64,22 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
         {logEntries.map(en => (
           <li key={en.id} className="log-entry">
             <div className="log-time">{formatTime(en.createdAt)}</div>
-            <div className="log-text">{en.content}</div>
+            <div className="log-body">
+              <div className="log-text">{en.content}</div>
+              <div className="log-task-row">
+                {en.linkedTaskDeleted ? (
+                  <span className="log-task-deleted-badge">
+                    {en.linkedTaskTitle} (deleted)
+                  </span>
+                ) : en.linkedTaskTitle ? (
+                  <span className="log-task-chip">{en.linkedTaskTitle}</span>
+                ) : null}
+                <TaskTypeahead
+                  value={en.taskItemId ?? null}
+                  onChange={taskItemId => handleTaskLink(en, taskItemId)}
+                />
+              </div>
+            </div>
             <button
               className="todo-x"
               onClick={() => deleteLog.mutate(en.id)}
@@ -63,19 +93,22 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
         ))}
       </ol>
 
-      <form className="add-row" onSubmit={addEntry}>
+      <form className="add-row log-add-row" onSubmit={addEntry}>
         <span className="add-plus">›</span>
-        <input
-          ref={inputRef}
-          className="add-input"
-          placeholder="What did you just work on? Press Enter to log"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          disabled={addLog.isPending}
-          onKeyDown={e => {
-            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
-          }}
-        />
+        <div className="log-add-inputs">
+          <input
+            ref={inputRef}
+            className="add-input"
+            placeholder="What did you just work on? Press Enter to log"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            disabled={addLog.isPending}
+            onKeyDown={e => {
+              if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+            }}
+          />
+          <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} />
+        </div>
       </form>
     </section>
   )

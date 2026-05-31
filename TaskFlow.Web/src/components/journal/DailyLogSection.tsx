@@ -107,7 +107,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
               if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
             }}
           />
-          <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} />
+          <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} onEscape={() => inputRef.current?.focus()} />
         </div>
         {/* Hidden submit button so Enter in the log text input submits the form
             even though the TaskTypeahead adds a second <input> to the form.

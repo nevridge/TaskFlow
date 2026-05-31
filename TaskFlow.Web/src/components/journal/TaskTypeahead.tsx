@@ -5,9 +5,10 @@ import type { TaskItemViewModel } from '@/hooks/useTasks'
 interface Props {
   value: number | null
   onChange: (id: number | null) => void
+  onEscape?: () => void
 }
 
-export function TaskTypeahead({ value, onChange }: Props) {
+export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const { data: queryResult } = useTasksQuery()
   const tasks: TaskItemViewModel[] = (queryResult?.data as TaskItemViewModel[] | undefined) ?? []
 
@@ -84,6 +85,11 @@ export function TaskTypeahead({ value, onChange }: Props) {
     } else if (e.key === 'Escape') {
       setOpen(false)
       setActiveIndex(-1)
+      if (onEscape) {
+        onEscape()
+      } else {
+        inputRef.current?.blur()
+      }
     } else if (e.key === 'Enter') {
       if (open && activeIndex >= 0) {
         e.preventDefault()

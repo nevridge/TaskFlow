@@ -151,6 +151,16 @@ public class JournalLogEntriesControllerV1Tests
     // ── UPDATE ────────────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task Update_ShouldReturnNotFound_WhenEntryMissing()
+    {
+        _entryRepo.Setup(s => s.GetByIdAsync(99)).ReturnsAsync((JournalEntry?)null);
+
+        var result = await _controller.Update(99, 1, new UpdateJournalLogEntryDto { Content = "x" });
+
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
     public async Task Update_ShouldReturnNotFound_WhenLogMissing()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());

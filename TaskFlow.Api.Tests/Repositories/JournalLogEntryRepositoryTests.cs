@@ -76,28 +76,31 @@ public class JournalLogEntryRepositoryTests
     [Fact]
     public async Task GetByIdAsync_ShouldIncludeTaskItem()
     {
-        using var context = CreateInMemoryContext();
-
-        var task = new TaskItem { Title = "Linked Task", Status = Status.Todo };
-        var entry = new JournalEntry { Title = "May 10", Date = new DateOnly(2026, 5, 10) };
-        context.TaskItems.Add(task);
-        context.JournalEntries.Add(entry);
-        await context.SaveChangesAsync();
-
-        var repo = new JournalLogEntryRepository(context);
-        var log = await repo.AddAsync(new JournalLogEntry
+        var (context, connection) = CreateSqliteContext();
+        await using (connection)
+        await using (context)
         {
-            JournalEntryId = entry.Id,
-            Content = "Work done",
-            TaskItemId = task.Id,
-            LinkedTaskTitleSnapshot = task.Title,
-        });
+            var task = new TaskItem { Title = "Linked Task", Status = Status.Todo };
+            var entry = new JournalEntry { Title = "May 10", Date = new DateOnly(2026, 5, 10) };
+            context.TaskItems.Add(task);
+            context.JournalEntries.Add(entry);
+            await context.SaveChangesAsync();
 
-        var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
+            var repo = new JournalLogEntryRepository(context);
+            var log = await repo.AddAsync(new JournalLogEntry
+            {
+                JournalEntryId = entry.Id,
+                Content = "Work done",
+                TaskItemId = task.Id,
+                LinkedTaskTitleSnapshot = task.Title,
+            });
 
-        fetched.Should().NotBeNull();
-        fetched!.TaskItem.Should().NotBeNull();
-        fetched.TaskItem!.Title.Should().Be("Linked Task");
+            var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
+
+            fetched.Should().NotBeNull();
+            fetched!.TaskItem.Should().NotBeNull();
+            fetched.TaskItem!.Title.Should().Be("Linked Task");
+        }
     }
 
     [Fact]

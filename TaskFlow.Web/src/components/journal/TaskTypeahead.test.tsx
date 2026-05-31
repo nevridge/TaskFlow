@@ -20,6 +20,10 @@ function renderTypeahead(value: number | null, onChange = vi.fn()) {
   return { onChange, ...render(<TaskTypeahead value={value} onChange={onChange} />) }
 }
 
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
 describe('TaskTypeahead', () => {
   beforeEach(() => {
     vi.clearAllMocks()

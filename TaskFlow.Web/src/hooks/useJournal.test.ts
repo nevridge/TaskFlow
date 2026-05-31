@@ -265,6 +265,15 @@ describe('useAddLogEntryMutation', () => {
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
     expect(journalApi.createLogEntry).toHaveBeenCalledWith(10, 'linked work', 42)
   })
+
+  it('passes taskItemId null to createLogEntry when explicitly set to null', async () => {
+    vi.mocked(journalApi.createLogEntry).mockResolvedValue({ data: { id: 3, content: 'test', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useAddLogEntryMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ content: 'test', taskItemId: null }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(journalApi.createLogEntry).toHaveBeenCalledWith(10, 'test', null)
+  })
 })
 
 describe('useUpdateLogEntryMutation', () => {

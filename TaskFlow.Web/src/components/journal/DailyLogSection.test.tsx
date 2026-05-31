@@ -15,7 +15,9 @@ vi.mock('@/hooks/useJournal', () => ({
 }))
 
 vi.mock('./TaskTypeahead', () => ({
-  TaskTypeahead: vi.fn(() => null),
+  TaskTypeahead: vi.fn(({ onChange }: { value: number | null; onChange: (id: number | null) => void }) => (
+    <button type="button" data-testid="task-typeahead" onClick={() => onChange(99)}>link-task</button>
+  )),
 }))
 
 import { DailyLogSection } from './DailyLogSection'
@@ -137,5 +139,14 @@ describe('DailyLogSection', () => {
     expect(screen.queryByText(/deleted/i)).not.toBeInTheDocument()
     // chip text should not appear
     expect(screen.queryByText('Build the feature')).not.toBeInTheDocument()
+  })
+
+  it('selecting a task via typeahead calls updateLogMutate with correct payload', async () => {
+    renderSection([baseEntry])
+    // The component renders two TaskTypeaheads: one per log entry, one for the draft form.
+    // Click the first one (the log entry's typeahead) which calls onChange(99).
+    const typeaheads = screen.getAllByTestId('task-typeahead')
+    await userEvent.click(typeaheads[0])
+    expect(updateLogMutate).toHaveBeenCalledWith({ id: baseEntry.id, content: baseEntry.content, taskItemId: 99 })
   })
 })

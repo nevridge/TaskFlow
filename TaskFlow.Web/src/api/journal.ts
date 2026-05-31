@@ -78,20 +78,10 @@ export const createLogEntry = (entryId: number, content: string, taskItemId?: nu
     { url: '/api/v1/JournalEntries/{entryId}/logs', path: { entryId }, body: { content, taskItemId }, headers: J },
   )
 
-export async function updateLogEntry(
-  entryId: number,
-  logId: number,
-  content: string,
-  taskItemId?: number | null
-): Promise<JournalLogEntryResponseDto> {
-  const response = await client.put<{ 200: JournalLogEntryResponseDto }, unknown, true>({
-    url: '/api/v1/JournalEntries/{entryId}/logs/{id}',
-    path: { entryId, id: logId },
-    body: { content, taskItemId },
-    headers: J,
-  })
-  return response.data as JournalLogEntryResponseDto
-}
+export const updateLogEntry = (entryId: number, logId: number, content: string, taskItemId?: number | null) =>
+  client.put<{ 200: JournalLogEntryResponseDto }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{entryId}/logs/{id}', path: { entryId, id: logId }, body: { content, taskItemId }, headers: J },
+  )
 
 export const deleteLogEntry = (entryId: number, logId: number) =>
   client.delete<{ 204: unknown }, unknown, true>(

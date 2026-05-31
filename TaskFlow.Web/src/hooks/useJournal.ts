@@ -7,6 +7,7 @@ import {
   removeJournalTodo,
   createLogEntry,
   deleteLogEntry,
+  updateLogEntry,
   getJournalNotes,
   createJournalNote,
   updateJournalNote,
@@ -185,8 +186,19 @@ export function useRemoveTodoMutation(entryId: number) {
 export function useAddLogEntryMutation(entryId: number) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (content: string) => createLogEntry(entryId, content),
+    mutationFn: ({ content, taskItemId }: { content: string; taskItemId?: number | null }) =>
+      createLogEntry(entryId, content, taskItemId),
     onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+  })
+}
+
+export function useUpdateLogEntryMutation(entryId: number) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, content, taskItemId }: { id: number; content: string; taskItemId?: number | null }) =>
+      updateLogEntry(entryId, id, content, taskItemId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+    onError: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
   })
 }
 

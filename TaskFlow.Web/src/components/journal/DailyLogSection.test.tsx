@@ -6,10 +6,18 @@ import type { DailyLogSectionHandle } from './DailyLogSection'
 
 const addLogMutate = vi.fn()
 const deleteLogMutate = vi.fn()
+const updateLogMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
   useAddLogEntryMutation: vi.fn(() => ({ mutate: addLogMutate, isPending: false })),
   useDeleteLogEntryMutation: vi.fn(() => ({ mutate: deleteLogMutate, isPending: false })),
+  useUpdateLogEntryMutation: vi.fn(() => ({ mutate: updateLogMutate, isPending: false })),
+}))
+
+vi.mock('./TaskTypeahead', () => ({
+  TaskTypeahead: vi.fn(({ onChange }: { value: number | null; onChange: (id: number | null) => void }) => (
+    <button type="button" data-testid="task-typeahead" onClick={() => onChange(99)}>link-task</button>
+  )),
 }))
 
 import { DailyLogSection } from './DailyLogSection'
@@ -20,6 +28,7 @@ const baseEntry: JournalLogEntryResponseDto = {
   content: 'Fixed the bug',
   journalEntryId: 10,
   createdAt: '2026-05-28T09:00:00Z',
+  linkedTaskDeleted: false,
 }
 
 const secondEntry: JournalLogEntryResponseDto = {
@@ -27,6 +36,7 @@ const secondEntry: JournalLogEntryResponseDto = {
   content: 'Reviewed PR',
   journalEntryId: 10,
   createdAt: '2026-05-28T10:00:00Z',
+  linkedTaskDeleted: false,
 }
 
 function renderSection(logEntries: JournalLogEntryResponseDto[] = [], ref?: React.Ref<DailyLogSectionHandle>) {
@@ -37,6 +47,7 @@ describe('DailyLogSection', () => {
   beforeEach(() => {
     addLogMutate.mockReset()
     deleteLogMutate.mockReset()
+    updateLogMutate.mockReset()
   })
 
   it('shows empty state when no log entries', () => {
@@ -65,7 +76,10 @@ describe('DailyLogSection', () => {
     const input = screen.getByRole('textbox')
     await userEvent.type(input, '  Working on tests  ')
     await userEvent.keyboard('{Enter}')
-    expect(addLogMutate).toHaveBeenCalledWith('Working on tests', expect.any(Object))
+    expect(addLogMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Working on tests' }),
+      expect.any(Object),
+    )
     expect(input).toHaveValue('')
   })
 
@@ -88,5 +102,51 @@ describe('DailyLogSection', () => {
     renderSection([], ref)
     ref.current?.focusDraftInput()
     expect(document.activeElement).toBe(screen.getByRole('textbox'))
+  })
+
+  // ─── Task association display ────────────────────────────────────────────────
+
+  it('renders linked task title chip when linkedTaskTitle is set and linkedTaskDeleted is false', () => {
+    const entry: JournalLogEntryResponseDto = {
+      ...baseEntry,
+      taskItemId: 7,
+      linkedTaskTitle: 'Build the feature',
+      linkedTaskDeleted: false,
+    }
+    renderSection([entry])
+    expect(screen.getByText('Build the feature')).toBeInTheDocument()
+  })
+
+  it('renders muted deleted badge when linkedTaskDeleted is true', () => {
+    const entry: JournalLogEntryResponseDto = {
+      ...baseEntry,
+      taskItemId: null,
+      linkedTaskTitle: 'Old deleted task',
+      linkedTaskDeleted: true,
+    }
+    renderSection([entry])
+    expect(screen.getByText('Old deleted task (deleted)')).toBeInTheDocument()
+  })
+
+  it('renders nothing for task when no taskItemId and no linkedTaskTitle', () => {
+    const entry: JournalLogEntryResponseDto = {
+      ...baseEntry,
+      taskItemId: null,
+      linkedTaskTitle: null,
+      linkedTaskDeleted: false,
+    }
+    renderSection([entry])
+    expect(screen.queryByText(/deleted/i)).not.toBeInTheDocument()
+    // chip text should not appear
+    expect(screen.queryByText('Build the feature')).not.toBeInTheDocument()
+  })
+
+  it('selecting a task via typeahead calls updateLogMutate with correct payload', async () => {
+    renderSection([baseEntry])
+    // The component renders two TaskTypeaheads: one per log entry, one for the draft form.
+    // Click the first one (the log entry's typeahead) which calls onChange(99).
+    const typeaheads = screen.getAllByTestId('task-typeahead')
+    await userEvent.click(typeaheads[0])
+    expect(updateLogMutate).toHaveBeenCalledWith({ id: baseEntry.id, content: baseEntry.content, taskItemId: 99 })
   })
 })

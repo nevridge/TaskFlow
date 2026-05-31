@@ -13,13 +13,15 @@ namespace TaskFlow.Api.Controllers.V1;
 public class JournalLogEntriesController(
     IJournalEntryRepository journalRepo,
     IJournalLogEntryRepository logRepo,
-    IValidator<JournalLogEntry> validator) : ControllerBase
+    IValidator<JournalLogEntry> validator,
+    ITaskRepository taskRepo) : ControllerBase
 {
     private const string GetLogRouteName = "GetJournalLogEntryV1";
     private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IJournalLogEntryRepository _logRepo = logRepo;
     private readonly IValidator<JournalLogEntry> _validator = validator;
+    private readonly ITaskRepository _taskRepo = taskRepo;
 
     // GET: api/v1/JournalEntries/{entryId}/logs
     [HttpGet]
@@ -64,12 +66,18 @@ public class JournalLogEntriesController(
             return NotFound();
         }
 
-        var log = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId };
+        var log = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId, TaskItemId = dto.TaskItemId };
 
         var validation = await _validator.ValidateAsync(log);
         if (!validation.IsValid)
         {
             return BadRequest(validation.Errors);
+        }
+
+        var linkError = await ApplyTaskLinkAsync(log, dto.TaskItemId);
+        if (linkError is not null)
+        {
+            return linkError;
         }
 
         var created = await _logRepo.AddAsync(log);
@@ -94,10 +102,18 @@ public class JournalLogEntriesController(
 
         existing.Content = dto.Content;
 
-        var validation = await _validator.ValidateAsync(existing);
+        // Validate on a non-tracked draft so the change tracker stays clean if validation fails.
+        var draft = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId, TaskItemId = dto.TaskItemId };
+        var validation = await _validator.ValidateAsync(draft);
         if (!validation.IsValid)
         {
             return BadRequest(validation.Errors);
+        }
+
+        var linkError = await ApplyTaskLinkAsync(existing, dto.TaskItemId);
+        if (linkError is not null)
+        {
+            return linkError;
         }
 
         await _logRepo.UpdateAsync(existing);
@@ -124,6 +140,26 @@ public class JournalLogEntriesController(
         return NoContent();
     }
 
+    private async Task<ActionResult?> ApplyTaskLinkAsync(JournalLogEntry entity, int? taskItemId)
+    {
+        if (taskItemId.HasValue)
+        {
+            var task = await _taskRepo.GetByIdAsync(taskItemId.Value);
+            if (task is null)
+            {
+                return BadRequest($"TaskItem with id {taskItemId.Value} was not found.");
+            }
+            entity.TaskItemId = task.Id;
+            entity.LinkedTaskTitleSnapshot = task.Title;
+        }
+        else
+        {
+            entity.TaskItemId = null;
+            entity.LinkedTaskTitleSnapshot = null;
+        }
+        return null;
+    }
+
     private static JournalLogEntryResponseDto ToDto(JournalLogEntry l) => new()
     {
         Id = l.Id,
@@ -131,5 +167,8 @@ public class JournalLogEntriesController(
         JournalEntryId = l.JournalEntryId,
         CreatedAt = l.CreatedAt,
         UpdatedAt = l.UpdatedAt,
+        TaskItemId = l.TaskItemId,
+        LinkedTaskTitle = l.TaskItem?.Title ?? l.LinkedTaskTitleSnapshot,
+        LinkedTaskDeleted = l.TaskItemId is null && l.LinkedTaskTitleSnapshot is not null,
     };
 }

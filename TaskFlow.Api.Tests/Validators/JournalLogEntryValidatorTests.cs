@@ -28,4 +28,46 @@ public class JournalLogEntryValidatorTests
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Validate_ShouldPass_WhenTaskItemIdIsNull()
+    {
+        var log = new JournalLogEntry { Content = "Work done", JournalEntryId = 1, TaskItemId = null };
+
+        var result = await _validator.ValidateAsync(log);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ShouldPass_WhenTaskItemIdIsPositive()
+    {
+        var log = new JournalLogEntry { Content = "Work done", JournalEntryId = 1, TaskItemId = 5 };
+
+        var result = await _validator.ValidateAsync(log);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ShouldFail_WhenTaskItemIdIsZero()
+    {
+        var log = new JournalLogEntry { Content = "Work done", JournalEntryId = 1, TaskItemId = 0 };
+
+        var result = await _validator.ValidateAsync(log);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "TaskItemId");
+    }
+
+    [Fact]
+    public async Task Validate_ShouldFail_WhenTaskItemIdIsNegative()
+    {
+        var log = new JournalLogEntry { Content = "Work done", JournalEntryId = 1, TaskItemId = -1 };
+
+        var result = await _validator.ValidateAsync(log);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName == "TaskItemId");
+    }
 }

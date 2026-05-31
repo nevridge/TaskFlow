@@ -506,7 +506,7 @@
 .log-entry {
   display: grid;
   grid-template-columns: 64px 1fr 22px;
-  align-items: baseline;
+  align-items: start;
   gap: 12px;
   padding: calc(8px * var(--den)) 4px;
   border-bottom: 1px dashed var(--line-soft);
@@ -525,6 +525,147 @@
   font-size: 14.5px;
   color: var(--ink);
   line-height: 1.45;
+}
+
+/* ─── Log entry body (text + task row stacked) ─────────────────────────────── */
+
+.log-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.log-task-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Task chip — shown when linkedTaskTitle is present and task is not deleted */
+.log-task-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 12%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Deleted task badge — muted greyed-out */
+.log-task-deleted-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--muted) 10%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-style: italic;
+}
+
+/* ─── Task Typeahead ────────────────────────────────────────────────────────── */
+
+.task-typeahead {
+  position: relative;
+  display: inline-block;
+}
+
+/* Must beat `.journal-page button` (0-1-1) so scoped as `.journal-page .task-typeahead-input` (0-2-0) */
+.journal-page .task-typeahead-input {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-2);
+  outline: none;
+  width: 150px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.journal-page .task-typeahead-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 15%, transparent);
+  color: var(--ink);
+}
+.journal-page .task-typeahead-input::placeholder {
+  color: var(--muted);
+}
+
+.task-typeahead-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 220px;
+  max-height: 220px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.12));
+}
+
+.task-typeahead-option {
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background .08s;
+}
+.task-typeahead-option:hover {
+  background: var(--hover-soft);
+}
+.task-typeahead-option.active {
+  background: var(--color-accent, #6b4fbb);
+  color: white;
+}
+.task-typeahead-option[aria-selected="true"] {
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  color: var(--accent);
+}
+
+.task-typeahead-none {
+  color: var(--muted);
+  font-style: italic;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 2px;
+}
+
+.task-typeahead-empty {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-style: italic;
+  cursor: default;
+}
+
+/* Log add row with typeahead alongside the text input */
+.log-add-inputs {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.log-add-inputs .add-input {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ─── Add row (shared) ─────────────────────────────────────────────────────── */

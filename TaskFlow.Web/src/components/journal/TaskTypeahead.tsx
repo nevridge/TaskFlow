@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useTasksQuery } from '@/hooks/useTasks'
 import type { TaskItemViewModel } from '@/hooks/useTasks'
 
@@ -10,22 +10,18 @@ interface Props {
 
 export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const { data: queryResult } = useTasksQuery()
-  const tasks: TaskItemViewModel[] = (queryResult?.data as TaskItemViewModel[] | undefined) ?? []
+  const tasks = useMemo(
+    () => (queryResult?.data as TaskItemViewModel[] | undefined) ?? [],
+    [queryResult?.data],
+  )
 
   const [inputValue, setInputValue] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync display value when `value` prop changes
-  useEffect(() => {
-    if (value == null) {
-      setInputValue('')
-    } else {
-      const task = tasks.find(t => Number(t.id) === value)
-      if (task) setInputValue(task.title)
-    }
-  }, [value, tasks])
+  const selectedTitle = value == null ? '' : (tasks.find(t => Number(t.id) === value)?.title ?? '')
+  const displayValue = open ? inputValue : selectedTitle
 
   const filtered = inputValue.trim()
     ? tasks
@@ -40,18 +36,14 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   }
 
   function handleSelect(task: TaskItemViewModel | null) {
-    if (task == null) {
-      onChange(null)
-      setInputValue('')
-    } else {
-      onChange(Number(task.id))
-      setInputValue(task.title)
-    }
+    onChange(task == null ? null : Number(task.id))
+    setInputValue('')
     setOpen(false)
     setActiveIndex(-1)
   }
 
   function handleFocus() {
+    setInputValue(selectedTitle)
     setOpen(true)
   }
 
@@ -59,13 +51,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
     setTimeout(() => {
       setOpen(false)
       setActiveIndex(-1)
-      // Reset input to selected task title if user typed something partial without selecting
-      if (value == null) {
-        setInputValue('')
-      } else {
-        const task = tasks.find(t => Number(t.id) === value)
-        setInputValue(task?.title ?? '')
-      }
+      setInputValue('')
     }, 150)
   }
 
@@ -109,7 +95,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
         className="task-typeahead-input"
         type="text"
         placeholder="Link to task…"
-        value={inputValue}
+        value={displayValue}
         onChange={handleInputChange}
         onFocus={handleFocus}
         onBlur={handleBlur}

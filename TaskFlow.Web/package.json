@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "type-check": "tsc -b --noEmit",
     "test": "vitest",
-    "gen:api": "openapi-ts --input http://localhost:8080/openapi/v1.json --output ./src/api/client --client @hey-api/client-fetch"
+    "gen:api": "openapi-ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",

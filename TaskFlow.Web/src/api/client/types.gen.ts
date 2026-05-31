@@ -17,6 +17,7 @@ export type CreateJournalEntryDto = {
 
 export type CreateJournalLogEntryDto = {
     content: string;
+    taskItemId?: null | number | string;
 };
 
 export type CreateJournalNoteDto = {
@@ -56,6 +57,9 @@ export type JournalLogEntryResponseDto = {
     journalEntryId?: number | string;
     createdAt?: string;
     updatedAt?: null | string;
+    taskItemId?: null | number | string;
+    linkedTaskTitle?: null | string;
+    linkedTaskDeleted?: boolean;
 };
 
 export type JournalNoteResponseDto = {
@@ -117,6 +121,7 @@ export type UpdateJournalEntryDto = {
 
 export type UpdateJournalLogEntryDto = {
     content: string;
+    taskItemId: null | number | string;
 };
 
 export type UpdateJournalNoteDto = {

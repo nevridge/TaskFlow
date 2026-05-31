@@ -53,6 +53,16 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<JournalLogEntry>(entity =>
+        {
+            entity.HasOne(l => l.TaskItem)
+                  .WithMany()
+                  .HasForeignKey(l => l.TaskItemId)
+                  .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(l => l.TaskItemId);
+        });
+
         modelBuilder.Entity<JournalEntry>(entity =>
         {
             entity.HasIndex(e => e.Date).IsUnique();

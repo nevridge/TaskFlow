@@ -13,13 +13,15 @@ namespace TaskFlow.Api.Controllers.V1;
 public class JournalLogEntriesController(
     IJournalEntryRepository journalRepo,
     IJournalLogEntryRepository logRepo,
-    IValidator<JournalLogEntry> validator) : ControllerBase
+    IValidator<JournalLogEntry> validator,
+    ITaskRepository taskRepo) : ControllerBase
 {
     private const string GetLogRouteName = "GetJournalLogEntryV1";
     private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IJournalLogEntryRepository _logRepo = logRepo;
     private readonly IValidator<JournalLogEntry> _validator = validator;
+    private readonly ITaskRepository _taskRepo = taskRepo;
 
     // GET: api/v1/JournalEntries/{entryId}/logs
     [HttpGet]
@@ -64,12 +66,24 @@ public class JournalLogEntriesController(
             return NotFound();
         }
 
-        var log = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId };
+        var log = new JournalLogEntry { Content = dto.Content, JournalEntryId = entryId, TaskItemId = dto.TaskItemId };
 
         var validation = await _validator.ValidateAsync(log);
         if (!validation.IsValid)
         {
             return BadRequest(validation.Errors);
+        }
+
+        if (dto.TaskItemId.HasValue)
+        {
+            var task = await _taskRepo.GetByIdAsync(dto.TaskItemId.Value);
+            if (task is null)
+            {
+                return BadRequest($"TaskItem with id {dto.TaskItemId.Value} was not found.");
+            }
+
+            log.TaskItemId = task.Id;
+            log.LinkedTaskTitleSnapshot = task.Title;
         }
 
         var created = await _logRepo.AddAsync(log);
@@ -93,11 +107,29 @@ public class JournalLogEntriesController(
         }
 
         existing.Content = dto.Content;
+        existing.TaskItemId = dto.TaskItemId;
 
         var validation = await _validator.ValidateAsync(existing);
         if (!validation.IsValid)
         {
             return BadRequest(validation.Errors);
+        }
+
+        if (dto.TaskItemId.HasValue)
+        {
+            var task = await _taskRepo.GetByIdAsync(dto.TaskItemId.Value);
+            if (task is null)
+            {
+                return BadRequest($"TaskItem with id {dto.TaskItemId.Value} was not found.");
+            }
+
+            existing.TaskItemId = task.Id;
+            existing.LinkedTaskTitleSnapshot = task.Title;
+        }
+        else
+        {
+            existing.TaskItemId = null;
+            existing.LinkedTaskTitleSnapshot = null;
         }
 
         await _logRepo.UpdateAsync(existing);
@@ -131,5 +163,8 @@ public class JournalLogEntriesController(
         JournalEntryId = l.JournalEntryId,
         CreatedAt = l.CreatedAt,
         UpdatedAt = l.UpdatedAt,
+        TaskItemId = l.TaskItemId,
+        LinkedTaskTitle = l.TaskItem?.Title ?? l.LinkedTaskTitleSnapshot,
+        LinkedTaskDeleted = l.TaskItemId is null && l.LinkedTaskTitleSnapshot is not null,
     };
 }

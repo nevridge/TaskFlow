@@ -10,12 +10,14 @@ public class JournalLogEntryRepository(TaskDbContext context) : IJournalLogEntry
 
     public async Task<IEnumerable<JournalLogEntry>> GetAllByEntryIdAsync(int entryId) =>
         await _context.JournalLogEntries
+            .Include(l => l.TaskItem)
             .Where(l => l.JournalEntryId == entryId)
             .OrderBy(l => l.CreatedAt)
             .ToListAsync();
 
     public async Task<JournalLogEntry?> GetByIdAsync(int entryId, int logId) =>
         await _context.JournalLogEntries
+            .Include(l => l.TaskItem)
             .FirstOrDefaultAsync(l => l.Id == logId && l.JournalEntryId == entryId);
 
     public async Task<JournalLogEntry> AddAsync(JournalLogEntry logEntry)

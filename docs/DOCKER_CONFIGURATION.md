@@ -44,7 +44,7 @@ A single multi-stage .NET Dockerfile used for both dev and prod. The build conte
 
 **Frontend (`TaskFlow.Web/Dockerfile`)**
 
-A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_BASE_URL=` (empty) from `.env.production` into the bundle. Because the generated SDK paths already include `/api/v1/...` and the runtime stage serves via `vite preview` with a proxy, an empty base URL causes the browser to send requests to the same origin. The runtime stage serves the built files and proxies `/api` and `/openapi` to `$API_TARGET` via `vite.preview.config.js`.
+A two-stage Node build. The build stage runs `npm run build`. The API client uses relative paths by default (no env var needed), so the browser sends requests to the same origin. The runtime stage serves the built files and proxies `/api` and `/openapi` to `$API_TARGET` via `vite.preview.config.js`.
 
 | Aspect | Value |
 |--------|-------|
@@ -79,7 +79,7 @@ A two-stage Node build. The build stage runs `npm run build`, baking `VITE_API_B
 | **Image Tag** | `taskflow-web:dev` |
 | **Port Mapping** | `3000:3000` |
 | **Depends on** | `taskflow-api` (health check must pass) |
-| **`VITE_API_BASE_URL`** | *(empty — baked in at build time from `.env.production`)* |
+| **API routing** | Relative paths via `vite preview` proxy to `http://taskflow-api:8080` |
 
 The frontend container waits for `taskflow-api` to pass its health check before starting. The `vite preview` runtime server proxies `/api` and `/openapi` requests to `$API_TARGET` (`http://taskflow-api:8080` inside the Docker network), so the browser makes same-origin requests and no CORS configuration is required.
 

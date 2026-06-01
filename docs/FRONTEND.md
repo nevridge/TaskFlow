@@ -104,8 +104,8 @@ TaskFlow.Web/
 │   ├── main.tsx                    # React root — QueryClientProvider, RouterProvider
 │   └── index.css                   # Tailwind base import
 │
-├── .env.development                # VITE_API_BASE_URL=http://localhost:8080
-├── .env.production                 # VITE_API_BASE_URL= (empty — same-origin via vite preview proxy)
+├── .env.development                # (empty — Vite proxy handles /api → localhost:8080)
+├── .env.production                 # (empty — reverse proxy handles /api routing)
 ├── vite.config.ts                  # @ path alias, dev proxy, vitest config
 ├── tsconfig.app.json               # App TypeScript config
 ├── tsconfig.node.json              # Node/tooling TypeScript config
@@ -158,11 +158,13 @@ Two routes:
 
 ## API Client Generation
 
-The `gen:api` npm script invokes `@hey-api/openapi-ts`:
+The `gen:api` npm script invokes `@hey-api/openapi-ts` using the configuration in `openapi-ts.config.ts`:
 
 ```json
-"gen:api": "openapi-ts --input http://localhost:8080/openapi/v1.json --output ./src/api/client --client @hey-api/client-fetch"
+"gen:api": "openapi-ts"
 ```
+
+The config file sets `baseUrl: false` on the `@hey-api/client-fetch` plugin so the generator never bakes a hardcoded server URL into `client.gen.ts`. The generated client uses relative paths by default, which route through whatever proxy is in front (Vite in dev, the production reverse proxy in prod).
 
 **When to regenerate:**
 - After any change to the API's request/response shapes, routes, or model properties
@@ -171,14 +173,10 @@ The `gen:api` npm script invokes `@hey-api/openapi-ts`:
 **The generated client instance (`client.gen.ts`):**
 
 ```typescript
-export const client = createClient(createConfig<ClientOptions2>({
-  baseUrl: import.meta.env.VITE_API_BASE_URL ?? '',
-  throwOnError: true,
-}));
+export const client = createClient(createConfig<ClientOptions2>());
 ```
 
-- `baseUrl` is injected at build time from `VITE_API_BASE_URL`
-- `throwOnError: true` means non-2xx responses throw, which React Query routes to `isError` / `error` rather than treating as success
+With no `baseUrl` argument, `@hey-api/client-fetch` defaults to relative paths. All API call URLs (`/api/v1/...`) resolve against the current page origin.
 
 ## TanStack Query Hooks
 
@@ -304,16 +302,12 @@ Straightforward note display and edit forms. `NoteCard` shows content and timest
 
 ## Environment Configuration
 
-| File | `VITE_API_BASE_URL` | When used |
-|------|-------------------|-----------|
-| `.env.development` | `http://localhost:8080` | `npm run dev` |
-| `.env.production` | *(empty)* | `npm run build` (Docker Compose image) |
+No frontend environment variables are required. Both `.env.development` and `.env.production` are empty.
 
-`VITE_API_BASE_URL` is baked into the bundle at build time by Vite. The value must be the API **origin only** — the generated SDK paths already include `/api/v1/...`, so setting this to `/api` would produce double-prefixed requests like `/api/api/v1/...`.
+The generated API client uses relative paths (`/api/v1/...`) by default, and routing is handled entirely by the proxy layer:
 
-- **Docker Compose:** use an empty string — the `vite preview` runtime server proxies `/api` and `/openapi` to `$API_TARGET` (`http://taskflow-api:8080`), so the browser makes same-origin requests without CORS.
-- **Direct API access (no proxy):** use `http://localhost:8080` — the browser resolves requests to the API on port 8080 (requires CORS).
-- **Do not** set this to `/api` or any path prefix.
+- **Dev (`npm run dev`):** Vite's dev server proxies `/api` and `/openapi` to `http://localhost:8080` — same-origin to the browser, no CORS needed.
+- **Docker Compose / production:** `vite preview` (or the production reverse proxy) proxies `/api` and `/openapi` to the API container — same-origin to the browser, no CORS needed.
 
 ## Vite Dev Server Proxy
 
@@ -409,7 +403,7 @@ CMD ["node_modules/.bin/vite", "preview", "--config", "vite.preview.config.js", 
 **Key points:**
 - `npm ci` (not `npm install`) for reproducible installs in CI and Docker
 - `vite preview` serves the built files and handles SPA fallback (all unmatched paths → `index.html`)
-- The build stage bakes `VITE_API_BASE_URL=` (empty) from `.env.production` into the bundle
+- The API client uses relative paths by default — no env var needed at build time
 - `vite.preview.config.js` is copied into the runtime stage to configure the preview server proxy
 
 ### docker-compose.yml integration
@@ -429,7 +423,7 @@ taskflow-web:
       condition: service_healthy
 ```
 
-The web service waits for `taskflow-api` to pass its health check before starting. The frontend image is built with `VITE_API_BASE_URL=` (empty) from `.env.production`, so the browser sends same-origin requests to the `vite preview` server (port 3000). That server proxies `/api` and `/openapi` to `http://taskflow-api:8080` inside the Docker network via `vite.preview.config.js`. CORS configuration is not needed since all requests appear same-origin to the browser.
+The web service waits for `taskflow-api` to pass its health check before starting. The API client uses relative paths by default, so the browser sends same-origin requests to the `vite preview` server (port 3000). That server proxies `/api` and `/openapi` to `http://taskflow-api:8080` inside the Docker network via `vite.preview.config.js`. CORS configuration is not needed since all requests appear same-origin to the browser.
 
 > **Note for local dev:** Running `npm run dev` and `docker compose up` simultaneously may cause port conflicts on 5173 vs 3000 but not on 8080. The dev server proxies to port 8080 either way.
 
@@ -456,7 +450,7 @@ Failures in any step block the PR. The build step verifies the production bundle
 
 - Confirm the API is running: `curl http://localhost:8080/health`
 - If using `npm run dev`, check the Vite proxy is targeting the right host (default: `localhost:8080`)
-- If `VITE_API_BASE_URL` is wrong in `.env.development`, fix it and restart `npm run dev` (env changes require a restart)
+- If the Vite proxy is not routing correctly, check `vite.config.ts` — the proxy target defaults to `http://localhost:8080` and can be overridden with `API_TARGET`
 
 ### Status/priority filters not working
 
@@ -470,7 +464,7 @@ Run `npm run gen:api` with the API running at `http://localhost:8080` to regener
 
 - Check browser console for network errors
 - Verify CORS: the API's `appsettings.Development.json` must include the frontend origin in `Cors:AllowedOrigins`
-- Verify `VITE_API_BASE_URL` was correct at build time (it's baked in — rebuild the image if it changed)
+- Verify `vite.preview.config.js` proxy is pointing at the correct API target (`API_TARGET` env var, default `http://taskflow-api:8080`)
 
 ---
 

@@ -75,7 +75,7 @@ TaskFlow.Web/
 ├── src/
 │   ├── api/
 │   │   ├── client/             # Auto-generated typed API client (do not edit manually)
-│   │   │   ├── client.gen.ts   # Client instance (baseUrl from VITE_API_BASE_URL)
+│   │   │   ├── client.gen.ts   # Client instance (relative paths by default)
 │   │   │   ├── sdk.gen.ts      # All generated API functions
 │   │   │   └── types.gen.ts    # All generated TypeScript types
 │   │   └── journal.ts          # Hand-written journal API functions + DTO types
@@ -104,8 +104,8 @@ TaskFlow.Web/
 │   ├── journal.css             # Journal page styles (scoped under .journal-page)
 │   ├── App.tsx                 # Router setup (/ → today's journal, /journal/:date, /tasks)
 │   └── main.tsx                # React root, QueryClient provider
-├── .env.development            # VITE_API_BASE_URL=http://localhost:8080
-├── .env.production             # VITE_API_BASE_URL= (empty — same-origin via vite preview proxy)
+├── .env.development            # (empty — Vite proxy handles /api → localhost:8080)
+├── .env.production             # (empty — reverse proxy handles /api routing)
 ├── vite.config.ts              # Vite config — @ alias, dev proxy, test config
 ├── Dockerfile                  # Multi-stage: build → vite preview
 └── package.json
@@ -128,7 +128,7 @@ npm run gen:api
 The generated files land in `src/api/client/`. Do not edit them manually — they will be overwritten on the next `gen:api` run. Commit the generated files to source control so the build is reproducible without a live API server.
 
 **How it works:**
-- `client.gen.ts` exports the configured client singleton (baseUrl from `VITE_API_BASE_URL`, `throwOnError: true` so failed requests propagate as errors to TanStack Query)
+- `client.gen.ts` exports the configured client singleton (relative paths by default, routed via Vite proxy in dev or the reverse proxy in production)
 - `sdk.gen.ts` exports one typed function per API endpoint (e.g. `getApiV1TaskItems`, `postApiV1TaskItems`)
 - `types.gen.ts` exports all request/response types derived from the OpenAPI schema
 
@@ -164,16 +164,13 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 
 ## Configuration
 
-| File | Variable | Value | Used when |
-|------|----------|-------|-----------|
-| `.env.development` | `VITE_API_BASE_URL` | `http://localhost:8080` | `npm run dev` |
-| `.env.production` | `VITE_API_BASE_URL` | *(empty)* | `npm run build` (Docker Compose image) |
+No frontend environment variables are required. Both `.env.development` and `.env.production` are empty files.
 
-The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`) or left empty for same-origin deployments. Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`.
+The API client uses relative paths (`/api/v1/...`) by default. Routing is handled entirely by the proxy layer — no CORS configuration is needed:
+- **Dev:** Vite dev server proxies `/api` and `/openapi` to `http://localhost:8080`
+- **Docker Compose / production:** `vite preview` proxies the same paths to `$API_TARGET`
 
-In Docker Compose, `.env.production` uses an empty string so the browser sends requests to the same origin (port 3000). The `vite preview` server (configured in `vite.preview.config.js`) proxies `/api` and `/openapi` requests to `$API_TARGET` (`http://taskflow-api:8080` inside the Docker network). This removes the need for CORS and avoids exposing port 8080 to the browser.
-
-The Vite dev server proxy can be redirected via environment variable:
+The Vite dev server proxy target can be overridden via environment variable:
 
 ```bash
 API_TARGET=http://taskflow-api:8080 npm run dev

@@ -271,14 +271,7 @@ See [API Reference](docs/API.md) for request/response shapes and [API Versioning
 
 ### Frontend
 
-| File | `VITE_API_BASE_URL` | Used when |
-|------|-------------------|-----------|
-| `.env.development` | `http://localhost:8080` | `npm run dev` |
-| `.env.production` | *(empty)* | `npm run build` (Docker Compose image) |
-
-The generated SDK paths already include `/api/v1/...`, so `VITE_API_BASE_URL` must be the API origin only (e.g. `http://localhost:8080`) or left empty for same-origin deployments. Do not set it to `/api` — that would produce double-prefixed paths like `/api/api/v1/...`.
-
-In Docker Compose, `.env.production` is empty so the browser sends requests to the same origin (port 3000). The `vite preview` runtime server proxies `/api` and `/openapi` to `$API_TARGET` (`http://taskflow-api:8080` inside Docker network) — no CORS needed.
+No frontend environment variables are required. The API client uses relative paths by default — the Vite dev server proxies `/api` to `http://localhost:8080` in development, and `vite preview` proxies the same paths to `http://taskflow-api:8080` in Docker Compose. The browser sees same-origin requests in both cases.
 
 ## Testing
 

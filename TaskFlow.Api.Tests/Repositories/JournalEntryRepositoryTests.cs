@@ -287,4 +287,110 @@ public class JournalEntryRepositoryTests
         events[1].EventType.Should().Be("RemovedFromJournalDay");
         events[1].FromJournalEntryId.Should().Be(entry.Id);
     }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
+
+        var parentTodo = todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var found = await repo.GetByIdAsync(entry.Id);
+
+        found.Should().NotBeNull();
+        var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetByDateAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = date });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var found = await repo.GetByDateAsync(date);
+
+        found.Should().NotBeNull();
+        var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldIncludeCurrentJournalEntry_OnChildTaskItems()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var firstEntry = await repo.AddAsync(new JournalEntry { Title = "First", Date = today.AddDays(1) });
+        var secondEntry = await repo.AddAsync(new JournalEntry { Title = "Second", Date = today.AddDays(2) });
+
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = parent.Id,
+            CurrentJournalEntryId = secondEntry.Id
+        };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(firstEntry.Id, parent.Id);
+
+        var todos = (await repo.GetTodosAsync(firstEntry.Id)).ToList();
+
+        var parentTodo = todos.First(t => t.Id == parent.Id);
+        var childItem = parentTodo.ChildTaskItems.First(c => c.Id == child.Id);
+        childItem.CurrentJournalEntry.Should().NotBeNull();
+        childItem.CurrentJournalEntry!.Id.Should().Be(secondEntry.Id);
+    }
 }

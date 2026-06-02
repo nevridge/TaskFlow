@@ -749,6 +749,14 @@
   color: var(--danger-ink);
   font-size: 13px;
 }
+.j-notify {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, #f59e0b 12%, transparent);
+  color: #92400e;
+  font-size: 13px;
+}
 
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
 

@@ -1,7 +1,7 @@
-import { useMemo, useRef } from 'react'
-import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
+import { useMemo, useRef, useState, useEffect } from 'react'
+import { useParams, useOutletContext, useNavigate, useLocation } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
-import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate, todayUrlDate } from '@/lib/journal-utils'
+import { urlDateToISO, todayISO, isValidISODate, addDays, addWeekdays, isoToUrlDate, todayUrlDate, prevWeekday } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
@@ -26,27 +26,59 @@ export function JournalPage() {
   // Fall back to today if the param is missing or malformed
   const effectiveDate = isValidISODate(isoDate) ? isoDate : todayISO()
 
-  const { entry, isLoading, error } = useEnsureJournalEntry(effectiveDate)
+  const { isDark, headerStyle, todoSort, projectStart, weekdaysOnly } = useOutletContext<AppContext>()
 
-  const { isDark, headerStyle, todoSort, projectStart } = useOutletContext<AppContext>()
+  // When weekdays-only is on, never create a journal entry for a weekend date — the
+  // redirect effect will navigate away, but the mutation could still fire before unmount.
+  const entryDate = weekdaysOnly ? prevWeekday(effectiveDate) : effectiveDate
+  const { entry, isLoading, error } = useEnsureJournalEntry(entryDate)
 
   const todosSectionRef = useRef<TodosSectionHandle>(null)
   const logSectionRef = useRef<DailyLogSectionHandle>(null)
   const notesSectionRef = useRef<NotesSectionHandle>(null)
 
+  useEffect(() => {
+    if (!weekdaysOnly) return
+    const friday = prevWeekday(effectiveDate)
+    if (friday !== effectiveDate) {
+      navigate(`/journal/${isoToUrlDate(friday)}`, { replace: true, state: { weekendRedirect: true } })
+    }
+  }, [effectiveDate, weekdaysOnly, navigate])
+
+  const location = useLocation()
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(() =>
+    location.state?.weekendRedirect ? 'Weekdays only — redirected to Friday' : null
+  )
+
+  useEffect(() => {
+    if (!notificationMsg) return
+    const id = setTimeout(() => setNotificationMsg(null), 3000)
+    return () => clearTimeout(id)
+  }, [notificationMsg])
+
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    setNotificationMsg(weekdaysOnly ? 'Weekdays only on' : 'Weekdays only off')
+  }, [weekdaysOnly])
+
   useJournalKeyboardShortcuts({
     onNewTodo: () => todosSectionRef.current?.focusDraftInput(),
     onNewLog: () => logSectionRef.current?.focusDraftInput(),
     onNewNote: () => notesSectionRef.current?.focusNewNote(),
-    onPrevDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, -1))}`),
-    onNextDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, 1))}`),
+    onPrevDay: () => navigate(`/journal/${isoToUrlDate(weekdaysOnly ? addWeekdays(effectiveDate, -1) : addDays(effectiveDate, -1))}`),
+    onNextDay: () => navigate(`/journal/${isoToUrlDate(weekdaysOnly ? addWeekdays(effectiveDate, 1) : addDays(effectiveDate, 1))}`),
     onJumpToToday: () => { if (effectiveDate !== todayISO()) navigate(`/journal/${todayUrlDate()}`) },
   })
 
   return (
     <div className={'journal-page' + (isDark ? ' is-dark' : '')}>
       <div className="j-shell">
-        <DateNav isoDate={effectiveDate} />
+        <DateNav isoDate={effectiveDate} weekdaysOnly={weekdaysOnly} />
+
+        {notificationMsg && (
+          <div className="j-notify">{notificationMsg}</div>
+        )}
 
         {error && (
           <div className="j-error">
@@ -55,7 +87,7 @@ export function JournalPage() {
         )}
 
         <article className="journal">
-          <JournalHeader isoDate={effectiveDate} style={headerStyle} projectStart={projectStart} />
+          <JournalHeader isoDate={effectiveDate} style={headerStyle} projectStart={projectStart} weekdaysOnly={weekdaysOnly} />
 
           {isLoading && !entry ? (
             <div className="j-loading">Loading…</div>

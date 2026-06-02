@@ -41,6 +41,8 @@ function makePrefs(overrides?: Partial<PrefsContextValue>): PrefsContextValue {
     setTaskSortDir: vi.fn(),
     autoCompleteParentWhenChildrenDone: false,
     setAutoCompleteParentWhenChildrenDone: vi.fn(),
+    weekdaysOnly: false,
+    setWeekdaysOnly: vi.fn(),
     ...overrides,
   }
 }
@@ -118,6 +120,13 @@ describe('SettingsDrawer', () => {
     renderDrawer(true, { autoCompleteParentWhenChildrenDone: false, setAutoCompleteParentWhenChildrenDone })
     await userEvent.click(screen.getByRole('switch', { name: /toggle parent auto-complete/i }))
     expect(setAutoCompleteParentWhenChildrenDone).toHaveBeenCalledWith(true)
+  })
+
+  it('weekdays-only toggle calls setWeekdaysOnly with inverted value', async () => {
+    const setWeekdaysOnly = vi.fn()
+    renderDrawer(true, { weekdaysOnly: false, setWeekdaysOnly })
+    await userEvent.click(screen.getByRole('switch', { name: /toggle weekdays-only counter/i }))
+    expect(setWeekdaysOnly).toHaveBeenCalledWith(true)
   })
 
   it('theme swatch click calls setTheme("default")', async () => {

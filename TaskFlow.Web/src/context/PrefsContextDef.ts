@@ -18,6 +18,8 @@ export interface PrefsContextValue {
   setTaskSortDir: (v: TaskSortDir) => void
   autoCompleteParentWhenChildrenDone: boolean
   setAutoCompleteParentWhenChildrenDone: (v: boolean | ((prev: boolean) => boolean)) => void
+  weekdaysOnly: boolean
+  setWeekdaysOnly: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
 export const PrefsContext = createContext<PrefsContextValue | null>(null)

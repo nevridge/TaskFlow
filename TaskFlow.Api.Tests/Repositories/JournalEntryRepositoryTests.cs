@@ -239,6 +239,30 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
+    public async Task AddAsync_ShouldInheritIncompleteTasks_FromMostRecentEntry_WhenDaysAreNonConsecutive()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        // Simulate a Friday→Monday gap: two entries with a 3-day gap (no Saturday/Sunday entries)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var firstEntry = await repo.AddAsync(new JournalEntry { Title = "First", Date = today.AddDays(1) });
+        var openTask = new TaskItem { Title = "Open task", Status = Status.Todo };
+        context.TaskItems.Add(openTask);
+        await context.SaveChangesAsync();
+        await repo.AddTodoAsync(firstEntry.Id, openTask.Id);
+
+        // Skip today+2 and today+3 (simulating Saturday and Sunday) — create today+4 directly
+        var laterEntry = await repo.AddAsync(new JournalEntry { Title = "Later", Date = today.AddDays(4) });
+
+        (await repo.GetTodosAsync(firstEntry.Id)).Should().BeEmpty();
+        (await repo.GetTodosAsync(laterEntry.Id)).Should().ContainSingle(t => t.Id == openTask.Id);
+        openTask.CurrentJournalEntryId.Should().Be(laterEntry.Id);
+        openTask.MoveCount.Should().Be(1);
+        openTask.FirstTaggedDate.Should().Be(firstEntry.Date);
+    }
+
+    [Fact]
     public async Task AddTodoAsync_AndRemoveTodoAsync_ShouldWriteTaskHistoryEvents()
     {
         using var context = CreateInMemoryContext();

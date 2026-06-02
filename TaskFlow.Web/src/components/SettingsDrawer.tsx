@@ -16,12 +16,14 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     todoSort,
     projectStart,
     autoCompleteParentWhenChildrenDone,
+    weekdaysOnly,
     setIsDark,
     setTheme,
     setHeaderStyle,
     setTodoSort,
     setProjectStart,
     setAutoCompleteParentWhenChildrenDone,
+    setWeekdaysOnly,
   } = usePrefs()
   const drawerRef = useRef<HTMLDivElement>(null)
 
@@ -92,6 +94,19 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 onChange={e => e.target.value && setProjectStart(e.target.value)}
                 className="settings-date-input"
               />
+            </DrawerRow>
+
+            <DrawerRow label="Weekdays only">
+              <button
+                onClick={() => setWeekdaysOnly(!weekdaysOnly)}
+                className="settings-toggle"
+                style={{ background: weekdaysOnly ? '#34c759' : 'rgba(0,0,0,.15)' }}
+                aria-label="Toggle weekdays-only counter"
+                role="switch"
+                aria-checked={weekdaysOnly}
+              >
+                <span className="settings-toggle-thumb" style={{ left: weekdaysOnly ? 16 : 2 }} />
+              </button>
             </DrawerRow>
           </section>
 

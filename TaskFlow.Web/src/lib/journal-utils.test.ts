@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { urlDateToISO, isValidISODate, todayISO, formatTime } from './journal-utils'
+import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek } from './journal-utils'
 
 describe('journal-utils date parsing', () => {
   it('rejects invalid URL dates and falls back to today', () => {
@@ -50,5 +50,79 @@ describe('formatTime', () => {
   it('zero-pads minutes (minutes=5 shows :05)', () => {
     const result = formatTime('2026-05-28T09:05:00Z')
     expect(result).toContain(':05')
+  })
+})
+
+// 2026-05-25 = Monday, 2026-05-29 = Friday, 2026-05-30 = Saturday, 2026-05-31 = Sunday
+describe('prevWeekday', () => {
+  it('returns the same date for a Monday', () => {
+    expect(prevWeekday('2026-05-25')).toBe('2026-05-25')
+  })
+
+  it('returns the same date for a Wednesday', () => {
+    expect(prevWeekday('2026-05-27')).toBe('2026-05-27')
+  })
+
+  it('returns the same date for a Friday', () => {
+    expect(prevWeekday('2026-05-29')).toBe('2026-05-29')
+  })
+
+  it('Saturday returns the preceding Friday', () => {
+    expect(prevWeekday('2026-05-30')).toBe('2026-05-29')
+  })
+
+  it('Sunday returns the preceding Friday', () => {
+    expect(prevWeekday('2026-05-31')).toBe('2026-05-29')
+  })
+})
+
+describe('addWeekdays', () => {
+  it('Friday +1 returns Monday', () => {
+    expect(addWeekdays('2026-05-29', 1)).toBe('2026-06-01')
+  })
+
+  it('Monday -1 returns Friday', () => {
+    expect(addWeekdays('2026-06-01', -1)).toBe('2026-05-29')
+  })
+
+  it('Wednesday +1 returns Thursday (no skip needed)', () => {
+    expect(addWeekdays('2026-05-27', 1)).toBe('2026-05-28')
+  })
+})
+
+describe('dayWeekWeekdaysOnly', () => {
+  const PROJECT_START = '2026-05-09'
+
+  it('with weekdaysOnly=false delegates to dayWeek', () => {
+    const date = '2026-05-28'
+    expect(dayWeekWeekdaysOnly(date, PROJECT_START, false)).toEqual(dayWeek(date, PROJECT_START))
+  })
+
+  it('with weekdaysOnly=true Day 1 = Monday when start is Monday', () => {
+    // 2026-05-25 is a Monday
+    const result = dayWeekWeekdaysOnly('2026-05-25', '2026-05-25', true)
+    expect(result.dayNum).toBe(1)
+    expect(result.weekNum).toBe(1)
+  })
+
+  it('with weekdaysOnly=true Day 5 = Friday (end of first work week)', () => {
+    // Mon 25 = Day 1, Tue 26 = Day 2, Wed 27 = Day 3, Thu 28 = Day 4, Fri 29 = Day 5
+    const result = dayWeekWeekdaysOnly('2026-05-29', '2026-05-25', true)
+    expect(result.dayNum).toBe(5)
+    expect(result.weekNum).toBe(1)
+  })
+
+  it('with weekdaysOnly=true Monday of second work week = Day 6, Week 2', () => {
+    // Mon 25 → Fri 29 = 5 days, Mon Jun 1 = Day 6
+    const result = dayWeekWeekdaysOnly('2026-06-01', '2026-05-25', true)
+    expect(result.dayNum).toBe(6)
+    expect(result.weekNum).toBe(2)
+  })
+
+  it('with weekdaysOnly=true and weekend startDate normalizes to preceding Friday', () => {
+    // startDate Saturday 2026-05-30 normalizes to Friday 2026-05-29
+    // so Friday 2026-05-29 is Day 1
+    const result = dayWeekWeekdaysOnly('2026-05-29', '2026-05-30', true)
+    expect(result.dayNum).toBe(1)
   })
 })

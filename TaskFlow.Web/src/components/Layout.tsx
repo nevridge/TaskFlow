@@ -19,6 +19,8 @@ export interface AppContext {
   setTodoSort: (v: SortMode) => void
   projectStart: string
   setProjectStart: (v: string) => void
+  weekdaysOnly: boolean
+  setWeekdaysOnly: (v: boolean) => void
 }
 
 export function Layout() {

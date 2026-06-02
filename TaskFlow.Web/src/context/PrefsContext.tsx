@@ -25,6 +25,9 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
   const [autoCompleteParentWhenChildrenDone, setAutoCompleteParentWhenChildrenDone] = useState<boolean>(
     () => initialPrefs.autoCompleteParentWhenChildrenDone ?? false,
   )
+  const [weekdaysOnly, setWeekdaysOnly] = useState<boolean>(
+    () => initialPrefs.weekdaysOnly ?? false,
+  )
 
   useEffect(() => {
     document.documentElement.classList.toggle('is-dark', isDark)
@@ -53,6 +56,10 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
     savePrefs({ autoCompleteParentWhenChildrenDone })
   }, [autoCompleteParentWhenChildrenDone])
 
+  useEffect(() => {
+    savePrefs({ weekdaysOnly })
+  }, [weekdaysOnly])
+
   return (
     <PrefsContext.Provider
       value={{
@@ -72,6 +79,8 @@ export function PrefsProvider({ children }: { children: React.ReactNode }) {
         setTaskSortDir,
         autoCompleteParentWhenChildrenDone,
         setAutoCompleteParentWhenChildrenDone,
+        weekdaysOnly,
+        setWeekdaysOnly,
       }}
     >
       {children}

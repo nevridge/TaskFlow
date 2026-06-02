@@ -44,10 +44,12 @@ function Consumer() {
       <span data-testid="headerStyle">{prefs.headerStyle}</span>
       <span data-testid="todoSort">{prefs.todoSort}</span>
       <span data-testid="projectStart">{prefs.projectStart}</span>
+      <span data-testid="weekdaysOnly">{String(prefs.weekdaysOnly)}</span>
       <button data-testid="setIsDarkTrue" onClick={() => prefs.setIsDark(true)}>set dark true</button>
       <button data-testid="setIsDarkFalse" onClick={() => prefs.setIsDark(false)}>set dark false</button>
       <button data-testid="setThemeNord" onClick={() => prefs.setTheme('nord')}>set theme nord</button>
       <button data-testid="setThemeDefault" onClick={() => prefs.setTheme('default')}>set theme default</button>
+      <button data-testid="setWeekdaysOnlyTrue" onClick={() => prefs.setWeekdaysOnly(true)}>set weekdays true</button>
     </div>
   )
 }
@@ -127,6 +129,22 @@ describe('PrefsContext setTheme', () => {
       screen.getByTestId('setThemeDefault').click()
     })
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+  })
+})
+
+describe('PrefsContext weekdaysOnly', () => {
+  it('default weekdaysOnly is false when localStorage is empty', () => {
+    renderWithProvider()
+    expect(screen.getByTestId('weekdaysOnly').textContent).toBe('false')
+  })
+
+  it('weekdaysOnly persists to localStorage when toggled', () => {
+    renderWithProvider()
+    act(() => {
+      screen.getByTestId('setWeekdaysOnlyTrue').click()
+    })
+    const stored = JSON.parse(fakeStorage.getItem(PREFS_KEY) ?? '{}')
+    expect(stored.weekdaysOnly).toBe(true)
   })
 })
 

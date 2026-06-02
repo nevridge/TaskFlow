@@ -99,3 +99,40 @@ export function urlDateToISO(urlDate: string): string {
 export function todayUrlDate(): string {
   return isoToUrlDate(todayISO())
 }
+
+function isWeekend(s: string): boolean {
+  const day = parseISO(s).getDay()
+  return day === 0 || day === 6
+}
+
+export function prevWeekday(s: string): string {
+  const day = parseISO(s).getDay()
+  if (day === 6) return addDays(s, -1)
+  if (day === 0) return addDays(s, -2)
+  return s
+}
+
+export function addWeekdays(s: string, n: number): string {
+  const step = n > 0 ? 1 : -1
+  let d = addDays(s, step)
+  while (isWeekend(d)) d = addDays(d, step)
+  return d
+}
+
+export function dayWeekWeekdaysOnly(
+  s: string,
+  startDate: string,
+  weekdaysOnly: boolean,
+): { dayNum: number; weekNum: number } {
+  if (!weekdaysOnly) return dayWeek(s, startDate)
+
+  const normalizedStart = prevWeekday(startDate)
+  let count = 0
+  let cursor = normalizedStart
+  while (cursor < s) {
+    cursor = addDays(cursor, 1)
+    if (!isWeekend(cursor)) count++
+  }
+  const dayNum = count + 1
+  return { dayNum, weekNum: Math.floor((dayNum - 1) / 5) + 1 }
+}

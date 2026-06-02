@@ -65,6 +65,8 @@ function makePrefs(overrides?: Partial<PrefsContextValue>): PrefsContextValue {
     setTaskSortDir: vi.fn(),
     autoCompleteParentWhenChildrenDone: false,
     setAutoCompleteParentWhenChildrenDone: vi.fn(),
+    weekdaysOnly: false,
+    setWeekdaysOnly: vi.fn(),
     ...overrides,
   }
 }

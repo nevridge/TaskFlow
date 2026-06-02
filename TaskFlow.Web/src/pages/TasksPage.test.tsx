@@ -48,6 +48,8 @@ describe('TasksPage', () => {
       setTaskSortDir: vi.fn(),
       autoCompleteParentWhenChildrenDone: false,
       setAutoCompleteParentWhenChildrenDone: vi.fn(),
+      weekdaysOnly: false,
+      setWeekdaysOnly: vi.fn(),
     }
 
     vi.mocked(usePrefs).mockReturnValue(mockPrefs)

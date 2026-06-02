@@ -1,7 +1,7 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState, useEffect } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
-import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate, todayUrlDate } from '@/lib/journal-utils'
+import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate, todayUrlDate, prevWeekday } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
@@ -28,11 +28,28 @@ export function JournalPage() {
 
   const { entry, isLoading, error } = useEnsureJournalEntry(effectiveDate)
 
-  const { isDark, headerStyle, todoSort, projectStart } = useOutletContext<AppContext>()
+  const { isDark, headerStyle, todoSort, projectStart, weekdaysOnly } = useOutletContext<AppContext>()
 
   const todosSectionRef = useRef<TodosSectionHandle>(null)
   const logSectionRef = useRef<DailyLogSectionHandle>(null)
   const notesSectionRef = useRef<NotesSectionHandle>(null)
+
+  useEffect(() => {
+    if (!weekdaysOnly) return
+    const dayOfWeek = new Date(effectiveDate + 'T00:00:00').getDay()
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      navigate(`/journal/${isoToUrlDate(prevWeekday(effectiveDate))}`, { replace: true })
+    }
+  }, [effectiveDate, weekdaysOnly, navigate])
+
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(null)
+  const isFirstRender = useRef(true)
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return }
+    setNotificationMsg(weekdaysOnly ? 'Weekdays only on' : 'Weekdays only off')
+    const id = setTimeout(() => setNotificationMsg(null), 3000)
+    return () => clearTimeout(id)
+  }, [weekdaysOnly])
 
   useJournalKeyboardShortcuts({
     onNewTodo: () => todosSectionRef.current?.focusDraftInput(),
@@ -46,7 +63,11 @@ export function JournalPage() {
   return (
     <div className={'journal-page' + (isDark ? ' is-dark' : '')}>
       <div className="j-shell">
-        <DateNav isoDate={effectiveDate} />
+        <DateNav isoDate={effectiveDate} weekdaysOnly={weekdaysOnly} />
+
+        {notificationMsg && (
+          <div className="j-notify">{notificationMsg}</div>
+        )}
 
         {error && (
           <div className="j-error">
@@ -55,7 +76,7 @@ export function JournalPage() {
         )}
 
         <article className="journal">
-          <JournalHeader isoDate={effectiveDate} style={headerStyle} projectStart={projectStart} />
+          <JournalHeader isoDate={effectiveDate} style={headerStyle} projectStart={projectStart} weekdaysOnly={weekdaysOnly} />
 
           {isLoading && !entry ? (
             <div className="j-loading">Loading…</div>

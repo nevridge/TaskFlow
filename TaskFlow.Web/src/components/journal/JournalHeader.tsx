@@ -1,13 +1,14 @@
-import { dayWeek, dowName, formatLong, formatShort, todayISO } from '@/lib/journal-utils'
+import { dayWeekWeekdaysOnly, dowName, formatLong, formatShort, todayISO } from '@/lib/journal-utils'
 
 interface Props {
   isoDate: string
   style: 'stat' | 'minimal'
   projectStart: string
+  weekdaysOnly: boolean
 }
 
-export function JournalHeader({ isoDate, style, projectStart }: Props) {
-  const { dayNum, weekNum } = dayWeek(isoDate, projectStart)
+export function JournalHeader({ isoDate, style, projectStart, weekdaysOnly }: Props) {
+  const { dayNum, weekNum } = dayWeekWeekdaysOnly(isoDate, projectStart, weekdaysOnly)
   const dow = dowName(isoDate)
   const isToday = isoDate === todayISO()
 

@@ -51,18 +51,24 @@ vi.mock('@/components/journal/NotesSection', async () => ({
   }),
 }))
 
+const mockNavigate = vi.fn()
+
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
   return {
     ...actual,
-    useOutletContext: () => ({
-      isDark: false,
-      headerStyle: 'stat',
-      todoSort: 'manual',
-      projectStart: '2026-05-09',
-    }),
+    useNavigate: () => mockNavigate,
+    useOutletContext: () => mockOutletContext,
   }
 })
+
+const mockOutletContext = {
+  isDark: false,
+  headerStyle: 'stat' as const,
+  todoSort: 'manual' as const,
+  projectStart: '2026-05-09',
+  weekdaysOnly: false,
+}
 
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
 import { JournalPage } from './JournalPage'
@@ -90,6 +96,8 @@ function renderPage(path = '/journal/05-28-2026') {
 
 describe('JournalPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    mockOutletContext.weekdaysOnly = false
     vi.mocked(useEnsureJournalEntry).mockReturnValue({
       entry: baseEntry,
       isLoading: false,
@@ -183,5 +191,12 @@ describe('JournalPage', () => {
     await new Promise(r => setTimeout(r, 50))
     expect(document.activeElement).not.toBe(logDraft)
     expect(document.activeElement).toBe(todosDraft)
+  })
+
+  it('redirects Saturday to preceding Friday when weekdaysOnly=true', () => {
+    mockOutletContext.weekdaysOnly = true
+    // 2026-05-30 is a Saturday; preceding Friday is 2026-05-29
+    renderPage('/journal/05-30-2026')
+    expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026', { replace: true })
   })
 })

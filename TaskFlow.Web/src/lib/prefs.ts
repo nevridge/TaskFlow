@@ -15,6 +15,7 @@ export interface Prefs {
   taskSortKey?: TaskSortKey
   taskSortDir?: TaskSortDir
   autoCompleteParentWhenChildrenDone?: boolean
+  weekdaysOnly?: boolean
 }
 
 export function loadPrefs(): Prefs {

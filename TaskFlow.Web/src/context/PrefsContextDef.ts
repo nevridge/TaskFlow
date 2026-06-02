@@ -19,7 +19,7 @@ export interface PrefsContextValue {
   autoCompleteParentWhenChildrenDone: boolean
   setAutoCompleteParentWhenChildrenDone: (v: boolean | ((prev: boolean) => boolean)) => void
   weekdaysOnly: boolean
-  setWeekdaysOnly: (v: boolean) => void
+  setWeekdaysOnly: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
 export const PrefsContext = createContext<PrefsContextValue | null>(null)

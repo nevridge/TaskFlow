@@ -113,9 +113,14 @@ export function prevWeekday(s: string): string {
 }
 
 export function addWeekdays(s: string, n: number): string {
+  if (n === 0) return s
   const step = n > 0 ? 1 : -1
-  let d = addDays(s, step)
-  while (isWeekend(d)) d = addDays(d, step)
+  let d = s
+  let remaining = Math.abs(n)
+  while (remaining > 0) {
+    d = addDays(d, step)
+    if (!isWeekend(d)) remaining--
+  }
   return d
 }
 

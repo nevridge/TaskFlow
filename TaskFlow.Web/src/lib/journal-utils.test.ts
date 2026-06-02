@@ -93,6 +93,10 @@ describe('addWeekdays', () => {
     // 2026-05-30 is Saturday; stepping +1 from a weekend must land on a weekday
     expect(addWeekdays('2026-05-30', 1)).toBe('2026-06-01')
   })
+
+  it('n=0 returns the same date unchanged', () => {
+    expect(addWeekdays('2026-05-27', 0)).toBe('2026-05-27')
+  })
 })
 
 describe('dayWeekWeekdaysOnly', () => {

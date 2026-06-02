@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
-import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
+import { useParams, useOutletContext, useNavigate, useLocation } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
 import { urlDateToISO, todayISO, isValidISODate, addDays, addWeekdays, isoToUrlDate, todayUrlDate, prevWeekday } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
@@ -36,13 +36,22 @@ export function JournalPage() {
 
   useEffect(() => {
     if (!weekdaysOnly) return
-    const dayOfWeek = new Date(effectiveDate + 'T00:00:00').getDay()
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      navigate(`/journal/${isoToUrlDate(prevWeekday(effectiveDate))}`, { replace: true })
+    const friday = prevWeekday(effectiveDate)
+    if (friday !== effectiveDate) {
+      navigate(`/journal/${isoToUrlDate(friday)}`, { replace: true, state: { weekendRedirect: true } })
     }
   }, [effectiveDate, weekdaysOnly, navigate])
 
+  const location = useLocation()
   const [notificationMsg, setNotificationMsg] = useState<string | null>(null)
+  useEffect(() => {
+    if (location.state?.weekendRedirect) {
+      setNotificationMsg('Weekdays only — redirected to Friday')
+      const id = setTimeout(() => setNotificationMsg(null), 3000)
+      return () => clearTimeout(id)
+    }
+  }, [location.state?.weekendRedirect])
+
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }

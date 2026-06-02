@@ -20,7 +20,7 @@ export interface AppContext {
   projectStart: string
   setProjectStart: (v: string) => void
   weekdaysOnly: boolean
-  setWeekdaysOnly: (v: boolean) => void
+  setWeekdaysOnly: (v: boolean | ((prev: boolean) => boolean)) => void
 }
 
 export function Layout() {

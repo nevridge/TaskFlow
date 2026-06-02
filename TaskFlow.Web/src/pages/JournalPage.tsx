@@ -43,21 +43,20 @@ export function JournalPage() {
   }, [effectiveDate, weekdaysOnly, navigate])
 
   const location = useLocation()
-  const [notificationMsg, setNotificationMsg] = useState<string | null>(null)
+  const [notificationMsg, setNotificationMsg] = useState<string | null>(() =>
+    location.state?.weekendRedirect ? 'Weekdays only — redirected to Friday' : null
+  )
+
   useEffect(() => {
-    if (location.state?.weekendRedirect) {
-      setNotificationMsg('Weekdays only — redirected to Friday')
-      const id = setTimeout(() => setNotificationMsg(null), 3000)
-      return () => clearTimeout(id)
-    }
-  }, [location.state?.weekendRedirect])
+    if (!notificationMsg) return
+    const id = setTimeout(() => setNotificationMsg(null), 3000)
+    return () => clearTimeout(id)
+  }, [notificationMsg])
 
   const isFirstRender = useRef(true)
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return }
     setNotificationMsg(weekdaysOnly ? 'Weekdays only on' : 'Weekdays only off')
-    const id = setTimeout(() => setNotificationMsg(null), 3000)
-    return () => clearTimeout(id)
   }, [weekdaysOnly])
 
   useJournalKeyboardShortcuts({

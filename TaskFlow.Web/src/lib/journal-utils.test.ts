@@ -88,6 +88,11 @@ describe('addWeekdays', () => {
   it('Wednesday +1 returns Thursday (no skip needed)', () => {
     expect(addWeekdays('2026-05-27', 1)).toBe('2026-05-28')
   })
+
+  it('Saturday +1 returns Monday (skips Sunday)', () => {
+    // 2026-05-30 is Saturday; stepping +1 from a weekend must land on a weekday
+    expect(addWeekdays('2026-05-30', 1)).toBe('2026-06-01')
+  })
 })
 
 describe('dayWeekWeekdaysOnly', () => {

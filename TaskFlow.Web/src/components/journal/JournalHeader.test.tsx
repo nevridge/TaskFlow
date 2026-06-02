@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
 vi.mock('@/lib/journal-utils', async (importOriginal) => {
@@ -13,6 +13,14 @@ import { todayISO } from '@/lib/journal-utils'
 import { JournalHeader } from './JournalHeader'
 
 const PROJECT_START = '2026-05-09'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('JournalHeader stat style', () => {
   beforeEach(() => {
@@ -52,6 +60,18 @@ describe('JournalHeader weekdaysOnly', () => {
     // 2026-05-11 (Monday) is Day 2 (Friday=1, Mon=2)
     render(<JournalHeader isoDate="2026-05-11" style="minimal" projectStart="2026-05-08" weekdaysOnly={true} />)
     expect(screen.getByText(/Day 2/)).toBeInTheDocument()
+  })
+
+  it('normalizes Saturday projectStart to preceding Friday for day count', () => {
+    // projectStart 2026-05-09 (Saturday) normalizes to 2026-05-08 (Friday)
+    // Friday 2026-05-08 should be Day 1 regardless of whether projectStart is Sat or Fri
+    const resultWithSat = render(<JournalHeader isoDate="2026-05-08" style="minimal" projectStart="2026-05-09" weekdaysOnly={true} />)
+    expect(resultWithSat.getByText(/Day 1/)).toBeInTheDocument()
+    resultWithSat.unmount()
+
+    // Same date with projectStart=Friday should also yield Day 1
+    const resultWithFri = render(<JournalHeader isoDate="2026-05-08" style="minimal" projectStart="2026-05-08" weekdaysOnly={true} />)
+    expect(resultWithFri.getByText(/Day 1/)).toBeInTheDocument()
   })
 })
 

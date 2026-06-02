@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
 import { useParams, useOutletContext, useNavigate } from 'react-router-dom'
 import { useEnsureJournalEntry } from '@/hooks/useJournal'
-import { urlDateToISO, todayISO, isValidISODate, addDays, isoToUrlDate, todayUrlDate, prevWeekday } from '@/lib/journal-utils'
+import { urlDateToISO, todayISO, isValidISODate, addDays, addWeekdays, isoToUrlDate, todayUrlDate, prevWeekday } from '@/lib/journal-utils'
 import { DateNav } from '@/components/journal/DateNav'
 import { JournalHeader } from '@/components/journal/JournalHeader'
 import { TodosSection } from '@/components/journal/TodosSection'
@@ -55,8 +55,8 @@ export function JournalPage() {
     onNewTodo: () => todosSectionRef.current?.focusDraftInput(),
     onNewLog: () => logSectionRef.current?.focusDraftInput(),
     onNewNote: () => notesSectionRef.current?.focusNewNote(),
-    onPrevDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, -1))}`),
-    onNextDay: () => navigate(`/journal/${isoToUrlDate(addDays(effectiveDate, 1))}`),
+    onPrevDay: () => navigate(`/journal/${isoToUrlDate(weekdaysOnly ? addWeekdays(effectiveDate, -1) : addDays(effectiveDate, -1))}`),
+    onNextDay: () => navigate(`/journal/${isoToUrlDate(weekdaysOnly ? addWeekdays(effectiveDate, 1) : addDays(effectiveDate, 1))}`),
     onJumpToToday: () => { if (effectiveDate !== todayISO()) navigate(`/journal/${todayUrlDate()}`) },
   })
 

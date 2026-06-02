@@ -24,6 +24,7 @@ import { DateNav } from './DateNav'
 
 describe('DateNav', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     navigate.mockReset()
   })
 

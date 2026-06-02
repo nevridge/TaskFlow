@@ -199,4 +199,98 @@ describe('JournalPage', () => {
     renderPage('/journal/05-30-2026')
     expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026', { replace: true })
   })
+
+  it('redirects Sunday to preceding Friday when weekdaysOnly=true', () => {
+    mockOutletContext.weekdaysOnly = true
+    // 2026-05-31 is a Sunday; preceding Friday is 2026-05-29
+    renderPage('/journal/05-31-2026')
+    expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026', { replace: true })
+  })
+
+  describe('keyboard shortcut weekdaysOnly navigation', () => {
+    it('pressing [ skips to previous weekday when weekdaysOnly=true', async () => {
+      mockOutletContext.weekdaysOnly = true
+      // 2026-06-01 is a Monday; prev weekday = 2026-05-29 (Friday)
+      renderPage('/journal/06-01-2026')
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '[', bubbles: true }))
+      await vi.waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026')
+      })
+    })
+
+    it('pressing ] skips to next weekday when weekdaysOnly=true', async () => {
+      mockOutletContext.weekdaysOnly = true
+      // 2026-05-29 is a Friday; next weekday = 2026-06-01 (Monday)
+      renderPage('/journal/05-29-2026')
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: ']', bubbles: true }))
+      await vi.waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/journal/06-01-2026')
+      })
+    })
+  })
+
+  describe('weekdaysOnly notification', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('shows notification when weekdaysOnly toggles to true', async () => {
+      vi.useFakeTimers()
+      const { rerender } = render(
+        <MemoryRouter initialEntries={['/journal/05-28-2026']}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+      // weekdaysOnly starts false — no notification yet
+      expect(screen.queryByText(/weekdays only on/i)).not.toBeInTheDocument()
+
+      // Toggle weekdaysOnly to true
+      mockOutletContext.weekdaysOnly = true
+      rerender(
+        <MemoryRouter initialEntries={['/journal/05-28-2026']}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      await vi.waitFor(() => {
+        expect(screen.getByText(/weekdays only on/i)).toBeInTheDocument()
+      })
+    })
+
+    it('notification disappears after 3 seconds', async () => {
+      vi.useFakeTimers()
+      const { rerender } = render(
+        <MemoryRouter initialEntries={['/journal/05-28-2026']}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      // Toggle weekdaysOnly to true to trigger notification
+      mockOutletContext.weekdaysOnly = true
+      rerender(
+        <MemoryRouter initialEntries={['/journal/05-28-2026']}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      await vi.waitFor(() => {
+        expect(screen.getByText(/weekdays only on/i)).toBeInTheDocument()
+      })
+
+      // Advance timers by 3 seconds — notification should disappear
+      vi.runAllTimers()
+
+      await vi.waitFor(() => {
+        expect(screen.queryByText(/weekdays only on/i)).not.toBeInTheDocument()
+      })
+    })
+  })
 })

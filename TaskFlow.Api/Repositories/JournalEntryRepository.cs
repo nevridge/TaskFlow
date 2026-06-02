@@ -43,10 +43,11 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             throw new DuplicateJournalDateException(entry.Date);
         }
 
-        var previousDate = entry.Date.AddDays(-1);
         var previousEntry = await _context.JournalEntries
             .Include(e => e.Todos)
-            .FirstOrDefaultAsync(e => e.Date == previousDate);
+            .Where(e => e.Date < entry.Date)
+            .OrderByDescending(e => e.Date)
+            .FirstOrDefaultAsync();
 
         if (previousEntry is not null)
         {

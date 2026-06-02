@@ -26,9 +26,12 @@ export function JournalPage() {
   // Fall back to today if the param is missing or malformed
   const effectiveDate = isValidISODate(isoDate) ? isoDate : todayISO()
 
-  const { entry, isLoading, error } = useEnsureJournalEntry(effectiveDate)
-
   const { isDark, headerStyle, todoSort, projectStart, weekdaysOnly } = useOutletContext<AppContext>()
+
+  // When weekdays-only is on, never create a journal entry for a weekend date — the
+  // redirect effect will navigate away, but the mutation could still fire before unmount.
+  const entryDate = weekdaysOnly ? prevWeekday(effectiveDate) : effectiveDate
+  const { entry, isLoading, error } = useEnsureJournalEntry(entryDate)
 
   const todosSectionRef = useRef<TodosSectionHandle>(null)
   const logSectionRef = useRef<DailyLogSectionHandle>(null)

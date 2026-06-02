@@ -15,18 +15,7 @@ Trigger when the user asks to build, implement, or ship a feature. Key phrases: 
 
 ## Step 1 — Branch Check, Disclosure, and Creation
 
-Announce: "Step 1/8 — Checking branch status, disclosing pipeline cost, and creating feature branch."
-
-**Token cost disclosure:** Before running any git commands, display this notice and use `AskUserQuestion` to confirm:
-
-> This pipeline will run 4–5 agents in sequence (codebase-researcher → spec-writer → backend-builder → frontend-builder → implementation-validator), each with its own context window. Open questions at any stage add extra revision cycles. Total token usage is approximately 10–15× a standard chat. Each agent run is billed separately.
-
-- **Question:** "Ready to start the explore-then-build pipeline?"
-- **Options:**
-  - "Yes — start the pipeline"
-  - "No — cancel"
-
-If "No — cancel": stop immediately. Do not proceed to any further steps.
+Announce: "Step 1/8 — Checking branch status."
 
 **Branch handling:** Check the current branch. If already on a feature or bugfix branch, proceed. If on `main`, derive a branch name from the user's feature description — convert it to lowercase, replace spaces with hyphens, strip non-alphanumeric characters, and truncate to 40 characters. Prefix with `feature/`. Pass the derived name as a literal string to the git command (do not use a shell variable for the branch name):
 
@@ -52,7 +41,7 @@ If branch creation fails (non-zero exit), stop and ask the user to manually crea
 
 Announce: "Step 2/8 — Mapping the codebase with codebase-researcher."
 
-Use `model: "sonnet"` for this agent. In the agent prompt, include: "Read `CLAUDE.md` at the project root before beginning — it documents the architecture, naming conventions, safe change rules, and testing requirements for this codebase."
+In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for codebase research, such as architecture overview, coding conventions, and any notes on the existing code structure.
 
 Launch the `codebase-researcher` agent with the user's feature description as the question. Ask it to identify:
 - Relevant files grouped by role (backend and frontend separately)
@@ -76,7 +65,7 @@ Do not proceed to Step 3 until the gate exits (either approved or no open questi
 
 Announce: "Step 3/8 — Writing the technical spec with spec-writer."
 
-Use `model: "opus"` for this agent — the spec-writer's output gates the entire implementation, so use the most capable model. In the agent prompt, include: "Read `CLAUDE.md` at the project root before beginning."
+In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for technical specification.
 
 Launch the `spec-writer` agent. Pass it:
 - The user's original feature description
@@ -106,9 +95,9 @@ Use `AskUserQuestion` with three options: "Approved", "Changes needed", "Rejecte
 
 **If Approved:** proceed to Step 5.
 
-**If Changes needed:** summarise the requested changes, re-launch `spec-writer` with the original inputs plus the change requests, run the `open-questions-gate` on the revised output, present the revised spec, and repeat this gate.
+**If Changes needed:** summarize the requested changes, re-launch `spec-writer` with the original inputs plus the change requests, run the `open-questions-gate` on the revised output, present the revised spec, and repeat this gate.
 
-**If Rejected:** stop the pipeline. Summarise what was explored in Steps 2–3 (key files found, patterns identified, risks noted) so the work is not lost. Do not proceed to implementation.
+**If Rejected:** stop the pipeline. Summarize what was explored in Steps 2–3 (key files found, patterns identified, risks noted) so the work is not lost. Do not proceed to implementation.
 
 ---
 
@@ -116,7 +105,7 @@ Use `AskUserQuestion` with three options: "Approved", "Changes needed", "Rejecte
 
 Announce: "Step 5/8 — Implementing the backend with backend-builder."
 
-Use `model: "sonnet"` for this agent. In the agent prompt, include: "Read `CLAUDE.md` at the project root before beginning. Pay particular attention to the Coding Conventions, Architecture, and Testing sections — all generated code must follow these patterns exactly."
+In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for backend implementation, such as architecture overview, coding conventions, and any notes on the existing backend structure.
 
 Launch the `backend-builder` agent. Pass it:
 - The approved Technical Brief (full text)
@@ -174,6 +163,8 @@ Files modified: [list files changed by the backend-builder]
 
 ## Step 5.5 — Build Verification Gate
 
+Only do this step if the backend implementation included any code changes. If there were no changes, skip this step and proceed to Step 6.
+
 Announce: "Step 5.5/8 — Verifying backend builds and tests pass before proceeding to frontend."
 
 Run the backend build:
@@ -221,7 +212,7 @@ Announce: "Step 6/8 — Implementing the frontend with frontend-builder."
 
 If "No — backend only": announce "Skipping frontend implementation — backend-only feature." and proceed directly to Step 7.
 
-Use `model: "sonnet"` for the frontend-builder agent. In the agent prompt, include: "Read `CLAUDE.md` at the project root before beginning. Pay particular attention to the Frontend section, API client patterns, hook conventions, testing patterns, and the Safe Change Rules."
+In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for frontend implementation, such as architecture overview, coding conventions, and any notes on the existing frontend structure.
 
 If "Yes — implement the frontend": launch the `frontend-builder` agent. Pass it:
 - The approved Technical Brief (full text)
@@ -280,8 +271,6 @@ Files modified: [list files changed by the frontend-builder]
 ## Step 7 — Validate the Implementation (implementation-validator)
 
 Announce: "Step 7/8 — Validating with implementation-validator."
-
-Use `model: "sonnet"` for this agent.
 
 Launch the `implementation-validator` agent. Pass it:
 - The approved Technical Brief as the spec document

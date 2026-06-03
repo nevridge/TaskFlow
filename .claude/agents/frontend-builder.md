@@ -64,6 +64,8 @@ If a task requires backend changes (new endpoint, schema change), note what is n
 5. Confirm the scope: list what you will implement and what you will explicitly not touch.
 
 ### Phase 2: Implement
+**Tool preference:** Use the `Edit` tool for modifying existing files and the `Write` tool for creating new ones. Reserve `Bash` for shell commands only (running `npm` scripts, `npx`, `git`). Never use Bash or Python scripts to perform file edits that `Edit` or `Write` can handle directly.
+
 Typical implementation order:
 1. API client module updates (if endpoints changed or new endpoints exist)
 2. TanStack Query hooks (queries and mutations)

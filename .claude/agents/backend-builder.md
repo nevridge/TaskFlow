@@ -62,6 +62,8 @@ If a task requires frontend changes, note what API contract the frontend will ne
 4. Confirm the scope: list what you will implement and what you will explicitly not touch.
 
 ### Phase 2: Implement in Dependency Order
+**Tool preference:** Use the `Edit` tool for modifying existing files and the `Write` tool for creating new ones. Reserve `Bash` for shell commands only (running `dotnet`, `git`). Never use Bash or Python scripts to perform file edits that `Edit` or `Write` can handle directly.
+
 Always implement in this order to avoid compilation errors:
 1. Entity/model changes (use primary constructors, `required` members, and records where appropriate)
 2. DbContext changes (DbSet, Fluent API config)

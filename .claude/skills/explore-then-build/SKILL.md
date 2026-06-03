@@ -339,7 +339,9 @@ Present to the user:
 - The proposed next action: open a PR
 - The current feature branch name
 
-Use `AskUserQuestion`: **"Implementation is complete. How would you like to proceed?"** with options: "Open a PR", "I have feedback — hold on", "Reject and discard".
+Use `AskUserQuestion`: **"Implementation is complete. How would you like to proceed?"** with options: "Open a PR", "Send back for re-work", "I have feedback — hold on", "Reject and discard".
+
+**If Send back for re-work:** Ask the user which findings or concerns should drive the re-work and which layer they affect (backend, frontend, or both). Then route exactly as in the Step 7 CRITICAL fix loop — use `SendMessage` to `BACKEND_AGENT_ID` and/or `FRONTEND_AGENT_ID` with the re-work instructions. After the builder(s) respond, re-launch `implementation-validator` with the same spec and updated file lists, run the `open-questions-gate` on the result, and return to this Step 8 gate with the new validator report.
 
 **If Open a PR:** Run the following sequence. Stop if any command fails.
 

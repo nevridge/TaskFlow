@@ -30,11 +30,10 @@ public class JournalTodosController(
 
         var todos = await _journalRepo.GetTodosAsync(entryId);
         var todoList = todos.ToList();
-        var entryTaskIds = todoList.Select(t => t.Id).ToHashSet();
 
         var rootItems = todoList
             .Where(t => t.ParentTaskItemId is null)
-            .Select(t => MapTodo(t, entry.Date, entryTaskIds));
+            .Select(t => MapTodo(t, entry.Date));
 
         return Ok(rootItems);
     }
@@ -85,13 +84,10 @@ public class JournalTodosController(
         return NoContent();
     }
 
-    private static TaskItemResponseDto MapTodo(
-        TaskItem task,
-        DateOnly entryDate,
-        IReadOnlySet<int> entryTaskIds)
+    private static TaskItemResponseDto MapTodo(TaskItem task, DateOnly? entryDate)
     {
         var children = task.ChildTaskItems
-            .Select(c => MapTodo(c, c.CurrentJournalEntry?.Date ?? entryDate, entryTaskIds))
+            .Select(c => MapTodo(c, c.CurrentJournalEntry?.Date))
             .ToList();
 
         return new TaskItemResponseDto
@@ -113,13 +109,13 @@ public class JournalTodosController(
         };
     }
 
-    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly currentJournalDate)
+    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
     {
-        if (!firstTaggedDate.HasValue)
+        if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
         {
             return 0;
         }
 
-        return Math.Max(0, currentJournalDate.DayNumber - firstTaggedDate.Value.DayNumber + 1);
+        return Math.Max(0, currentJournalDate.Value.DayNumber - firstTaggedDate.Value.DayNumber + 1);
     }
 }

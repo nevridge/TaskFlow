@@ -288,6 +288,32 @@ public class JournalEntryRepositoryTests
         events[1].FromJournalEntryId.Should().Be(entry.Id);
     }
 
+    // Verifies the GetAllAsync include chain specifically — the controller path uses GetTodosAsync,
+    // which is covered by GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry.
+    [Fact]
+    public async Task GetAllAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var all = (await repo.GetAllAsync()).ToList();
+
+        var foundEntry = all.First(e => e.Id == entry.Id);
+        var parentTodo = foundEntry.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
     [Fact]
     public async Task GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry()
     {

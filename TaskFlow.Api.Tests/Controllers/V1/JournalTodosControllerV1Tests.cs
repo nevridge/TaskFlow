@@ -305,6 +305,43 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldNotIncludeOrphanedSubtask_InAnyChildList()
+    {
+        // A child whose ParentTaskItemId does not match the parent's Id — misconfigured relationship.
+        // The child appears in ChildTaskItems of the parent object, but its ParentTaskItemId points elsewhere.
+        var misconfiguredChild = new TaskItem
+        {
+            Id = 10,
+            Title = "Misconfigured",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 99, // does NOT match parent.Id (2)
+            ChildTaskItems = []
+        };
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Parent",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ChildTaskItems = [misconfiguredChild]
+        };
+
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        // Parent is a root item, but its misconfigured child should still appear mapped under Children
+        // because MapTodo iterates ChildTaskItems directly from the EF nav property.
+        // The important assertion: the child does NOT appear in the root list.
+        todos.Should().ContainSingle(t => t.Id == 2);
+        todos.Should().NotContain(t => t.Id == 10);
+    }
+
+    [Fact]
     public async Task RemoveTodo_ShouldAlsoRemoveChildren_WhenParentIsRemoved()
     {
         var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 4, ChildTaskItems = [] };

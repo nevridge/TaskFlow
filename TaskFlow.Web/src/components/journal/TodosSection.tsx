@@ -124,12 +124,15 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   function toggle(todo: TaskItemResponseDto) {
     setActionError(null)
     const isDone = todo.status === 'Completed' || !!todo.isComplete
+    const isChild = todo.parentTaskItemId != null
     toggleTodo.mutate(
       {
         id: Number(todo.id),
         title: todo.title,
         done: !isDone,
         parentTaskItemId: todo.parentTaskItemId ?? null,
+        // Subtask completion must never auto-complete the parent in the journal UI
+        ...(isChild && { autoCompleteParentWhenChildrenDone: false }),
       },
       { onError: err => setActionError(getTaskActionErrorMessage(err)) }
     )

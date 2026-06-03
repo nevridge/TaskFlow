@@ -62,10 +62,7 @@ function renderSection(props?: Partial<{ entryId: number; isoDate: string; sort:
 
 describe('TodosSection', () => {
   beforeEach(() => {
-    createTodoMutate.mockReset()
-    toggleTodoMutate.mockReset()
-    editTodoMutate.mockReset()
-    removeTodoMutate.mockReset()
+    vi.clearAllMocks()
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(todayISO).mockReturnValue('2026-05-28')
   })
@@ -301,6 +298,18 @@ describe('TodosSection', () => {
     await userEvent.click(checkButtons[1])
     expect(toggleTodoMutate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 99 }),
+      expect.any(Object)
+    )
+  })
+
+  it('toggling a subtask does not auto-complete the parent (autoCompleteParentWhenChildrenDone is false)', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    const checkButtons = screen.getAllByRole('button', { name: /mark done/i })
+    // Click the child check button (second 'Mark done' button)
+    await userEvent.click(checkButtons[1])
+    expect(toggleTodoMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ autoCompleteParentWhenChildrenDone: false }),
       expect.any(Object)
     )
   })

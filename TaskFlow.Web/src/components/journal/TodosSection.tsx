@@ -9,7 +9,27 @@ import {
   useRemoveTodoMutation,
   openTodoCount,
 } from '@/hooks/useJournal'
-import { todayISO } from '@/lib/journal-utils'
+import { todayISO, formatMonthDay } from '@/lib/journal-utils'
+
+const CheckSvg = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+
+const HistorySvg = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 8v5l3 2"/>
+    <path d="M3.05 11a9 9 0 1 1 .5 4"/>
+    <path d="M3 4v7h7"/>
+  </svg>
+)
+
+const DeleteSvg = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+    <path d="M18 6L6 18M6 6l12 12"/>
+  </svg>
+)
 
 type SortMode = 'manual' | 'open first' | 'done last'
 
@@ -119,7 +139,14 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     if (editingId == null) return
     const text = editingText.trim()
     if (text) {
-      const current = todos.find(t => Number(t.id) === editingId)
+      // Search both top-level todos and their children for the task being edited
+      let current: TaskItemResponseDto | undefined = todos.find(t => Number(t.id) === editingId)
+      if (!current) {
+        for (const td of todos) {
+          current = td.children?.find(c => Number(c.id) === editingId)
+          if (current) break
+        }
+      }
       editTodo.mutate({
         id: editingId,
         title: text,
@@ -155,11 +182,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                   onClick={() => toggle(td)}
                   aria-label={isDone ? 'Mark not done' : 'Mark done'}
                 >
-                  {isDone && (
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  )}
+                  {isDone && <CheckSvg />}
                 </button>
 
                 {editingId === Number(td.id) ? (
@@ -191,11 +214,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                   onClick={() => setHistoryTask(td)}
                   aria-label="History"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 8v5l3 2"/>
-                    <path d="M3.05 11a9 9 0 1 1 .5 4"/>
-                    <path d="M3 4v7h7"/>
-                  </svg>
+                  <HistorySvg />
                 </button>
 
                 <button
@@ -203,10 +222,82 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                   onClick={() => removeTodo.mutate(Number(td.id))}
                   aria-label="Delete"
                 >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                  </svg>
+                  <DeleteSvg />
                 </button>
+
+                {td.children && td.children.length > 0 && (
+                  <ul className="todo-child-list">
+                    {td.children.map(child => {
+                      const childDone = child.status === 'Completed' || !!child.isComplete
+                      const childIsFuture =
+                        !!child.currentJournalDate && child.currentJournalDate > isoDate
+                      return (
+                        <li
+                          key={child.id}
+                          className={
+                            'todo todo-child' +
+                            (childDone ? ' is-done' : '') +
+                            (childIsFuture ? ' is-future' : '')
+                          }
+                        >
+                          <button
+                            className="todo-check"
+                            onClick={() => toggle(child)}
+                            aria-label={childDone ? 'Mark not done' : 'Mark done'}
+                          >
+                            {childDone && <CheckSvg />}
+                          </button>
+
+                          {editingId === Number(child.id) ? (
+                            <input
+                              className="todo-edit"
+                              value={editingText}
+                              autoFocus
+                              onChange={e => setEditingText(e.target.value)}
+                              onBlur={commitEdit}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') commitEdit()
+                                if (e.key === 'Escape') { setEditingId(null); setEditingText('') }
+                              }}
+                            />
+                          ) : (
+                            <span
+                              className="todo-text"
+                              onDoubleClick={() => {
+                                setEditingId(Number(child.id))
+                                setEditingText(child.title ?? '')
+                              }}
+                            >
+                              {child.title}
+                            </span>
+                          )}
+
+                          {childIsFuture && child.currentJournalDate && (
+                            <span className="todo-future-badge">
+                              {formatMonthDay(child.currentJournalDate)}
+                            </span>
+                          )}
+
+                          <button
+                            className="todo-history"
+                            onClick={() => setHistoryTask(child)}
+                            aria-label="View history"
+                          >
+                            <HistorySvg />
+                          </button>
+
+                          <button
+                            className="todo-x"
+                            onClick={() => removeTodo.mutate(Number(child.id))}
+                            aria-label="Remove from day"
+                          >
+                            <DeleteSvg />
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </li>
             )
           })}

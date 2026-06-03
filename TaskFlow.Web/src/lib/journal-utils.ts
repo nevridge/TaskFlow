@@ -141,3 +141,14 @@ export function dayWeekWeekdaysOnly(
   const dayNum = count + 1
   return { dayNum, weekNum: Math.floor((dayNum - 1) / 5) + 1 }
 }
+
+const SHORT_MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+/** Formats an ISO date string as "Jun 4" */
+export function formatMonthDay(isoDate: string): string {
+  const [, month, day] = isoDate.split('-').map(Number)
+  return SHORT_MONTH_NAMES[month - 1] + ' ' + day
+}

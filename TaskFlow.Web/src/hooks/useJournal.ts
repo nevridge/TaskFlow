@@ -140,14 +140,14 @@ export function useToggleTodoMutation(entryId: number) {
   const qc = useQueryClient()
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title, done, parentTaskItemId }: { id: number; title: string; done: boolean; parentTaskItemId?: number | null }) =>
+    mutationFn: ({ id, title, done, parentTaskItemId, autoCompleteParentWhenChildrenDone: overrideAutoComplete }: { id: number; title: string; done: boolean; parentTaskItemId?: number | null; autoCompleteParentWhenChildrenDone?: boolean }) =>
       putApiV1TaskItemsById({
         path: { id },
         body: {
           title,
           status: done ? 'completed' : 'todo',
           parentTaskItemId,
-          autoCompleteParentWhenChildrenDone,
+          autoCompleteParentWhenChildrenDone: overrideAutoComplete ?? autoCompleteParentWhenChildrenDone,
         } as UpdateTaskItemDto,
       }),
     onSuccess: () => {

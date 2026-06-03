@@ -289,13 +289,15 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                             <HistorySvg />
                           </button>
 
-                          <button
-                            className="todo-x"
-                            onClick={() => removeTodo.mutate(Number(child.id))}
-                            aria-label="Remove from day"
-                          >
-                            <DeleteSvg />
-                          </button>
+                          {!childIsFuture && (
+                            <button
+                              className="todo-x"
+                              onClick={() => removeTodo.mutate(Number(child.id))}
+                              aria-label="Remove from day"
+                            >
+                              <DeleteSvg />
+                            </button>
+                          )}
                         </li>
                       )
                     })}

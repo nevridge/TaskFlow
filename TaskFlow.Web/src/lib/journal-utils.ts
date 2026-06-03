@@ -149,6 +149,6 @@ const SHORT_MONTH_NAMES = [
 
 /** Formats an ISO date string as "Jun 4" */
 export function formatMonthDay(isoDate: string): string {
-  const [, month, day] = isoDate.split('-').map(Number)
-  return SHORT_MONTH_NAMES[month - 1] + ' ' + day
+  const d = parseISO(isoDate)
+  return SHORT_MONTH_NAMES[d.getMonth()] + ' ' + d.getDate()
 }

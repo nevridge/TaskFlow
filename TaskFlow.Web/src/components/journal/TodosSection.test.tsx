@@ -322,6 +322,18 @@ describe('TodosSection', () => {
     expect(removeTodoMutate).toHaveBeenCalledWith(99)
   })
 
+  it('future-scheduled subtask does not show remove button', () => {
+    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [futureChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-06-02' })
+    // The child row is present but no "Remove from day" button should appear for it
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+  })
+
   it('child task does not appear at top level when nested under parent', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
     renderSection()

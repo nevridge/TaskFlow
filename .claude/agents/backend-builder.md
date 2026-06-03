@@ -75,6 +75,8 @@ Always implement in this order to avoid compilation errors:
 8. Unit tests for all new code
 
 ### Phase 3: Verify
+**Working directory note:** The Bash tool starts at the repo root (`C:\code\TaskFlow`) and persists directory changes between calls. Never run `cd` as a standalone Bash call — all `dotnet` commands run from the repo root without any `cd`.
+
 After implementation, run these commands and fix any failures before finishing:
 ```bash
 # Type-check and build

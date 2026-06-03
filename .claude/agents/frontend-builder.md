@@ -76,14 +76,14 @@ Typical implementation order:
 7. CSS additions (if needed)
 
 ### Phase 3: Verify
+**Working directory note:** The Bash tool starts at the repo root (`C:\code\TaskFlow`) and persists directory changes between calls. Never run `cd` as a standalone Bash call — always inline it with the command it serves (e.g. `cd TaskFlow.Web && npm run build`). If a prior Bash call already changed into `TaskFlow.Web`, run subsequent `npm`/`npx` commands directly without another `cd`.
+
 After implementation, run these commands and fix any failures before finishing:
 ```bash
-cd TaskFlow.Web
+# Type-check — run from TaskFlow.Web (inline the cd)
+cd TaskFlow.Web && npx tsc --noEmit
 
-# Type-check
-npx tsc --noEmit
-
-# Build (catches bundler errors)
+# Build — catches bundler errors (already in TaskFlow.Web after the line above if chained)
 npm run build
 ```
 

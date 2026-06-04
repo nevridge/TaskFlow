@@ -334,6 +334,74 @@ describe('TodosSection', () => {
     expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
   })
 
+  it('unlinked subtask (currentJournalDate null) does not show remove button', () => {
+    const unlinkedChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: null }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [unlinkedChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-05-28' })
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+  })
+
+  it('past-dated subtask (currentJournalDate < isoDate) does not show remove button', () => {
+    const pastChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-05-20' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [pastChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-05-28' })
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+  })
+
+  it('same-day subtask (currentJournalDate === isoDate) shows remove button', () => {
+    // childTodo already has currentJournalDate: '2026-05-28', rendered with isoDate: '2026-05-28'
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection({ isoDate: '2026-05-28' })
+    expect(screen.getByRole('button', { name: /remove from day/i })).toBeInTheDocument()
+  })
+
+  it('subtask with undefined currentJournalDate does not show remove button', () => {
+    const noDateChild: TaskItemResponseDto = { ...childTodo }
+    // Remove the currentJournalDate property entirely (undefined)
+    delete (noDateChild as Partial<TaskItemResponseDto>).currentJournalDate
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [noDateChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-05-28' })
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+  })
+
+  it('editing a subtask calls editTodo.mutate with child id and parentTaskItemId', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    await userEvent.dblClick(screen.getByText('Sub A'))
+    const editInput = screen.getByDisplayValue('Sub A')
+    await userEvent.clear(editInput)
+    await userEvent.type(editInput, 'Sub A updated')
+    await userEvent.keyboard('{Enter}')
+    expect(editTodoMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 99, title: 'Sub A updated' })
+    )
+  })
+
+  it('parent with no children does not render a child list', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+    renderSection()
+    expect(document.querySelector('.todo-child-list')).not.toBeInTheDocument()
+  })
+
+  it('parent with empty children array does not render a child list', () => {
+    const parentNoChildren: TaskItemResponseDto = { ...openTodo, children: [] }
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentNoChildren] }, isLoading: false } as never)
+    renderSection()
+    expect(document.querySelector('.todo-child-list')).not.toBeInTheDocument()
+  })
+
   it('child task does not appear at top level when nested under parent', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
     renderSection()

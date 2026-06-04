@@ -289,7 +289,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                             <HistorySvg />
                           </button>
 
-                          {!childIsFuture && (
+                          {child.currentJournalDate === isoDate && (
                             <button
                               className="todo-x"
                               onClick={() => removeTodo.mutate(Number(child.id))}

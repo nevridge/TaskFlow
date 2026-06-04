@@ -12,7 +12,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     private readonly TaskDbContext _context = context;
 
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
+        // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
+        // when both a parent and its child are linked to the same JournalEntry.
         await _context.JournalEntries
+            .AsNoTracking()
             .Include(e => e.Todos)
                 .ThenInclude(t => t.ChildTaskItems)
                     .ThenInclude(c => c.CurrentJournalEntry)
@@ -21,7 +24,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .ToListAsync();
 
     public async Task<JournalEntry?> GetByIdAsync(int id) =>
+        // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
+        // when both a parent and its child are linked to the same JournalEntry.
         await _context.JournalEntries
+            .AsNoTracking()
             .Include(e => e.Todos)
                 .ThenInclude(t => t.ChildTaskItems)
                     .ThenInclude(c => c.CurrentJournalEntry)
@@ -29,7 +35,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .FirstOrDefaultAsync(e => e.Id == id);
 
     public async Task<JournalEntry?> GetByDateAsync(DateOnly date) =>
+        // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
+        // when both a parent and its child are linked to the same JournalEntry.
         await _context.JournalEntries
+            .AsNoTracking()
             .Include(e => e.Todos)
                 .ThenInclude(t => t.ChildTaskItems)
                     .ThenInclude(c => c.CurrentJournalEntry)
@@ -111,7 +120,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
 
     public async Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId)
     {
+        // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
+        // when both a parent and its child are linked to the same JournalEntry.
         var entry = await _context.JournalEntries
+            .AsNoTracking()
             .Include(e => e.Todos)
                 .ThenInclude(t => t.ChildTaskItems)
                     .ThenInclude(c => c.CurrentJournalEntry)

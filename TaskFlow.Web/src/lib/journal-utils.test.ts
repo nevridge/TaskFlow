@@ -143,4 +143,10 @@ describe('formatMonthDay', () => {
   it('formats 2026-01-01 as "Jan 1"', () => {
     expect(formatMonthDay('2026-01-01')).toBe('Jan 1')
   })
+  it('formats 2026-12-31 as "Dec 31"', () => {
+    expect(formatMonthDay('2026-12-31')).toBe('Dec 31')
+  })
+  it('formats 2026-11-15 as "Nov 15"', () => {
+    expect(formatMonthDay('2026-11-15')).toBe('Nov 15')
+  })
 })

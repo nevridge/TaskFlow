@@ -494,4 +494,68 @@ public class JournalEntryRepositoryTests
         childItem.CurrentJournalEntry.Should().NotBeNull();
         childItem.CurrentJournalEntry!.Id.Should().Be(secondEntry.Id);
     }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldNestChild_WhenChildHasNullCurrentJournalEntryId()
+    {
+        // AC4: A child with null CurrentJournalEntryId (never assigned to any journal) still appears
+        // nested under the parent via ThenInclude, even though it is not in the JournalEntryTaskItem
+        // join table for this entry.
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+
+        int entryId;
+        int parentId;
+        int childId;
+
+        {
+            var writeOptions = new DbContextOptionsBuilder<TaskDbContext>()
+                .UseSqlite(connection)
+                .Options;
+            await using var writeContext = new TaskDbContext(writeOptions);
+            writeContext.Database.EnsureCreated();
+
+            var writeRepo = new JournalEntryRepository(writeContext);
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+            var entry = await writeRepo.AddAsync(new JournalEntry { Title = "Entry", Date = date });
+            entryId = entry.Id;
+
+            var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+            writeContext.TaskItems.Add(parent);
+            await writeContext.SaveChangesAsync();
+            parentId = parent.Id;
+
+            // Child is created with ParentTaskItemId set but is NEVER linked to any journal entry,
+            // so CurrentJournalEntryId remains null and no JournalEntryTaskItem row exists for it.
+            var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+            writeContext.TaskItems.Add(child);
+            await writeContext.SaveChangesAsync();
+            childId = child.Id;
+
+            // Only the parent is linked to the entry — child is NOT in the join table.
+            await writeRepo.AddTodoAsync(entryId, parentId);
+        }
+
+        var readOptions = new DbContextOptionsBuilder<TaskDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var readContext = new TaskDbContext(readOptions);
+        var readRepo = new JournalEntryRepository(readContext);
+
+        var todos = (await readRepo.GetTodosAsync(entryId)).ToList();
+
+        // Exactly one root-level item (the parent) is returned by the flat filter.
+        todos.Should().ContainSingle(t => t.ParentTaskItemId == null);
+        todos.Single(t => t.ParentTaskItemId == null).Id.Should().Be(parentId);
+
+        // The parent's ChildTaskItems navigation property contains the child, loaded via FK.
+        var parentTodo = todos.First(t => t.Id == parentId);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == childId);
+
+        // The child's FK back to the parent is intact, and CurrentJournalEntryId is null.
+        var childItem = parentTodo.ChildTaskItems.First(c => c.Id == childId);
+        childItem.ParentTaskItemId.Should().Be(parentId);
+        childItem.CurrentJournalEntryId.Should().BeNull();
+    }
 }

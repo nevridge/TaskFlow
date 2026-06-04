@@ -86,6 +86,7 @@ public class JournalTodosController(
 
     private static TaskItemResponseDto MapTodo(TaskItem task, DateOnly? entryDate)
     {
+        // The include chain loads only one level of ChildTaskItems (no grandchildren), so recursion terminates at depth 1 in practice.
         var children = task.ChildTaskItems
             .Select(c => MapTodo(c, c.CurrentJournalEntry?.Date))
             .ToList();

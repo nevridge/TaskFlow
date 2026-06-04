@@ -371,4 +371,59 @@ public class JournalTodosControllerV1Tests
         result.Should().BeOfType<NoContentResult>();
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 20), Times.Never);
     }
+
+    [Fact]
+    public async Task GetAll_ShouldNestChild_WhenChildAssignedToDifferentEntry()
+    {
+        // AC3: A child linked to a different JournalEntry still appears nested under the parent.
+        // Its CurrentJournalDate reflects its own entry's date, not the queried entry's date.
+        var queriedEntryDate = new DateOnly(2026, 6, 3);
+        var childEntryDate = new DateOnly(2026, 5, 20);
+
+        var childEntry = new JournalEntry { Id = 99, Title = "Earlier", Date = childEntryDate };
+        var child = new TaskItem
+        {
+            Id = 10,
+            Title = "Child",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = 2,
+            ChildTaskItems = [],
+            CurrentJournalEntryId = childEntry.Id,
+            CurrentJournalEntry = childEntry
+        };
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Parent",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = null,
+            ChildTaskItems = [child]
+        };
+
+        // The repository returns only the parent as a root item (child is not in this entry's join table).
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Today", Date = queriedEntryDate });
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+
+        // Exactly one root-level item — the parent.
+        todos.Should().ContainSingle();
+        todos[0].Id.Should().Be(2);
+
+        // The child appears nested under the parent.
+        todos[0].Children.Should().ContainSingle();
+        var childDto = todos[0].Children!.Single();
+        childDto.Id.Should().Be(10);
+
+        // The child's CurrentJournalDate reflects its own entry (childEntryDate), not the queried entry's date.
+        childDto.CurrentJournalDate.Should().Be(childEntryDate);
+
+        // The child does NOT appear as a standalone root item.
+        todos.Should().NotContain(t => t.Id == 10 && t.ParentTaskItemId == null);
+    }
 }

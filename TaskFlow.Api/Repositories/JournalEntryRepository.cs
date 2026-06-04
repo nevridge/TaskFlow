@@ -122,6 +122,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     {
         // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
         // when both a parent and its child are linked to the same JournalEntry.
+        // Note: the .Where(t => t.CurrentJournalEntryId == entryId) filter applies only to the flat
+        // return collection (direct Todos of this entry). Each returned item's ChildTaskItems navigation
+        // property is populated by ThenInclude via the FK relationship and may contain children assigned
+        // to a different JournalEntry (or none at all), satisfying AC3 and AC4.
         var entry = await _context.JournalEntries
             .AsNoTracking()
             .Include(e => e.Todos)

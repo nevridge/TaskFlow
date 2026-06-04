@@ -418,4 +418,15 @@ describe('TodosSection', () => {
     // 1 top-level todo, 0 completed → counter shows "0/1"
     expect(screen.getByText('0/1')).toBeInTheDocument()
   })
+
+  it('counter shows 1/1 when parent is completed and child is open (child excluded from both numerator and denominator)', () => {
+    const completedParentWithOpenChild: TaskItemResponseDto = {
+      ...doneTodo,
+      children: [childTodo],
+    }
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [completedParentWithOpenChild] }, isLoading: false } as never)
+    renderSection()
+    // 1 root-level todo (completed), child not counted in either numerator or denominator → 1/1
+    expect(screen.getByText('1/1')).toBeInTheDocument()
+  })
 })

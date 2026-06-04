@@ -212,7 +212,7 @@ export function useDeleteLogEntryMutation(entryId: number) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Count open todos in a journal entry's todos list. */
+/** Count open (non-Completed) root-level todos. Children are already nested in parent.children by the API and must not be included in the input array. */
 export function openTodoCount(todos: TaskItemResponseDto[]): number {
   return todos.filter(t => t.status !== 'Completed' && !t.isComplete).length
 }

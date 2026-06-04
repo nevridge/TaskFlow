@@ -14,10 +14,31 @@ TaskFlow is a personal task and daily journal management application. It consist
 
 ## Commands
 
+### Running the full stack locally
+
+**Preferred: Docker dev environment** (requires Docker Desktop to be running)
 ```bash
-# Backend — run
+# Starts API on :8080 and Seq logging UI on :5380
+docker compose up -d
+
+# Frontend dev server — proxies /api → http://localhost:8080 (matches Docker API port)
+cd TaskFlow.Web && npm run dev
+# Verify backend: curl http://localhost:8080/health
+```
+
+**Without Docker** (dotnet run puts the API on :5290, not :8080)
+```bash
+# Backend runs on http://localhost:5290
 dotnet run --project TaskFlow.Api
 
+# Frontend must override the proxy target to match
+cd TaskFlow.Web && API_TARGET=http://localhost:5290 npm run dev
+# Verify backend: curl http://localhost:5290/health
+```
+
+> The vite proxy defaults to `http://localhost:8080`. Running `npm run dev` without Docker and without `API_TARGET` will silently fail — the frontend loads but all API calls 404.
+
+```bash
 # Backend — test (all)
 dotnet test
 
@@ -32,9 +53,6 @@ dotnet format --verify-no-changes
 
 # Frontend — install deps (first time or after pulling)
 cd TaskFlow.Web && npm install
-
-# Frontend — dev server (proxies /api → http://localhost:8080)
-cd TaskFlow.Web && npm run dev
 
 # Frontend — type-check
 cd TaskFlow.Web && npx tsc --noEmit
@@ -53,9 +71,6 @@ cd TaskFlow.Web && npm run test -- --run --coverage
 
 # Frontend — regenerate typed API client from live OpenAPI spec (API must be running)
 cd TaskFlow.Web && npm run gen:api
-
-# Docker (dev — includes Seq logging UI at http://localhost:5380)
-docker compose up -d
 
 # Docker (production)
 docker compose -f docker-compose.prod.yml up

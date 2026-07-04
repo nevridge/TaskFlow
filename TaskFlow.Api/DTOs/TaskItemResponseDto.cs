@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace TaskFlow.Api.DTOs;
 
 public class TaskItemResponseDto
@@ -19,4 +21,7 @@ public class TaskItemResponseDto
     public DateOnly? CurrentJournalDate { get; set; }
     public int MoveCount { get; set; }
     public int DaysTagged { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ICollection<TaskItemResponseDto>? Children { get; set; }
 }

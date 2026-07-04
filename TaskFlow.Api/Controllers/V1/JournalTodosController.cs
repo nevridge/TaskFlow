@@ -2,6 +2,7 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
@@ -28,19 +29,13 @@ public class JournalTodosController(
         }
 
         var todos = await _journalRepo.GetTodosAsync(entryId);
-        return Ok(todos.Select(t => new TaskItemResponseDto
-        {
-            Id = t.Id,
-            Title = t.Title,
-            Description = t.Description,
-            IsComplete = t.IsComplete,
-            DueDate = t.DueDate,
-            Status = t.Status.ToString(),
-            Priority = t.Priority.ToString(),
-            CurrentJournalDate = entry.Date,
-            MoveCount = t.MoveCount,
-            DaysTagged = GetDaysTagged(t.FirstTaggedDate, entry.Date),
-        }));
+        var todoList = todos.ToList();
+
+        var rootItems = todoList
+            .Where(t => t.ParentTaskItemId is null)
+            .Select(t => MapTodo(t, entry.Date));
+
+        return Ok(rootItems);
     }
 
     // POST: api/v1/JournalEntries/{entryId}/todos
@@ -72,20 +67,55 @@ public class JournalTodosController(
     [HttpDelete("{taskItemId}")]
     public async Task<IActionResult> RemoveTodo(int entryId, int taskItemId)
     {
+        var currentTodos = await _journalRepo.GetTodosAsync(entryId);
+        var todoList = currentTodos.ToList();
+
         if (!await _journalRepo.RemoveTodoAsync(entryId, taskItemId))
         {
             return NotFound();
         }
+
+        var children = todoList.Where(t => t.ParentTaskItemId == taskItemId);
+        foreach (var child in children)
+        {
+            await _journalRepo.RemoveTodoAsync(entryId, child.Id);
+        }
+
         return NoContent();
     }
 
-    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly currentJournalDate)
+    private static TaskItemResponseDto MapTodo(TaskItem task, DateOnly? entryDate)
     {
-        if (!firstTaggedDate.HasValue)
+        var children = task.ChildTaskItems
+            .Select(c => MapTodo(c, c.CurrentJournalEntry?.Date))
+            .ToList();
+
+        return new TaskItemResponseDto
+        {
+            Id = task.Id,
+            Title = task.Title,
+            Description = task.Description,
+            IsComplete = task.IsComplete,
+            DueDate = task.DueDate,
+            Status = task.Status.ToString(),
+            Priority = task.Priority.ToString(),
+            ParentTaskItemId = task.ParentTaskItemId,
+            CurrentJournalEntryId = task.CurrentJournalEntryId,
+            FirstTaggedDate = task.FirstTaggedDate,
+            MoveCount = task.MoveCount,
+            CurrentJournalDate = entryDate,
+            DaysTagged = GetDaysTagged(task.FirstTaggedDate, entryDate),
+            Children = children.Count > 0 ? children : null,
+        };
+    }
+
+    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
+    {
+        if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
         {
             return 0;
         }
 
-        return Math.Max(0, currentJournalDate.DayNumber - firstTaggedDate.Value.DayNumber + 1);
+        return Math.Max(0, currentJournalDate.Value.DayNumber - firstTaggedDate.Value.DayNumber + 1);
     }
 }

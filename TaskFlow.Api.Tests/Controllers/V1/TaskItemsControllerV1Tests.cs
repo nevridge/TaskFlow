@@ -234,6 +234,44 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_ShouldSucceedAndAttachToExistingEntry_WhenJournalDateRaceOccurs()
+    {
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "Racy task",
+            JournalDate = targetDate
+        };
+
+        var createdTask = new TaskItem
+        {
+            Id = 88,
+            Title = "Racy task",
+            Status = Status.Todo
+        };
+        var existingEntry = new JournalEntry { Id = 21, Date = targetDate, Title = "Journal" };
+
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(88)).ReturnsAsync(createdTask);
+
+        _mockJournalRepo.SetupSequence(r => r.GetByDateAsync(targetDate))
+            .ReturnsAsync((JournalEntry?)null)
+            .ReturnsAsync(existingEntry);
+        _mockJournalRepo.Setup(r => r.AddAsync(It.IsAny<JournalEntry>()))
+            .ThrowsAsync(new DuplicateJournalDateException(targetDate));
+        _mockJournalRepo.Setup(r => r.AddTodoAsync(existingEntry.Id, createdTask.Id, null))
+            .ReturnsAsync(AddTodoResult.Success);
+
+        var result = await _controller.Create(createDto);
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        _mockJournalRepo.Verify(r => r.AddTodoAsync(existingEntry.Id, createdTask.Id, null), Times.Once);
+        _mockJournalRepo.Verify(r => r.GetByDateAsync(targetDate), Times.Exactly(2));
+    }
+
+    [Fact]
     public async Task Create_ShouldForwardTimezoneOffsetToAddTodoAsync_WhenJournalDateIsToday()
     {
         // User in UTC-5 (timezoneOffsetMinutes = -300). Their "today" = utcNow - 5h.

@@ -401,12 +401,34 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             return;
         }
 
-        var entry = await _journalRepo.GetByDateAsync(journalDate)
-            ?? await _journalRepo.AddAsync(new JournalEntry
+        JournalEntry entry;
+        try
+        {
+            entry = await _journalRepo.GetByDateAsync(journalDate)
+                ?? await _journalRepo.AddAsync(new JournalEntry
+                {
+                    Title = $"Journal {journalDate:MM-dd-yyyy}",
+                    Date = journalDate,
+                });
+        }
+        catch (DuplicateJournalDateException)
+        {
+            // A concurrent request created the entry for this date between our
+            // GetByDateAsync miss and our AddAsync call. The row now exists —
+            // re-fetch it and continue attaching the task to it. Unlike
+            // JournalEntriesController.Create, the caller here only asked to
+            // create a task, so we must not surface a 409 for this race.
+            var existing = await _journalRepo.GetByDateAsync(journalDate);
+            if (existing is null)
             {
-                Title = $"Journal {journalDate:MM-dd-yyyy}",
-                Date = journalDate,
-            });
+                // Should not happen: the exception only fires on a unique
+                // constraint violation, meaning a row for this date was just
+                // committed by the concurrent request. Defensive guard only.
+                return;
+            }
+
+            entry = existing;
+        }
 
         await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
     }

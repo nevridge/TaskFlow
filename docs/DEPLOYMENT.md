@@ -230,7 +230,7 @@ For detailed security scanning documentation, see [SECURITY_SCANNING.md](SECURIT
 
 **appsettings.json** - Base configuration for all environments
 **appsettings.Development.json** - Development overrides
-**appsettings.Production.json** - Production overrides (optional)
+**appsettings.Production.json** - Production overrides; supplies `Cors:AllowedOrigins` with `https://taskflow.skalaforge.com` so the deployed frontend origin is allowed by the CORS middleware
 
 **Override order (highest to lowest priority):**
 1. Environment variables

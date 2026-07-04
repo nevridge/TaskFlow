@@ -80,4 +80,19 @@ public class CorsServiceExtensionsTests
 
         origins.Should().BeEmpty();
     }
+
+    [Fact]
+    public void GetConfiguredOrigins_WhenLoadedFromProductionAppsettings_ShouldReturnProductionOrigin()
+    {
+        var apiProjectPath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "TaskFlow.Api");
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(apiProjectPath)
+            .AddJsonFile("appsettings.json")
+            .AddJsonFile("appsettings.Production.json")
+            .Build();
+
+        var origins = CorsServiceExtensions.GetConfiguredOrigins(configuration);
+
+        origins.Should().BeEquivalentTo(["https://taskflow.skalaforge.com"]);
+    }
 }

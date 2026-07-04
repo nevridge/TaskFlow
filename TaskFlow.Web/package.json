@@ -42,7 +42,7 @@
     "tailwind-merge": "^3.5.0",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.4",
+    "vite": "^8.0.16",
     "vitest": "^4.1.4"
   }
 }

@@ -214,6 +214,22 @@ describe('useToggleTodoMutation', () => {
       })
     )
   })
+
+  it('explicit autoCompleteParentWhenChildrenDone:false overrides pref=true in HTTP body', async () => {
+    const { usePrefs } = await import('@/context/usePrefs')
+    vi.mocked(usePrefs).mockReturnValue({ autoCompleteParentWhenChildrenDone: true } as never)
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ id: 3, title: 'Sub', done: true, autoCompleteParentWhenChildrenDone: false }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({ autoCompleteParentWhenChildrenDone: false }),
+      })
+    )
+  })
 })
 
 describe('useEditTodoMutation', () => {

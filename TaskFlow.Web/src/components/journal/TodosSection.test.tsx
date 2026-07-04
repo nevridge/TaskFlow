@@ -62,10 +62,7 @@ function renderSection(props?: Partial<{ entryId: number; isoDate: string; sort:
 
 describe('TodosSection', () => {
   beforeEach(() => {
-    createTodoMutate.mockReset()
-    toggleTodoMutate.mockReset()
-    editTodoMutate.mockReset()
-    removeTodoMutate.mockReset()
+    vi.clearAllMocks()
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(todayISO).mockReturnValue('2026-05-28')
   })
@@ -232,5 +229,125 @@ describe('TodosSection', () => {
     renderSection(undefined, ref)
     ref.current?.focusDraftInput()
     expect(document.activeElement).toBe(screen.getByRole('textbox'))
+  })
+
+  // ── Subtask (children) tests ────────────────────────────────────────────────
+
+  const childTodo: TaskItemResponseDto = {
+    id: 99,
+    title: 'Sub A',
+    status: 'Todo',
+    isComplete: false,
+    priority: 'low',
+    description: null,
+    dueDate: null,
+    parentTaskItemId: 1,
+    currentJournalDate: '2026-05-28',
+  }
+
+  const parentWithChild: TaskItemResponseDto = {
+    ...openTodo,
+    children: [childTodo],
+  }
+
+  it('renders subtask nested under parent when children array is populated', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    const li = screen.getByText('Sub A').closest('li')
+    expect(li?.className).toContain('todo-child')
+  })
+
+  it('subtask with future currentJournalDate gets is-future class', () => {
+    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [futureChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-06-02' })
+    const li = screen.getByText('Sub A').closest('li')
+    expect(li?.className).toContain('is-future')
+  })
+
+  it('subtask with past currentJournalDate does NOT get is-future class', () => {
+    const pastChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-05-01' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [pastChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-06-02' })
+    const li = screen.getByText('Sub A').closest('li')
+    expect(li?.className).not.toContain('is-future')
+  })
+
+  it('future-date badge shows human-readable date', () => {
+    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [futureChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-06-02' })
+    expect(screen.getByText('Jun 10')).toBeInTheDocument()
+  })
+
+  it('toggle on subtask calls mutation with child id', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    const checkButtons = screen.getAllByRole('button', { name: /mark done/i })
+    // The child check button follows the parent's — it is the second 'Mark done' button
+    await userEvent.click(checkButtons[1])
+    expect(toggleTodoMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 99 }),
+      expect.any(Object)
+    )
+  })
+
+  it('toggling a subtask does not auto-complete the parent (autoCompleteParentWhenChildrenDone is false)', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    const checkButtons = screen.getAllByRole('button', { name: /mark done/i })
+    // Click the child check button (second 'Mark done' button)
+    await userEvent.click(checkButtons[1])
+    expect(toggleTodoMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ autoCompleteParentWhenChildrenDone: false }),
+      expect.any(Object)
+    )
+  })
+
+  it('delete on subtask calls removeTodo.mutate with child id', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    const removeButtons = screen.getAllByRole('button', { name: /remove from day/i })
+    await userEvent.click(removeButtons[0])
+    expect(removeTodoMutate).toHaveBeenCalledWith(99)
+  })
+
+  it('future-scheduled subtask does not show remove button', () => {
+    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
+    vi.mocked(useJournalTodos).mockReturnValue({
+      data: { data: [{ ...openTodo, children: [futureChild] }] },
+      isLoading: false,
+    } as never)
+    renderSection({ isoDate: '2026-06-02' })
+    // The child row is present but no "Remove from day" button should appear for it
+    expect(screen.getByText('Sub A')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+  })
+
+  it('child task does not appear at top level when nested under parent', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    const childList = document.querySelector('.todo-child-list')
+    expect(childList).toBeInTheDocument()
+    // The child li is inside the child list, not a direct sibling of the parent li
+    const childLi = screen.getByText('Sub A').closest('li')
+    expect(childLi?.closest('.todo-child-list')).toBeInTheDocument()
+  })
+
+  it('todo counter reflects top-level count only', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    renderSection()
+    // 1 top-level todo, 0 completed → counter shows "0/1"
+    expect(screen.getByText('0/1')).toBeInTheDocument()
   })
 })

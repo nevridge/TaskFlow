@@ -287,4 +287,211 @@ public class JournalEntryRepositoryTests
         events[1].EventType.Should().Be("RemovedFromJournalDay");
         events[1].FromJournalEntryId.Should().Be(entry.Id);
     }
+
+    // Verifies the GetAllAsync include chain specifically — the controller path uses GetTodosAsync,
+    // which is covered by GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry.
+    [Fact]
+    public async Task GetAllAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var all = (await repo.GetAllAsync()).ToList();
+
+        var foundEntry = all.First(e => e.Id == entry.Id);
+        var parentTodo = foundEntry.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry()
+    {
+        var (context, connection) = CreateSqliteContext();
+        await using var _ = connection;
+        await using var __ = context;
+
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
+
+        var parentTodo = todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var found = await repo.GetByIdAsync(entry.Id);
+
+        found.Should().NotBeNull();
+        var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetByDateAsync_ShouldIncludeChildTaskItems_OnTodos()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = date });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var found = await repo.GetByDateAsync(date);
+
+        found.Should().NotBeNull();
+        var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldNestChild_WhenBothParentAndChildLinkedToSameEntry()
+    {
+        // Use a shared SQLite connection so two separate context instances share the same DB.
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+
+        int entryId;
+        int parentId;
+        int childId;
+
+        // Write phase: use a dedicated write context so it is disposed before the read context opens.
+        // This ensures no tracked instances leak into the read context's identity map.
+        {
+            var writeOptions = new DbContextOptionsBuilder<TaskDbContext>()
+                .UseSqlite(connection)
+                .Options;
+            await using var writeContext = new TaskDbContext(writeOptions);
+            writeContext.Database.EnsureCreated();
+
+            var writeRepo = new JournalEntryRepository(writeContext);
+            var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+            var entry = await writeRepo.AddAsync(new JournalEntry { Title = "Entry", Date = date });
+            entryId = entry.Id;
+
+            var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+            writeContext.TaskItems.Add(parent);
+            await writeContext.SaveChangesAsync();
+            parentId = parent.Id;
+
+            var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+            writeContext.TaskItems.Add(child);
+            await writeContext.SaveChangesAsync();
+            childId = child.Id;
+
+            // Link both parent AND child to the same entry — this is the identity map collision scenario.
+            await writeRepo.AddTodoAsync(entryId, parentId);
+            await writeRepo.AddTodoAsync(entryId, childId);
+        }
+
+        // Read phase: fresh context with an empty identity map — this is where the collision occurs
+        // without AsNoTracking, because EF loads child both as a direct Todo and as a ChildTaskItem.
+        var readOptions = new DbContextOptionsBuilder<TaskDbContext>()
+            .UseSqlite(connection)
+            .Options;
+        await using var readContext = new TaskDbContext(readOptions);
+        var readRepo = new JournalEntryRepository(readContext);
+
+        var todos = (await readRepo.GetTodosAsync(entryId)).ToList();
+
+        // Assert 1: the returned list contains both items (both linked to the same entry),
+        // but only the parent qualifies as a root-level item (ParentTaskItemId is null).
+        // Without AsNoTracking, the identity map collision causes the child's ParentTaskItemId
+        // to read as null, which makes it falsely appear as a root item in the controller filter.
+        var rootItems = todos.Where(t => t.ParentTaskItemId is null).ToList();
+        rootItems.Should().ContainSingle(t => t.Id == parentId);
+
+        // Assert 2: the parent has exactly one child with the expected Id.
+        var parentTodo = todos.First(t => t.Id == parentId);
+        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == childId);
+
+        // Assert 3: the child's ParentTaskItemId is not null and correctly points to the parent.
+        // This is the key assertion: without AsNoTracking this would be null due to identity map collision.
+        var childItem = parentTodo.ChildTaskItems.First(c => c.Id == childId);
+        childItem.ParentTaskItemId.Should().NotBeNull();
+        childItem.ParentTaskItemId.Should().Be(parentId);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldIncludeCurrentJournalEntry_OnChildTaskItems()
+    {
+        var (context, connection) = CreateSqliteContext();
+        await using var _ = connection;
+        await using var __ = context;
+
+        var repo = new JournalEntryRepository(context);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var firstEntry = await repo.AddAsync(new JournalEntry { Title = "First", Date = today.AddDays(1) });
+        var secondEntry = await repo.AddAsync(new JournalEntry { Title = "Second", Date = today.AddDays(2) });
+
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = parent.Id,
+            CurrentJournalEntryId = secondEntry.Id
+        };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(firstEntry.Id, parent.Id);
+
+        var todos = (await repo.GetTodosAsync(firstEntry.Id)).ToList();
+
+        var parentTodo = todos.First(t => t.Id == parent.Id);
+        var childItem = parentTodo.ChildTaskItems.First(c => c.Id == child.Id);
+        childItem.CurrentJournalEntry.Should().NotBeNull();
+        childItem.CurrentJournalEntry!.Id.Should().Be(secondEntry.Id);
+    }
 }

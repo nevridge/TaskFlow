@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek } from './journal-utils'
+import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay } from './journal-utils'
 
 describe('journal-utils date parsing', () => {
   it('rejects invalid URL dates and falls back to today', () => {
@@ -133,5 +133,14 @@ describe('dayWeekWeekdaysOnly', () => {
     // so Friday 2026-05-29 is Day 1
     const result = dayWeekWeekdaysOnly('2026-05-29', '2026-05-30', true)
     expect(result.dayNum).toBe(1)
+  })
+})
+
+describe('formatMonthDay', () => {
+  it('formats 2026-06-04 as "Jun 4"', () => {
+    expect(formatMonthDay('2026-06-04')).toBe('Jun 4')
+  })
+  it('formats 2026-01-01 as "Jan 1"', () => {
+    expect(formatMonthDay('2026-01-01')).toBe('Jan 1')
   })
 })

@@ -64,6 +64,8 @@ If a task requires backend changes (new endpoint, schema change), note what is n
 5. Confirm the scope: list what you will implement and what you will explicitly not touch.
 
 ### Phase 2: Implement
+**Tool preference:** Use the `Edit` tool for modifying existing files and the `Write` tool for creating new ones. Reserve `Bash` for shell commands only (running `npm` scripts, `npx`, `git`). Never use Bash or Python scripts to perform file edits that `Edit` or `Write` can handle directly.
+
 Typical implementation order:
 1. API client module updates (if endpoints changed or new endpoints exist)
 2. TanStack Query hooks (queries and mutations)
@@ -74,14 +76,14 @@ Typical implementation order:
 7. CSS additions (if needed)
 
 ### Phase 3: Verify
+**Working directory note:** The Bash tool starts at the repo root (`C:\code\TaskFlow`) and persists directory changes between calls. Never run `cd` as a standalone Bash call — always inline it with the command it serves (e.g. `cd TaskFlow.Web && npm run build`). If a prior Bash call already changed into `TaskFlow.Web`, run subsequent `npm`/`npx` commands directly without another `cd`.
+
 After implementation, run these commands and fix any failures before finishing:
 ```bash
-cd TaskFlow.Web
+# Type-check — run from TaskFlow.Web (inline the cd)
+cd TaskFlow.Web && npx tsc --noEmit
 
-# Type-check
-npx tsc --noEmit
-
-# Build (catches bundler errors)
+# Build — catches bundler errors (already in TaskFlow.Web after the line above if chained)
 npm run build
 ```
 

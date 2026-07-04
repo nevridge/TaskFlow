@@ -28,6 +28,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPlatformVersion)" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftPlatformVersion)">

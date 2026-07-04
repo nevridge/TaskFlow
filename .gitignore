@@ -218,3 +218,4 @@ TaskFlow.Api/tasks.db-wal
 /data/
 
 # End of file
+.claude/worktrees/

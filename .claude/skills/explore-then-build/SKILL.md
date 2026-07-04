@@ -107,7 +107,7 @@ Announce: "Step 5/8 — Implementing the backend with backend-builder."
 
 In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for backend implementation, such as architecture overview, coding conventions, and any notes on the existing backend structure.
 
-Launch the `backend-builder` agent. Pass it:
+Launch the `backend-builder` agent. **Do NOT pass `isolation: "worktree"` — the builder must work directly in the current feature branch.** Pass it:
 - The approved Technical Brief (full text)
 - The codebase-researcher findings (relevant backend file paths, patterns, similar examples)
 
@@ -214,7 +214,7 @@ If "No — backend only": announce "Skipping frontend implementation — backend
 
 In the agent prompt, pass any relevant information from the `CLAUDE.md` that might be needed for frontend implementation, such as architecture overview, coding conventions, and any notes on the existing frontend structure.
 
-If "Yes — implement the frontend": launch the `frontend-builder` agent. Pass it:
+If "Yes — implement the frontend": launch the `frontend-builder` agent. **Do NOT pass `isolation: "worktree"` — the builder must work directly in the current feature branch.** Pass it:
 - The approved Technical Brief (full text)
 - The codebase-researcher findings (relevant frontend file paths, patterns, similar examples)
 - The API contract summary from the backend-builder (the new/changed endpoints, request/response shapes, status codes)
@@ -339,7 +339,9 @@ Present to the user:
 - The proposed next action: open a PR
 - The current feature branch name
 
-Use `AskUserQuestion`: **"Implementation is complete. How would you like to proceed?"** with options: "Open a PR", "I have feedback — hold on", "Reject and discard".
+Use `AskUserQuestion`: **"Implementation is complete. How would you like to proceed?"** with options: "Open a PR", "Send back for re-work", "I have feedback — hold on", "Reject and discard".
+
+**If Send back for re-work:** Ask the user which findings or concerns should drive the re-work and which layer they affect (backend, frontend, or both). Then route exactly as in the Step 7 CRITICAL fix loop — use `SendMessage` to `BACKEND_AGENT_ID` and/or `FRONTEND_AGENT_ID` with the re-work instructions. After the builder(s) respond, re-launch `implementation-validator` with the same spec and updated file lists, run the `open-questions-gate` on the result, and return to this Step 8 gate with the new validator report.
 
 **If Open a PR:** Run the following sequence. Stop if any command fails.
 

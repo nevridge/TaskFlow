@@ -290,17 +290,19 @@ TaskFlow.Api.Tests/
 public class TaskItemsControllerV1Tests
 {
     [Fact]
-    public async Task GetById_ReturnsNotFound_WhenTaskDoesNotExist()
+    public async Task Get_ReturnsNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
         var mockRepo = new Mock<ITaskRepository>();
+        var mockValidator = new Mock<IValidator<TaskItem>>();
+        var mockJournalRepo = new Mock<IJournalEntryRepository>();
         mockRepo.Setup(r => r.GetByIdAsync(1))
                 .ReturnsAsync((TaskItem?)null);
 
-        var controller = new TaskItemsController(mockRepo.Object);
+        var controller = new TaskItemsController(mockRepo.Object, mockValidator.Object, mockJournalRepo.Object);
 
         // Act
-        var result = await controller.GetById(1);
+        var result = await controller.Get(1);
 
         // Assert
         result.Result.Should().BeOfType<NotFoundResult>();

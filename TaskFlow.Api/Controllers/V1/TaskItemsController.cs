@@ -287,13 +287,13 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
     private async Task<bool> HasIncompleteChildrenAsync(int taskId)
     {
-        var allTasks = await _repo.GetAllAsync() ?? [];
+        var allTasks = await _repo.GetAllAsync();
         return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.IsComplete, t.Status));
     }
 
     private async Task<bool> HasChildrenAsync(int taskId)
     {
-        var allTasks = await _repo.GetAllAsync() ?? [];
+        var allTasks = await _repo.GetAllAsync();
         return allTasks.Any(t => t.ParentTaskItemId == taskId);
     }
 

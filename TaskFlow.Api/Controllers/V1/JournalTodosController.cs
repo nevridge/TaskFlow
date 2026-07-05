@@ -2,6 +2,7 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -104,18 +105,8 @@ public class JournalTodosController(
             FirstTaggedDate = task.FirstTaggedDate,
             MoveCount = task.MoveCount,
             CurrentJournalDate = entryDate,
-            DaysTagged = GetDaysTagged(task.FirstTaggedDate, entryDate),
+            DaysTagged = DaysTaggedHelper.GetDaysTagged(task.FirstTaggedDate, entryDate),
             Children = children.Count > 0 ? children : null,
         };
-    }
-
-    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
-    {
-        if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
-        {
-            return 0;
-        }
-
-        return Math.Max(0, currentJournalDate.Value.DayNumber - firstTaggedDate.Value.DayNumber + 1);
     }
 }

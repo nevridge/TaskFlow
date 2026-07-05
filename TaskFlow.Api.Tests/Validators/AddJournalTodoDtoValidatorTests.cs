@@ -32,4 +32,37 @@ public class AddJournalTodoDtoValidatorTests
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData(-721)]
+    [InlineData(841)]
+    [InlineData(999999)]
+    public async Task Validate_ShouldFail_WhenTimezoneOffsetMinutesIsOutOfRange(int value)
+    {
+        var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = value });
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().ContainSingle(e =>
+            e.PropertyName == "TimezoneOffsetMinutes" &&
+            e.ErrorMessage == "TimezoneOffsetMinutes must be between -720 and 840 (UTC-12:00 to UTC+14:00).");
+    }
+
+    [Theory]
+    [InlineData(-720)]
+    [InlineData(840)]
+    [InlineData(0)]
+    public async Task Validate_ShouldPass_WhenTimezoneOffsetMinutesIsWithinRange(int value)
+    {
+        var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = value });
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validate_ShouldPass_WhenTimezoneOffsetMinutesIsNull()
+    {
+        var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = null });
+
+        result.IsValid.Should().BeTrue();
+    }
 }

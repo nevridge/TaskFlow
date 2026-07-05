@@ -10,7 +10,7 @@ namespace TaskFlow.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator, IJournalEntryRepository? journalRepo = null) : ControllerBase
+public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator, IJournalEntryRepository journalRepo) : ControllerBase
 {
     private const string ApiVersionString = "1.0";
     private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
@@ -23,7 +23,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
-    private readonly IJournalEntryRepository? _journalRepo = journalRepo;
+    private readonly IJournalEntryRepository _journalRepo = journalRepo;
 
     // GET: api/v1/TaskItems
     [HttpGet]
@@ -396,11 +396,6 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
 
     private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate, int? timezoneOffsetMinutes = null)
     {
-        if (_journalRepo is null)
-        {
-            return;
-        }
-
         JournalEntry entry;
         try
         {

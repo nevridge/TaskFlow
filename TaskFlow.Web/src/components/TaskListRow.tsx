@@ -9,7 +9,6 @@ type TaskRowModel = TaskItemResponseDto & {
   moveCount?: number
   daysTagged?: number
   parentTaskItemId?: number | null
-  childCount?: number
   childTaskCount?: number
 }
 

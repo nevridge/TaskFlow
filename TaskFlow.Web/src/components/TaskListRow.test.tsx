@@ -89,6 +89,13 @@ describe('TaskListRow', () => {
     expect(screen.getByText('—', { selector: '.t-list-cell--due .t-list-empty' })).toBeInTheDocument()
   })
 
+  it('renders unaffected when only childTaskCount is present (no childCount field)', () => {
+    const task = { ...baseTask, childTaskCount: 3 }
+    renderRow(task)
+    expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()
+    expect(screen.getByText('todo')).toBeInTheDocument()
+  })
+
   describe('overdue indicator', () => {
     const pastDate = '2020-01-01T00:00:00Z'
 

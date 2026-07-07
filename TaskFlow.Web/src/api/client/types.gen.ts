@@ -107,11 +107,11 @@ export type TaskItemResponseDto = {
     firstTaggedDate?: null | string;
     lastMovedDate?: null | string;
     isScheduledFuture?: boolean;
-    childCount?: number | string;
     childTaskCount?: number | string;
     currentJournalDate?: null | string;
     moveCount?: number | string;
     daysTagged?: number | string;
+    children?: null | Array<TaskItemResponseDto>;
 };
 
 export type UpdateJournalEntryDto = {

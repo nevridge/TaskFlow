@@ -18,7 +18,6 @@ export type TaskItemViewModel = TaskItemResponseDto & {
   moveCount?: number
   isScheduledFuture?: boolean
   parentTaskItemId?: number | null
-  childCount?: number
   childTaskCount?: number
 }
 

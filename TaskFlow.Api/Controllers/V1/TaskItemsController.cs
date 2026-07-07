@@ -2,6 +2,7 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -338,16 +339,6 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
         await _repo.UpdateAsync(parent);
     }
 
-    private static int GetDaysTagged(DateOnly? firstTaggedDate, DateOnly? currentJournalDate)
-    {
-        if (!firstTaggedDate.HasValue || !currentJournalDate.HasValue)
-        {
-            return 0;
-        }
-
-        return Math.Max(0, currentJournalDate.Value.DayNumber - firstTaggedDate.Value.DayNumber + 1);
-    }
-
     // DELETE: api/v1/TaskItems/5
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
@@ -451,7 +442,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             ChildTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id),
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,
-            DaysTagged = GetDaysTagged(item.FirstTaggedDate, currentJournalDate)
+            DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate)
         };
     }
 

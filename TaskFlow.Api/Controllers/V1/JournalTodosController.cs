@@ -106,6 +106,7 @@ public class JournalTodosController(
             MoveCount = task.MoveCount,
             CurrentJournalDate = entryDate,
             DaysTagged = DaysTaggedHelper.GetDaysTagged(task.FirstTaggedDate, entryDate),
+            ChildTaskCount = children.Count,
             Children = children.Count > 0 ? children : null,
         };
     }

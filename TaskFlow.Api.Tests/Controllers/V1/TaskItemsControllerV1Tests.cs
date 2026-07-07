@@ -927,4 +927,125 @@ public class TaskItemsControllerV1Tests
         _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 2)), Times.Once);
         _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 10 && t.IsComplete && t.Status == Status.Completed)), Times.Once);
     }
+
+    [Fact]
+    public async Task Get_ReturnsChildTaskCount_ComputedOnce()
+    {
+        // Arrange
+        var parent = new TaskItem { Id = 1, Title = "Parent", Status = Status.Todo, Priority = Priority.Low };
+        var tasks = new List<TaskItem>
+        {
+            parent,
+            new() { Id = 2, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new() { Id = 3, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 }
+        };
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
+
+        // Act
+        var result = await _controller.Get(1);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
+        dto.ChildTaskCount.Should().Be(2);
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
+    }
+
+    [Fact]
+    public void Get_ResponseDto_DoesNotExposeChildCount_ReflectionGuard()
+    {
+        // Assert: ChildCount must never be reintroduced; ChildTaskCount is the sole source of truth.
+        typeof(TaskItemResponseDto).GetProperty("ChildCount").Should().BeNull();
+        typeof(TaskItemResponseDto).GetProperty("ChildTaskCount").Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Create_ReturnsCorrectChildTaskCount()
+    {
+        // Arrange
+        var createDto = new CreateTaskItemDto
+        {
+            Title = "New Parent",
+            Status = Status.Todo,
+            Priority = Priority.Medium
+        };
+        var createdTask = new TaskItem { Id = 1, Title = createDto.Title, Status = createDto.Status, Priority = createDto.Priority };
+        var refreshedTask = new TaskItem { Id = 1, Title = createDto.Title, Status = createDto.Status, Priority = createDto.Priority };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(refreshedTask);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(
+        [
+            refreshedTask,
+            new TaskItem { Id = 2, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new TaskItem { Id = 3, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 }
+        ]);
+
+        // Act
+        var result = await _controller.Create(createDto);
+
+        // Assert
+        var createdResult = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
+        var responseDto = createdResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
+        responseDto.ChildTaskCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task Update_ReturnsCorrectChildTaskCount()
+    {
+        // Arrange
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Updated Parent",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low
+        };
+        var existingTask = new TaskItem { Id = 1, Title = "Old Parent", Status = Status.Todo, Priority = Priority.Low };
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(
+        [
+            existingTask,
+            new TaskItem { Id = 2, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new TaskItem { Id = 3, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new TaskItem { Id = 4, Title = "Child 3", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 }
+        ]);
+
+        // Act
+        var result = await _controller.Update(1, updateDto);
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
+        responseDto.ChildTaskCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetAll_ChildTaskCount_MatchesDictionaryLookup()
+    {
+        // Arrange
+        var tasks = new List<TaskItem>
+        {
+            new() { Id = 1, Title = "Parent", Status = Status.Todo, Priority = Priority.Low },
+            new() { Id = 2, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new() { Id = 3, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
+            new() { Id = 4, Title = "Unrelated", Status = Status.Todo, Priority = Priority.Low }
+        };
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
+
+        // Act
+        var result = await _controller.GetAll();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var dtos = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        dtos.Single(d => d.Id == 1).ChildTaskCount.Should().Be(2);
+        dtos.Single(d => d.Id == 2).ChildTaskCount.Should().Be(0);
+        dtos.Single(d => d.Id == 4).ChildTaskCount.Should().Be(0);
+    }
 }

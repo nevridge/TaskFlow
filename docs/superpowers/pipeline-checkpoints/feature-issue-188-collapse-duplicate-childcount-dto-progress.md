@@ -8,3 +8,13 @@ Files modified:
 - TaskFlow.Api.Tests/Controllers/V1/TaskItemsControllerV1Tests.cs (5 new tests incl. permanent reflection guard)
 - TaskFlow.Api.Tests/Controllers/V1/JournalTodosControllerV1Tests.cs (2 new tests)
 Commit: f15c0ef
+
+Stage: frontend-complete
+Frontend agent ID: a8c773edf1eae5433
+Files modified:
+- TaskFlow.Web/src/hooks/useTasks.ts (removed childCount from TaskItemViewModel)
+- TaskFlow.Web/src/components/TaskListRow.tsx (removed childCount from TaskRowModel)
+- TaskFlow.Web/src/components/TaskListRow.test.tsx (added regression test)
+- TaskFlow.Web/src/api/journal.ts (Omit<> fix for type collision surfaced by corrected regen)
+- TaskFlow.Web/src/api/client/* (regenerated via npm run gen:api; catches up prior drift plus removes childCount)
+Commit: e00f9ba

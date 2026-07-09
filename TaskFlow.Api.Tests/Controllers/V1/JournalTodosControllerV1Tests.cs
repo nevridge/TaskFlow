@@ -371,4 +371,52 @@ public class JournalTodosControllerV1Tests
         result.Should().BeOfType<NoContentResult>();
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 20), Times.Never);
     }
+
+    [Fact]
+    public async Task GetAll_MapTodo_ReturnsCorrectChildTaskCount()
+    {
+        var child1 = new TaskItem { Id = 10, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
+        var child2 = new TaskItem { Id = 11, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Parent",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ChildTaskItems = [child1, child2]
+        };
+
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        todos.Single(t => t.Id == 2).ChildTaskCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetAll_MapTodo_LeafTodoHasZeroChildTaskCount()
+    {
+        var leaf = new TaskItem
+        {
+            Id = 2,
+            Title = "Leaf",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ChildTaskItems = []
+        };
+
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([leaf]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        var dto = todos.Single(t => t.Id == 2);
+        dto.ChildTaskCount.Should().Be(0);
+        dto.Children.Should().BeNull();
+    }
 }

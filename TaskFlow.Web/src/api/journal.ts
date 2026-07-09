@@ -34,7 +34,10 @@ export type UpdateJournalEntryDto = {
 }
 
 import type { TaskItemResponseDto as ClientTaskItemResponseDto } from './client/types.gen'
-export type TaskItemResponseDto = ClientTaskItemResponseDto & {
+export type TaskItemResponseDto = Omit<
+  ClientTaskItemResponseDto,
+  'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children'
+> & {
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number

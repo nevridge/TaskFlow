@@ -38,7 +38,6 @@ The snippets below describe the currently implemented contract additions used by
 - `moveCount: number`
 - `isScheduledFuture: boolean`
 - `parentTaskItemId: number | null`
-- `childCount: number`
 - `childTaskCount: number`
 
 #### Create task with optional journal assignment

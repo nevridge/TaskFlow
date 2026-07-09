@@ -423,6 +423,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     {
         var currentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var childTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id);
 
         return new TaskItemResponseDto
         {
@@ -438,8 +439,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             FirstTaggedDate = item.FirstTaggedDate,
             LastMovedDate = await GetLastMovedDateAsync(item.Id),
             IsScheduledFuture = currentJournalDate.HasValue && currentJournalDate.Value > today,
-            ChildCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id),
-            ChildTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id),
+            ChildTaskCount = childTaskCount,
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,
             DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate)

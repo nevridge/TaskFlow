@@ -89,6 +89,18 @@ describe('TaskListRow', () => {
     expect(screen.getByText('—', { selector: '.t-list-cell--due .t-list-empty' })).toBeInTheDocument()
   })
 
+  it('renders unaffected when only childTaskCount is present (no childCount field)', () => {
+    const task = { ...baseTask, childTaskCount: 3 }
+    renderRow(task)
+    expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()
+    expect(screen.getByText('todo')).toBeInTheDocument()
+
+    // @ts-expect-error childCount was removed from TaskRowModel — this must fail to compile
+    // if the field is ever reintroduced, since the component never reads it at runtime.
+    const withRemovedField: TaskProp = { ...baseTask, childCount: 3 }
+    expect(withRemovedField).toBeTruthy()
+  })
+
   describe('overdue indicator', () => {
     const pastDate = '2020-01-01T00:00:00Z'
 

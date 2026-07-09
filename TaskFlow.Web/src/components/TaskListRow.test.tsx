@@ -94,6 +94,11 @@ describe('TaskListRow', () => {
     renderRow(task)
     expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()
     expect(screen.getByText('todo')).toBeInTheDocument()
+
+    // @ts-expect-error childCount was removed from TaskRowModel — this must fail to compile
+    // if the field is ever reintroduced, since the component never reads it at runtime.
+    const withRemovedField: TaskProp = { ...baseTask, childCount: 3 }
+    expect(withRemovedField).toBeTruthy()
   })
 
   describe('overdue indicator', () => {

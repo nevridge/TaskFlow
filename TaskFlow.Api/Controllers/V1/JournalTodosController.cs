@@ -101,6 +101,8 @@ public class JournalTodosController(
             Status = task.Status.ToString(),
             Priority = task.Priority.ToString(),
             ParentTaskItemId = task.ParentTaskItemId,
+            ProjectId = task.ProjectId,
+            ProjectName = task.Project?.Name,
             CurrentJournalEntryId = task.CurrentJournalEntryId,
             FirstTaggedDate = task.FirstTaggedDate,
             MoveCount = task.MoveCount,

@@ -127,6 +127,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .Include(e => e.Todos)
                 .ThenInclude(t => t.ChildTaskItems)
                     .ThenInclude(c => c.CurrentJournalEntry)
+            .Include(e => e.Todos).ThenInclude(t => t.Project)
+            .Include(e => e.Todos).ThenInclude(t => t.ChildTaskItems).ThenInclude(c => c.Project)
             .FirstOrDefaultAsync(e => e.Id == entryId);
         return entry?.Todos.Where(t => t.CurrentJournalEntryId == entryId) ?? [];
     }

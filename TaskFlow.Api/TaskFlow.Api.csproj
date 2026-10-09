@@ -31,6 +31,8 @@
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
+    <!-- Explicit Design reference: Tools 10.0.8 declares a dependency on Design 8.0.0, which breaks `dotnet ef`. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftPlatformVersion)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftPlatformVersion)">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

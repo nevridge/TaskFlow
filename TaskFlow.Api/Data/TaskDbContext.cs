@@ -8,6 +8,7 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
     public DbSet<TaskItem> TaskItems => Set<TaskItem>();
     public DbSet<TaskItemEvent> TaskItemEvents => Set<TaskItemEvent>();
     public DbSet<Note> Notes => Set<Note>();
+    public DbSet<Project> Projects => Set<Project>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLogEntry> JournalLogEntries => Set<JournalLogEntry>();
     public DbSet<JournalNote> JournalNotes => Set<JournalNote>();
@@ -35,6 +36,22 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                 .WithOne(e => e.TaskItem)
                 .HasForeignKey(e => e.TaskItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(t => t.Project)
+                .WithMany(p => p.Tasks)
+                .HasForeignKey(t => t.ProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(t => t.ProjectId);
+        });
+
+        modelBuilder.Entity<Project>(entity =>
+        {
+            entity.Property(p => p.Name)
+                .HasMaxLength(100)
+                .UseCollation("NOCASE");
+
+            entity.HasIndex(p => p.Name).IsUnique();
         });
 
         modelBuilder.Entity<TaskItemEvent>(entity =>

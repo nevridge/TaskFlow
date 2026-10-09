@@ -43,7 +43,7 @@ Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` 
 ## Requirements
 
 - Claude Code (checked with 2.1.292) and the .NET 10 runtime on `PATH` (`dotnet`).
-- A running TaskFlow with the **Projects API** (TaskFlow PR [#221](https://github.com/nevridge/TaskFlow/pull/221) or later). Start it with `docker compose up -d` in the TaskFlow repo.
+- A running TaskFlow with the **Projects API** (TaskFlow PR [#221](https://github.com/nevridge/TaskFlow/pull/221)) and the journal update fix ([#224](https://github.com/nevridge/TaskFlow/pull/224); without it, `update_journal` with `summary` returns a 500 on days that have planned tasks). Both are merged to `main`. Start it with `docker compose up -d --build` in the TaskFlow repo.
 
 ## Install
 
@@ -93,7 +93,6 @@ Tests stub the HTTP layer; a reflection test also guards the tool surface (exact
 
 ## Known issues
 
-- `update_journal` with `summary` fails with a 500 when the day has planned tasks. This is a TaskFlow API bug (`JournalEntryRepository.UpdateAsync` re-inserts the entry's todo join rows), not the MCP server. Adding **notes** works. Until it is fixed in TaskFlow, prefer notes.
 - Subagents cannot ask questions mid-run, so the agent proposes and reports rather than confirming; the interactive confirm-then-write flows live in the skills.
 
 ## Sources

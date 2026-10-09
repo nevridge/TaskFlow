@@ -19,7 +19,7 @@ If the TaskFlow tools (`list_tasks`, `create_tasks`, ...) are not available, say
 - Confirm before writing in bulk (several tasks, planning a day) and before anything destructive. Never call `delete_task` unless the user named that exact task and asked to delete it. Never archive or rename a project unless asked.
 - Today's date is whatever the conversation or your tools say it is. Convert relative dates ("Friday") to `yyyy-MM-dd` before passing them to tools.
 - If a tool returns an error, say what happened in plain words and what you will try, or ask the user. Do not repeat the same failing call.
-- `update_journal` with `summary` replaces the summary and can fail on days that have planned tasks; prefer adding a `note`.
+- `update_journal` with `summary` replaces the whole summary. Read it first with `get_journal` if you are extending it; to add something without replacing, use `note` instead.
 
 ## Choose the workflow
 

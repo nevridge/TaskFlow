@@ -101,8 +101,19 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
 
     public async Task UpdateAsync(JournalEntry entry)
     {
-        entry.UpdatedAt = DateTime.UtcNow;
-        _context.JournalEntries.Update(entry);
+        // The entry usually arrives as the detached graph from GetByIdAsync (todos, their subtasks and log
+        // entries included). Re-attaching that graph with Update() re-inserts the todo join rows (UNIQUE
+        // constraint failure) and rewrites every loaded task and log row, so copy only the entry's own
+        // editable fields onto the tracked row instead. Date and CreatedAt are never changed here.
+        var tracked = await _context.JournalEntries.FindAsync(entry.Id)
+            ?? throw new KeyNotFoundException($"Journal entry {entry.Id} was not found.");
+
+        var now = DateTime.UtcNow;
+        tracked.Title = entry.Title;
+        tracked.Summary = entry.Summary;
+        tracked.UpdatedAt = now;
+        entry.UpdatedAt = now;
+
         await _context.SaveChangesAsync();
     }
 

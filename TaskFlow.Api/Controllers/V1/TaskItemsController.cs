@@ -11,9 +11,14 @@ namespace TaskFlow.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> validator, IJournalEntryRepository journalRepo) : ControllerBase
+public class TaskItemsController(
+    ITaskRepository repo,
+    IValidator<TaskItem> validator,
+    IJournalEntryRepository journalRepo,
+    IProjectRepository projectRepo) : ControllerBase
 {
     private const string ApiVersionString = "1.0";
+    private const string ProjectNotFoundErrorCode = "TASK_PROJECT_NOT_FOUND";
     private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
@@ -25,6 +30,7 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
+    private readonly IProjectRepository _projectRepo = projectRepo;
 
     // GET: api/v1/TaskItems
     [HttpGet]
@@ -128,6 +134,16 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             }
         }
 
+        if (createDto.ProjectId.HasValue && await _projectRepo.GetByIdAsync(createDto.ProjectId.Value) is null)
+        {
+            return UnprocessableEntity(new
+            {
+                code = ProjectNotFoundErrorCode,
+                message = "The selected project was not found.",
+                details = new { projectId = createDto.ProjectId }
+            });
+        }
+
         var item = new TaskItem
         {
             Title = createDto.Title,
@@ -136,7 +152,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             IsComplete = createDto.IsComplete,
             Priority = createDto.Priority,
             DueDate = createDto.DueDate,
-            ParentTaskItemId = createDto.ParentTaskItemId
+            ParentTaskItemId = createDto.ParentTaskItemId,
+            ProjectId = createDto.ProjectId
         };
 
         var validationResult = await _validator.ValidateAsync(item);
@@ -435,6 +452,8 @@ public class TaskItemsController(ITaskRepository repo, IValidator<TaskItem> vali
             Status = item.Status.ToString(),
             Priority = item.Priority.ToString(),
             ParentTaskItemId = item.ParentTaskItemId,
+            ProjectId = item.ProjectId,
+            ProjectName = item.Project?.Name,
             CurrentJournalEntryId = item.CurrentJournalEntryId,
             FirstTaggedDate = item.FirstTaggedDate,
             LastMovedDate = await GetLastMovedDateAsync(item.Id),

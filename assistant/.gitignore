@@ -1,0 +1,15 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage*/
+*.log
+
+## Published MCP server build consumed by the plugin (produced by build.ps1)
+plugin/bin/
+
+## Local Claude Code state
+.claude/settings.local.json

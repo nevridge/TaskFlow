@@ -1,0 +1,19 @@
+{
+  "name": "taskflow-assistant",
+  "displayName": "TaskFlow Assistant",
+  "version": "0.1.0",
+  "description": "Manage your work tasks and projects in a local TaskFlow instance: plan the day, capture tasks from notes, log progress, and review the week.",
+  "author": {
+    "name": "Neil"
+  },
+  "repository": "https://github.com/nevridge/taskflow-assistant",
+  "keywords": ["tasks", "projects", "journal", "planning"],
+  "userConfig": {
+    "api_url": {
+      "type": "string",
+      "title": "TaskFlow API URL",
+      "description": "Base URL of the TaskFlow API (no trailing path). The local Docker stack uses http://localhost:8081.",
+      "default": "http://localhost:8081"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "taskflow-assistant",
+  "description": "Personal TaskFlow work assistant",
+  "owner": {
+    "name": "Neil"
+  },
+  "plugins": [
+    {
+      "name": "taskflow-assistant",
+      "source": "./plugin",
+      "description": "Plan the day, capture tasks, log progress and review the week in a local TaskFlow instance."
+    }
+  ]
+}

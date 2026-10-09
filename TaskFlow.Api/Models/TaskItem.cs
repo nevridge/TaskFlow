@@ -14,6 +14,8 @@ public class TaskItem
     public int? ParentTaskItemId { get; set; }
     public TaskItem? ParentTaskItem { get; set; }
     public ICollection<TaskItem> ChildTaskItems { get; set; } = [];
+    public int? ProjectId { get; set; }
+    public Project? Project { get; set; }
     public int? CurrentJournalEntryId { get; set; }
     public JournalEntry? CurrentJournalEntry { get; set; }
     public ICollection<TaskItemEvent> Events { get; set; } = [];

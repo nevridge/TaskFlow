@@ -13,6 +13,11 @@ public class CreateTaskItemDto
     public DateOnly? JournalDate { get; set; }
     public int? ParentTaskItemId { get; set; }
     /// <summary>
+    /// Optional project to create the task in. Project changes after creation go through
+    /// the Projects assign/unassign endpoints, not the task update endpoint.
+    /// </summary>
+    public int? ProjectId { get; set; }
+    /// <summary>
     /// The user's timezone offset in minutes (e.g. -420 for PDT, 0 for UTC). Optional.
     /// </summary>
     public int? TimezoneOffsetMinutes { get; set; }

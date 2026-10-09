@@ -9,10 +9,10 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     private readonly TaskDbContext _context = context;
 
     public async Task<IEnumerable<TaskItem>> GetAllAsync() =>
-        await _context.TaskItems.ToListAsync();
+        await _context.TaskItems.Include(t => t.Project).ToListAsync();
 
     public async Task<TaskItem?> GetByIdAsync(int id) =>
-        await _context.TaskItems.FirstOrDefaultAsync(t => t.Id == id);
+        await _context.TaskItems.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
 
     public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
         await _context.TaskItems

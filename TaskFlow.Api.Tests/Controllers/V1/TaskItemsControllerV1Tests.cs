@@ -15,6 +15,7 @@ public class TaskItemsControllerV1Tests
     private readonly Mock<ITaskRepository> _mockRepo;
     private readonly Mock<IValidator<TaskItem>> _mockValidator;
     private readonly Mock<IJournalEntryRepository> _mockJournalRepo;
+    private readonly Mock<IProjectRepository> _mockProjectRepo;
     private readonly TaskItemsController _controller;
 
     public TaskItemsControllerV1Tests()
@@ -22,10 +23,11 @@ public class TaskItemsControllerV1Tests
         _mockRepo = new Mock<ITaskRepository>();
         _mockValidator = new Mock<IValidator<TaskItem>>();
         _mockJournalRepo = new Mock<IJournalEntryRepository>();
+        _mockProjectRepo = new Mock<IProjectRepository>();
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
         _mockRepo.Setup(r => r.GetHistoryAsync(It.IsAny<int>())).ReturnsAsync([]);
-        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object);
+        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object, _mockProjectRepo.Object);
     }
 
     [Fact]
@@ -146,6 +148,65 @@ public class TaskItemsControllerV1Tests
         responseDto.Status.Should().Be("Todo");
         responseDto.Priority.Should().Be("High");
         responseDto.DueDate.Should().Be(dueDate);
+    }
+
+    [Fact]
+    public async Task Create_ShouldAssignProject_WhenProjectExists()
+    {
+        var project = new Project { Id = 7, Name = "Alpha" };
+        var createDto = new CreateTaskItemDto { Title = "New Task", ProjectId = 7 };
+        TaskItem? captured = null;
+        _mockProjectRepo.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(project);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>()))
+            .Callback<TaskItem>(t => captured = t)
+            .ReturnsAsync((TaskItem t) =>
+            {
+                t.Id = 1;
+                t.Project = project;
+                return t;
+            });
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(() => captured);
+
+        var result = await _controller.Create(createDto);
+
+        captured.Should().NotBeNull();
+        captured!.ProjectId.Should().Be(7);
+        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
+        var dto = created.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
+        dto.ProjectId.Should().Be(7);
+        dto.ProjectName.Should().Be("Alpha");
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnUnprocessableEntity_WhenProjectDoesNotExist()
+    {
+        var createDto = new CreateTaskItemDto { Title = "New Task", ProjectId = 999 };
+        _mockProjectRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Project?)null);
+
+        var result = await _controller.Create(createDto);
+
+        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        unprocessable.Value.Should().NotBeNull();
+        unprocessable.Value!.ToString().Should().Contain("TASK_PROJECT_NOT_FOUND");
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldPreserveProject()
+    {
+        var existing = new TaskItem { Id = 3, Title = "Old", ProjectId = 7, Project = new Project { Id = 7, Name = "Alpha" } };
+        _mockRepo.Setup(r => r.GetByIdAsync(3)).ReturnsAsync(existing);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+
+        var result = await _controller.Update(3, new UpdateTaskItemDto { Title = "New" });
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var dto = ok.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
+        dto.ProjectId.Should().Be(7);
+        existing.ProjectId.Should().Be(7);
     }
 
     [Fact]

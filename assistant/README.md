@@ -1,6 +1,29 @@
 # taskflow-assistant
 
-A [Claude Code](https://code.claude.com) plugin that helps you manage your **own work tasks and projects** in a local [TaskFlow](https://github.com/nevridge/TaskFlow) instance. It works from any folder, in the terminal and in the Claude Code desktop app.
+Helps you manage your **own work tasks and projects** in a local [TaskFlow](https://github.com/nevridge/TaskFlow) instance, from any folder. One MCP server, two ways to use it:
+
+| Where | How | Section |
+|---|---|---|
+| **Claude Desktop, Chat** | MCP server registered in `claude_desktop_config.json` + one uploaded skill | [Claude Desktop (Chat)](#claude-desktop-chat) |
+| **Claude Code** (terminal, IDE extensions, the desktop app's Code tab where available) | A Claude Code plugin: MCP server + agent + four slash-command skills | [Claude Code plugin](#claude-code-plugin) |
+
+A Claude Code plugin does **not** load in Chat: Chat ignores a plugin's local MCP servers, agents and `bin/` executables (see the [plugin support table](https://claude.com/docs/plugins/platform-support)), so Chat needs the separate setup below.
+
+## Claude Desktop (Chat)
+
+Needs the .NET 10 runtime on `PATH`, Claude Desktop, and TaskFlow running with the Projects API.
+
+1. Publish the server: `./build.ps1`
+2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open.
+3. Register the server: `./scripts/install-claude-desktop.ps1` (add `-ApiUrl http://host:port` if TaskFlow is not on `localhost:8081`; `-DryRun` previews, `-Uninstall` removes). It merges a `taskflow` entry into `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other settings and saves a timestamped backup next to it.
+4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 14 tools. If not, read `%APPDATA%\Claude\logs\mcp-server-taskflow.log`.
+5. Package and upload the skill: `./scripts/package-chat-skill.ps1`, then in Claude Desktop go to **Customize > Skills > + > Upload a skill** and choose `dist/taskflow-assistant-skill.zip`.
+
+Chat applies the skill automatically when your request fits ("plan my day", "turn these notes into tasks", "draft my weekly update"); there are no slash commands in Chat. Skills need code execution enabled for your account; if your organization disables it, paste `chat/taskflow-assistant/SKILL.md` into a Project's instructions instead. The skill lives in `chat/taskflow-assistant/` and mirrors the plugin's four skills, restricted to the frontmatter keys Chat accepts.
+
+## Claude Code plugin
+
+A [Claude Code](https://code.claude.com) plugin for the terminal and IDEs.
 
 It bundles:
 
@@ -27,8 +50,10 @@ Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` 
 ```powershell
 ./build.ps1                                   # publishes the server into plugin/bin (gitignored)
 claude plugin marketplace add C:\code\taskflow-assistant
-claude plugin install taskflow-assistant@taskflow-assistant   # user scope: every project, CLI and desktop app
+claude plugin install taskflow-assistant@taskflow-assistant   # user scope: every project in Claude Code
 ```
+
+This is for Claude Code only. The Chat part of Claude Desktop does not read it; use the [Chat setup](#claude-desktop-chat).
 
 Add the marketplace from the **local path** (as above). Claude Code then loads the plugin in place, so the published `plugin/bin` is found and your edits apply on the next session or `/reload-plugins`. A copy installed from GitHub would not contain `plugin/bin`.
 
@@ -77,6 +102,7 @@ Built from the official docs, checked 2026-10-09 against Claude Code 2.1.292:
 
 - Plugins: <https://code.claude.com/docs/en/plugins>, [manifest reference](https://code.claude.com/docs/en/plugins-reference), [create](https://code.claude.com/docs/en/plugins/create), [loading](https://code.claude.com/docs/en/plugins/loading), [create a marketplace](https://code.claude.com/docs/en/plugin-marketplaces)
 - [Subagents](https://code.claude.com/docs/en/sub-agents), [Skills](https://code.claude.com/docs/en/skills), [MCP](https://code.claude.com/docs/en/mcp)
+- Claude Desktop Chat: [Connect to local MCP servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers), [MCPB](https://github.com/modelcontextprotocol/mcpb) (not used: a config-file entry was chosen over a one-click extension), [plugin support by surface](https://claude.com/docs/plugins/platform-support), [Using Skills in Claude](https://support.claude.com/en/articles/12512180-using-skills-in-claude)
 - MCP C# SDK: <https://github.com/modelcontextprotocol/csharp-sdk> (`ModelContextProtocol` 2.2.0; docs/concepts)
 - Tool design: Anthropic, [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents)
 

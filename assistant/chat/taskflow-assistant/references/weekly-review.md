@@ -1,0 +1,13 @@
+# Weekly review and status update
+
+Goal: summarize a period from real data and draft a status update in the user's voice.
+
+1. Call `weekly_review` (default: the last 7 days; pass `from` and `to` as `yyyy-MM-dd` if the user gave a range).
+2. For each project that has overdue or stalled work, or that the user named, call `project_status`.
+3. Draft the update with these sections, omitting empty ones:
+   - **Done**: completed work grouped by project.
+   - **In progress / next**: the most urgent open tasks per project.
+   - **At risk**: overdue and stalled tasks, each with a one-line suggestion (re-date, split, drop, escalate).
+   - **Notes**: anything notable from the journal summaries and logs.
+4. Keep to what the data shows. Do not invent accomplishments or reasons for delays; phrase guesses as questions.
+5. Offer to save the draft as a journal note (`update_journal` with `note`). Only do it if the user agrees.

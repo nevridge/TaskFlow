@@ -1,4 +1,5 @@
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useLayoutEffect, forwardRef, useImperativeHandle } from 'react'
+import type { RefObject } from 'react'
 import type { JournalNoteResponseDto } from '@/api/journal'
 import {
   useJournalNotes,
@@ -7,6 +8,7 @@ import {
   useDeleteJournalNoteMutation,
 } from '@/hooks/useJournal'
 import { formatTime } from '@/lib/journal-utils'
+import { NoteContent } from './NoteContent'
 
 interface Props {
   entryId: number
@@ -14,6 +16,18 @@ interface Props {
 
 export interface NotesSectionHandle {
   focusNewNote: () => void
+}
+
+const MAX_NOTE_LENGTH = 2000
+
+// Grows a textarea to fit its content (capped via CSS max-height)
+function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, active = true) {
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [ref, value, active])
 }
 
 export const NotesSection = forwardRef<NotesSectionHandle, Props>(function NotesSection({ entryId }, ref) {
@@ -25,7 +39,13 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const editRef = useRef<HTMLTextAreaElement>(null)
+  // Guards against double-handling an edit session (e.g. Enter then blur, Escape then blur)
+  const committedRef = useRef(false)
+
+  useAutoGrow(inputRef, draft)
+  useAutoGrow(editRef, editingText, editingId !== null)
 
   useImperativeHandle(ref, () => ({
     focusNewNote: () => inputRef.current?.focus(),
@@ -33,18 +53,29 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
 
   function addNote(e: React.FormEvent) {
     e.preventDefault()
+    submitDraft()
+  }
+
+  function submitDraft() {
     const text = draft.trim()
     if (!text) return
-    createNote.mutate(text, { onSuccess: () => inputRef.current?.focus() })
+    createNote.mutate(text, {
+      onSuccess: () => inputRef.current?.focus(),
+      // Put the text back if the save failed, unless something was typed since
+      onError: () => setDraft(current => current || text),
+    })
     setDraft('')
   }
 
   function startEdit(note: JournalNoteResponseDto) {
+    committedRef.current = false
     setEditingId(note.id)
     setEditingText(note.content)
   }
 
   function commitEdit(noteId: number, original: string) {
+    if (committedRef.current) return
+    committedRef.current = true
     const text = editingText.trim()
     if (text && text !== original) {
       updateNote.mutate({ id: noteId, content: text })
@@ -53,6 +84,8 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   }
 
   function cancelEdit() {
+    if (committedRef.current) return
+    committedRef.current = true
     setEditingId(null)
   }
 
@@ -66,20 +99,30 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
           <li key={note.id} className="log-entry">
             <div className="log-time">{formatTime(note.createdAt)}</div>
             {editingId === note.id ? (
-              <input
+              <textarea
+                ref={editRef}
                 className="note-edit"
+                rows={1}
+                maxLength={MAX_NOTE_LENGTH}
                 value={editingText}
                 autoFocus
+                onFocus={e => {
+                  const end = e.currentTarget.value.length
+                  e.currentTarget.setSelectionRange(end, end)
+                }}
                 onChange={e => setEditingText(e.target.value)}
                 onBlur={() => commitEdit(note.id, note.content)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') { e.preventDefault(); commitEdit(note.id, note.content) }
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    commitEdit(note.id, note.content)
+                  }
                   if (e.key === 'Escape') cancelEdit()
                 }}
               />
             ) : (
               <div className="note-text" onDoubleClick={() => startEdit(note)}>
-                {note.content}
+                <NoteContent text={note.content} />
               </div>
             )}
             <button
@@ -97,14 +140,20 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
 
       <form className="add-row" onSubmit={addNote}>
         <span className="add-plus">›</span>
-        <input
+        <textarea
           ref={inputRef}
-          className="add-input"
-          placeholder="Add a note… Press Enter to save"
+          className="add-input note-add-input"
+          rows={1}
+          maxLength={MAX_NOTE_LENGTH}
+          placeholder="Add a note… Enter to save, Shift+Enter for new line"
           value={draft}
           onChange={e => setDraft(e.target.value)}
           disabled={createNote.isPending}
           onKeyDown={e => {
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              e.preventDefault()
+              submitDraft()
+            }
             if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
           }}
         />

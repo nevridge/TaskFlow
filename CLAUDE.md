@@ -106,7 +106,7 @@ Two execution tools are available on this Windows machine:
 - Entry is auto-created on first visit via `useEnsureJournalEntry` in `src/hooks/useJournal.ts`
 - Todos are existing `TaskItem` records linked via a many-to-many join (`JournalEntryTaskItem`)
 - Log entries are separate `JournalLogEntry` records embedded in the entry response
-- Notes are stored in `JournalEntry.Summary` (debounced PUT on textarea change)
+- Notes are separate `JournalNote` records (add and edit via textarea: Enter saves, Shift+Enter inserts a newline, double-click to edit), shown with a small formatter (`src/lib/notes-format.ts`) that renders `-`/`*` bullet lists and `1.` numbered lists as React elements.
 - Date utilities (ISO ↔ URL format, day/week counters) live in `src/lib/journal-utils.ts`
 - Journal-specific styles are in `src/journal.css`, scoped under `.journal-page`
 - User preferences (header style, sort, dark mode, project start date) persist to `localStorage` under key `taskflow_journal_prefs_v1`

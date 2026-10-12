@@ -51,6 +51,23 @@ describe('Nav', () => {
     expect(journalLink.getAttribute('href')).toMatch(/^\/journal\/\d{2}-\d{2}-\d{4}$/)
   })
 
+  it('renders Projects link to /projects', () => {
+    renderNav('/')
+    expect(screen.getByRole('link', { name: /^projects$/i })).toHaveAttribute('href', '/projects')
+  })
+
+  it.each(['/projects', '/projects/3'])('marks Projects active on %s only', (path) => {
+    renderNav(path)
+    expect(screen.getByRole('link', { name: /^projects$/i }).className).toContain('is-active')
+    expect(screen.getByRole('link', { name: /^tasks$/i }).className).not.toContain('is-active')
+    expect(screen.getByRole('link', { name: /journal/i }).className).not.toContain('is-active')
+  })
+
+  it('does not mark Projects active on tasks routes', () => {
+    renderNav('/tasks')
+    expect(screen.getByRole('link', { name: /^projects$/i }).className).not.toContain('is-active')
+  })
+
   it('Tasks link points to /tasks', () => {
     renderNav('/')
     expect(screen.getByRole('link', { name: /tasks/i })).toHaveAttribute('href', '/tasks')

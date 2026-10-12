@@ -9,6 +9,7 @@ export function Nav({ onMenuClick }: NavProps) {
   const { pathname } = useLocation()
   const isJournal = pathname.startsWith('/journal')
   const isTasks = pathname.startsWith('/tasks')
+  const isProjects = pathname.startsWith('/projects')
 
   return (
     <nav aria-label="Primary navigation" className="app-nav">
@@ -33,6 +34,12 @@ export function Nav({ onMenuClick }: NavProps) {
         className={`app-nav-link${isTasks ? ' is-active' : ''}`}
       >
         Tasks
+      </Link>
+      <Link
+        to="/projects"
+        className={`app-nav-link${isProjects ? ' is-active' : ''}`}
+      >
+        Projects
       </Link>
     </nav>
   )

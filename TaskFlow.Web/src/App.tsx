@@ -1,6 +1,8 @@
 import { Navigate, Routes, Route } from 'react-router-dom'
 import { TasksPage } from '@/pages/TasksPage'
 import { TaskDetailPage } from '@/pages/TaskDetailPage'
+import { ProjectsPage } from '@/pages/ProjectsPage'
+import { ProjectDetailPage } from '@/pages/ProjectDetailPage'
 import { JournalPage } from '@/pages/JournalPage'
 import { Layout } from '@/components/Layout'
 import { PrefsProvider } from '@/context/PrefsContext'
@@ -15,6 +17,8 @@ function App() {
           <Route path="/journal/:date" element={<JournalPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:id" element={<ProjectDetailPage />} />
         </Route>
       </Routes>
     </PrefsProvider>

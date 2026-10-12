@@ -78,16 +78,18 @@ docker compose -f docker-compose.prod.yml up
 
 ## Shell & Command Execution
 
-Two execution tools are available on this Windows machine:
+This project may be worked on from different machines with different shell configurations:
 
-- **Bash tool** — runs POSIX shell (WSL/Git Bash). Use for cross-platform CLIs: `git`, `npm`, `dotnet`, `docker`, `gh`, `node`, `python3`.
-- **PowerShell tool** — runs `pwsh`. Use for Windows operations requiring PowerShell cmdlets.
+- **WSL2 (Ubuntu) environment:** POSIX shell only. All tools — `git`, `npm`, `dotnet`, `docker`, `gh`, `node`, `python3`, `rg` (ripgrep) — run natively inside Ubuntu. There is no PowerShell tool in this setup.
+- **Native Windows environment:** Bash tool (Git Bash) and PowerShell tool (`pwsh`) are both available. `rg` (ripgrep) is installed natively on Windows and works in both.
 
-**Never mix them:** Do not run `Get-ChildItem`, `Test-Path`, or `Select-String` through the Bash tool. Do not run `grep`, `find`, `xargs`, `sed`, `awk`, or `head`/`tail` through the PowerShell tool.
+**At the start of a session, confirm which environment is active** — check whether you're operating inside a WSL/Linux filesystem path (`/home/...`) or a Windows path (`C:\...` or `/mnt/c/...`), or ask if ambiguous.
 
-**`rg` (ripgrep) is installed natively on Windows** — works in both Bash and PowerShell without WSL. Use it when a shell-level content search is needed and the Grep tool is not appropriate.
+**Never mix shells within a WSL2 session** — there is no PowerShell available; all commands are POSIX.
 
-**Prefer dedicated tools over shell commands:**
+**In a native Windows environment, never mix tools across the Bash and PowerShell tools:** Do not run `Get-ChildItem`, `Test-Path`, or `Select-String` through the Bash tool. Do not run `grep`, `find`, `xargs`, `sed`, `awk`, or `head`/`tail` through the PowerShell tool.
+
+**Prefer dedicated tools over shell commands regardless of environment:**
 - Find files → Glob tool (not `find` or `Get-ChildItem`)
 - Search content → Grep tool (not `grep` or `Select-String`); shell fallback: `rg`
 - Read files → Read tool (not `cat` or `Get-Content`)

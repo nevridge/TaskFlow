@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { NotesSectionHandle } from './NotesSection'
@@ -70,6 +70,18 @@ describe('NotesSection', () => {
     expect(createNoteMutate).toHaveBeenCalledTimes(1)
     expect(createNoteMutate).toHaveBeenCalledWith('New note', expect.any(Object))
     expect(input).toHaveValue('')
+  })
+
+  it('restores the draft when creating the note fails', async () => {
+    // Real mutations fail asynchronously, after the draft has been cleared
+    createNoteMutate.mockImplementation((_text, opts) => {
+      setTimeout(() => act(() => opts.onError()), 0)
+    })
+    renderSection()
+    const input = screen.getByPlaceholderText(/add a note/i)
+    await userEvent.type(input, 'keep me')
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(input).toHaveValue('keep me'))
   })
 
   it('Shift+Enter inserts a newline and does not create a note', async () => {

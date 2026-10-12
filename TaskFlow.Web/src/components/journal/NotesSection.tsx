@@ -59,7 +59,11 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   function submitDraft() {
     const text = draft.trim()
     if (!text) return
-    createNote.mutate(text, { onSuccess: () => inputRef.current?.focus() })
+    createNote.mutate(text, {
+      onSuccess: () => inputRef.current?.focus(),
+      // Put the text back if the save failed, unless something was typed since
+      onError: () => setDraft(current => current || text),
+    })
     setDraft('')
   }
 
@@ -138,7 +142,7 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
         <span className="add-plus">›</span>
         <textarea
           ref={inputRef}
-          className="add-input"
+          className="add-input note-add-input"
           rows={1}
           maxLength={MAX_NOTE_LENGTH}
           placeholder="Add a note… Enter to save, Shift+Enter for new line"

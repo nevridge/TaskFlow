@@ -76,7 +76,8 @@ export function ProjectDetailPage() {
     wasEditing.current = editing
   }, [editing])
 
-  if (!Number.isFinite(id) || projectQuery.isError) return <NotFound />
+  // A failed background refetch keeps the cached project on screen; only an error with no data is "not found".
+  if (!Number.isInteger(id) || id <= 0 || (projectQuery.isError && !projectQuery.data)) return <NotFound />
   if (projectQuery.isLoading || !projectQuery.data) {
     return (
       <div className="projects-page">

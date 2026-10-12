@@ -19,8 +19,14 @@ export const projectKeys = {
 }
 
 // Task mutations elsewhere do not invalidate project keys, so project queries
-// that show counts refetch on every mount and go stale quickly.
+// that show counts refetch on every mount and go stale quickly. A still-mounted
+// page can show stale counts until its next refetch. TODO(#228): invalidate
+// projectKeys.all from the task create/update/delete mutations and drop this workaround.
 export const PROJECT_STALE_TIME_MS = 5_000
+
+function isValidProjectId(id: number) {
+  return Number.isInteger(id) && id > 0
+}
 
 export function useProjectsQuery() {
   return useQuery({
@@ -35,7 +41,7 @@ export function useProjectQuery(id: number) {
   return useQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => getProject(id),
-    enabled: Number.isFinite(id),
+    enabled: isValidProjectId(id),
     retry: false,
     staleTime: PROJECT_STALE_TIME_MS,
     refetchOnMount: 'always',
@@ -46,7 +52,7 @@ export function useProjectTasksQuery(id: number) {
   return useQuery({
     queryKey: projectKeys.tasks(id),
     queryFn: () => getProjectTasks(id),
-    enabled: Number.isFinite(id),
+    enabled: isValidProjectId(id),
     retry: false,
   })
 }
@@ -71,6 +77,7 @@ export function useUpdateProjectMutation() {
   })
 }
 
+// Delete, assign and unassign have no UI yet; they are deliverables for #228.
 export function useDeleteProjectMutation() {
   const qc = useQueryClient()
   return useMutation({

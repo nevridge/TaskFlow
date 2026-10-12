@@ -14,6 +14,8 @@ export function ProjectsPage() {
   const createMutation = useCreateProjectMutation()
   const updateMutation = useUpdateProjectMutation()
   const [showArchived, setShowArchived] = useState(false)
+  // Only the row being saved is locked; concurrent PUTs to the same project would race.
+  const pendingProjectId = updateMutation.isPending ? updateMutation.variables?.id : undefined
 
   const projects: ProjectResponseDto[] = data?.data ?? []
   const visible = showArchived ? projects : projects.filter((p) => !p.isArchived)
@@ -64,7 +66,7 @@ export function ProjectsPage() {
             project={project}
             onSave={handleSave}
             onToggleArchive={handleToggleArchive}
-            disabled={updateMutation.isPending}
+            disabled={pendingProjectId === project.id}
           />
         ))}
       </ul>

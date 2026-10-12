@@ -93,6 +93,13 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/projects')
   })
 
+  it('keeps showing the cached project when a refetch fails', () => {
+    mockProject({ isError: true, data: { data: project } })
+    renderAt('/projects/7')
+    expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
+    expect(screen.queryByText('Project not found.')).not.toBeInTheDocument()
+  })
+
   it('keeps the project header and shows a tasks error when only the tasks query fails', () => {
     mockTasks({ isError: true })
     renderAt('/projects/7')
@@ -105,6 +112,11 @@ describe('ProjectDetailPage', () => {
     renderAt('/projects/abc')
     expect(screen.getByRole('alert')).toHaveTextContent('Project not found.')
     expect(useProjectQuery).toHaveBeenCalledWith(NaN)
+  })
+
+  it.each(['0', '-3', '1.5'])('shows not found for non-positive-integer id %s', (id) => {
+    renderAt(`/projects/${id}`)
+    expect(screen.getByRole('alert')).toHaveTextContent('Project not found.')
   })
 
   it('shows not found when the response has no project', () => {

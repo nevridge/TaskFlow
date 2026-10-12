@@ -85,6 +85,13 @@ describe('project queries', () => {
     expect(api.getProject).not.toHaveBeenCalled()
   })
 
+  it.each([0, -3, 1.5])('useProjectQuery and useProjectTasksQuery are disabled for id %s', (id) => {
+    renderHook(() => useProjectQuery(id), { wrapper: makeWrapper() })
+    renderHook(() => useProjectTasksQuery(id), { wrapper: makeWrapper() })
+    expect(api.getProject).not.toHaveBeenCalled()
+    expect(api.getProjectTasks).not.toHaveBeenCalled()
+  })
+
   it('useProjectQuery does not retry on error', async () => {
     vi.mocked(api.getProject).mockRejectedValue({})
     const qc = new QueryClient({ defaultOptions: { queries: { retry: 3 } } })

@@ -245,11 +245,18 @@ describe('ProjectsPage', () => {
     expect(await screen.findByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
   })
 
-  it('disables row actions while an update is pending', () => {
-    vi.mocked(useUpdateProjectMutation).mockReturnValue({ mutateAsync: updateAsync, isPending: true } as never)
+  it('disables only the row whose update is pending', () => {
+    mockQuery({ data: { data: [alpha, make({ id: 3, name: 'Gamma' })] } })
+    vi.mocked(useUpdateProjectMutation).mockReturnValue({
+      mutateAsync: updateAsync,
+      isPending: true,
+      variables: { id: 1 },
+    } as never)
     renderPage()
     expect(screen.getByRole('button', { name: 'Edit Alpha' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Archive Alpha' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Edit Gamma' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Archive Gamma' })).toBeEnabled()
   })
 
   it('renders a long name in a wrapping link', () => {

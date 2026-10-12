@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { NotesSectionHandle } from './NotesSection'
@@ -26,12 +26,20 @@ const note1: JournalNoteResponseDto = {
   createdAt: '2026-05-28T09:00:00Z',
 }
 
+const multiNote: JournalNoteResponseDto = {
+  id: 2,
+  content: '- a\n- b',
+  journalEntryId: 10,
+  createdAt: '2026-05-28T10:00:00Z',
+}
+
 function renderSection(ref?: React.Ref<NotesSectionHandle>) {
   return render(<NotesSection ref={ref} entryId={10} />)
 }
 
 describe('NotesSection', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     createNoteMutate.mockReset()
     updateNoteMutate.mockReset()
     deleteNoteMutate.mockReset()
@@ -49,18 +57,41 @@ describe('NotesSection', () => {
     expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
   })
 
-  it('submitting trimmed text calls createNote.mutate and clears input', async () => {
+  it('add field is a textarea', () => {
     renderSection()
-    const input = screen.getByRole('textbox')
+    expect(screen.getByPlaceholderText(/add a note/i).tagName).toBe('TEXTAREA')
+  })
+
+  it('Enter creates a trimmed note and clears the field', async () => {
+    renderSection()
+    const input = screen.getByPlaceholderText(/add a note/i)
     await userEvent.type(input, '  New note  ')
     await userEvent.keyboard('{Enter}')
+    expect(createNoteMutate).toHaveBeenCalledTimes(1)
     expect(createNoteMutate).toHaveBeenCalledWith('New note', expect.any(Object))
     expect(input).toHaveValue('')
   })
 
+  it('Shift+Enter inserts a newline and does not create a note', async () => {
+    renderSection()
+    const input = screen.getByPlaceholderText(/add a note/i)
+    await userEvent.type(input, 'line one')
+    await userEvent.keyboard('{Shift>}{Enter}{/Shift}')
+    await userEvent.keyboard('line two')
+    expect(input).toHaveValue('line one\nline two')
+    expect(createNoteMutate).not.toHaveBeenCalled()
+  })
+
+  it('Enter on whitespace-only text does not create a note', async () => {
+    renderSection()
+    await userEvent.type(screen.getByPlaceholderText(/add a note/i), '   ')
+    await userEvent.keyboard('{Enter}')
+    expect(createNoteMutate).not.toHaveBeenCalled()
+  })
+
   it('pressing Escape clears the input', async () => {
     renderSection()
-    const input = screen.getByRole('textbox')
+    const input = screen.getByPlaceholderText(/add a note/i)
     await userEvent.type(input, 'some text')
     await userEvent.keyboard('{Escape}')
     expect(input).toHaveValue('')
@@ -73,49 +104,95 @@ describe('NotesSection', () => {
     expect(deleteNoteMutate).toHaveBeenCalledWith(1)
   })
 
-  it('double-clicking note text shows edit input with note content', async () => {
-    vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+  it('renders stored bullet lines as list items', () => {
+    vi.mocked(useJournalNotes).mockReturnValue({ data: [multiNote], isLoading: false } as never)
     renderSection()
-    await userEvent.dblClick(screen.getByText('Remember to update docs'))
-    const editInput = screen.getByDisplayValue('Remember to update docs')
-    expect(editInput).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem').filter(li => li.closest('.note-text'))).toHaveLength(2)
   })
 
-  it('pressing Enter in edit input calls updateNote.mutate', async () => {
-    vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+  async function startEditing(note = note1) {
+    vi.mocked(useJournalNotes).mockReturnValue({ data: [note], isLoading: false } as never)
     renderSection()
-    await userEvent.dblClick(screen.getByText('Remember to update docs'))
-    const editInput = screen.getByDisplayValue('Remember to update docs')
+    const display = document.querySelector('.note-text') as HTMLElement
+    await userEvent.dblClick(display)
+    return document.querySelector('.note-edit') as HTMLTextAreaElement
+  }
+
+  it('double-clicking shows a textarea with the exact multi-line text', async () => {
+    const editInput = await startEditing(multiNote)
+    expect(editInput.tagName).toBe('TEXTAREA')
+    expect(editInput.value).toBe('- a\n- b')
+    expect(screen.getAllByRole('textbox')).toHaveLength(2)
+  })
+
+  it('Enter in edit saves once and returns to display', async () => {
+    const editInput = await startEditing()
     await userEvent.clear(editInput)
     await userEvent.type(editInput, 'Updated note')
     await userEvent.keyboard('{Enter}')
+    expect(updateNoteMutate).toHaveBeenCalledTimes(1)
     expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Updated note' })
+    expect(screen.queryByDisplayValue('Updated note')).not.toBeInTheDocument()
   })
 
-  it('pressing Escape in edit input returns to read mode without calling mutate', async () => {
-    vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Remember to update docs'))
-    await userEvent.keyboard('{Escape}')
-    expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
+  it('Shift+Enter in edit does not save', async () => {
+    const editInput = await startEditing()
+    await userEvent.type(editInput, '{Shift>}{Enter}{/Shift}more')
+    expect(editInput).toHaveValue('Remember to update docs\nmore')
     expect(updateNoteMutate).not.toHaveBeenCalled()
   })
 
-  it('blurring edit input calls updateNote.mutate when text changed', async () => {
-    vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Remember to update docs'))
-    const editInput = screen.getByDisplayValue('Remember to update docs')
+  it('blur after changing text saves', async () => {
+    const editInput = await startEditing()
     await userEvent.clear(editInput)
     await userEvent.type(editInput, 'Blurred update')
     await userEvent.tab()
     expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Blurred update' })
   })
 
-  it('focusNewNote() via ref focuses the new note input', () => {
+  it('Escape after changing text discards the edit', async () => {
+    const editInput = await startEditing()
+    await userEvent.type(editInput, ' extra')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.tab()
+    expect(updateNoteMutate).not.toHaveBeenCalled()
+    expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
+  })
+
+  it('Enter then blur calls mutate exactly once', async () => {
+    const editInput = await startEditing()
+    await userEvent.type(editInput, '!')
+    await userEvent.keyboard('{Enter}')
+    fireEvent.blur(editInput)
+    expect(updateNoteMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('Escape then blur does not mutate', async () => {
+    const editInput = await startEditing()
+    await userEvent.type(editInput, '!')
+    await userEvent.keyboard('{Escape}')
+    fireEvent.blur(editInput)
+    expect(updateNoteMutate).not.toHaveBeenCalled()
+  })
+
+  it('unchanged text exits without mutate', async () => {
+    await startEditing()
+    await userEvent.keyboard('{Enter}')
+    expect(updateNoteMutate).not.toHaveBeenCalled()
+    expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
+  })
+
+  it('emptied text exits without mutate', async () => {
+    const editInput = await startEditing()
+    await userEvent.clear(editInput)
+    await userEvent.keyboard('{Enter}')
+    expect(updateNoteMutate).not.toHaveBeenCalled()
+  })
+
+  it('focusNewNote() via ref focuses the new note textarea', () => {
     const ref = createRef<NotesSectionHandle>()
     renderSection(ref)
     ref.current?.focusNewNote()
-    expect(document.activeElement).toBe(screen.getByRole('textbox'))
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(/add a note/i))
   })
 })

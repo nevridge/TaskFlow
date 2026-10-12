@@ -704,6 +704,14 @@
   font-size: 14px;
   padding: 2px 0;
 }
+.journal-page .add-input {
+  resize: none;
+  font-family: inherit;
+  line-height: 1.4;
+  display: block;
+  max-height: 12em;
+  overflow-y: auto;
+}
 .add-input::placeholder { color: var(--muted-2); }
 
 /* ─── Notes ────────────────────────────────────────────────────────────────── */
@@ -718,10 +726,16 @@
   color: var(--ink);
   cursor: text;
   line-height: 1.4;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
+.journal-page .note-p,
+.journal-page .note-list { margin: 0; }
+.journal-page .note-list { padding-left: 1.25em; }
+.journal-page ul.note-list { list-style: disc; }
+.journal-page ol.note-list { list-style: decimal; }
+.journal-page .note-text > * + * { margin-top: 4px; }
 .journal-page .note-edit {
   flex: 1;
   border: 0;
@@ -730,6 +744,13 @@
   outline: none;
   padding: 2px 0;
   font-size: 14.5px;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.4;
+  display: block;
+  width: 100%;
+  max-height: 12em;
+  overflow-y: auto;
 }
 
 /* ─── Loading / error states ───────────────────────────────────────────────── */

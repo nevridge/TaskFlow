@@ -215,6 +215,36 @@ describe('ProjectsPage', () => {
     })
   })
 
+  it('disables Create while the create mutation is in flight', async () => {
+    const user = userEvent.setup()
+    let resolve: (v: unknown) => void = () => {}
+    createAsync.mockReturnValue(new Promise((r) => { resolve = r }))
+    renderPage()
+    await user.type(screen.getByLabelText('Name'), 'Gamma')
+    await user.click(screen.getByRole('button', { name: 'Create project' }))
+    expect(screen.getByRole('button', { name: 'Create project' })).toBeDisabled()
+    resolve({})
+  })
+
+  it('disables Save while a list-page edit is in flight', async () => {
+    const user = userEvent.setup()
+    let resolve: (v: unknown) => void = () => {}
+    updateAsync.mockReturnValue(new Promise((r) => { resolve = r }))
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    resolve({})
+  })
+
+  it('returns focus to the Edit button after a successful save', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(await screen.findByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
+  })
+
   it('disables row actions while an update is pending', () => {
     vi.mocked(useUpdateProjectMutation).mockReturnValue({ mutateAsync: updateAsync, isPending: true } as never)
     renderPage()

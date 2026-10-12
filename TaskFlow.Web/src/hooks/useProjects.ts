@@ -63,10 +63,11 @@ export function useUpdateProjectMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: UpdateProjectDto }) => updateProject(id, data),
-    onSuccess: (_result, { id }) => {
-      qc.invalidateQueries({ queryKey: projectKeys.all })
-      qc.invalidateQueries({ queryKey: projectKeys.detail(id) })
-    },
+    onSuccess: (_result, { id }) =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: projectKeys.all }),
+        qc.invalidateQueries({ queryKey: projectKeys.detail(id) }),
+      ]),
   })
 }
 

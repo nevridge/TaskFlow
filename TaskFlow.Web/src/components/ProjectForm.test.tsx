@@ -32,6 +32,29 @@ describe('ProjectForm', () => {
     expect(onSubmit).toHaveBeenCalledWith({ name: 'Alpha', description: null })
   })
 
+  it('sends a description with content as typed (untrimmed); whitespace-only becomes null', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = setup()
+    await user.type(screen.getByLabelText('Name'), 'Alpha')
+    await user.type(screen.getByLabelText('Description'), '  keep me  ')
+    await user.click(screen.getByRole('button', { name: 'Create project' }))
+    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: '  keep me  ' })
+    await user.clear(screen.getByLabelText('Description'))
+    await user.type(screen.getByLabelText('Description'), '   ')
+    await user.click(screen.getByRole('button', { name: 'Create project' }))
+    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: null })
+  })
+
+  it('ties the submit error alert to the form via aria-describedby', async () => {
+    const user = userEvent.setup()
+    setup({ onSubmit: vi.fn().mockRejectedValue({ message: 'Nope' }) })
+    await user.type(screen.getByLabelText('Name'), 'X')
+    await user.click(screen.getByRole('button', { name: 'Create project' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveAttribute('id')
+    expect(alert.closest('form')).toHaveAttribute('aria-describedby', alert.id)
+  })
+
   it('clears the form after success when resetOnSuccess', async () => {
     const user = userEvent.setup()
     setup({ resetOnSuccess: true })

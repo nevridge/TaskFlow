@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import {
   projectKeys,
+  PROJECT_STALE_TIME_MS,
   useProjectsQuery,
   useProjectQuery,
   useProjectTasksQuery,
@@ -58,6 +59,25 @@ describe('project queries', () => {
     const { result } = renderHook(() => useProjectQuery(3), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.getProject).toHaveBeenCalledWith(3)
+  })
+
+  it('useProjectQuery uses the short staleTime and refetchOnMount always', async () => {
+    vi.mocked(api.getProject).mockResolvedValue({ data: { id: 3 } } as never)
+    const qc = makeClient()
+    const { result } = renderHook(() => useProjectQuery(3), { wrapper: makeWrapper(qc) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const opts = qc.getQueryCache().find({ queryKey: projectKeys.detail(3) })?.observers[0].options
+    expect(opts?.staleTime).toBe(PROJECT_STALE_TIME_MS)
+    expect(opts?.refetchOnMount).toBe('always')
+  })
+
+  it('useProjectTasksQuery has retry disabled', async () => {
+    vi.mocked(api.getProjectTasks).mockResolvedValue({ data: [] } as never)
+    const qc = makeClient()
+    const { result } = renderHook(() => useProjectTasksQuery(5), { wrapper: makeWrapper(qc) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const opts = qc.getQueryCache().find({ queryKey: projectKeys.tasks(5) })?.observers[0].options
+    expect(opts?.retry).toBe(false)
   })
 
   it('useProjectQuery is disabled for NaN', () => {

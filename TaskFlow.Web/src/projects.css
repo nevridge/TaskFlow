@@ -20,12 +20,12 @@
   color: inherit;
 }
 
-.p-shell {
+.projects-page .p-shell {
   max-width: 900px;
   margin: 0 auto;
 }
 
-.p-title {
+.projects-page .p-title {
   margin: 0 0 20px;
   font-size: 22px;
   font-weight: 700;
@@ -33,13 +33,13 @@
   overflow-wrap: anywhere;
 }
 
-.p-subtitle {
+.projects-page .p-subtitle {
   margin: 0 0 12px;
   font-size: 15px;
   font-weight: 600;
 }
 
-.p-panel {
+.projects-page .p-panel {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -50,13 +50,13 @@
 
 /* ─── Form ────────────────────────────────────────────────────────────────── */
 
-.p-form {
+.projects-page .p-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.p-field {
+.projects-page .p-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -93,19 +93,19 @@
   border-color: var(--danger-ink);
 }
 
-.p-counter {
+.projects-page .p-counter {
   font-size: 12px;
   color: var(--muted);
 }
 
-.p-field-error,
-.p-error {
+.projects-page .p-field-error,
+.projects-page .p-error {
   margin: 0;
   font-size: 13px;
   color: var(--danger-ink);
 }
 
-.p-form-actions {
+.projects-page .p-form-actions {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -135,19 +135,20 @@
 .projects-page .p-btn--primary {
   background: var(--accent);
   border-color: var(--accent);
+  /* No on-accent token exists in index.css; white is intentional. */
   color: #fff;
 }
 
 /* ─── List ────────────────────────────────────────────────────────────────── */
 
-.p-toolbar {
+.projects-page .p-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
 }
 
-.p-toggle {
+.projects-page .p-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -155,7 +156,7 @@
   cursor: pointer;
 }
 
-.p-list {
+.projects-page .p-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -164,7 +165,7 @@
   gap: 10px;
 }
 
-.p-row {
+.projects-page .p-row {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -176,29 +177,29 @@
   justify-content: space-between;
 }
 
-.p-row-main {
+.projects-page .p-row-main {
   min-width: 0;
   flex: 1;
 }
 
-.p-row-name {
+.projects-page .p-row-name {
   font-weight: 600;
   color: var(--ink);
   overflow-wrap: anywhere;
   text-decoration: none;
 }
 
-.p-row-name:hover {
+.projects-page .p-row-name:hover {
   color: var(--accent);
   text-decoration: underline;
 }
 
-.p-counts {
+.projects-page .p-counts {
   font-size: 13px;
   color: var(--muted);
 }
 
-.p-desc {
+.projects-page .p-desc {
   margin: 4px 0 0;
   font-size: 14px;
   color: var(--ink-2);
@@ -206,7 +207,7 @@
   white-space: pre-wrap;
 }
 
-.p-desc--clamp {
+.projects-page .p-desc--clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -214,13 +215,13 @@
   overflow: hidden;
 }
 
-.p-row-actions {
+.projects-page .p-row-actions {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.p-badge {
+.projects-page .p-badge {
   display: inline-block;
   margin-left: 8px;
   padding: 1px 8px;
@@ -232,25 +233,25 @@
   vertical-align: middle;
 }
 
-.p-badge--completed {
+.projects-page .p-badge--completed {
   color: var(--accent-ink);
   background: var(--accent-soft);
 }
 
-.p-empty,
-.p-status {
+.projects-page .p-empty,
+.projects-page .p-status {
   color: var(--muted);
   font-size: 14px;
 }
 
-.p-back {
+.projects-page .p-back {
   display: inline-block;
   margin-bottom: 14px;
   font-size: 13px;
   color: var(--accent);
 }
 
-.p-task-meta {
+.projects-page .p-task-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -259,9 +260,14 @@
   color: var(--muted);
 }
 
-.p-detail-head {
+.projects-page .p-detail-head {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
+}
+
+.projects-page .p-badge--block {
+  display: table;
+  margin: 4px 0 0;
 }

@@ -71,16 +71,19 @@ describe('ProjectDetailPage', () => {
     expect(useProjectQuery).toHaveBeenCalledWith(7)
   })
 
-  it('shows the Archived badge for archived projects', () => {
+  it('shows the Archived badge outside the h1 accessible name', () => {
     mockProject({ data: { data: { ...project, isArchived: true } } })
     renderAt('/projects/7')
+    expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
     expect(screen.getByText('Archived')).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
   it('shows loading state', () => {
     mockProject({ isLoading: true })
     renderAt('/projects/7')
     expect(screen.getByRole('status')).toHaveTextContent('Loading project')
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
   })
 
   it('shows not found when the project query errors (including network errors)', () => {
@@ -90,10 +93,12 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByRole('link', { name: 'Back to projects' })).toHaveAttribute('href', '/projects')
   })
 
-  it('shows not found when the tasks query errors', () => {
+  it('keeps the project header and shows a tasks error when only the tasks query fails', () => {
     mockTasks({ isError: true })
     renderAt('/projects/7')
-    expect(screen.getByRole('alert')).toHaveTextContent('Project not found.')
+    expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
+    expect(screen.getByText('Failed to load tasks.')).toBeInTheDocument()
+    expect(screen.queryByText('Project not found.')).not.toBeInTheDocument()
   })
 
   it('shows not found for an invalid id', () => {
@@ -151,6 +156,26 @@ describe('ProjectDetailPage', () => {
       data: { name: 'Renamed', description: 'Alpha desc', isArchived: false },
     })
     expect(await screen.findByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
+  })
+
+  it('renders exactly one h1 in edit mode', async () => {
+    const user = userEvent.setup()
+    renderAt('/projects/7')
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
+  })
+
+  it('editing an archived project preserves isArchived true', async () => {
+    const user = userEvent.setup()
+    mockProject({ data: { data: { ...project, isArchived: true } } })
+    renderAt('/projects/7')
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(updateAsync).toHaveBeenCalledWith({
+      id: 7,
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true },
+    })
   })
 
   it('edit 409 shows the message and keeps the form open', async () => {

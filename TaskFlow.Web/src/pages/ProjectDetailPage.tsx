@@ -66,7 +66,6 @@ export function ProjectDetailPage() {
   const { id: idParam } = useParams()
   const id = Number(idParam)
   const projectQuery = useProjectQuery(id)
-  const tasksQuery = useProjectTasksQuery(id)
   const updateMutation = useUpdateProjectMutation()
   const [editing, setEditing] = useState(false)
   const editBtnRef = useRef<HTMLButtonElement>(null)
@@ -77,11 +76,14 @@ export function ProjectDetailPage() {
     wasEditing.current = editing
   }, [editing])
 
-  if (!Number.isFinite(id) || projectQuery.isError || tasksQuery.isError) return <NotFound />
+  if (!Number.isFinite(id) || projectQuery.isError) return <NotFound />
   if (projectQuery.isLoading || !projectQuery.data) {
     return (
       <div className="projects-page">
-        <div className="p-shell"><p className="p-status" role="status">Loading project…</p></div>
+        <div className="p-shell">
+          <h1 className="p-title">Project</h1>
+          <p className="p-status" role="status">Loading project…</p>
+        </div>
       </div>
     )
   }
@@ -95,32 +97,33 @@ export function ProjectDetailPage() {
         <Link className="p-back" to="/projects">Back to projects</Link>
         <section className="p-panel">
           {editing ? (
-            <ProjectForm
-              initialName={project.name}
-              initialDescription={project.description}
-              submitLabel="Save"
-              errorFallback="Could not save project."
-              autoFocusName
-              onSubmit={async (values) => {
-                await updateMutation.mutateAsync({
-                  id: project.id,
-                  data: {
-                    name: values.name,
-                    description: values.description,
-                    isArchived: project.isArchived,
-                  },
-                })
-                setEditing(false)
-              }}
-              onCancel={() => setEditing(false)}
-            />
+            <>
+              <h1 className="p-title">{project.name}</h1>
+              <ProjectForm
+                initialName={project.name}
+                initialDescription={project.description}
+                submitLabel="Save"
+                errorFallback="Could not save project."
+                autoFocusName
+                onSubmit={async (values) => {
+                  await updateMutation.mutateAsync({
+                    id: project.id,
+                    data: {
+                      name: values.name,
+                      description: values.description,
+                      isArchived: project.isArchived,
+                    },
+                  })
+                  setEditing(false)
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            </>
           ) : (
             <div className="p-detail-head">
               <div className="p-row-main">
-                <h1 className="p-title">
-                  {project.name}
-                  {project.isArchived && <span className="p-badge">Archived</span>}
-                </h1>
+                <h1 className="p-title">{project.name}</h1>
+                {project.isArchived && <span className="p-badge p-badge--block">Archived</span>}
                 <div className="p-counts">
                   {project.openTaskCount} open · {project.completedTaskCount} completed
                 </div>

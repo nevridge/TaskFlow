@@ -42,6 +42,7 @@ export function ProjectForm({
   const descId = `${uid}-desc`
   const nameErrId = `${uid}-name-err`
   const descErrId = `${uid}-desc-err`
+  const submitErrId = `${uid}-submit-err`
   const nameRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription ?? '')
@@ -61,8 +62,9 @@ export function ProjectForm({
     if (found.name || found.description) return
     setSubmitting(true)
     try {
-      const trimmedDescription = description.trim()
-      await onSubmit({ name: name.trim(), description: trimmedDescription || null })
+      // Only a whitespace-only description becomes null; otherwise send it as typed so
+      // the payload matches what validation measured.
+      await onSubmit({ name: name.trim(), description: description.trim() ? description : null })
       if (resetOnSuccess) {
         setName('')
         setDescription('')
@@ -77,7 +79,12 @@ export function ProjectForm({
   const busy = submitting || disabled
 
   return (
-    <form className="p-form" onSubmit={handleSubmit} noValidate>
+    <form
+      className="p-form"
+      onSubmit={handleSubmit}
+      noValidate
+      aria-describedby={submitError ? submitErrId : undefined}
+    >
       <div className="p-field">
         <label className="p-label" htmlFor={nameId}>Name</label>
         <input
@@ -107,7 +114,7 @@ export function ProjectForm({
           <p id={descErrId} className="p-field-error" role="alert">{errors.description}</p>
         )}
       </div>
-      {submitError && <p className="p-error" role="alert">{submitError}</p>}
+      {submitError && <p id={submitErrId} className="p-error" role="alert">{submitError}</p>}
       <div className="p-form-actions">
         <button type="submit" className="p-btn p-btn--primary" disabled={busy}>{submitLabel}</button>
         {onCancel && (

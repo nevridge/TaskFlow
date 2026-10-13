@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using TaskFlow.Api.Data;
+using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Providers;
@@ -254,7 +255,14 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.JournalEntries.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        var json = JsonSerializer.Serialize(new { loaded.CreatedAt, loaded.UpdatedAt }, JsonSerializerOptionsProvider.Default);
+        var dto = new JournalEntryResponseDto
+        {
+            Id = loaded.Id,
+            Title = loaded.Title,
+            CreatedAt = loaded.CreatedAt,
+            UpdatedAt = loaded.UpdatedAt
+        };
+        var json = JsonSerializer.Serialize(dto, JsonSerializerOptionsProvider.Default);
         using var doc = JsonDocument.Parse(json);
 
         doc.RootElement.GetProperty("createdAt").GetString().Should().EndWith("Z");
@@ -383,6 +391,8 @@ public class UtcDateTimeModelBuilderExtensionsTests
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Ignore the navigation targets of JournalNote so the model contains only the note table,
+            // mapped without the UTC converter.
             modelBuilder.Ignore<JournalEntry>();
             modelBuilder.Ignore<TaskItem>();
             modelBuilder.Entity<JournalNote>().ToTable("JournalNotes");

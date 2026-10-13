@@ -11,7 +11,7 @@ public static class UtcDateTimeModelBuilderExtensions
     /// Writes values unchanged and marks values read from the database as <see cref="DateTimeKind.Utc"/>,
     /// so System.Text.Json emits a Z suffix. Does not alter the stored text or the model snapshot.
     /// </summary>
-    public static ValueConverter<DateTime, DateTime> UtcConverter { get; } =
+    internal static ValueConverter<DateTime, DateTime> UtcConverter { get; } =
         new(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
 
     /// <summary>

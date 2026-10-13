@@ -82,6 +82,27 @@ public class TaskItemsControllerV1Tests
         okResult.Value.Should().BeOfType<TaskCountDto>().Which.Count.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(0)]
+    public async Task GetTaskCountV1_ShouldSerializeToCamelCaseCountJson(int count)
+    {
+        // Arrange
+        _mockRepo.Setup(r => r.CountAsync()).ReturnsAsync(count);
+
+        // Act
+        var result = await _controller.GetTaskCountV1();
+        var dto = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value;
+        var json = System.Text.Json.JsonSerializer.Serialize(dto, TaskFlow.Api.Providers.JsonSerializerOptionsProvider.Default);
+
+        // Assert
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var properties = doc.RootElement.EnumerateObject().ToList();
+        properties.Should().ContainSingle();
+        properties[0].Name.Should().Be("count");
+        properties[0].Value.GetInt32().Should().Be(count);
+    }
+
     [Fact]
     public void GetTaskCountV1_ShouldBeRoutedAsCountLiteral()
     {

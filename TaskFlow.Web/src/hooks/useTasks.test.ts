@@ -65,6 +65,53 @@ describe('useTaskCountQuery', () => {
   })
 })
 
+describe('task count refresh after mutations', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function setup() {
+    vi.mocked(sdk.getApiV1TaskItemsCount)
+      .mockResolvedValueOnce({ data: { count: 2 }, response: new Response() } as never)
+      .mockResolvedValue({ data: { count: 3 }, response: new Response() } as never)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    return wrapper
+  }
+
+  it('refetches the count after a create mutation', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 9, title: 'N' }, response: new Response() } as never)
+    const { result } = renderHook(
+      () => ({ count: useTaskCountQuery(), create: useCreateTaskMutation() }),
+      { wrapper: setup() },
+    )
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(2))
+    result.current.create.mutate({ title: 'N', status: 'todo' } as never)
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(3))
+  })
+
+  it('refetches the count after a delete mutation', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: new Response() } as never)
+    const { result } = renderHook(
+      () => ({ count: useTaskCountQuery(), del: useDeleteTaskMutation() }),
+      { wrapper: setup() },
+    )
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(2))
+    result.current.del.mutate(1)
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(3))
+  })
+
+  it('refetches the count after an update mutation', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1, title: 'U' }, response: new Response() } as never)
+    const { result } = renderHook(
+      () => ({ count: useTaskCountQuery(), update: useUpdateTaskMutation() }),
+      { wrapper: setup() },
+    )
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(2))
+    result.current.update.mutate({ id: 1, data: { title: 'U' } as never })
+    await waitFor(() => expect(result.current.count.data?.data?.count).toBe(3))
+  })
+})
+
 describe('useTaskQuery', () => {
   beforeEach(() => vi.clearAllMocks())
 

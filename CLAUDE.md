@@ -148,7 +148,7 @@ Tests mirror the main project structure: `Controllers/V1/`, `Repositories/`, `Va
 ## Repository Etiquette
 
 - **Branches:** `feature/description` or `bugfix/description`
-- **Commits:** Conventional Commits format (`feat:`, `fix:`, `chore:`, `docs:`, etc.)
+- **Commits:** Conventional Commits format (`feat:`, `fix:`, `chore:`, `docs:`, etc.); commits carry no `Co-Authored-By` trailer
 - **PRs:** Must include updated or new tests; CI enforces 75% line coverage (backend) and 80% line coverage (frontend)
 
 ## CI/CD

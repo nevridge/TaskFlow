@@ -20,8 +20,9 @@ Before writing a single test, confirm you have:
 2. **Approved technical brief** — data model, endpoints, contracts, files that change
 3. **Backend builder's summary**
 4. **Frontend builder's summary**
+5. **UX TESTING_CRITERIA** — only when a UX advisory was produced; treat each criterion as an additional AC to cover
 
-If any are missing, ask for them before proceeding.
+If any of 1–4 are missing, ask for them before proceeding.
 
 ## Pre-Writing Protocol
 
@@ -31,6 +32,7 @@ If any are missing, ask for them before proceeding.
 4. Explore the existing tests next to the code under test (`TaskFlow.Api.Tests/` mirrors the main project; frontend tests are colocated as `Foo.test.tsx`).
 5. **Inventory existing coverage before writing anything.** The builders write tests too. Use Grep (entity name, method name, condition keywords such as `ReturnsBadRequest`, `NotFound`) to find tests that already cover the same behavior on the same input. A test that covers the same behavior is a duplicate regardless of which file it lives in. Never add duplicates; reference the existing test in your report instead.
 6. Read the source files named in the builder summaries so your tests call real APIs with real shapes.
+7. **Read the tests before you credit them.** Builder summaries only claim what a test does. Before marking any AC or edge case as covered, open the test file and read the test's body: confirm it arranges the scenario, performs the action, and asserts the behavior the AC describes. A test whose name or summary matches but whose assertions do not is not coverage — report it as a gap. In your AC Coverage Report, state that you read the test bodies; never report coverage based on names or summaries alone.
 
 ## Test Conventions
 
@@ -72,10 +74,12 @@ After writing the tests, run the full gates for BOTH stacks every time, from the
 Develop with targeted runs first (`dotnet test --filter "FullyQualifiedName~<TestClassName>"`, `npm run test -- --run <file>`), then run the full gates once.
 
 ### Backend
+In Git Bash, MSYS rewrites arguments that start with `/` (such as `/p:CollectCoverage=true`) into Windows paths, which fails with `MSB1008`. Prefix the coverage command with `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*"` (the other commands below do not need it).
+
 ```bash
 dotnet format TaskFlow.sln --verify-no-changes
 dotnet build TaskFlow.sln --configuration Release
-dotnet test TaskFlow.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage.cobertura.xml /p:Exclude="[xunit.*]*%2c[TaskFlow.Api]TaskFlow.Api.Program%2c[TaskFlow.Api]TaskFlow.Api.Migrations.*%2c[TaskFlow.Api]TaskFlow.Api.Middleware.*%2c[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*%2c[TaskFlow.Api]System.Runtime.CompilerServices.*%2c[TaskFlow.Api]TaskFlow.Api.DTOs.*" /p:Threshold=75 /p:ThresholdType=line /p:ThresholdStat=total
+MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" dotnet test TaskFlow.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage.cobertura.xml /p:Exclude="[xunit.*]*%2c[TaskFlow.Api]TaskFlow.Api.Program%2c[TaskFlow.Api]TaskFlow.Api.Migrations.*%2c[TaskFlow.Api]TaskFlow.Api.Middleware.*%2c[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*%2c[TaskFlow.Api]System.Runtime.CompilerServices.*%2c[TaskFlow.Api]TaskFlow.Api.DTOs.*" /p:Threshold=75 /p:ThresholdType=line /p:ThresholdStat=total
 ```
 FAIL if any test fails or total line coverage is under **75%**. If `dotnet format` fails, run `dotnet format TaskFlow.sln` once and re-verify. The repo root contains both `TaskFlow.sln` and `docker-compose.dcproj`, so always name `TaskFlow.sln`.
 

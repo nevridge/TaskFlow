@@ -151,7 +151,7 @@ Apply the [Commit Phase](#commit-phase) with message: `feat(<scope>): frontend i
 
 ### Step 8 — test-verifier: Write acceptance tests and run the gates
 
-Invoke `test-verifier` directly on the feature branch. Pass: approved user story, approved brief, backend builder's summary from Step 6, frontend builder's summary from Step 7. Capture the test verifier's report (verification results, AC coverage, test list, any gaps found).
+Invoke `test-verifier` directly on the feature branch. Pass: approved user story, approved brief, backend builder's summary from Step 6, frontend builder's summary from Step 7, and — if a `ux_advisory` was produced in Step 5.6 — its `TESTING_CRITERIA` under **UX Testing Criteria**. Instruct it to open and read the test bodies before reporting any AC as covered. Capture the test verifier's report (verification results, AC coverage, test list, any gaps found).
 
 ---
 
@@ -163,7 +163,7 @@ Apply the [Commit Phase](#commit-phase) with message: `test(<scope>): acceptance
 
 ### Step 9 — implementation-validator: Gap analysis
 
-Invoke `implementation-validator`. Pass: approved story, approved brief, test verifier's report, instruction to inspect files on disk. If `ux_advisory` was produced, include it under **UX Advisory** and add: "A deviation documented in the frontend builder's `ux_deviations` with a stated technical reason must be classified Important at most — never Critical. An undocumented UX deviation may be classified Critical."
+Invoke `implementation-validator`. Pass: approved story, approved brief, test verifier's report, and the instruction: "Read every in-scope file fresh from disk — production code, generated client, and tests. Do not rely on a previous review pass or on the builders' summaries." This applies to every run, including the re-runs in Steps 10 and 10.6, which must re-read all files, not only the ones just changed. If `ux_advisory` was produced, include it under **UX Advisory** and add: "A deviation documented in the frontend builder's `ux_deviations` with a stated technical reason must be classified Important at most — never Critical. An undocumented UX deviation may be classified Critical."
 
 Capture the validator report with findings grouped by severity: **Critical**, **Important**, **Minor**. Present it to the user.
 

@@ -6,12 +6,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TaskFlow is a personal task and daily journal management application. It consists of a .NET 10 REST API (`TaskFlow.Api`) and a React frontend (`TaskFlow.Web`). The app is self-hosted via Docker and Portainer, with production running at `taskflow.skalaforge.com`. The primary user is the repository owner.
 
-## Tech Stack
-
-- **Backend:** .NET 10, EF Core + SQLite, FluentValidation, OpenTelemetry → Seq, xUnit/Moq/FluentAssertions, Scalar/OpenAPI
-- **Frontend:** React 19, React Router v7, TanStack Query v5, Tailwind CSS v4, hey-api/client-fetch
-- **Infrastructure:** Docker Compose (API, Seq containers), Portainer GitOps deploy
-
 ## Commands
 
 ```bash
@@ -36,8 +30,8 @@ cd TaskFlow.Web && npm install
 # Frontend — dev server (proxies /api → http://localhost:8080)
 cd TaskFlow.Web && npm run dev
 
-# Frontend — type-check
-cd TaskFlow.Web && npx tsc --noEmit
+# Frontend — type-check (what CI runs; plain `npx tsc --noEmit` checks nothing here because tsconfig.json is solution-style)
+cd TaskFlow.Web && npm run type-check
 
 # Frontend — test (all, single run)
 cd TaskFlow.Web && npm run test -- --run
@@ -79,13 +73,9 @@ Two execution tools are available on this Windows machine:
 
 ## Architecture
 
-**Layered flow:** `Controller → Repository → EF Core (SQLite)`
-
 **Extension method pattern** — `Program.cs` stays clean by delegating all service registration to methods in `Extensions/`. Each extension file owns one concern (persistence, versioning, health checks, OpenTelemetry, validation, JSON, OpenAPI). Adding a new cross-cutting concern means a new extension file, not touching `Program.cs`.
 
 **API versioning** uses both URL path (`/api/v1/TaskItems`) and request header (`x-api-version`). Controllers live in `Controllers/V1/` and are decorated with `[ApiVersion("1.0")]`.
-
-**Health checks:** Three endpoints — `/health` (combined), `/health/ready` (DB connectivity, K8s readiness probe), `/health/live` (always up, liveness probe). Custom JSON writer in `HealthChecks/`.
 
 **Migrations run on startup** when `Database:MigrateOnStartup` is `true` (default in Docker).
 
@@ -143,7 +133,7 @@ Tests mirror the main project structure: `Controllers/V1/`, `Repositories/`, `Va
 - `PrefsContext` tests must clean up DOM side-effects in `afterEach`: `document.documentElement.removeAttribute('data-theme')`, `document.documentElement.classList.remove('is-dark')`, `localStorage.clear()`
 - Keyboard shortcut tests use `vi.useFakeTimers()` for chord sequences; clean up with `document.body.innerHTML = ''` in `afterEach`
 
-**Gotcha — enum PascalCase:** Backend serializes status as PascalCase (`'Completed'`, `'Todo'`). Always use PascalCase in test fixtures. The component compares `status === 'Completed'` — a lowercase `'completed'` fixture will silently produce wrong behaviour.
+Test fixtures must use PascalCase status values too (see the enum rule under Safe Change Rules) — a lowercase `'completed'` fixture silently produces wrong behaviour.
 
 ## Repository Etiquette
 
@@ -152,8 +142,6 @@ Tests mirror the main project structure: `Controllers/V1/`, `Repositories/`, `Va
 - **PRs:** Must include updated or new tests; CI enforces 75% line coverage (backend) and 80% line coverage (frontend)
 
 ## CI/CD
-
-GitHub Actions: `ci.yml` (lint → build → test → smoke test), `codeql.yml`, `container-scan.yml` (Trivy), `ghcr-deploy.yml` (push to GHCR → update `taskflow-deploy` repo → Portainer GitOps deploys).
 
 Push to `main` triggers automatic deployment. Images are tagged `sha-<commit>`. The GitOps compose file lives in `nevridge/taskflow-deploy`.
 

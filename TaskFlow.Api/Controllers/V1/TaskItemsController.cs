@@ -46,6 +46,14 @@ public class TaskItemsController(
         return Ok(await Task.WhenAll(dtoTasks));
     }
 
+    // GET: api/v1/TaskItems/count
+    [HttpGet("count")]
+    public async Task<ActionResult<TaskCountDto>> GetTaskCountV1()
+    {
+        var count = await _repo.CountAsync();
+        return Ok(new TaskCountDto { Count = count });
+    }
+
     // GET: api/v1/TaskItems/5
     [HttpGet("{id}", Name = "GetTaskV1")]
     public async Task<ActionResult<TaskItemResponseDto>> Get(int id)

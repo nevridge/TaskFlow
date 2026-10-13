@@ -11,6 +11,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     public async Task<IEnumerable<TaskItem>> GetAllAsync() =>
         await _context.TaskItems.Include(t => t.Project).ToListAsync();
 
+    public Task<int> CountAsync() => _context.TaskItems.CountAsync();
+
     public async Task<TaskItem?> GetByIdAsync(int id) =>
         await _context.TaskItems.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
 

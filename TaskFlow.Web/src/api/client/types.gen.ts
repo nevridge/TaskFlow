@@ -103,6 +103,10 @@ export type ProjectResponseDto = {
 
 export type Status = 'draft' | 'todo' | 'completed';
 
+export type TaskCountDto = {
+    count?: number | string;
+};
+
 export type TaskItemEventResponseDto = {
     id?: number | string;
     taskItemId?: number | string;
@@ -747,6 +751,22 @@ export type PostApiV1TaskItemsResponses = {
 };
 
 export type PostApiV1TaskItemsResponse = PostApiV1TaskItemsResponses[keyof PostApiV1TaskItemsResponses];
+
+export type GetApiV1TaskItemsCountData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/TaskItems/count';
+};
+
+export type GetApiV1TaskItemsCountResponses = {
+    /**
+     * OK
+     */
+    200: TaskCountDto;
+};
+
+export type GetApiV1TaskItemsCountResponse = GetApiV1TaskItemsCountResponses[keyof GetApiV1TaskItemsCountResponses];
 
 export type DeleteApiV1TaskItemsByIdData = {
     body?: never;

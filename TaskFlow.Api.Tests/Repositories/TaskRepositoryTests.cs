@@ -54,6 +54,39 @@ public class TaskRepositoryTests
     }
 
     [Fact]
+    public async Task CountAsync_ShouldReturnNumberOfTasks()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddRangeAsync(
+            new TaskItem { Id = 1, Title = "Task 1", Status = Status.Todo },
+            new TaskItem { Id = 2, Title = "Task 2", Status = Status.Draft },
+            new TaskItem { Id = 3, Title = "Task 3", IsComplete = true, Status = Status.Completed });
+        await context.SaveChangesAsync();
+
+        // Act
+        var result = await repository.CountAsync();
+
+        // Assert
+        result.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CountAsync_WhenNoTasks_ShouldReturnZero()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        // Act
+        var result = await repository.CountAsync();
+
+        // Assert
+        result.Should().Be(0);
+    }
+
+    [Fact]
     public async Task GetByIdAsync_ShouldReturnTask_WhenTaskExists()
     {
         // Arrange

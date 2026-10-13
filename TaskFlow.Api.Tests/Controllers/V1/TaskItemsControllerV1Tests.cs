@@ -55,6 +55,51 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task GetTaskCountV1_ShouldReturnOkWithCount()
+    {
+        // Arrange
+        _mockRepo.Setup(r => r.CountAsync()).ReturnsAsync(5);
+
+        // Act
+        var result = await _controller.GetTaskCountV1();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        okResult.Value.Should().BeOfType<TaskCountDto>().Which.Count.Should().Be(5);
+    }
+
+    [Fact]
+    public async Task GetTaskCountV1_WhenNoTasks_ShouldReturnOkWithZero()
+    {
+        // Arrange
+        _mockRepo.Setup(r => r.CountAsync()).ReturnsAsync(0);
+
+        // Act
+        var result = await _controller.GetTaskCountV1();
+
+        // Assert
+        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        okResult.Value.Should().BeOfType<TaskCountDto>().Which.Count.Should().Be(0);
+    }
+
+    [Fact]
+    public void GetTaskCountV1_ShouldBeRoutedAsCountLiteral()
+    {
+        // Arrange
+        var countTemplate = typeof(TaskItemsController).GetMethod(nameof(TaskItemsController.GetTaskCountV1))!
+            .GetCustomAttributes(typeof(HttpGetAttribute), false)
+            .Cast<HttpGetAttribute>().Single().Template;
+        var idTemplate = typeof(TaskItemsController).GetMethod(nameof(TaskItemsController.Get))!
+            .GetCustomAttributes(typeof(HttpGetAttribute), false)
+            .Cast<HttpGetAttribute>().Single().Template;
+
+        // Assert
+        countTemplate.Should().Be("count");
+        idTemplate.Should().Be("{id}");
+        countTemplate.Should().NotBe(idTemplate);
+    }
+
+    [Fact]
     public async Task Get_ShouldReturnOkWithTask_WhenTaskExists()
     {
         // Arrange

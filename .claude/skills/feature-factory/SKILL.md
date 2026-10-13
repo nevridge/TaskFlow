@@ -139,7 +139,7 @@ The frontend-builder does not start the API and does not run the client generato
 
 If `ux_advisory` was produced, include in the output requirements: "Include a `ux_deviations` section. For each case where UX advisory guidance could not be followed, document: which guidance, the technical reason, and what was done instead. If all guidance was followed, write: `ux_deviations: none`."
 
-Capture the frontend builder's summary (components, routes, hooks, tests, ux_deviations). Apply the [Spec-Blocker Loop](#spec-blocker-loop) with cap **1**. If the spec change touched the **API Changes** section, re-invoke `backend-builder` first (then apply Step 6.5), then `frontend-builder`; if only **Frontend Changes**, re-invoke `frontend-builder` only.
+Capture the frontend builder's summary (components, routes, hooks, tests, ux_deviations). Apply the [Spec-Blocker Loop](#spec-blocker-loop) with cap **1**. If the spec change touched the **API Changes** section, re-invoke `backend-builder` first (stop if it reports `Client regeneration: FAILED`, as in Step 6, then apply Step 6.5), then `frontend-builder`; if only **Frontend Changes**, re-invoke `frontend-builder` only.
 
 ---
 

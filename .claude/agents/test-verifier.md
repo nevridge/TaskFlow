@@ -81,7 +81,7 @@ dotnet format TaskFlow.sln --verify-no-changes
 dotnet build TaskFlow.sln --configuration Release
 MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" dotnet test TaskFlow.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage.cobertura.xml /p:Exclude="[xunit.*]*%2c[TaskFlow.Api]TaskFlow.Api.Program%2c[TaskFlow.Api]TaskFlow.Api.Migrations.*%2c[TaskFlow.Api]TaskFlow.Api.Middleware.*%2c[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*%2c[TaskFlow.Api]System.Runtime.CompilerServices.*%2c[TaskFlow.Api]TaskFlow.Api.DTOs.*" /p:Threshold=75 /p:ThresholdType=line /p:ThresholdStat=total
 ```
-FAIL if any test fails or total line coverage is under **75%**. If `dotnet format` fails, run `dotnet format TaskFlow.sln` once and re-verify. The repo root contains both `TaskFlow.sln` and `docker-compose.dcproj`, so always name `TaskFlow.sln`.
+FAIL if any test fails or total line coverage is under **75%**. If `dotnet format` fails, fix only your own test files (`dotnet format TaskFlow.sln --include <your test files>`) and re-verify; if it still fails on a production file, report that file as a FAIL and do not reformat it. The repo root contains both `TaskFlow.sln` and `docker-compose.dcproj`, so always name `TaskFlow.sln`.
 
 ### Frontend
 Run each as `cd TaskFlow.Web && <command>` (inline the `cd`; run `npm install` first if `node_modules` is missing):

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 
 namespace TaskFlow.Api.Data;
@@ -98,5 +99,7 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                   .HasForeignKey(n => n.JournalEntryId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
+
+        modelBuilder.ApplyUtcAuditTimestamps();
     }
 }

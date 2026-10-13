@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useTasksQuery,
+  useTaskCountQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
@@ -43,6 +44,11 @@ const COLUMNS: Array<{ key: TaskSortKey; label: string }> = [
 
 export function TasksPage() {
   const { data, isLoading, error } = useTasksQuery()
+  const { data: countData } = useTaskCountQuery()
+  // Generated type is `number | string` (optional); normalise, hide label if not a finite number.
+  const rawCount = countData?.data?.count
+  const parsedCount = rawCount === undefined || rawCount === '' ? NaN : Number(rawCount)
+  const taskCount = Number.isFinite(parsedCount) ? parsedCount : null
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
   const deleteMutation = useDeleteTaskMutation()
@@ -330,7 +336,14 @@ export function TasksPage() {
     <div className="tasks-page">
       <div className="t-shell">
         <div className="t-page-hdr">
-          <h1 className="t-page-title">Tasks</h1>
+          <div className="flex items-baseline gap-2">
+            <h1 className="t-page-title">Tasks</h1>
+            {taskCount !== null && (
+              <span data-testid="task-count" className="text-[13px] text-[var(--muted)]">
+                {taskCount === 1 ? '1 task' : `${taskCount} tasks`}
+              </span>
+            )}
+          </div>
           <button className="t-btn-primary" onClick={() => setShowCreate(true)}>New Task</button>
         </div>
 

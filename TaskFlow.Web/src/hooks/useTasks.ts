@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getApiV1TaskItems,
+  getApiV1TaskItemsCount,
   getTaskV1,
   postApiV1TaskItems,
   putApiV1TaskItemsById,
@@ -35,12 +36,20 @@ export const taskKeys = {
   all: ['tasks'] as const,
   detail: (id: number) => ['tasks', id] as const,
   history: (id: number) => ['tasks', id, 'history'] as const,
+  count: ['tasks', 'count'] as const,
 }
 
 export function useTasksQuery() {
   return useQuery({
     queryKey: taskKeys.all,
     queryFn: () => getApiV1TaskItems(),
+  })
+}
+
+export function useTaskCountQuery() {
+  return useQuery({
+    queryKey: taskKeys.count,
+    queryFn: () => getApiV1TaskItemsCount(),
   })
 }
 

@@ -84,7 +84,7 @@ Two execution tools are available on this Windows machine:
 - **Repository Pattern** — no direct `DbContext` access outside of repository classes
 - **New validators** go in `Validators/` and are auto-discovered via `AddValidatorsFromAssemblyContaining` — no manual registration needed
 - **New cross-cutting concerns** go in a new `Extensions/` file — do not add service registrations to `Program.cs` directly
-- **Auto-generated files** (`src/api/client/sdk.gen.ts`) must never be manually edited — run `npm run gen:api` to regenerate
+- **Auto-generated files** (`src/api/client/sdk.gen.ts`) must never be manually edited — run `npm run gen:api` to regenerate (inside feature-factory, only the backend-builder regenerates, using `npx openapi-ts -i <spec url>` against the launch-profile port 5290 instead)
 - **C# naming:** PascalCase for types and members, camelCase for local variables
 
 ## Frontend

@@ -177,7 +177,7 @@ If the validator report contains **Critical** findings:
 2. Re-invoke `backend-builder` for backend gaps; `frontend-builder` for frontend gaps; backend first if both. Pass the findings.
 3. After builder(s) complete, apply the [Commit Phase](#commit-phase) with message: `fix(<scope>): address validator findings for <feature-slug>`.
 4. Re-invoke `test-verifier` (Step 8 inputs, updated), then `implementation-validator` (Step 9 inputs, updated). Present the new report.
-5. If critical findings remain, loop once more. After two correction loops, stop and surface the remaining findings — flag that manual intervention is required.
+5. If critical findings remain, loop once more. After two correction loops, stop the chain: surface the remaining Critical findings, flag that manual intervention is required, and do not continue to Steps 10.5, 10.6 or 11 and do not offer a PR.
 
 If no critical findings, proceed to Step 10.5.
 
@@ -326,4 +326,4 @@ Used by Steps 6 and 7. Each caller initializes a `respec_count` variable and pro
 - **GitHub writes use the per-command owner token** (`GH_TOKEN="$(gh auth token --user nevridge)"`). Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
 - **Never commit or push to `main`.** All work reaches `main` through a pull request.
 - **No `Co-Authored-By` trailer on any commit.**
-- **Checklist idempotency.** If Step 10.5 fires again after a correction loop, update the existing `<!-- ux-checklist -->` comment rather than creating a duplicate.
+- **Checklist idempotency.** Step 10.5 never creates a duplicate `<!-- ux-checklist -->` comment: if one already exists on the issue, update it.

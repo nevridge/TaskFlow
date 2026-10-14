@@ -91,6 +91,12 @@ claude --plugin-dir ./plugin                  # try it for one session without i
 
 Tests stub the HTTP layer; a reflection test also guards the tool surface (exact tool set, every tool and parameter described, read-only/destructive flags).
 
+### Building features with feature-factory
+
+Open Claude Code in this repo on a `feature/` or `bugfix/` branch and ask it to build a feature, or run `/feature-factory <issue-number>`. It walks the issue through research, story, brief, documentation advisors, build, verification and a PR, with three approval stops (story, brief, final review). A story groomed with `/groom-issue` skips the story stop. An open dependency on another repo's issue or PR (for example a TaskFlow API change) stops the run until you say "proceed anyway".
+
+It needs the user-level agents `story-writer`, `codebase-researcher` and `spec-writer` in `~/.claude/agents/`. The skill is `.claude/skills/feature-factory/SKILL.md` and its agents are in `.claude/agents/`.
+
 ## Known issues
 
 - Subagents cannot ask questions mid-run, so the agent proposes and reports rather than confirming; the interactive confirm-then-write flows live in the skills.

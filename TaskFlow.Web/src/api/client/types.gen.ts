@@ -13,10 +13,19 @@ export type AssignProjectTaskDto = {
     taskItemId?: number | string;
 };
 
+export type CarryForwardRequestDto = {
+    timezoneOffsetMinutes?: null | number | string;
+};
+
+export type CarryForwardResponseDto = {
+    movedCount?: number | string;
+};
+
 export type CreateJournalEntryDto = {
     title: string;
     summary?: null | string;
     date?: string;
+    timezoneOffsetMinutes?: null | number | string;
 };
 
 export type CreateJournalLogEntryDto = {
@@ -256,6 +265,24 @@ export type PutApiV1JournalEntriesByIdResponses = {
 };
 
 export type PutApiV1JournalEntriesByIdResponse = PutApiV1JournalEntriesByIdResponses[keyof PutApiV1JournalEntriesByIdResponses];
+
+export type PostApiV1JournalEntriesByIdCarryForwardData = {
+    body?: null | CarryForwardRequestDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{id}/carry-forward';
+};
+
+export type PostApiV1JournalEntriesByIdCarryForwardResponses = {
+    /**
+     * OK
+     */
+    200: CarryForwardResponseDto;
+};
+
+export type PostApiV1JournalEntriesByIdCarryForwardResponse = PostApiV1JournalEntriesByIdCarryForwardResponses[keyof PostApiV1JournalEntriesByIdCarryForwardResponses];
 
 export type GetApiV1JournalEntriesByEntryIdLogsData = {
     body?: never;

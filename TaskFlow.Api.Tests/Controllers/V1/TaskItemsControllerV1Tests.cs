@@ -2,8 +2,11 @@ using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using TaskFlow.Api.Controllers.V1;
+using TaskFlow.Api.Data;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
@@ -330,6 +333,60 @@ public class TaskItemsControllerV1Tests
         result.Result.Should().BeOfType<CreatedAtRouteResult>();
         _mockJournalRepo.Verify(r => r.AddTodoAsync(existingEntry.Id, createdTask.Id, null), Times.Once);
         _mockJournalRepo.Verify(r => r.GetByDateAsync(targetDate), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task Create_ShouldNeverTriggerCarryForward_WhenJournalDateIsProvided()
+    {
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var createdTask = new TaskItem { Id = 91, Title = "Tomorrow", Status = Status.Todo };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdAsync(91)).ReturnsAsync(createdTask);
+        _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync((JournalEntry?)null);
+        _mockJournalRepo.Setup(r => r.AddAsync(It.IsAny<JournalEntry>()))
+            .ReturnsAsync(new JournalEntry { Id = 4, Title = "J", Date = targetDate });
+
+        var result = await _controller.Create(new CreateTaskItemDto { Title = "Tomorrow", JournalDate = targetDate, TimezoneOffsetMinutes = 0 });
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        _mockJournalRepo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldLeaveTodaysTasksOnToday_WhenTaskCreatedForTomorrow()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+        var options = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).Options;
+        await using var context = new TaskDbContext(options);
+        context.Database.EnsureCreated();
+
+        var journalRepo = new JournalEntryRepository(context);
+        var controller = new TaskItemsController(new TaskRepository(context), _mockValidator.Object, journalRepo, _mockProjectRepo.Object);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+
+        const int offset = 0;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var todayEntry = await journalRepo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+        var todayTask = new TaskItem { Title = "Today task", Status = Status.Todo };
+        context.TaskItems.Add(todayTask);
+        await context.SaveChangesAsync();
+        await journalRepo.AddTodoAsync(todayEntry.Id, todayTask.Id, offset);
+
+        var result = await controller.Create(new CreateTaskItemDto
+        {
+            Title = "Tomorrow task",
+            JournalDate = today.AddDays(1),
+            TimezoneOffsetMinutes = offset
+        });
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        var tomorrowEntry = await journalRepo.GetByDateAsync(today.AddDays(1));
+        tomorrowEntry!.Todos.Select(t => t.Title).Should().BeEquivalentTo(["Tomorrow task"]);
+        (await journalRepo.GetTodosAsync(todayEntry.Id)).Should().ContainSingle(t => t.Id == todayTask.Id);
+        context.TaskItems.Single(t => t.Id == todayTask.Id).MoveCount.Should().Be(0);
     }
 
     [Fact]

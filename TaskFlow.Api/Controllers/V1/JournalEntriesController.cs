@@ -2,6 +2,7 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -10,8 +11,14 @@ namespace TaskFlow.Api.Controllers.V1;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class JournalEntriesController(IJournalEntryRepository journalRepo, IValidator<JournalEntry> validator) : ControllerBase
+public class JournalEntriesController(
+    IJournalEntryRepository journalRepo,
+    IValidator<JournalEntry> validator,
+    IValidator<CreateJournalEntryDto> createValidator,
+    IValidator<CarryForwardRequestDto> carryForwardValidator) : ControllerBase
 {
+    private readonly IValidator<CreateJournalEntryDto> _createValidator = createValidator;
+    private readonly IValidator<CarryForwardRequestDto> _carryForwardValidator = carryForwardValidator;
     private const string GetRouteEntryName = "GetJournalEntryV1";
     private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -42,6 +49,12 @@ public class JournalEntriesController(IJournalEntryRepository journalRepo, IVali
     [HttpPost]
     public async Task<ActionResult<JournalEntryResponseDto>> Create([FromBody] CreateJournalEntryDto dto)
     {
+        var dtoValidation = await _createValidator.ValidateAsync(dto);
+        if (!dtoValidation.IsValid)
+        {
+            return BadRequest(dtoValidation.Errors);
+        }
+
         var existingByDate = await _journalRepo.GetByDateAsync(dto.Date);
         if (existingByDate is not null)
         {
@@ -63,6 +76,18 @@ public class JournalEntriesController(IJournalEntryRepository journalRepo, IVali
         try
         {
             var created = await _journalRepo.AddAsync(entry);
+
+            // Carry-forward only when the entry is the user's today and an offset was supplied (no UTC fallback).
+            if (dto.TimezoneOffsetMinutes.HasValue
+                && dto.Date == UserDateHelper.GetUserToday(DateTime.UtcNow, dto.TimezoneOffsetMinutes))
+            {
+                var moved = await _journalRepo.CarryForwardIncompleteTasksAsync(created.Id, dto.Date);
+                if (moved > 0)
+                {
+                    created = await _journalRepo.GetByIdAsync(created.Id) ?? created;
+                }
+            }
+
             return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
         }
         catch (DuplicateJournalDateException)
@@ -74,6 +99,39 @@ public class JournalEntriesController(IJournalEntryRepository journalRepo, IVali
                 existingEntry = existing is null ? null : ToDto(existing),
             });
         }
+    }
+
+    // POST: api/v1/JournalEntries/5/carry-forward
+    [HttpPost("{id}/carry-forward")]
+    public async Task<ActionResult<CarryForwardResponseDto>> CarryForward(int id, [FromBody] CarryForwardRequestDto? dto = null)
+    {
+        dto ??= new CarryForwardRequestDto();
+
+        var validation = await _carryForwardValidator.ValidateAsync(dto);
+        if (!validation.IsValid)
+        {
+            return BadRequest(validation.Errors);
+        }
+
+        var entry = await _journalRepo.GetByIdAsync(id);
+        if (entry is null)
+        {
+            return NotFound();
+        }
+
+        if (!dto.TimezoneOffsetMinutes.HasValue)
+        {
+            return Ok(new CarryForwardResponseDto { MovedCount = 0 });
+        }
+
+        var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, dto.TimezoneOffsetMinutes);
+        if (entry.Date != userToday)
+        {
+            return Ok(new CarryForwardResponseDto { MovedCount = 0 });
+        }
+
+        var moved = await _journalRepo.CarryForwardIncompleteTasksAsync(id, userToday);
+        return Ok(new CarryForwardResponseDto { MovedCount = moved });
     }
 
     // PUT: api/v1/JournalEntries/5

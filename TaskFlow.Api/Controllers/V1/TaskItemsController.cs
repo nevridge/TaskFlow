@@ -92,13 +92,7 @@ public class TaskItemsController(
         if (createDto.JournalDate.HasValue)
         {
             // Use timezone offset if provided, otherwise fallback to UTC
-            DateTime utcNow = DateTime.UtcNow;
-            DateTime userNow = utcNow;
-            if (createDto.TimezoneOffsetMinutes.HasValue)
-            {
-                userNow = utcNow.AddMinutes(createDto.TimezoneOffsetMinutes.Value);
-            }
-            var today = DateOnly.FromDateTime(userNow);
+            var today = UserDateHelper.GetUserToday(DateTime.UtcNow, createDto.TimezoneOffsetMinutes);
             if (createDto.JournalDate.Value < today)
             {
                 return UnprocessableEntity(new

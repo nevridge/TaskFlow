@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
@@ -197,69 +198,62 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
-    public async Task AddAsync_ShouldAutomaticallyInheritIncompleteTasks_FromPreviousDay()
+    public async Task AddAsync_ShouldNotMoveAnyTasks_WhenCreatingFutureOrPastEntry()
     {
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var previousEntry = await repo.AddAsync(new JournalEntry { Title = "Previous", Date = today.AddDays(1) });
-        var openTask = new TaskItem { Title = "Open task", Status = Status.Todo };
-        context.TaskItems.Add(openTask);
-        await context.SaveChangesAsync();
-        await repo.AddTodoAsync(previousEntry.Id, openTask.Id);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, task) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
 
-        var nextEntry = await repo.AddAsync(new JournalEntry { Title = "Next", Date = today.AddDays(2) });
+        var future = await repo.AddAsync(new JournalEntry { Title = "Future", Date = today.AddDays(1) });
+        var past = await repo.AddAsync(new JournalEntry { Title = "Past", Date = today.AddDays(-5) });
 
-        (await repo.GetTodosAsync(previousEntry.Id)).Should().BeEmpty();
-        (await repo.GetTodosAsync(nextEntry.Id)).Should().ContainSingle(t => t.Id == openTask.Id);
-        openTask.CurrentJournalEntryId.Should().Be(nextEntry.Id);
-        openTask.MoveCount.Should().Be(1);
-        openTask.FirstTaggedDate.Should().Be(previousEntry.Date);
+        (await repo.GetTodosAsync(source.Id)).Should().ContainSingle(t => t.Id == task.Id);
+        (await repo.GetTodosAsync(future.Id)).Should().BeEmpty();
+        (await repo.GetTodosAsync(past.Id)).Should().BeEmpty();
+        task.CurrentJournalEntryId.Should().Be(source.Id);
+        task.MoveCount.Should().Be(0);
+        context.TaskItemEvents.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task AddAsync_ShouldNotInheritCompletedTasks_FromPreviousDay()
+    public async Task CarryForwardIncompleteTasksAsync_ShouldLeaveCompletedTasksInPlace()
     {
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, open) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var done = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done", Status = Status.Completed, IsComplete = true });
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var previousEntry = await repo.AddAsync(new JournalEntry { Title = "Previous", Date = today.AddDays(1) });
-        var completedTask = new TaskItem { Title = "Done task", Status = Status.Completed, IsComplete = true };
-        context.TaskItems.Add(completedTask);
-        await context.SaveChangesAsync();
-        await repo.AddTodoAsync(previousEntry.Id, completedTask.Id);
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        var nextEntry = await repo.AddAsync(new JournalEntry { Title = "Next", Date = today.AddDays(2) });
-
-        (await repo.GetTodosAsync(previousEntry.Id)).Should().ContainSingle(t => t.Id == completedTask.Id);
-        (await repo.GetTodosAsync(nextEntry.Id)).Should().BeEmpty();
-        completedTask.CurrentJournalEntryId.Should().Be(previousEntry.Id);
+        moved.Should().Be(1);
+        (await repo.GetTodosAsync(target.Id)).Should().ContainSingle(t => t.Id == open.Id);
+        (await repo.GetTodosAsync(source.Id)).Should().ContainSingle(t => t.Id == done.Id);
+        done.CurrentJournalEntryId.Should().Be(source.Id);
+        done.MoveCount.Should().Be(0);
     }
 
     [Fact]
-    public async Task AddAsync_ShouldInheritIncompleteTasks_FromMostRecentEntry_WhenDaysAreNonConsecutive()
+    public async Task CarryForwardIncompleteTasksAsync_ShouldMoveTasksFromAllEarlierEntries_WhenDatesHaveGaps()
     {
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (older, olderTask) = await SeedLinkedTaskAsync(context, today.AddDays(-6));
+        var (newer, newerTask) = await SeedLinkedTaskAsync(context, today.AddDays(-3));
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
-        // Simulate a Friday→Monday gap: two entries with a 3-day gap (no Saturday/Sunday entries)
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var firstEntry = await repo.AddAsync(new JournalEntry { Title = "First", Date = today.AddDays(1) });
-        var openTask = new TaskItem { Title = "Open task", Status = Status.Todo };
-        context.TaskItems.Add(openTask);
-        await context.SaveChangesAsync();
-        await repo.AddTodoAsync(firstEntry.Id, openTask.Id);
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        // Skip today+2 and today+3 (simulating Saturday and Sunday) — create today+4 directly
-        var laterEntry = await repo.AddAsync(new JournalEntry { Title = "Later", Date = today.AddDays(4) });
-
-        (await repo.GetTodosAsync(firstEntry.Id)).Should().BeEmpty();
-        (await repo.GetTodosAsync(laterEntry.Id)).Should().ContainSingle(t => t.Id == openTask.Id);
-        openTask.CurrentJournalEntryId.Should().Be(laterEntry.Id);
-        openTask.MoveCount.Should().Be(1);
-        openTask.FirstTaggedDate.Should().Be(firstEntry.Date);
+        moved.Should().Be(2);
+        (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Should().BeEquivalentTo([olderTask.Id, newerTask.Id]);
+        (await repo.GetTodosAsync(older.Id)).Should().BeEmpty();
+        (await repo.GetTodosAsync(newer.Id)).Should().BeEmpty();
+        olderTask.FirstTaggedDate.Should().Be(older.Date);
+        newerTask.FirstTaggedDate.Should().Be(newer.Date);
     }
 
     [Fact]
@@ -493,5 +487,253 @@ public class JournalEntryRepositoryTests
         var childItem = parentTodo.ChildTaskItems.First(c => c.Id == child.Id);
         childItem.CurrentJournalEntry.Should().NotBeNull();
         childItem.CurrentJournalEntry!.Id.Should().Be(secondEntry.Id);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldSetCountersAndEvents_ForEachMovedTask()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (a, taskA) = await SeedLinkedTaskAsync(context, today.AddDays(-4));
+        var (b, taskB) = await SeedLinkedTaskAsync(context, today.AddDays(-2));
+        taskB.FirstTaggedDate = today.AddDays(-9);
+        taskB.MoveCount = 2;
+        await context.SaveChangesAsync();
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        moved.Should().Be(2);
+        taskA.CurrentJournalEntryId.Should().Be(target.Id);
+        taskA.MoveCount.Should().Be(1);
+        taskA.FirstTaggedDate.Should().Be(a.Date);
+        taskB.MoveCount.Should().Be(3);
+        taskB.FirstTaggedDate.Should().Be(today.AddDays(-9));
+        var events = context.TaskItemEvents.ToList();
+        events.Should().HaveCount(2);
+        events.Should().OnlyContain(e => e.EventType == "ReassignedToJournalDay"
+            && e.ChangeSummary == "Automatically moved forward to the next journal day."
+            && e.ToJournalEntryId == target.Id && e.ToJournalDate == today);
+        events.Single(e => e.TaskItemId == taskA.Id).FromJournalEntryId.Should().Be(a.Id);
+        events.Single(e => e.TaskItemId == taskA.Id).FromJournalDate.Should().Be(a.Date);
+        events.Single(e => e.TaskItemId == taskB.Id).FromJournalEntryId.Should().Be(b.Id);
+        events.Single(e => e.TaskItemId == taskB.Id).FromJournalDate.Should().Be(b.Date);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldRespectStatusAndIsCompleteIndependently()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var statusOnly = await LinkNewTaskAsync(context, source, new TaskItem { Title = "S", Status = Status.Completed, IsComplete = false });
+        var flagOnly = await LinkNewTaskAsync(context, source, new TaskItem { Title = "F", Status = Status.Todo, IsComplete = true });
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        moved.Should().Be(1);
+        statusOnly.CurrentJournalEntryId.Should().Be(source.Id);
+        flagOnly.CurrentJournalEntryId.Should().Be(source.Id);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldNotTouchPlannedDayBetween_AndReachStrandedTasks()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (a, taskA) = await SeedLinkedTaskAsync(context, today.AddDays(-5));
+        var (_, taskFuture) = await SeedLinkedTaskAsync(context, today.AddDays(2));
+        var target = await repo.AddAsync(new JournalEntry { Title = "C", Date = today });
+        var orphan = new TaskItem { Title = "Orphan", Status = Status.Todo };
+        context.TaskItems.Add(orphan);
+        await context.SaveChangesAsync();
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        moved.Should().Be(1);
+        taskA.CurrentJournalEntryId.Should().Be(target.Id);
+        (await repo.GetTodosAsync(a.Id)).Should().BeEmpty();
+        taskFuture.MoveCount.Should().Be(0);
+        taskFuture.CurrentJournalEntryId.Should().NotBe(target.Id);
+        orphan.CurrentJournalEntryId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldCarryIntoPreExistingTodayEntry()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var target = await repo.AddAsync(new JournalEntry { Title = "Planned earlier", Date = today });
+        var existing = await LinkNewTaskAsync(context, target, new TaskItem { Title = "Already here", Status = Status.Todo });
+        var (_, old) = await SeedLinkedTaskAsync(context, today.AddDays(-2));
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        moved.Should().Be(1);
+        (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Should().BeEquivalentTo([existing.Id, old.Id]);
+        existing.MoveCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldBeIdempotent_WhenRunTwice()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (_, task) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().Be(1);
+        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().Be(0);
+
+        task.MoveCount.Should().Be(1);
+        context.TaskItemEvents.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldNotPullBackTaskCompletedOrRemovedAfterCarry()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (_, completedLater) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var (_, removedLater) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+        await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        completedLater.Status = Status.Completed;
+        completedLater.IsComplete = true;
+        await context.SaveChangesAsync();
+        await repo.RemoveTodoAsync(target.Id, removedLater.Id);
+
+        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().Be(0);
+        completedLater.CurrentJournalEntryId.Should().Be(target.Id);
+        removedLater.CurrentJournalEntryId.Should().BeNull();
+        completedLater.MoveCount.Should().Be(1);
+        removedLater.MoveCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldMoveSubTasksIndependentlyOfParent()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var doneParent = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Parent", Status = Status.Completed, IsComplete = true });
+        var openChild = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Open child", Status = Status.Todo, ParentTaskItemId = doneParent.Id });
+        var doneChild = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done child", Status = Status.Completed, IsComplete = true, ParentTaskItemId = doneParent.Id });
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        openChild.CurrentJournalEntryId.Should().Be(target.Id);
+        doneChild.CurrentJournalEntryId.Should().Be(source.Id);
+        doneParent.CurrentJournalEntryId.Should().Be(source.Id);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldReturnZero_WhenTargetIsNotUserToday()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (_, task) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var tomorrow = await repo.AddAsync(new JournalEntry { Title = "Tomorrow", Date = today.AddDays(1) });
+
+        (await repo.CarryForwardIncompleteTasksAsync(tomorrow.Id, today)).Should().Be(0);
+
+        task.MoveCount.Should().Be(0);
+        context.TaskItemEvents.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldReturnZero_WhenEntryMissing()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+
+        (await repo.CarryForwardIncompleteTasksAsync(999, new DateOnly(2026, 10, 13))).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldReturnZeroAndRollBack_WhenConcurrentRequestAlreadyLinkedTask()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+        var today = new DateOnly(2026, 10, 13);
+
+        var seedOptions = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).Options;
+        int targetId;
+        int taskId;
+        int sourceId;
+        await using (var seed = new TaskDbContext(seedOptions))
+        {
+            seed.Database.EnsureCreated();
+            var (source, task) = await SeedLinkedTaskAsync(seed, today.AddDays(-1));
+            var target = await new JournalEntryRepository(seed).AddAsync(new JournalEntry { Title = "Today", Date = today });
+            targetId = target.Id;
+            taskId = task.Id;
+            sourceId = source.Id;
+        }
+
+        // Simulate the competing request: its join row lands after our reads but before our save.
+        var interceptor = new InsertJoinRowInterceptor(targetId, taskId);
+        var options = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using (var loser = new TaskDbContext(options))
+        {
+            var moved = await new JournalEntryRepository(loser).CarryForwardIncompleteTasksAsync(targetId, today);
+            moved.Should().Be(0);
+        }
+
+        interceptor.Fired.Should().BeTrue();
+        await using var verify = new TaskDbContext(seedOptions);
+        var reloaded = await verify.TaskItems.SingleAsync(t => t.Id == taskId);
+        reloaded.MoveCount.Should().Be(0);
+        reloaded.CurrentJournalEntryId.Should().Be(sourceId);
+        (await verify.TaskItemEvents.CountAsync()).Should().Be(0);
+    }
+
+    private sealed class InsertJoinRowInterceptor(int entryId, int taskId) : SaveChangesInterceptor
+    {
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (!Fired)
+            {
+                Fired = true;
+                await eventData.Context!.Database.ExecuteSqlAsync(
+                    $"INSERT INTO JournalEntryTaskItem (JournalEntryId, TodosId) VALUES ({entryId}, {taskId})", cancellationToken);
+            }
+
+            return result;
+        }
+    }
+
+    private static async Task<(JournalEntry entry, TaskItem task)> SeedLinkedTaskAsync(TaskDbContext context, DateOnly date)
+    {
+        var entry = new JournalEntry { Title = $"Entry {date}", Date = date, CreatedAt = DateTime.UtcNow };
+        context.JournalEntries.Add(entry);
+        await context.SaveChangesAsync();
+        var task = await LinkNewTaskAsync(context, entry, new TaskItem { Title = $"Open {date}", Status = Status.Todo });
+        return (entry, task);
+    }
+
+    private static async Task<TaskItem> LinkNewTaskAsync(TaskDbContext context, JournalEntry entry, TaskItem task)
+    {
+        context.TaskItems.Add(task);
+        await context.SaveChangesAsync();
+        task.CurrentJournalEntryId = entry.Id;
+        entry.Todos.Add(task);
+        await context.SaveChangesAsync();
+        return task;
     }
 }

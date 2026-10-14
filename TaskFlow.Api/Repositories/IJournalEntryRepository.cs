@@ -14,4 +14,5 @@ public interface IJournalEntryRepository
     Task<bool> TodoExistsAsync(int entryId, int taskItemId);
     Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId, int? timezoneOffsetMinutes = null);
     Task<bool> RemoveTodoAsync(int entryId, int taskItemId);
+    Task<int> CarryForwardIncompleteTasksAsync(int entryId, DateOnly userToday);
 }

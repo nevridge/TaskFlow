@@ -347,6 +347,19 @@ describe('TasksPage', () => {
       expect(screen.getByText('Parent task')).toBeInTheDocument()
     })
 
+    it('after a stale reset the create form does not default to the removed project and the filter stays All if it reappears', async () => {
+      const { rerender } = renderPage()
+      await userEvent.selectOptions(filterSelect(), 'Alpha')
+      mockProjects(projectList.filter(p => p.id !== 1))
+      rerender(page())
+      await waitFor(() => expect(filterSelect()).toHaveDisplayValue('All projects'))
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      expect(document.getElementById('projectId')).toHaveDisplayValue('No project')
+      mockProjects(projectList)
+      rerender(page())
+      expect(filterSelect()).toHaveDisplayValue('All projects')
+    })
+
     it('does not reset the filter while projects are loading or when the fetch failed', async () => {
       const { rerender } = renderPage()
       await userEvent.selectOptions(filterSelect(), 'Alpha')
@@ -457,6 +470,54 @@ describe('TasksPage', () => {
         'Task saved, but the project change failed: This task is already in that project.',
       )
       expect(screen.getByText('Edit Task')).toBeInTheDocument()
+    })
+
+    function withTask3Project(projectId: number, projectName: string) {
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: taskList.map(t => (t.id === 3 ? { ...t, projectId, projectName } : t)) },
+        isLoading: false,
+        error: null,
+      } as never)
+    }
+
+    it('after a 409 the refetched project reaches the form; the retry makes no further assign call and keeps edits', async () => {
+      changeAsync.mockRejectedValueOnce({ message: 'This task is already assigned to the project.' })
+      const view = renderPage()
+      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
+      await userEvent.type(screen.getByLabelText('Title'), ' edited')
+      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('This task is already in that project.')
+      expect(changeAsync).toHaveBeenCalledTimes(1)
+
+      // Another tab had already moved the task to Beta; the invalidation refetch reports it.
+      withTask3Project(2, 'Beta')
+      view.rerender(page())
+      expect(document.getElementById('projectId')).toHaveDisplayValue('Beta')
+      expect(screen.getByLabelText('Title')).toHaveValue('Alpha work edited')
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalledTimes(2))
+      expect(changeAsync).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(screen.queryByText('Edit Task')).not.toBeInTheDocument())
+    })
+
+    it('a "No project" retry after a refetch unassigns from the refetched project, not the stale one', async () => {
+      changeAsync.mockRejectedValueOnce({ status: 404 })
+      const view = renderPage()
+      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
+      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'No project')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await screen.findByRole('alert')
+      expect(changeAsync).toHaveBeenLastCalledWith({ taskId: 3, fromProjectId: 1, toProjectId: null })
+
+      withTask3Project(2, 'Beta')
+      view.rerender(page())
+      // The selection follows the server; the user chooses "No project" again and retries.
+      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'No project')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(changeAsync).toHaveBeenCalledTimes(2))
+      expect(changeAsync).toHaveBeenLastCalledWith({ taskId: 3, fromProjectId: 2, toProjectId: null })
     })
 
     it('edit with a failed PUT makes no project call', async () => {

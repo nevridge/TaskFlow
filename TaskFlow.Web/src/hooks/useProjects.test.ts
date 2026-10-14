@@ -267,11 +267,11 @@ describe('useChangeTaskProject', () => {
     expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, taskKeys.all]))
   })
 
-  it('does not invalidate on a generic failure', async () => {
+  it('invalidates project and task keys on a generic failure too', async () => {
     vi.mocked(api.assignTaskToProject).mockRejectedValue({ message: 'boom' })
     const { result, keys } = setup()
     result.current.mutate({ taskId: 9, fromProjectId: null, toProjectId: 2 })
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(keys()).toEqual([])
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, taskKeys.all]))
   })
 })

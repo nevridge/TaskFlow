@@ -326,11 +326,17 @@ describe('TaskDetailPage', () => {
     })
 
     it('does not offer other archived projects; falls back to projectName when missing from the list', () => {
-      vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: [projects[0]] }, isSuccess: true } as never)
+      // The list contains an archived project (Old) that is not the task's current one.
+      vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: [projects[0], projects[2]] }, isSuccess: true } as never)
       mockTask({ projectId: 9, projectName: 'Deleted elsewhere' })
       renderPage()
-      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Deleted elsewhere')
-      expect(screen.queryByRole('option', { name: /old/i })).not.toBeInTheDocument()
+      const select = screen.getByRole('combobox', { name: /project/i })
+      expect(select).toHaveDisplayValue('Deleted elsewhere')
+      expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual([
+        'No project',
+        'Deleted elsewhere',
+        'Alpha',
+      ])
     })
 
     it('matches a string projectId against the options', () => {

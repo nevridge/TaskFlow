@@ -61,6 +61,8 @@ export function TaskDetailPage() {
   const serverProjectId = normalizeProjectId(task?.projectId)
 
   // Once the refetched task reports a different project, the optimistic value is no longer needed.
+  // React's "adjusting state while rendering" pattern; guarded by the seen-value
+  // comparison, so the re-render finds them equal and cannot loop.
   const [seenServerProjectId, setSeenServerProjectId] = useState(serverProjectId)
   if (seenServerProjectId !== serverProjectId) {
     setSeenServerProjectId(serverProjectId)

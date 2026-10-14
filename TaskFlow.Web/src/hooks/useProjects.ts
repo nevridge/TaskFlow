@@ -12,7 +12,6 @@ import {
 import type { CreateProjectDto, UpdateProjectDto } from '@/api/projects'
 import { taskKeys } from '@/hooks/useTasks'
 import { projectKeys } from '@/hooks/projectKeys'
-import { getProjectErrorKind } from '@/lib/project-errors'
 
 // Re-exported so existing imports from '@/hooks/useProjects' keep working.
 export { projectKeys }
@@ -125,7 +124,7 @@ export interface ChangeTaskProjectInput {
  * - same project: no call (never sends a redundant assign)
  * - to a project: one POST assign (the server moves it; never unassign first)
  * - to no project: DELETE from the old project
- * On 404/409 the project and task caches are refetched so the UI matches the server.
+ * On any failure the project and task caches are refetched so the UI matches the server.
  */
 export function useChangeTaskProject() {
   const qc = useQueryClient()
@@ -147,11 +146,11 @@ export function useChangeTaskProject() {
         qc.invalidateQueries({ queryKey: projectKeys.tasks(fromProjectId) })
       }
     },
-    onError: error => {
-      if (getProjectErrorKind(error) !== 'generic') {
-        qc.invalidateQueries({ queryKey: projectKeys.all })
-        qc.invalidateQueries({ queryKey: taskKeys.all })
-      }
+    // Any failure refetches, so the UI converges on server state even when the error
+    // body (e.g. from a proxy) cannot be classified as 404/409.
+    onError: () => {
+      qc.invalidateQueries({ queryKey: projectKeys.all })
+      qc.invalidateQueries({ queryKey: taskKeys.all })
     },
   })
 }

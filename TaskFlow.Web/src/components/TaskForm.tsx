@@ -62,6 +62,8 @@ export function TaskForm({
     serverProjectId !== null ? String(serverProjectId) : defaultActive,
   )
   // When a refetch changes the task's server-side project, the selection follows it.
+  // React's "adjusting state while rendering" pattern; guarded by the seen-value
+  // comparison, so the re-render finds them equal and cannot loop. Other fields are untouched.
   const [seenServerProjectId, setSeenServerProjectId] = useState(serverProjectId)
   if (task && seenServerProjectId !== serverProjectId) {
     setSeenServerProjectId(serverProjectId)
@@ -71,7 +73,9 @@ export function TaskForm({
   useEffect(() => {
     if (projectInvalid) projectRef.current?.focus()
   }, [projectInvalid])
-  const projectOptions = buildProjectOptions(task, projects)
+  const projectOptions = buildProjectOptions(task, projects, projectId ? Number(projectId) : null)
+  // A selected id with no option (project deleted) is shown as, and submitted as, "No project".
+  const effectiveProjectId = projectOptions.some(o => o.value === projectId) ? projectId : ''
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -84,7 +88,7 @@ export function TaskForm({
       // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
       dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
       parentTaskItemId: parentTaskId ? Number(parentTaskId) : undefined,
-      projectId: projectId ? Number(projectId) : null,
+      projectId: effectiveProjectId ? Number(effectiveProjectId) : null,
     })
   }
 
@@ -132,7 +136,7 @@ export function TaskForm({
           id="projectId"
           ref={projectRef}
           className="t-input"
-          value={projectId}
+          value={effectiveProjectId}
           aria-invalid={projectInvalid ? 'true' : undefined}
           onChange={e => { setProjectId(e.target.value); onProjectChange?.() }}
         >

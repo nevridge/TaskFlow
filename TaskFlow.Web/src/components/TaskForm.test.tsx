@@ -203,6 +203,69 @@ describe('TaskForm', () => {
       expect(onSubmit).not.toHaveBeenCalled()
     })
 
+    it('marks the Save button aria-busy only while saving', () => {
+      const { unmount } = renderForm(undefined, vi.fn(), vi.fn(), { projects, isSaving: true })
+      expect(screen.getByRole('button', { name: /saving/i })).toHaveAttribute('aria-busy', 'true')
+      unmount()
+      renderForm(undefined, vi.fn(), vi.fn(), { projects })
+      expect(screen.getByRole('button', { name: 'Save' })).not.toHaveAttribute('aria-busy')
+    })
+
+    it('keeps a selected project that is archived afterwards, with the suffix, and submits it', async () => {
+      const onSubmit = vi.fn()
+      const view = renderForm({ ...existing, projectId: null }, onSubmit, vi.fn(), { projects })
+      await userEvent.selectOptions(projectSelect(), 'Beta')
+      view.rerender(
+        <TaskForm
+          task={{ ...existing, projectId: null }}
+          projects={projects.map(p => (p.id === 2 ? { ...p, isArchived: true } : p))}
+          onSubmit={onSubmit}
+          onCancel={vi.fn()}
+        />,
+      )
+      expect(projectSelect()).toHaveDisplayValue('Beta (archived)')
+      expect(optionLabels()).toEqual(['No project', 'Beta (archived)', 'Alpha'])
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ projectId: 2 }))
+    })
+
+    it('does not offer an archived project that was never selected', () => {
+      renderForm({ ...existing, projectId: 1, projectName: 'Alpha' }, vi.fn(), vi.fn(), { projects })
+      expect(optionLabels()).not.toContain('Old (archived)')
+    })
+
+    it('shows and submits "No project" when the selected project disappears from the list', async () => {
+      const onSubmit = vi.fn()
+      const view = renderForm({ ...existing, projectId: null }, onSubmit, vi.fn(), { projects })
+      await userEvent.selectOptions(projectSelect(), 'Beta')
+      view.rerender(
+        <TaskForm
+          task={{ ...existing, projectId: null }}
+          projects={projects.filter(p => p.id !== 2)}
+          onSubmit={onSubmit}
+          onCancel={vi.fn()}
+        />,
+      )
+      expect(projectSelect()).toHaveDisplayValue('No project')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ projectId: null }))
+    })
+
+    it('resyncing to a new server project keeps the other edited fields', async () => {
+      const { rerender } = renderForm({ ...existing, projectId: 1, projectName: 'Alpha' }, vi.fn(), vi.fn(), { projects })
+      await userEvent.type(screen.getByLabelText(/title/i), ' edited')
+      rerender(
+        <TaskForm
+          task={{ ...existing, projectId: 2, projectName: 'Beta' }}
+          projects={projects}
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      )
+      expect(projectSelect()).toHaveDisplayValue('Beta')
+      expect(screen.getByLabelText(/title/i)).toHaveValue('Existing task edited')
+    })
+
     it('tab order is Due Date, Project, Parent Task', async () => {
       renderForm(undefined, vi.fn(), vi.fn(), { projects })
       screen.getByLabelText('Due Date').focus()

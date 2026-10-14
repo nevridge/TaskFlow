@@ -66,7 +66,9 @@ export function TasksPage() {
   const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
+  // The edited task is looked up in the query data by id (see editingTask below) so a
+  // refetch after a failed project change reaches the form and the retry.
+  const [editingSnapshot, setEditingSnapshot] = useState<TaskListModel | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -102,6 +104,11 @@ export function TasksPage() {
     () => (data?.data as TaskListModel[] | undefined) ?? [],
     [data],
   )
+
+  const editingTask: TaskListModel | null = editingSnapshot
+    ? (tasks.find(t => Number(t.id) === Number(editingSnapshot.id)) ?? editingSnapshot)
+    : null
+  const setEditingTask = setEditingSnapshot
 
   const projects: ProjectOption[] = useMemo(
     () =>
@@ -393,6 +400,7 @@ export function TasksPage() {
               task={editingTask ?? undefined}
               availableParents={parentOptions}
               projects={projects}
+              // Follows the UX advisory's smart default: preselect a specific project filter on create.
               defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
               projectInvalid={createProjectInvalid || saveWithProject.projectInvalid}
               onProjectChange={() => { setCreateProjectInvalid(false); saveWithProject.setProjectInvalid(false) }}

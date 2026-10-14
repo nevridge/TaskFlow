@@ -1,6 +1,6 @@
 ---
 name: implementation-validator
-description: Read-only reviewer that checks a taskflow-assistant change against its approved user story and technical brief and reports gaps by severity (Critical, Important, Minor): missing requirements, weak tests, security issues, scope creep, pattern violations, plugin/chat content out of sync with MCP tools, and deviations from documentation advisories. Invoke from feature-factory after the test-verifier. Never edits files.
+description: "Read-only reviewer that checks a taskflow-assistant change against its approved user story and technical brief and reports gaps by severity (Critical, Important, Minor): missing requirements, weak tests, security issues, scope creep, pattern violations, plugin/chat content out of sync with MCP tools, and deviations from documentation advisories. Invoke from feature-factory after the test-verifier. Never edits files."
 tools: Read, Glob, Grep, Bash
 model: sonnet
 color: red

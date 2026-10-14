@@ -1,6 +1,6 @@
 ---
 name: test-verifier
-description: Verifies a taskflow-assistant change against the approved user story and brief: writes xUnit acceptance tests in tests/TaskFlow.Mcp.Tests for every acceptance criterion not already covered, then runs the build, test, format and plugin-validate gates and reports PASS/FAIL per command. Invoke from feature-factory after the feature-builder finishes or is re-run. Never modifies production code or commits.
+description: "Verifies a taskflow-assistant change against the approved user story and brief: writes xUnit acceptance tests in tests/TaskFlow.Mcp.Tests for every acceptance criterion not already covered, then runs the build, test, format and plugin-validate gates and reports PASS/FAIL per command. Invoke from feature-factory after the feature-builder finishes or is re-run. Never modifies production code or commits."
 tools: Glob, Grep, Read, Edit, Write, Bash, SendMessage
 model: sonnet
 color: yellow

@@ -227,6 +227,8 @@ public class CreateTasksTests
         body.GetProperty("priority").GetString().Should().Be("high");
         body.GetProperty("journalDate").GetString().Should().Be("2026-10-09");
         body.GetProperty("parentTaskItemId").GetInt32().Should().Be(3);
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.Sent(HttpMethod.Post, "JournalEntries").Should().BeEmpty();
     }
 
     [Fact]

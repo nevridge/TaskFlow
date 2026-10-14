@@ -13,6 +13,13 @@ internal static class InputParsing
     /// <summary>The local UTC offset in minutes, which the API uses for its "past day" rules.</summary>
     public static int OffsetMinutes(TimeProvider time) => (int)time.GetLocalNow().Offset.TotalMinutes;
 
+    /// <summary>Local date and UTC offset from a single clock read, so the two can never straddle midnight or a DST change.</summary>
+    public static (DateOnly Today, int OffsetMinutes) LocalNow(TimeProvider time)
+    {
+        var n = time.GetLocalNow();
+        return (DateOnly.FromDateTime(n.DateTime), (int)n.Offset.TotalMinutes);
+    }
+
     public static DateOnly ParseDate(string value, DateOnly today, string paramName)
     {
         switch (value.Trim().ToLowerInvariant())

@@ -1,6 +1,7 @@
 using System.Net;
 using FluentAssertions;
 using ModelContextProtocol;
+using TaskFlow.Mcp.Api;
 using TaskFlow.Mcp.Tools;
 
 namespace TaskFlow.Mcp.Tests;
@@ -45,6 +46,7 @@ public class JournalToolsTests
         var body = handler.BodyOf(HttpMethod.Post, "JournalEntries");
         body.GetProperty("date").GetString().Should().Be("2026-10-09");
         body.GetProperty("title").GetString().Should().Be("Journal 10-09-2026");
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         text.Should().Contain("Planned tasks: none").And.Contain("Summary: (none)");
     }
 
@@ -61,6 +63,186 @@ public class JournalToolsTests
         var text = await Tools(handler).GetJournal();
 
         text.Should().Contain("entry #9");
+        handler.Sent(HttpMethod.Get, "JournalEntries").Should().HaveCount(2);
+        handler.BodyOf(HttpMethod.Post, "JournalEntries").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Fact]
+    public async Task EnsureAsync_Rethrows_WhenConflictIsFollowedByAnEmptyFind()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", new { message = "exists" }, HttpStatusCode.Conflict);
+
+        var act = () => JournalResolver.EnsureAsync(Fixtures.Client(handler), Fixtures.Today, -420, CancellationToken.None);
+
+        (await act.Should().ThrowAsync<TaskFlowApiException>()).Which.Status.Should().Be(HttpStatusCode.Conflict);
+    }
+
+    [Theory]
+    [InlineData("tomorrow", "2026-10-10")]
+    [InlineData("yesterday", "2026-10-08")]
+    public async Task GetJournal_CreatesOtherDays_WithTheSameOffset(string date, string expected)
+    {
+        var handler = EmptyJournalStub();
+
+        await Tools(handler).GetJournal(date);
+
+        var body = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+        body.GetProperty("date").GetString().Should().Be(expected);
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Fact]
+    public async Task SetJournalTodos_CreatesTheEntryAndAddsTheTodo_WithTheSameOffset()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(8, "2026-10-09"), HttpStatusCode.Created)
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Planned") })
+            .Post("JournalEntries/8/todos", status: HttpStatusCode.NoContent);
+
+        await Tools(handler).SetJournalTodos(add: [1]);
+
+        handler.BodyOf(HttpMethod.Post, "JournalEntries").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.BodyOf(HttpMethod.Post, "JournalEntries/8/todos").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Fact]
+    public async Task AddLogEntry_CreatesAMissingEntry_WithTheOffset()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(8, "2026-10-09"), HttpStatusCode.Created)
+            .Post("JournalEntries/8/logs", new { id = 1, content = "Did it", journalEntryId = 8, createdAt = "2026-10-09T16:30:00Z" });
+
+        await Tools(handler).AddLogEntry("Did it");
+
+        handler.BodyOf(HttpMethod.Post, "JournalEntries").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Fact]
+    public async Task UpdateJournal_CreatesAMissingEntry_WithTheOffset()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(8, "2026-10-09"), HttpStatusCode.Created)
+            .Post("JournalEntries/8/notes", new { id = 1, content = "A note", createdAt = "2026-10-09T16:30:00Z" });
+
+        await Tools(handler).UpdateJournal(note: "A note");
+
+        handler.BodyOf(HttpMethod.Post, "JournalEntries").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Fact]
+    public async Task GetJournal_NearUtcMidnight_SendsTheOffsetForLocalTodayAndTomorrow()
+    {
+        var handler = EmptyJournalStub();
+        var tools = new JournalTools(Fixtures.Client(handler), Fixtures.Time(new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero), -300));
+
+        await tools.GetJournal("today");
+        var today = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+        await tools.GetJournal("tomorrow");
+        var tomorrow = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+
+        today.GetProperty("date").GetString().Should().Be("2026-10-09");
+        today.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-300);
+        tomorrow.GetProperty("date").GetString().Should().Be("2026-10-10");
+        tomorrow.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-300);
+    }
+
+    [Theory]
+    [InlineData(330)]
+    [InlineData(345)]
+    [InlineData(-570)]
+    [InlineData(-300)]
+    [InlineData(-420)]
+    [InlineData(-720)]
+    [InlineData(840)]
+    public async Task GetJournal_SendsTheLocalOffset_ForDifferentZones(int offsetMinutes)
+    {
+        var handler = EmptyJournalStub();
+        var tools = new JournalTools(Fixtures.Client(handler), Fixtures.Time(new DateTimeOffset(2026, 10, 9, 17, 0, 0, TimeSpan.Zero), offsetMinutes));
+
+        await tools.GetJournal();
+
+        handler.BodyOf(HttpMethod.Post, "JournalEntries").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offsetMinutes);
+    }
+
+    [Fact]
+    public async Task GetJournal_RereadsTheOffsetPerCall_AcrossADaylightSavingChange()
+    {
+        var rule = TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(
+            new DateTime(2026, 1, 1),
+            new DateTime(2026, 12, 31),
+            TimeSpan.FromHours(1),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 3, 8),
+            TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1, 1, 1, 2, 0, 0), 11, 1));
+        var zone = TimeZoneInfo.CreateCustomTimeZone("dst", TimeSpan.FromHours(-8), "dst", "std", "day", [rule]);
+        var clock = Fixtures.Time();
+        clock.SetLocalTimeZone(zone);
+        var handler = EmptyJournalStub();
+        var tools = new JournalTools(Fixtures.Client(handler), clock);
+
+        await tools.GetJournal();
+        var before = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+        clock.Advance(TimeSpan.FromDays(30));
+        await tools.GetJournal();
+        var after = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+
+        before.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        after.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-480);
+    }
+
+    [Fact]
+    public async Task JournalTools_ReadTheClockOnce_PerToolCall()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", Array.Empty<object>())
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Planned") })
+            .Post("JournalEntries/3/todos", status: HttpStatusCode.NoContent)
+            .Post("JournalEntries/3/logs", new { id = 1, content = "x", journalEntryId = 3, createdAt = "2026-10-09T16:30:00Z" })
+            .Post("JournalEntries/3/notes", new { id = 1, content = "n", createdAt = "2026-10-09T16:30:00Z" });
+        var clock = new CountingTimeProvider();
+        var tools = new JournalTools(Fixtures.Client(handler), clock);
+        var calls = new Func<Task>[]
+        {
+            () => tools.GetJournal(),
+            () => tools.SetJournalTodos(add: [1]),
+            () => tools.AddLogEntry("x"),
+            () => tools.UpdateJournal(note: "n"),
+        };
+
+        foreach (var call in calls)
+        {
+            clock.UtcReads = 0;
+            await call();
+
+            clock.UtcReads.Should().Be(1);
+        }
+    }
+
+    private static StubHandler EmptyJournalStub() => new StubHandler()
+        .Get("JournalEntries", Array.Empty<object>())
+        .Post("JournalEntries", Fixtures.Journal(8, "2026-10-09"), HttpStatusCode.Created)
+        .Get("JournalEntries/8/todos", Array.Empty<object>())
+        .Get("JournalEntries/8/notes", Array.Empty<object>());
+
+    private sealed class CountingTimeProvider : TimeProvider
+    {
+        private readonly TimeZoneInfo _zone = TimeZoneInfo.CreateCustomTimeZone("test", TimeSpan.FromHours(-7), "test", "test");
+
+        public int UtcReads { get; set; }
+
+        public override TimeZoneInfo LocalTimeZone => _zone;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            UtcReads++;
+            return new DateTimeOffset(2026, 10, 9, 17, 0, 0, TimeSpan.Zero);
+        }
     }
 
     [Fact]

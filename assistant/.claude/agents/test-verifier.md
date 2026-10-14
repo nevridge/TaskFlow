@@ -60,7 +60,7 @@ Develop with targeted runs first (`dotnet test --filter "FullyQualifiedName~<Cla
 
 ## Classifying a failure
 
-- **Code failure**: a compile error, a failing test, or a lint/format violation in production code. Report it with a diagnosis for the builder. Fix compile errors and format problems in your own test files yourself.
+- **Code failure**: a compile error, a failing test, or a lint/format violation in production code. Report it with a diagnosis for the builder. Fix compile errors and format problems in your own test files yourself. Before reporting a failing test that you wrote, re-read the AC and the production code to decide whether the test or the code is wrong. If the test misreads the AC or the code's documented behavior, fix the test. Report a code failure only when the test correctly encodes the AC.
 - **Format-only failure**: only `dotnet format --verify-no-changes` failed. Say `FORMAT-ONLY` so the orchestrator can have the builder run `dotnet format`.
 - **Environment failure**: the .NET SDK or the `claude` CLI is missing or too old, or a command cannot run for reasons unrelated to the code. Say `ENVIRONMENT FAILURE` and stop; do not retry or work around it.
 

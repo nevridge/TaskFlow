@@ -12,7 +12,7 @@ Run every `git`, `gh` and `dotnet` command through the Bash tool, because the ow
 
 Resolve the issue number `N`, in this order: the invocation argument, then the branch name when it matches `^(feature|bugfix)/[0-9]+-` (`feature/12-foo` gives 12; `bugfix/net10-upgrade` and `feature/2fa-login` give nothing, because the digits must be followed by a hyphen), then ask once: "Which GitHub issue is this feature for? Give me the number, or say 'none'." Keep the raw feature description (the issue body, or the user's text) in scope for the whole chain.
 
-If `N` is known, run `GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json state,body,title` and stop if `state` is `CLOSED`.
+If `N` is known, run `GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json state,body,title` and stop if `state` is `CLOSED`. If the command fails (issue not found, wrong account, no network), report the exact error and stop; do not continue with an empty issue body.
 
 The agents `story-writer`, `codebase-researcher` and `spec-writer` are user-level agents (`~/.claude/agents/`); this repo has no copies. The project agents live in `.claude/agents/`: `feature-builder`, `test-verifier`, `implementation-validator`, `mcp-advisor`, `claude-plugin-advisor` and `dotnet-advisor`.
 
@@ -130,10 +130,13 @@ Apply the [Commit Phase](#commit-phase) with message `feat(<scope>): <feature-sl
 
 Invoke `test-verifier` with the approved story, the brief, the builder summary and `advisories` (if any). Tell it to read test bodies before reporting any AC as covered, and to say which files the change touches (`plugin/**`, `chat/**`) so it knows whether to run the plugin validators.
 
-Handle the result:
-- **Code failure** (a build error, failing test, or a format violation in production code that is not format-only): send the report to `feature-builder`, then re-run the verifier. Each builder re-invocation adds 1 to `correction_cycles`, the single budget shared with Steps 10 and 11 (cap **2**). When the cap is reached and the gates still fail, stop: report the failing output, state that manual intervention is required, and offer no PR.
-- **Format-only failure** (only `dotnet format --verify-no-changes` fails): have `feature-builder` run `dotnet format TaskFlow.Assistant.sln`, then re-run the verifier. This does not count toward `correction_cycles`, but allow it once per verifier run: if the same format check still fails afterwards (for example an analyzer rule `dotnet format` cannot fix), treat it as a code failure.
-- **Environment failure** (missing .NET SDK, missing or too-old `claude` CLI): stop the chain, report the exact failure, and open no PR. Do not loop the builder.
+**Verifier outcomes** (every verifier run, here and in the [Correction Loop](#correction-loop), is handled this way):
+- **Pass:** continue.
+- **Code failure** (a build error, a failing test or a format violation in production code that is not format-only): run the [Correction Loop](#correction-loop) with the verifier's report.
+- **Format-only failure** (only `dotnet format --verify-no-changes` fails): have `feature-builder` run `dotnet format TaskFlow.Assistant.sln`, commit as `chore(<scope>): format`, and re-run the verifier. This is not a correction cycle, and it happens once per failure: if format still fails afterwards (for example an analyzer rule `dotnet format` cannot fix), treat it as a code failure.
+- **Environment failure** (missing .NET SDK, missing or too-old `claude` CLI): halt, reporting the exact failure. Do not loop the builder.
+
+The verifier owns the tests it writes. If one of its own tests fails because the test is wrong, it fixes the test and reports only real production failures (see the verifier agent).
 
 ### Step 8.5 — Commit
 
@@ -149,33 +152,40 @@ Deviation severity: a deviation from advisory guidance that is documented in `ad
 
 ### Step 10 — Critical finding loop (conditional)
 
-If the report has Critical findings:
-
-1. Re-invoke `feature-builder` with the findings and add 1 to `correction_cycles`.
-2. Apply the [Commit Phase](#commit-phase) with message `fix(<scope>): address validator findings for <feature-slug>`.
-3. Re-invoke `test-verifier` and handle its result as in Step 8 (a code failure goes back to the builder and uses `correction_cycles`; an environment failure stops the chain). Apply the [Commit Phase](#commit-phase) with message `test(<scope>): update acceptance tests for <feature-slug>` so any tests it added are committed.
-4. Re-invoke `implementation-validator` and present the new report.
-5. If Critical findings remain and `correction_cycles` is below 2, loop again. At 2, stop: surface the remaining Critical findings, state that manual intervention is required, skip Steps 11 and 12, and offer no PR.
+While the latest validator report has Critical findings, run the [Correction Loop](#correction-loop) with them and the message `fix(<scope>): address validator findings for <feature-slug>`. The loop re-runs the validator and halts the run when the budget is spent, so this step needs no counter of its own.
 
 ### Step 11 — Important/Minor rework pass (conditional)
 
-If the latest validator report has Important or Minor findings, run one pass: re-invoke `feature-builder` with them, commit as `fix(<scope>): address important/minor validator findings for <feature-slug>`, re-run the verifier (handle its result as in Step 8, and commit any tests it added as `test(<scope>): update acceptance tests for <feature-slug>`), then the validator, and present the report. Run no second pass; carry residual findings into Step 12 for awareness only.
-
-If the pass leaves a failing gate or new Critical findings, handle them as in Step 8 or Step 10 using the remaining `correction_cycles` budget. When the budget is spent, stop with manual intervention required and offer no PR.
+If the latest validator report has Important or Minor findings and `correction_cycles` is below 2, run the [Correction Loop](#correction-loop) once with them and the message `fix(<scope>): address important/minor validator findings for <feature-slug>`. Run no second pass. If the pass leaves new Critical findings, Step 10 applies again. If the budget is already spent, skip the pass. In both cases carry the remaining Important and Minor findings into Step 12 for awareness only.
 
 ---
 
 ### Step 12 — APPROVAL STOP 3: Final review
 
-Present: the feature in one line; validator status (Critical: 0 / Important: N / Minor: N); the residual findings; the files changed; the advisory documents consulted. If Critical findings remain or any gate is failing, offer no PR, say manual intervention is required, and name the branch.
+Present: the feature in one line; validator status (Critical: 0 / Important: N / Minor: N); the residual findings; the files changed; the advisory documents consulted. A [halt](#halt) never reaches this step. As a last safeguard, if Critical findings remain or any gate is failing, offer no PR, say manual intervention is required, and name the branch.
 
 Otherwise ask: "The feature has passed validation. Would you like to open a pull request?" Options: **Yes, open a PR** (run the [PR Flow](#pr-flow)) or **No, I'll review first** (leave the branch as is). Never proceed without an explicit "Yes".
 
 ---
 
+## Correction Loop
+
+The only place where `feature-builder` is re-invoked to fix verifier or validator findings. Steps 8, 10 and 11 call it; none of them counts cycles itself. `correction_cycles` counts builder re-invocations made here, with a cap of **2** for the whole run. The format-only fix and the Spec-Blocker Loop are separate and do not count.
+
+Input: the findings (a verifier report or validator findings) and a commit message.
+
+1. **Budget check, before anything runs.** If `correction_cycles` is 2, [halt](#halt). Otherwise add 1 to `correction_cycles`.
+2. Re-invoke `feature-builder` with the findings. Apply the [Commit Phase](#commit-phase) with the input message.
+3. Re-invoke `test-verifier` and handle the result under **Verifier outcomes** (Step 8). A code failure there goes back to step 1 of this same invocation (not a nested call) with the new verifier report and the message `fix(<scope>): fix failing gates for <feature-slug>`. Once the verifier passes, apply the Commit Phase with `test(<scope>): update acceptance tests for <feature-slug>` so any tests it added are committed.
+4. If the loop was entered from Step 10 or 11 (validator findings), re-invoke `implementation-validator` with the instruction from Step 9 and present the new report. If it was entered from Step 8, return to Step 8.5 and continue to Step 9.
+
+### Halt
+
+Stop the chain. Report the remaining findings or the failing output, name the branch, state that manual intervention is required, skip Step 12 and offer no PR. A halt leaves the branch and its commits as they are.
+
 ## Commit Phase
 
-Used by Steps 6.5, 8.5, 10 and 11, including the commits that follow a re-run of the verifier. Run through Bash. If `git status --short` shows no changes, skip the commit and say so.
+Used by Steps 6.5 and 8.5, the Correction Loop and the format-only fix. Run through Bash. If `git status --short` shows no changes, skip the commit and say so.
 
 ```bash
 git status --short
@@ -216,7 +226,7 @@ Used by Step 6 with a cap of 1. A spec blocker is a contradiction or impossibili
 - **Advisors never edit files and never block.** Guidance that could not be verified against current documentation is marked `UNVERIFIED`.
 - **Plugin and chat content stay in sync with tool behavior.** The builder updates all of it in the same change; the validator checks.
 - **No PR while any gate fails.** `build.ps1` is not a gate.
-- **Cap all builder correction cycles (Steps 8, 10 and 11) at two in total.**
+- **Cap all builder correction cycles at two in total, counted only in the Correction Loop.** The budget is checked before the builder runs.
 - **All `gh` body arguments use `--body-file`, never `--body`.**
 - **GitHub access uses the per-command owner token** (`GH_TOKEN="$(gh auth token --user nevridge)"`). Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
 - **Never commit or push to `main`; never force-push.**

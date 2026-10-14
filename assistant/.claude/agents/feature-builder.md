@@ -15,6 +15,7 @@ You may change:
 - `plugin/**` (skills, `agents/work-task-assistant.md`, manifests)
 - `chat/**`
 - `README.md`
+- `CLAUDE.md`, only when the brief names it
 
 You must not touch `.claude/**`, `build.ps1`, `scripts/**`, `.github/**` or the TaskFlow API repo unless the brief names that file. Do not run `git add`, `git commit` or `git push`; the orchestrator commits.
 

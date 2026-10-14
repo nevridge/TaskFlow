@@ -10,7 +10,7 @@ Run every `git`, `gh` and `dotnet` command through the Bash tool, because the ow
 
 ## Before You Begin
 
-Resolve the issue number `N`, in this order: the invocation argument, then a number at the start of the branch name after the prefix (`feature/12-foo` gives 12; `bugfix/net10-upgrade` and `feature/2fa-login` give nothing), then ask once: "Which GitHub issue is this feature for? Give me the number, or say 'none'." Keep the raw feature description (the issue body, or the user's text) in scope for the whole chain.
+Resolve the issue number `N`, in this order: the invocation argument, then the branch name when it matches `^(feature|bugfix)/[0-9]+-` (`feature/12-foo` gives 12; `bugfix/net10-upgrade` and `feature/2fa-login` give nothing, because the digits must be followed by a hyphen), then ask once: "Which GitHub issue is this feature for? Give me the number, or say 'none'." Keep the raw feature description (the issue body, or the user's text) in scope for the whole chain.
 
 If `N` is known, run `GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json state,body,title` and stop if `state` is `CLOSED`.
 
@@ -39,13 +39,13 @@ Stories here often depend on a change in another repo (for example the TaskFlow 
 
 ```bash
 GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json body --jq .body \
-  | awk '/^```/{f=!f; next} !f' | sed -E 's/`[^`]*`//g' \
+  | awk '/^[[:space:]]*```/{f=!f; next} !f' | sed -E 's/`[^`]*`//g' \
   | sed -E 's,https?://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+)/(issues|pull)/([0-9]+),\1/\2#\4,g' \
-  | grep -oE '(^|[[:space:](])[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+' \
-  | sed -E 's/^[[:space:](]//' | sort -u
+  | grep -oE '(^|[^A-Za-z0-9_./-])[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+' \
+  | sed -E 's/^[^A-Za-z0-9_-]//' | sort -u
 ```
 
-This ignores fenced code and inline code; blockquoted text counts. The owner part cannot contain a dot and must follow whitespace, `(` or the start of a line, so path and domain fragments such as `learn.microsoft.com/foo#1` do not match. A bare `#123` means this repo and is not checked. Drop a reference that points to this issue itself (`nevridge/taskflow-assistant#<N>`, compared case-insensitively). For each remaining reference look up its state with the owner token:
+This ignores fenced code (indented fences too) and inline code; blockquoted text counts. The owner part cannot contain a dot, and the character before it must not be a letter, digit, `_`, `.`, `/` or `-`. Markdown punctuation such as `**`, `[`, `<`, quotes and commas may precede a reference, but path and domain fragments such as `learn.microsoft.com/foo#1` do not match. The scan can still flag something that merely looks like `owner/repo#N` (for example `src/x.cs#3`); it then shows as an unreachable blocker and the user can clear it with "proceed anyway". A bare `#123` means this repo and is not checked. Drop a reference that points to this issue itself (`nevridge/taskflow-assistant#<N>`, compared case-insensitively). For each remaining reference look up its state with the owner token:
 
 ```bash
 GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/issues/<num> --jq '{state, state_reason, pr: (.pull_request != null)}'
@@ -70,7 +70,7 @@ If you have an issue number, read the first non-blank line of the body from Befo
 
 - It starts with `> Groomed` **and** the body contains `## Acceptance Criteria`, `## Edge Cases` and `## Out of Scope`: skip Steps 2 and 3, log "Issue #N is pre-groomed — story-writer and the story approval stop are bypassed", and treat the issue body as the approved story. Go to Step 4.
 - It starts with `> Groomed` but a heading is missing, or there is no marker, or there is no issue: run story-writer normally.
-- The researcher findings materially contradict the groomed story (a referenced file, tool or endpoint does not exist or was restructured): tell the user and re-invoke `story-writer` with the groomed story as context before continuing.
+- The researcher findings materially contradict the groomed story (a referenced file, tool or endpoint does not exist or was restructured): tell the user and re-invoke `story-writer` with the groomed story as context. The rewritten story is no longer the groomed one, so run it through Step 3 (approval stop 1) before Step 4.
 
 The `groom-issue` skill writes the marker and the three headings.
 
@@ -132,7 +132,7 @@ Invoke `test-verifier` with the approved story, the brief, the builder summary a
 
 Handle the result:
 - **Code failure** (a build error, failing test, or a format violation in production code that is not format-only): send the report to `feature-builder`, then re-run the verifier. Each builder re-invocation adds 1 to `correction_cycles`, the single budget shared with Steps 10 and 11 (cap **2**). When the cap is reached and the gates still fail, stop: report the failing output, state that manual intervention is required, and offer no PR.
-- **Format-only failure** (only `dotnet format --verify-no-changes` fails): have `feature-builder` run `dotnet format TaskFlow.Assistant.sln`, then re-run the verifier. This does not count toward any cycle limit.
+- **Format-only failure** (only `dotnet format --verify-no-changes` fails): have `feature-builder` run `dotnet format TaskFlow.Assistant.sln`, then re-run the verifier. This does not count toward `correction_cycles`, but allow it once per verifier run: if the same format check still fails afterwards (for example an analyzer rule `dotnet format` cannot fix), treat it as a code failure.
 - **Environment failure** (missing .NET SDK, missing or too-old `claude` CLI): stop the chain, report the exact failure, and open no PR. Do not loop the builder.
 
 ### Step 8.5 — Commit
@@ -153,12 +153,13 @@ If the report has Critical findings:
 
 1. Re-invoke `feature-builder` with the findings and add 1 to `correction_cycles`.
 2. Apply the [Commit Phase](#commit-phase) with message `fix(<scope>): address validator findings for <feature-slug>`.
-3. Re-invoke `test-verifier`, then `implementation-validator`, and present the new report.
-4. If Critical findings remain and `correction_cycles` is below 2, loop again. At 2, stop: surface the remaining Critical findings, state that manual intervention is required, skip Steps 11 and 12, and offer no PR.
+3. Re-invoke `test-verifier` and handle its result as in Step 8 (a code failure goes back to the builder and uses `correction_cycles`; an environment failure stops the chain). Apply the [Commit Phase](#commit-phase) with message `test(<scope>): update acceptance tests for <feature-slug>` so any tests it added are committed.
+4. Re-invoke `implementation-validator` and present the new report.
+5. If Critical findings remain and `correction_cycles` is below 2, loop again. At 2, stop: surface the remaining Critical findings, state that manual intervention is required, skip Steps 11 and 12, and offer no PR.
 
 ### Step 11 — Important/Minor rework pass (conditional)
 
-If the latest validator report has Important or Minor findings, run one pass: re-invoke `feature-builder` with them, commit as `fix(<scope>): address important/minor validator findings for <feature-slug>`, re-run the verifier and validator, and present the report. Run no second pass; carry residual findings into Step 12 for awareness only.
+If the latest validator report has Important or Minor findings, run one pass: re-invoke `feature-builder` with them, commit as `fix(<scope>): address important/minor validator findings for <feature-slug>`, re-run the verifier (handle its result as in Step 8, and commit any tests it added as `test(<scope>): update acceptance tests for <feature-slug>`), then the validator, and present the report. Run no second pass; carry residual findings into Step 12 for awareness only.
 
 If the pass leaves a failing gate or new Critical findings, handle them as in Step 8 or Step 10 using the remaining `correction_cycles` budget. When the budget is spent, stop with manual intervention required and offer no PR.
 
@@ -174,7 +175,7 @@ Otherwise ask: "The feature has passed validation. Would you like to open a pull
 
 ## Commit Phase
 
-Used by Steps 6.5, 8.5, 10 and 11. Run through Bash. If `git status --short` shows no changes, skip the commit and say so.
+Used by Steps 6.5, 8.5, 10 and 11, including the commits that follow a re-run of the verifier. Run through Bash. If `git status --short` shows no changes, skip the commit and say so.
 
 ```bash
 git status --short

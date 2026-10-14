@@ -118,10 +118,15 @@ export function TasksPage() {
   // A filter pointing at a project that no longer exists would hide every task. Only
   // reset once the projects query has succeeded: loading or errored fetches are not
   // evidence that the project is gone.
-  useEffect(() => {
-    if (!projectsQuery.isSuccess || typeof projectFilter !== 'number') return
-    if (!projects.some(p => p.id === projectFilter)) setProjectFilter('all')
-  }, [projectsQuery.isSuccess, projects, projectFilter])
+  // Adjusted during render (not in an effect) so the stale value never paints and is
+  // actually discarded, so it cannot come back if a project with that id reappears.
+  if (
+    projectsQuery.isSuccess &&
+    typeof projectFilter === 'number' &&
+    !projects.some(p => p.id === projectFilter)
+  ) {
+    setProjectFilter('all')
+  }
 
   function handleSortClick(key: TaskSortKey) {
     if (key === taskSortKey) {

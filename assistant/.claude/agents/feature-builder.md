@@ -25,7 +25,7 @@ You must not touch `.claude/**`, `build.ps1`, `scripts/**`, `.github/**` or the 
 - Time handling uses `TimeProvider` (see `InputParsing.OffsetMinutes`). `timezoneOffsetMinutes` is minutes east of UTC.
 - Tests use xUnit v3, FluentAssertions and `FakeTimeProvider`. Build on `StubHandler` (route by method and path, records requests, `BodyOf` reads a sent body) and the `Fixtures` builders in `TestSupport.cs`. Extend an existing test file for the class under test rather than creating a parallel one.
 - Test names: `Method_Scenario_ExpectedBehavior`. Arrange / Act / Assert separated by blank lines. Zero build warnings.
-- Prefer `Edit` for existing files and `Write` for new ones. Use Bash only for `dotnet` and read-only `git` commands.
+- Prefer `Edit` for existing files and `Write` for new ones. Use Bash only for `dotnet`, `claude plugin validate` and read-only `git` commands.
 
 ## Plugin and chat sync (mandatory)
 

@@ -10,7 +10,7 @@ Run every `git`, `gh` and `dotnet` command through the Bash tool, because the ow
 
 ## Before You Begin
 
-Resolve the issue number `N`, in this order: the invocation argument, then the digits in the branch name (for example `feature/12-foo` gives 12), then ask once: "Which GitHub issue is this feature for? Give me the number, or say 'none'." Keep the raw feature description (the issue body, or the user's text) in scope for the whole chain.
+Resolve the issue number `N`, in this order: the invocation argument, then a number at the start of the branch name after the prefix (`feature/12-foo` gives 12; `bugfix/net10-upgrade` and `feature/2fa-login` give nothing), then ask once: "Which GitHub issue is this feature for? Give me the number, or say 'none'." Keep the raw feature description (the issue body, or the user's text) in scope for the whole chain.
 
 If `N` is known, run `GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json state,body,title` and stop if `state` is `CLOSED`.
 
@@ -35,15 +35,17 @@ Never proceed on `main`. All work reaches `main` through a pull request.
 
 ### Step 0.5 — Upstream dependency check
 
-Stories here often depend on a change in another repo (for example the TaskFlow API). If there is no issue number, skip this step. Otherwise scan **only the issue body** (not comments) for references of the form `owner/repo#123`:
+Stories here often depend on a change in another repo (for example the TaskFlow API). If there is no issue number, skip this step. Otherwise scan **only the issue body** (not comments) for references of the form `owner/repo#123` and for full GitHub issue or PR URLs, which the first `sed` rewrites to that form:
 
 ```bash
 GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json body --jq .body \
   | awk '/^```/{f=!f; next} !f' | sed -E 's/`[^`]*`//g' \
-  | grep -oE '[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#[0-9]+' | sort -u
+  | sed -E 's,https?://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+)/(issues|pull)/([0-9]+),\1/\2#\4,g' \
+  | grep -oE '(^|[[:space:](])[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+' \
+  | sed -E 's/^[[:space:](]//' | sort -u
 ```
 
-This ignores fenced code and inline code; blockquoted text counts. Drop a reference that points to this issue itself (`nevridge/taskflow-assistant#<N>`). For each remaining reference look up its state with the owner token:
+This ignores fenced code and inline code; blockquoted text counts. The owner part cannot contain a dot and must follow whitespace, `(` or the start of a line, so path and domain fragments such as `learn.microsoft.com/foo#1` do not match. A bare `#123` means this repo and is not checked. Drop a reference that points to this issue itself (`nevridge/taskflow-assistant#<N>`, compared case-insensitively). For each remaining reference look up its state with the owner token:
 
 ```bash
 GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/issues/<num> --jq '{state, state_reason, pr: (.pull_request != null)}'
@@ -116,7 +118,7 @@ Advisors are advisory only. They have no spec-blocker mechanism: never loop back
 
 ### Step 6 — feature-builder: Implement code, tests and content
 
-Initialize `respec_count = 0`. Invoke `feature-builder` directly on the feature branch (no worktree isolation). Pass the approved brief, the researcher findings, the approved story, and `advisories` under **Documentation Advisories** if produced. Require an `advisory_deviations` section in its summary (see the builder agent). Capture the summary and apply the [Spec-Blocker Loop](#spec-blocker-loop) with cap **1**.
+Initialize `respec_count = 0` and `correction_cycles = 0`. Invoke `feature-builder` directly on the feature branch (no worktree isolation). Pass the approved brief, the researcher findings, the approved story, and `advisories` under **Documentation Advisories** if produced. Require an `advisory_deviations` section in its summary (see the builder agent). Capture the summary and apply the [Spec-Blocker Loop](#spec-blocker-loop) with cap **1**.
 
 ### Step 6.5 — Commit
 
@@ -129,7 +131,7 @@ Apply the [Commit Phase](#commit-phase) with message `feat(<scope>): <feature-sl
 Invoke `test-verifier` with the approved story, the brief, the builder summary and `advisories` (if any). Tell it to read test bodies before reporting any AC as covered, and to say which files the change touches (`plugin/**`, `chat/**`) so it knows whether to run the plugin validators.
 
 Handle the result:
-- **Code failure** (a build error, failing test, or a format violation in production code that is not format-only): send the report to `feature-builder`, then re-run the verifier. This uses the cycle budget of Step 10.
+- **Code failure** (a build error, failing test, or a format violation in production code that is not format-only): send the report to `feature-builder`, then re-run the verifier. Each builder re-invocation adds 1 to `correction_cycles`, the single budget shared with Steps 10 and 11 (cap **2**). When the cap is reached and the gates still fail, stop: report the failing output, state that manual intervention is required, and offer no PR.
 - **Format-only failure** (only `dotnet format --verify-no-changes` fails): have `feature-builder` run `dotnet format TaskFlow.Assistant.sln`, then re-run the verifier. This does not count toward any cycle limit.
 - **Environment failure** (missing .NET SDK, missing or too-old `claude` CLI): stop the chain, report the exact failure, and open no PR. Do not loop the builder.
 
@@ -149,20 +151,22 @@ Deviation severity: a deviation from advisory guidance that is documented in `ad
 
 If the report has Critical findings:
 
-1. Re-invoke `feature-builder` with the findings.
+1. Re-invoke `feature-builder` with the findings and add 1 to `correction_cycles`.
 2. Apply the [Commit Phase](#commit-phase) with message `fix(<scope>): address validator findings for <feature-slug>`.
 3. Re-invoke `test-verifier`, then `implementation-validator`, and present the new report.
-4. If Critical findings remain, loop once more. After two correction cycles, stop: surface the remaining Critical findings, state that manual intervention is required, skip Steps 11 and 12, and offer no PR.
+4. If Critical findings remain and `correction_cycles` is below 2, loop again. At 2, stop: surface the remaining Critical findings, state that manual intervention is required, skip Steps 11 and 12, and offer no PR.
 
 ### Step 11 — Important/Minor rework pass (conditional)
 
 If the latest validator report has Important or Minor findings, run one pass: re-invoke `feature-builder` with them, commit as `fix(<scope>): address important/minor validator findings for <feature-slug>`, re-run the verifier and validator, and present the report. Run no second pass; carry residual findings into Step 12 for awareness only.
 
+If the pass leaves a failing gate or new Critical findings, handle them as in Step 8 or Step 10 using the remaining `correction_cycles` budget. When the budget is spent, stop with manual intervention required and offer no PR.
+
 ---
 
 ### Step 12 — APPROVAL STOP 3: Final review
 
-Present: the feature in one line; validator status (Critical: 0 / Important: N / Minor: N); the residual findings; the files changed; the advisory documents consulted. If Critical findings remain, offer no PR, say manual intervention is required, and name the branch.
+Present: the feature in one line; validator status (Critical: 0 / Important: N / Minor: N); the residual findings; the files changed; the advisory documents consulted. If Critical findings remain or any gate is failing, offer no PR, say manual intervention is required, and name the branch.
 
 Otherwise ask: "The feature has passed validation. Would you like to open a pull request?" Options: **Yes, open a PR** (run the [PR Flow](#pr-flow)) or **No, I'll review first** (leave the branch as is). Never proceed without an explicit "Yes".
 
@@ -211,7 +215,7 @@ Used by Step 6 with a cap of 1. A spec blocker is a contradiction or impossibili
 - **Advisors never edit files and never block.** Guidance that could not be verified against current documentation is marked `UNVERIFIED`.
 - **Plugin and chat content stay in sync with tool behavior.** The builder updates all of it in the same change; the validator checks.
 - **No PR while any gate fails.** `build.ps1` is not a gate.
-- **Cap the Critical loop at two cycles.**
+- **Cap all builder correction cycles (Steps 8, 10 and 11) at two in total.**
 - **All `gh` body arguments use `--body-file`, never `--body`.**
 - **GitHub access uses the per-command owner token** (`GH_TOKEN="$(gh auth token --user nevridge)"`). Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
 - **Never commit or push to `main`; never force-push.**

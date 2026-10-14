@@ -81,11 +81,10 @@ public class JournalEntriesController(
             if (dto.TimezoneOffsetMinutes.HasValue
                 && dto.Date == UserDateHelper.GetUserToday(DateTime.UtcNow, dto.TimezoneOffsetMinutes))
             {
-                var moved = await _journalRepo.CarryForwardIncompleteTasksAsync(created.Id, dto.Date);
-                if (moved > 0)
-                {
-                    created = await _journalRepo.GetByIdAsync(created.Id) ?? created;
-                }
+                await _journalRepo.CarryForwardIncompleteTasksAsync(created.Id, dto.Date);
+
+                // Always re-read: a lost race returns 0 but leaves the unsaved moves on the tracked entity.
+                created = await _journalRepo.GetByIdAsync(created.Id) ?? created;
             }
 
             return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));

@@ -95,7 +95,7 @@ TaskFlow.Web/
 │   │   └── journal/
 │   │       ├── DateNav.tsx         # Prev/next date navigation bar
 │   │       ├── JournalHeader.tsx   # Day/week stat header (stat or minimal style)
-│   │       ├── TodosSection.tsx    # Linked tasks with toggle, edit, carry-over
+│   │       ├── TodosSection.tsx    # Linked tasks with toggle, edit
 │   │       ├── DailyLogSection.tsx # Timestamped activity log
 │   │       └── NotesSection.tsx    # Freeform notes (debounced auto-save)
 │   ├── lib/

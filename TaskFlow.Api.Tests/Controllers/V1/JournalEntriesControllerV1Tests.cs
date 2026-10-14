@@ -99,17 +99,23 @@ public class JournalEntriesControllerV1Tests
     }
 
     [Fact]
-    public async Task Create_ShouldNotReload_WhenNothingMoved()
+    public async Task Create_ShouldReturnPersistedTodos_WhenCarryForwardMovedNothing()
     {
         const int offset = 0;
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
-        SetupCreate(today, id: 22);
+        // The entry returned by AddAsync still carries unsaved moves, as after a lost carry-forward race.
+        _repo.Setup(r => r.GetByDateAsync(today)).ReturnsAsync((JournalEntry?)null);
+        _validator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default)).ReturnsAsync(new ValidationResult());
+        _repo.Setup(r => r.AddAsync(It.IsAny<JournalEntry>()))
+            .ReturnsAsync(new JournalEntry { Id = 22, Title = "t", Date = today, Todos = [new TaskItem { Id = 99, Title = "unsaved" }] });
         _repo.Setup(r => r.CarryForwardIncompleteTasksAsync(22, today)).ReturnsAsync(0);
+        _repo.Setup(r => r.GetByIdAsync(22)).ReturnsAsync(new JournalEntry { Id = 22, Title = "t", Date = today });
 
-        await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
+        var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
 
+        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
+        created.Value.Should().BeOfType<JournalEntryResponseDto>().Which.TodoTaskItemIds.Should().BeEmpty();
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(22, today), Times.Once);
-        _repo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]

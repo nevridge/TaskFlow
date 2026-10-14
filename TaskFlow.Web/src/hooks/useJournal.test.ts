@@ -458,6 +458,16 @@ describe('useEditTodoMutation', () => {
       expect.objectContaining({ path: { id: 3 }, body: expect.objectContaining({ title: 'New title' }) })
     )
   })
+
+  it('never sends projectId in the PUT body, so editing a todo title cannot clear its project', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ id: 3, title: 'New title' }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
+  })
 })
 
 describe('useRemoveTodoMutation', () => {

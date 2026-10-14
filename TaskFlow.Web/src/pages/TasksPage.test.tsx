@@ -245,6 +245,33 @@ describe('TasksPage', () => {
       expect(status.compareDocumentPosition(filterSelect()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
+    it('tab order in the filter row is Status then Project', async () => {
+      renderPage()
+      screen.getByRole('combobox', { name: 'Status' }).focus()
+      await userEvent.tab()
+      expect(filterSelect()).toHaveFocus()
+    })
+
+    it('updates the filtered list and count when a task project changes without a reload', async () => {
+      const { rerender } = renderPage()
+      await userEvent.selectOptions(filterSelect(), 'Alpha')
+      expect(screen.getByText('Alpha work')).toBeInTheDocument()
+      expect(screen.getByText('1 task')).toBeInTheDocument()
+
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: taskList.map(t => (t.id === 3 ? { ...t, projectId: 2, projectName: 'Beta' } : t)) },
+        isLoading: false,
+        error: null,
+      } as never)
+      rerender(page())
+
+      expect(screen.queryByText('Alpha work')).not.toBeInTheDocument()
+      expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
+      await userEvent.selectOptions(filterSelect(), 'Beta')
+      expect(screen.getByText('Alpha work')).toBeInTheDocument()
+      expect(screen.getByText('2 tasks')).toBeInTheDocument()
+    })
+
     it('shows only the selected project tasks, matching a string projectId by number', async () => {
       renderPage()
       await userEvent.selectOptions(filterSelect(), 'Beta')

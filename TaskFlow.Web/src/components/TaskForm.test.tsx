@@ -203,6 +203,15 @@ describe('TaskForm', () => {
       expect(onSubmit).not.toHaveBeenCalled()
     })
 
+    it('tab order is Due Date, Project, Parent Task', async () => {
+      renderForm(undefined, vi.fn(), vi.fn(), { projects })
+      screen.getByLabelText('Due Date').focus()
+      await userEvent.tab()
+      expect(projectSelect()).toHaveFocus()
+      await userEvent.tab()
+      expect(screen.getByLabelText('Parent Task')).toHaveFocus()
+    })
+
     it('works with no projects prop', () => {
       renderForm()
       expect(optionLabels()).toEqual(['No project'])

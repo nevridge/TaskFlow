@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -350,6 +350,33 @@ describe('TaskDetailPage', () => {
       )
       expect(select).toHaveDisplayValue('Beta')
       expect(updateAsync).not.toHaveBeenCalled()
+    })
+
+    it('quick change on a task without a project assigns it (from null)', async () => {
+      mockTask({ projectId: null, projectName: null })
+      renderPage()
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Alpha')
+      expect(changeMutate).toHaveBeenCalledWith(
+        { taskId: 1, fromProjectId: null, toProjectId: 1 },
+        expect.any(Object),
+      )
+    })
+
+    it('the quick-change select never offers archived projects other than the current one', () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      const labels = within(screen.getByRole('combobox', { name: /project/i }))
+        .getAllByRole('option')
+        .map(o => o.textContent)
+      expect(labels).toEqual(['No project', 'Alpha', 'Beta'])
+    })
+
+    it('quick change restores focus to the select once the change settles', async () => {
+      changeMutate.mockImplementation(() => { (document.activeElement as HTMLElement | null)?.blur() })
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+      await waitFor(() => expect(screen.getByRole('combobox', { name: /project/i })).toHaveFocus())
     })
 
     it('quick change to "No project" unassigns', async () => {

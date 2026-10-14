@@ -251,6 +251,22 @@ describe('useEnsureJournalEntry carry-forward', () => {
     expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
   })
 
+  it('decides "today" at create call time, so a midnight rollover while loading sends the offset', async () => {
+    let resolveEntries: (v: never) => void = () => {}
+    vi.mocked(journalApi.getJournalEntries).mockReturnValue(new Promise(r => { resolveEntries = r as never }) as never)
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(3, TOMORROW)))
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+
+    // Midnight passes while the entries request is still in flight.
+    vi.setSystemTime(new Date(2026, 5, 11, 0, 5, 0))
+    await act(async () => { resolveEntries(ok([])) })
+
+    await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ date: TOMORROW, timezoneOffsetMinutes: -300 })
+    ))
+  })
+
   it('does not carry after creating today (server carried inline)', async () => {
     vi.mocked(journalApi.getJournalEntries)
       .mockResolvedValueOnce(ok([]))

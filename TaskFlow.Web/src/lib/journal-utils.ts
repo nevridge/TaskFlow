@@ -35,6 +35,11 @@ export function todayISO(): string {
   return isoDate(new Date())
 }
 
+/** Minutes ahead of UTC for the browser's current offset (e.g. -300 for UTC-5). */
+export function getTimezoneOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset()
+}
+
 export function addDays(s: string, n: number): string {
   const d = parseISO(s)
   d.setDate(d.getDate() + n)

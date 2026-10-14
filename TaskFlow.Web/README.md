@@ -158,7 +158,6 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 - `useToggleTodoMutation(entryId)` — toggles task status (`todo` ↔ `completed`)
 - `useEditTodoMutation(entryId)` — renames a linked task
 - `useRemoveTodoMutation(entryId)` — unlinks a task from the entry
-- `useCarryOverMutation()` — copies uncompleted todos from one entry into another
 - `useAddLogEntryMutation(entryId)` — adds a log entry, invalidates journal cache
 - `useDeleteLogEntryMutation(entryId)` — removes a log entry
 

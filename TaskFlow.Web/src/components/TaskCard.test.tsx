@@ -15,10 +15,10 @@ const task: TaskItemResponseDto = {
   isComplete: false,
 }
 
-function renderCard(onEdit = vi.fn(), onDelete = vi.fn()) {
+function renderCard(onEdit = vi.fn(), onDelete = vi.fn(), taskOverride: TaskItemResponseDto = task) {
   return render(
     <MemoryRouter>
-      <TaskCard task={task} onEdit={onEdit} onDelete={onDelete} />
+      <TaskCard task={taskOverride} onEdit={onEdit} onDelete={onDelete} />
     </MemoryRouter>
   )
 }
@@ -47,5 +47,32 @@ describe('TaskCard', () => {
     renderCard(vi.fn(), onDelete)
     await userEvent.click(screen.getByRole('button', { name: /delete/i }))
     expect(onDelete).toHaveBeenCalledWith(task)
+  })
+
+  describe('project badge', () => {
+    it('shows the project name with its original case and a title', () => {
+      renderCard(vi.fn(), vi.fn(), { ...task, projectId: 3, projectName: 'Alpha Launch' })
+      const badge = screen.getByText('Alpha Launch')
+      expect(badge).toHaveAttribute('title', 'Alpha Launch')
+      expect(badge).toHaveClass('t-badge-project')
+    })
+
+    it('carries the truncation class and the full name in the title for long names', () => {
+      const longName = 'A very long project name that should be truncated with an ellipsis in the card'
+      renderCard(vi.fn(), vi.fn(), { ...task, projectId: 3, projectName: longName })
+      const badge = screen.getByText(longName)
+      expect(badge).toHaveClass('t-badge-project')
+      expect(badge).toHaveAttribute('title', longName)
+    })
+
+    it.each([
+      ['null project', { projectId: null, projectName: null }],
+      ['undefined project', {}],
+      ['projectId without a name', { projectId: 3, projectName: null }],
+      ['empty name', { projectId: 3, projectName: '' }],
+    ])('renders no badge for %s', (_label, extra) => {
+      const { container } = renderCard(vi.fn(), vi.fn(), { ...task, ...extra })
+      expect(container.querySelector('.t-badge-project')).toBeNull()
+    })
   })
 })

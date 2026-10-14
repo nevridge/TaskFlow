@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import type { PrefsContextValue } from '@/context/PrefsContextDef'
@@ -10,6 +11,16 @@ vi.mock('@/hooks/useTasks', () => ({
   useUpdateTaskMutation: vi.fn(),
   useDeleteTaskMutation: vi.fn(),
   useTaskHistoryQuery: vi.fn(),
+  taskKeys: {
+    all: ['tasks'],
+    detail: (id: number) => ['tasks', id],
+    history: (id: number) => ['tasks', id, 'history'],
+  },
+}))
+
+vi.mock('@/hooks/useProjects', () => ({
+  useProjectsQuery: vi.fn(),
+  useChangeTaskProject: vi.fn(),
 }))
 
 vi.mock('@/hooks/useNotes', () => ({
@@ -28,6 +39,7 @@ vi.mock('@/components/TaskHistoryPanel', () => ({
 }))
 
 import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useDeleteTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
+import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskDetailPage } from './TaskDetailPage'
@@ -46,6 +58,12 @@ const task = {
   moveCount: 0,
   daysTagged: 0,
 }
+
+const projects = [
+  { id: 1, name: 'Alpha', isArchived: false },
+  { id: 2, name: 'Beta', isArchived: false },
+  { id: 3, name: 'Old', isArchived: true },
+]
 
 function makePrefs(overrides?: Partial<PrefsContextValue>): PrefsContextValue {
   return {
@@ -71,28 +89,61 @@ function makePrefs(overrides?: Partial<PrefsContextValue>): PrefsContextValue {
   }
 }
 
+let queryClient: QueryClient
+
 function renderPage(path = '/tasks/1') {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/tasks/:id" element={<TaskDetailPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/tasks/:id" element={<TaskDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
+}
+
+const updateAsync = vi.fn()
+const changeAsync = vi.fn()
+const changeMutate = vi.fn()
+
+function mockChange(overrides: Record<string, unknown> = {}) {
+  vi.mocked(useChangeTaskProject).mockReturnValue({
+    mutate: changeMutate,
+    mutateAsync: changeAsync,
+    isPending: false,
+    ...overrides,
+  } as never)
+}
+
+function mockTask(overrides: Record<string, unknown> = {}) {
+  vi.mocked(useTaskQuery).mockReturnValue({
+    data: { data: { ...task, ...overrides } },
+    isLoading: false,
+    error: null,
+  } as never)
 }
 
 let confirmSpy: ReturnType<typeof vi.spyOn>
 
 describe('TaskDetailPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    updateAsync.mockReset().mockResolvedValue({})
+    changeAsync.mockReset().mockResolvedValue(undefined)
+    changeMutate.mockReset()
+
     vi.mocked(usePrefs).mockReturnValue(makePrefs())
+    vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: projects }, isSuccess: true } as never)
+    mockChange()
 
     vi.mocked(useTaskQuery).mockReturnValue({ data: { data: task }, isLoading: false, error: null } as never)
     vi.mocked(useTasksQuery).mockReturnValue({ data: { data: [task] }, isLoading: false } as never)
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
 
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
     vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
@@ -103,7 +154,6 @@ describe('TaskDetailPage', () => {
 
   afterEach(() => {
     confirmSpy.mockRestore()
-    vi.clearAllMocks()
   })
 
   it('shows loading state', () => {
@@ -144,7 +194,7 @@ describe('TaskDetailPage', () => {
   })
 
   it('description is absent when null', () => {
-    vi.mocked(useTaskQuery).mockReturnValue({ data: { data: { ...task, description: null } }, isLoading: false, error: null } as never)
+    mockTask({ description: null })
     renderPage()
     expect(screen.queryByText('Users cannot log in')).not.toBeInTheDocument()
   })
@@ -176,16 +226,14 @@ describe('TaskDetailPage', () => {
     expect(screen.getByText('Fix login bug')).toBeInTheDocument()
   })
 
-  it('submitting edit form calls updateTask.mutate', async () => {
-    const updateMutate = vi.fn()
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: updateMutate, isPending: false } as never)
+  it('submitting edit form calls the update mutation with the task fields and closes the form', async () => {
     renderPage()
     await userEvent.click(screen.getByRole('button', { name: /edit/i }))
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    expect(updateMutate).toHaveBeenCalledWith(
+    expect(updateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1, data: expect.objectContaining({ title: 'Fix login bug' }) }),
-      expect.any(Object)
     )
+    await waitFor(() => expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument())
   })
 
   it('delete with confirm=true calls deleteTask.mutate', async () => {
@@ -218,36 +266,220 @@ describe('TaskDetailPage', () => {
     expect(screen.getByRole('textbox')).toBeInTheDocument()
   })
 
-  it('TASK_REOPEN_PAST_DAY_NOT_ALLOWED error shows proper message', async () => {
-    const updateMutate = vi.fn((_payload, { onError }: { onError: (e: unknown) => void }) => {
-      onError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' })
-    })
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: updateMutate, isPending: false } as never)
+  async function saveWithUpdateError(error: unknown) {
+    updateAsync.mockRejectedValue(error)
     renderPage()
     await userEvent.click(screen.getByRole('button', { name: /edit/i }))
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    expect(screen.getByText(/completed tasks assigned to past days cannot be reopened/i)).toBeInTheDocument()
+  }
+
+  it('TASK_REOPEN_PAST_DAY_NOT_ALLOWED error shows proper message', async () => {
+    await saveWithUpdateError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' })
+    expect(await screen.findByText(/completed tasks assigned to past days cannot be reopened/i)).toBeInTheDocument()
   })
 
   it('TASK_PARENT_CYCLE_NOT_ALLOWED error shows proper message', async () => {
-    const updateMutate = vi.fn((_payload, { onError }: { onError: (e: unknown) => void }) => {
-      onError({ code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' })
-    })
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: updateMutate, isPending: false } as never)
-    renderPage()
-    await userEvent.click(screen.getByRole('button', { name: /edit/i }))
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    expect(screen.getByText(/cycle/i)).toBeInTheDocument()
+    await saveWithUpdateError({ code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' })
+    expect(await screen.findByText(/cycle/i)).toBeInTheDocument()
   })
 
-  it('unknown mutation error shows generic message', async () => {
-    const updateMutate = vi.fn((_payload, { onError }: { onError: (e: unknown) => void }) => {
-      onError({ code: 'UNKNOWN_ERROR' })
-    })
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: updateMutate, isPending: false } as never)
+  it('unknown mutation error shows generic message in an alert', async () => {
+    await saveWithUpdateError({ code: 'UNKNOWN_ERROR' })
+    expect(await screen.findByRole('alert')).toHaveTextContent(/unable to save task changes/i)
+  })
+
+  it('PUT failure makes no project call and keeps the form open', async () => {
+    mockTask({ projectId: 1, projectName: 'Alpha' })
+    updateAsync.mockRejectedValue({ code: 'UNKNOWN_ERROR' })
     renderPage()
     await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    expect(screen.getByText(/unable to save task changes/i)).toBeInTheDocument()
+    await screen.findByRole('alert')
+    expect(changeAsync).not.toHaveBeenCalled()
+    expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+  })
+
+  describe('project', () => {
+    it('shows the project name of the task', () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
+    })
+
+    it('shows "No project" when the task has no project (null) without error', () => {
+      mockTask({ projectId: null, projectName: null })
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('No project')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('shows "No project" when projectId and projectName are undefined', () => {
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('No project')
+    })
+
+    it('shows an archived current project with the (archived) suffix', () => {
+      mockTask({ projectId: 3, projectName: 'Old' })
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Old (archived)')
+    })
+
+    it('does not offer other archived projects; falls back to projectName when missing from the list', () => {
+      vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: [projects[0]] }, isSuccess: true } as never)
+      mockTask({ projectId: 9, projectName: 'Deleted elsewhere' })
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Deleted elsewhere')
+      expect(screen.queryByRole('option', { name: /old/i })).not.toBeInTheDocument()
+    })
+
+    it('matches a string projectId against the options', () => {
+      mockTask({ projectId: '2', projectName: 'Beta' })
+      renderPage()
+      expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Beta')
+    })
+
+    it('quick change fires the mutation immediately and shows the new value optimistically', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      const select = screen.getByRole('combobox', { name: /project/i })
+      await userEvent.selectOptions(select, 'Beta')
+      expect(changeMutate).toHaveBeenCalledWith(
+        { taskId: 1, fromProjectId: 1, toProjectId: 2 },
+        expect.any(Object),
+      )
+      expect(select).toHaveDisplayValue('Beta')
+      expect(updateAsync).not.toHaveBeenCalled()
+    })
+
+    it('quick change to "No project" unassigns', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'No project')
+      expect(changeMutate).toHaveBeenCalledWith(
+        { taskId: 1, fromProjectId: 1, toProjectId: null },
+        expect.any(Object),
+      )
+    })
+
+    it('select is disabled and busy while the change is in flight', () => {
+      mockChange({ isPending: true })
+      renderPage()
+      const select = screen.getByRole('combobox', { name: /project/i })
+      expect(select).toBeDisabled()
+      expect(select).toHaveAttribute('aria-busy', 'true')
+    })
+
+    it('quick change error reverts the value, announces the message and refocuses the select', async () => {
+      changeMutate.mockImplementation((_input, { onError }: { onError: (e: unknown) => void }) => onError({ status: 404 }))
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      const select = screen.getByRole('combobox', { name: /project/i })
+      await userEvent.selectOptions(select, 'Beta')
+      expect(await screen.findByRole('alert')).toHaveTextContent('That project no longer exists.')
+      expect(select).toHaveDisplayValue('Alpha')
+      expect(select).toHaveFocus()
+    })
+
+    it('quick change maps a 409 conflict message', async () => {
+      changeMutate.mockImplementation((_input, { onError }: { onError: (e: unknown) => void }) =>
+        onError({ message: 'This task is already assigned to the project.' }))
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+      expect(await screen.findByRole('alert')).toHaveTextContent('This task is already in that project.')
+    })
+
+    it('quick select is not rendered while the edit form is open', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      expect(screen.getAllByRole('combobox', { name: /project/i })).toHaveLength(1)
+      expect(document.getElementById('task-project')).toBeNull()
+      expect(document.getElementById('projectId')).not.toBeNull()
+    })
+
+    it('edit form: unchanged project makes no project call and the PUT has no projectId', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.clear(screen.getByLabelText(/title/i))
+      await userEvent.type(screen.getByLabelText(/title/i), 'Renamed')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(updateAsync).toHaveBeenCalled())
+      expect(updateAsync.mock.calls[0][0].data).not.toHaveProperty('projectId')
+      expect(changeAsync).not.toHaveBeenCalled()
+    })
+
+    it('edit form: moving to another project assigns it (never unassigns first)', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() =>
+        expect(changeAsync).toHaveBeenCalledWith({ taskId: 1, fromProjectId: 1, toProjectId: 2 }),
+      )
+      expect(updateAsync.mock.calls[0][0].data).not.toHaveProperty('projectId')
+    })
+
+    it('edit form: "No project" unassigns from the old project', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'No project')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() =>
+        expect(changeAsync).toHaveBeenCalledWith({ taskId: 1, fromProjectId: 1, toProjectId: null }),
+      )
+    })
+
+    it('partial failure keeps the form open and focus on Save; a retry re-sends PUT then the project call', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Task saved, but the project change failed: Unable to change the project. Please try again.',
+      )
+      expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
+
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument())
+      expect(updateAsync).toHaveBeenCalledTimes(2)
+      expect(changeAsync).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: /edit/i })).toHaveFocus()
+    })
+
+    it('partial failure invalidates the task list and detail queries', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await screen.findByRole('alert')
+      const keys = invalidate.mock.calls.map(c => c[0]?.queryKey)
+      expect(keys).toContainEqual(['tasks'])
+      expect(keys).toContainEqual(['tasks', 1])
+    })
+
+    it('a 404 on the project call marks the Project select invalid and focuses it until changed', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      changeAsync.mockRejectedValueOnce({ status: 404 })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      const select = screen.getByRole('combobox', { name: 'Project' })
+      await userEvent.selectOptions(select, 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('That project no longer exists.')
+      expect(select).toHaveAttribute('aria-invalid', 'true')
+      expect(select).toHaveFocus()
+      await userEvent.selectOptions(select, 'Alpha')
+      expect(select).not.toHaveAttribute('aria-invalid')
+    })
   })
 })

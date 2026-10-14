@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   useTaskQuery,
   useTasksQuery,
-  useUpdateTaskMutation,
   useDeleteTaskMutation,
   type TaskItemViewModel,
-  type UpdateTaskPayload,
 } from '@/hooks/useTasks'
+import { useChangeTaskProject, useProjectsQuery } from '@/hooks/useProjects'
+import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
+import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { getProjectMutationErrorMessage, normalizeProjectId } from '@/lib/project-errors'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
@@ -28,7 +30,9 @@ export function TaskDetailPage() {
   const { data: taskData, isLoading: taskLoading, error: taskError } = useTaskQuery(taskId)
   const { data: allTasksData } = useTasksQuery()
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
-  const updateTask = useUpdateTaskMutation()
+  const { data: projectsData } = useProjectsQuery()
+  const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
+  const changeProject = useChangeTaskProject()
   const deleteTask = useDeleteTaskMutation()
   const createNote = useCreateNoteMutation(taskId)
   const updateNote = useUpdateNoteMutation(taskId)
@@ -40,11 +44,43 @@ export function TaskDetailPage() {
   const [editingTask, setEditingTask] = useState(false)
   const [showNoteForm, setShowNoteForm] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteResponseDto | null>(null)
-  const [taskMutationError, setTaskMutationError] = useState<string | null>(null)
+  const [quickProjectValue, setQuickProjectValue] = useState<string | null>(null)
+  const [quickProjectError, setQuickProjectError] = useState<string | null>(null)
+  const projectSelectRef = useRef<HTMLSelectElement>(null)
+  const editButtonRef = useRef<HTMLButtonElement>(null)
+  const refocusProjectSelect = useRef(false)
+  const refocusEditButton = useRef(false)
 
   const task = taskData?.data as TaskDetailModel | undefined
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
   const allTasks: TaskDetailModel[] = (allTasksData?.data as TaskDetailModel[] | undefined) ?? []
+  const projects: ProjectOption[] = useMemo(
+    () => (projectsData?.data ?? []).map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived })),
+    [projectsData],
+  )
+  const serverProjectId = normalizeProjectId(task?.projectId)
+
+  // Once the refetched task reports a different project, the optimistic value is no longer needed.
+  const [seenServerProjectId, setSeenServerProjectId] = useState(serverProjectId)
+  if (seenServerProjectId !== serverProjectId) {
+    setSeenServerProjectId(serverProjectId)
+    setQuickProjectValue(null)
+  }
+
+  // Restore focus once the quick-change select is enabled again, and to Edit after a full save.
+  useEffect(() => {
+    if (!changeProject.isPending && refocusProjectSelect.current) {
+      refocusProjectSelect.current = false
+      projectSelectRef.current?.focus()
+    }
+  })
+  useEffect(() => {
+    if (!editingTask && refocusEditButton.current) {
+      refocusEditButton.current = false
+      editButtonRef.current?.focus()
+    }
+  }, [editingTask])
+
   const parentOptions = allTasks
     .filter(t => Number(t.id) !== taskId)
     .map(t => ({ id: Number(t.id), title: t.title }))
@@ -53,20 +89,31 @@ export function TaskDetailPage() {
   if (taskLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading…</p></div></div>
   if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
-  function handleUpdateTask(data: TaskFormPayload) {
-    setTaskMutationError(null)
-    updateTask.mutate(
+  async function handleUpdateTask(data: TaskFormPayload) {
+    const saved = await saveWithProject.save(task!, data, autoCompleteParentWhenChildrenDone)
+    if (saved) {
+      refocusEditButton.current = true
+      setEditingTask(false)
+    }
+  }
+
+  function handleQuickProjectChange(value: string) {
+    const to = value ? Number(value) : null
+    if (to === serverProjectId) {
+      setQuickProjectValue(null)
+      return
+    }
+    setQuickProjectValue(value)
+    setQuickProjectError(null)
+    refocusProjectSelect.current = true
+    changeProject.mutate(
+      { taskId, fromProjectId: serverProjectId, toProjectId: to },
       {
-        id: taskId,
-        data: {
-          ...(data as UpdateTaskPayload),
-          autoCompleteParentWhenChildrenDone,
-        } as UpdateTaskPayload,
+        onError: err => {
+          setQuickProjectValue(null)
+          setQuickProjectError(getProjectMutationErrorMessage(err))
+        },
       },
-      {
-        onSuccess: () => setEditingTask(false),
-        onError: err => setTaskMutationError(getTaskMutationErrorMessage(err)),
-      }
     )
   }
 
@@ -94,15 +141,24 @@ export function TaskDetailPage() {
           {editingTask ? (
             <>
               <h2 className="t-panel-title">Edit Task</h2>
-              {taskMutationError && <p className="t-inline-error">{taskMutationError}</p>}
-              <TaskForm task={task} availableParents={parentOptions} onSubmit={handleUpdateTask} onCancel={() => { setEditingTask(false); setTaskMutationError(null) }} />
+              {saveWithProject.error && <p className="t-inline-error" role="alert">{saveWithProject.error}</p>}
+              <TaskForm
+                task={task}
+                availableParents={parentOptions}
+                projects={projects}
+                projectInvalid={saveWithProject.projectInvalid}
+                onProjectChange={() => saveWithProject.setProjectInvalid(false)}
+                isSaving={saveWithProject.isSaving}
+                onSubmit={handleUpdateTask}
+                onCancel={() => { setEditingTask(false); saveWithProject.clearError() }}
+              />
             </>
           ) : (
             <>
               <div className="t-card-row">
                 <h1 className="t-detail-title">{task.title}</h1>
                 <div className="t-card-actions">
-                  <button className="t-btn" onClick={() => setEditingTask(true)}>Edit</button>
+                  <button ref={editButtonRef} className="t-btn" onClick={() => setEditingTask(true)}>Edit</button>
                   <button className="t-btn-danger" onClick={handleDeleteTask}>Delete</button>
                 </div>
               </div>
@@ -110,6 +166,25 @@ export function TaskDetailPage() {
               <div className="t-detail-meta">
                 <span>Status: <strong>{task.status}</strong></span>
                 <span>Priority: <strong>{task.priority}</strong></span>
+                <div className="t-detail-project" title={task.projectName ?? undefined}>
+                  <label htmlFor="task-project">Project: </label>
+                  <select
+                    id="task-project"
+                    ref={projectSelectRef}
+                    className="t-select"
+                    value={quickProjectValue ?? (serverProjectId !== null ? String(serverProjectId) : '')}
+                    disabled={changeProject.isPending}
+                    aria-busy={changeProject.isPending || undefined}
+                    aria-invalid={quickProjectError ? 'true' : undefined}
+                    onChange={e => handleQuickProjectChange(e.target.value)}
+                  >
+                    <option value="">No project</option>
+                    {buildProjectOptions(task, projects).map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {quickProjectError && <p className="t-inline-error" role="alert">{quickProjectError}</p>}
+                </div>
                 <span>Parent: <strong>{task.parentTaskItemId ? `#${task.parentTaskItemId}` : 'None'}</strong></span>
                 <span>Children: <strong>{task.childTaskCount ?? 0}</strong></span>
                 {task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}

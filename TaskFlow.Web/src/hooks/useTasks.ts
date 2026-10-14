@@ -8,6 +8,7 @@ import {
 } from '@/api/client/sdk.gen'
 import type { CreateTaskItemDto, TaskItemResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { getTaskHistory } from '@/api/tasks'
+import { projectKeys } from '@/hooks/projectKeys'
 
 export type TaskItemViewModel = TaskItemResponseDto & {
   currentJournalEntryId?: number | null
@@ -74,9 +75,13 @@ export function useCreateTaskMutation() {
           dueDate: data.dueDate,
           parentTaskItemId: data.parentTaskItemId ?? null,
           journalDate: data.journalDate ?? null,
+          projectId: data.projectId ?? null,
         } as CreateTaskItemDto,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: taskKeys.all })
+      if (variables.projectId != null) qc.invalidateQueries({ queryKey: projectKeys.all })
+    },
   })
 }
 
@@ -86,6 +91,9 @@ export function useUpdateTaskMutation() {
     mutationFn: ({ id, data }: { id: number; data: UpdateTaskPayload }) =>
       putApiV1TaskItemsById({
         path: { id },
+        // Intentionally no projectId: UpdateTaskItemDto has none, and PUT is a full
+        // replace that must never clear the project. Project changes go through the
+        // assign/unassign endpoints (see useChangeTaskProject).
         body: {
           title: data.title,
           description: data.description,
@@ -100,6 +108,8 @@ export function useUpdateTaskMutation() {
     onSuccess: (_result, { id }) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
+      // Status changes alter the open/completed counts shown on project views.
+      qc.invalidateQueries({ queryKey: projectKeys.all })
     },
   })
 }
@@ -110,6 +120,7 @@ export function useDeleteTaskMutation() {
     mutationFn: (id: number) => deleteApiV1TaskItemsById({ path: { id } }),
     onSuccess: (_result, id) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
+      qc.invalidateQueries({ queryKey: projectKeys.all })
       qc.removeQueries({ queryKey: taskKeys.detail(id) })
     },
   })

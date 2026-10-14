@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { useTasksQuery, useTaskQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from './useTasks'
+import { projectKeys } from './projectKeys'
 
 vi.mock('@/api/client/sdk.gen', () => ({
   getApiV1TaskItems: vi.fn(),
@@ -14,8 +15,7 @@ vi.mock('@/api/client/sdk.gen', () => ({
 
 import * as sdk from '@/api/client/sdk.gen'
 
-function makeWrapper() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+function makeWrapper(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return ({ children }: { children: React.ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children)
 }
@@ -78,5 +78,77 @@ describe('useDeleteTaskMutation', () => {
     result.current.mutate(5)
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
     expect(sdk.deleteApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({ path: { id: 5 } }))
+  })
+})
+
+describe('project handling in task mutations', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function setup<T>(useHook: () => T) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(useHook, { wrapper: makeWrapper(qc) })
+    const keys = () => invalidate.mock.calls.map(c => c[0]?.queryKey)
+    return { result, keys }
+  }
+
+  it('create forwards projectId in the POST body', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    const { result } = setup(useCreateTaskMutation)
+    result.current.mutate({ title: 'T', projectId: 4 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(vi.mocked(sdk.postApiV1TaskItems).mock.calls[0][0]?.body).toEqual(expect.objectContaining({ projectId: 4 }))
+  })
+
+  it('create sends projectId null when none is chosen and does not invalidate project keys', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    const { result, keys } = setup(useCreateTaskMutation)
+    result.current.mutate({ title: 'T' })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(vi.mocked(sdk.postApiV1TaskItems).mock.calls[0][0]?.body).toEqual(expect.objectContaining({ projectId: null }))
+    expect(keys()).not.toContainEqual(projectKeys.all)
+  })
+
+  it('create with a project invalidates tasks and project keys', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    const { result, keys } = setup(useCreateTaskMutation)
+    result.current.mutate({ title: 'T', projectId: 4 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(keys()).toContainEqual(['tasks'])
+    expect(keys()).toContainEqual(projectKeys.all)
+  })
+
+  it('update body never contains projectId, even if the caller passes one', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
+    const { result } = setup(useUpdateTaskMutation)
+    result.current.mutate({ id: 2, data: { title: 'U', projectId: 9 } as never })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
+  })
+
+  it('update invalidates tasks, the task detail and project keys', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
+    const { result, keys } = setup(useUpdateTaskMutation)
+    result.current.mutate({ id: 2, data: { title: 'U' } })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(keys()).toContainEqual(['tasks'])
+    expect(keys()).toContainEqual(['tasks', 2])
+    expect(keys()).toContainEqual(projectKeys.all)
+  })
+
+  it('delete invalidates project keys', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: new Response() } as never)
+    const { result, keys } = setup(useDeleteTaskMutation)
+    result.current.mutate(5)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(keys()).toContainEqual(projectKeys.all)
+  })
+
+  it('does not invalidate project keys when the update fails', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockRejectedValue({ code: 'X' })
+    const { result, keys } = setup(useUpdateTaskMutation)
+    result.current.mutate({ id: 2, data: { title: 'U' } })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(keys()).toEqual([])
   })
 })

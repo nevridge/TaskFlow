@@ -61,6 +61,8 @@ function describeEvent(event: TaskItemEventResponseDto): string {
       return 'Due date changed'
     case 'StatusChanged':
       return 'Status changed'
+    case 'ProjectChanged':
+      return 'Project changed'
     default:
       return event.eventType
   }

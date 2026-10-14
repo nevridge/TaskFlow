@@ -8,16 +8,20 @@ import {
   type TaskItemViewModel,
   type UpdateTaskPayload,
 } from '@/hooks/useTasks'
+import { useProjectsQuery } from '@/hooks/useProjects'
+import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
+import { normalizeProjectId, PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskListRow } from '@/components/TaskListRow'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
-import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
+import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
 import '@/tasks.css'
 
 type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
 type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
+type ProjectFilter = 'all' | 'none' | number
 
 type TaskListModel = TaskItemViewModel
 
@@ -56,6 +60,10 @@ export function TasksPage() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
+  const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
+  const [createProjectInvalid, setCreateProjectInvalid] = useState(false)
+  const projectsQuery = useProjectsQuery()
+  const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [editingTask, setEditingTask] = useState<TaskListModel | null>(null)
@@ -95,6 +103,26 @@ export function TasksPage() {
     [data],
   )
 
+  const projects: ProjectOption[] = useMemo(
+    () =>
+      [...(projectsQuery.data?.data ?? [])]
+        .map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [projectsQuery.data],
+  )
+  const filterProjects = useMemo(
+    () => [...projects.filter(p => !p.isArchived), ...projects.filter(p => p.isArchived)],
+    [projects],
+  )
+
+  // A filter pointing at a project that no longer exists would hide every task. Only
+  // reset once the projects query has succeeded: loading or errored fetches are not
+  // evidence that the project is gone.
+  useEffect(() => {
+    if (!projectsQuery.isSuccess || typeof projectFilter !== 'number') return
+    if (!projects.some(p => p.id === projectFilter)) setProjectFilter('all')
+  }, [projectsQuery.isSuccess, projects, projectFilter])
+
   function handleSortClick(key: TaskSortKey) {
     if (key === taskSortKey) {
       setTaskSortDir(taskSortDir === 'asc' ? 'desc' : 'asc')
@@ -109,13 +137,18 @@ export function TasksPage() {
     return taskSortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
-  // Apply filters: view filter, status filter, search
+  // Apply filters: view filter, status filter, project filter, search
   const filtered = useMemo(() => {
     return tasks
       .filter(t => matchesViewFilter(t, viewFilter))
       .filter(t => statusFilter === 'all' || (t.status ?? '').toLowerCase() === statusFilter)
+      .filter(t => {
+        if (projectFilter === 'all') return true
+        const taskProjectId = normalizeProjectId(t.projectId)
+        return projectFilter === 'none' ? taskProjectId === null : taskProjectId === projectFilter
+      })
       .filter(t => !debouncedSearch || t.title.toLowerCase().includes(debouncedSearch.toLowerCase()))
-  }, [tasks, viewFilter, statusFilter, debouncedSearch])
+  }, [tasks, viewFilter, statusFilter, projectFilter, debouncedSearch])
 
   const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
 
@@ -229,21 +262,33 @@ export function TasksPage() {
   }, [filtered, filteredById, childrenByParentId, expandedParentIds, taskSortKey, taskSortDir])
 
   // Handlers
-  function handleCreate(formData: TaskFormPayload) {
+  function clearFormErrors() {
     setMutationError(null)
+    setCreateProjectInvalid(false)
+    saveWithProject.clearError()
+  }
+
+  function handleCreate(formData: TaskFormPayload) {
+    if (createMutation.isPending) return
+    clearFormErrors()
     createMutation.mutate(formData as CreateTaskPayload, {
       onSuccess: () => setShowCreate(false),
-      onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      onError: err => {
+        if (getErrorCode(err) === 'TASK_PROJECT_NOT_FOUND') {
+          setMutationError(PROJECT_CREATE_NOT_FOUND_MESSAGE)
+          setCreateProjectInvalid(true)
+        } else {
+          setMutationError(getTaskMutationErrorMessage(err))
+        }
+      },
     })
   }
 
-  function handleUpdate(formData: TaskFormPayload) {
+  async function handleUpdate(formData: TaskFormPayload) {
     if (!editingTask?.id) return
-    setMutationError(null)
-    updateMutation.mutate(
-      { id: Number(editingTask.id), data: { ...(formData as UpdateTaskPayload), autoCompleteParentWhenChildrenDone } as UpdateTaskPayload },
-      { onSuccess: () => setEditingTask(null), onError: err => setMutationError(getTaskMutationErrorMessage(err)) }
-    )
+    clearFormErrors()
+    const saved = await saveWithProject.save(editingTask, formData, autoCompleteParentWhenChildrenDone)
+    if (saved) setEditingTask(null)
   }
 
   function handleStatusCycle(task: TaskListModel) {
@@ -321,6 +366,7 @@ export function TasksPage() {
     )
   }
 
+  const formError = mutationError ?? saveWithProject.error
   const totalFiltered = priorityGroups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks...</p></div></div>
@@ -337,12 +383,17 @@ export function TasksPage() {
         {(showCreate || editingTask) && (
           <div className="t-panel">
             <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
-            {mutationError && <p className="t-inline-error">{mutationError}</p>}
+            {formError && <p className="t-inline-error" role="alert">{formError}</p>}
             <TaskForm
               task={editingTask ?? undefined}
               availableParents={parentOptions}
+              projects={projects}
+              defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
+              projectInvalid={createProjectInvalid || saveWithProject.projectInvalid}
+              onProjectChange={() => { setCreateProjectInvalid(false); saveWithProject.setProjectInvalid(false) }}
+              isSaving={saveWithProject.isSaving || createMutation.isPending}
               onSubmit={editingTask ? handleUpdate : handleCreate}
-              onCancel={() => { setShowCreate(false); setEditingTask(null); setMutationError(null) }}
+              onCancel={() => { setShowCreate(false); setEditingTask(null); clearFormErrors() }}
             />
           </div>
         )}
@@ -382,17 +433,37 @@ export function TasksPage() {
             <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
             <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
           </div>
-          <label htmlFor="status-filter" className="t-filter-label">Status</label>
-          <select id="status-filter" className="t-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
-            <option value="all">All</option>
-            <option value="draft">Draft</option>
-            <option value="todo">Todo</option>
-            <option value="completed">Completed</option>
-          </select>
+          <span className="t-filter-field">
+            <label htmlFor="status-filter" className="t-filter-label">Status</label>
+            <select id="status-filter" className="t-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
+              <option value="all">All</option>
+              <option value="draft">Draft</option>
+              <option value="todo">Todo</option>
+              <option value="completed">Completed</option>
+            </select>
+          </span>
+          <span className="t-filter-field">
+            <label htmlFor="project-filter" className="t-filter-label">Project</label>
+            <select
+              id="project-filter"
+              className="t-select"
+              value={String(projectFilter)}
+              onChange={e => {
+                const v = e.target.value
+                setProjectFilter(v === 'all' || v === 'none' ? v : Number(v))
+              }}
+            >
+              <option value="all">All projects</option>
+              <option value="none">No project</option>
+              {filterProjects.map(p => (
+                <option key={p.id} value={String(p.id)}>{p.isArchived ? `${p.name} (archived)` : p.name}</option>
+              ))}
+            </select>
+          </span>
           <span className="t-filter-count">{totalFiltered} task{totalFiltered !== 1 ? 's' : ''}</span>
         </div>
 
-        {mutationError && !showCreate && !editingTask && <p className="t-inline-error">{mutationError}</p>}
+        {mutationError && !showCreate && !editingTask && <p className="t-inline-error" role="alert">{mutationError}</p>}
 
         {totalFiltered === 0 ? (
           <p className="t-empty">No tasks match your filters.</p>
@@ -498,6 +569,7 @@ function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') return 'This task has subtasks. Remove or reassign subtasks before deleting.'
   if (code === 'TASK_PARENT_NOT_FOUND') return 'The selected parent task was not found.'
   if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') return 'You cannot create new tasks on a past journal day.'
+  if (code === 'TASK_PROJECT_NOT_FOUND') return PROJECT_CREATE_NOT_FOUND_MESSAGE
   return 'Unable to save task changes. Please try again.'
 }
 

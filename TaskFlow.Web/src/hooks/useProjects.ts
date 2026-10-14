@@ -18,8 +18,8 @@ export { projectKeys }
 
 // The task create/update/delete mutations in useTasks.ts invalidate projectKeys.all,
 // but the journal toggle/create paths call the SDK directly and do not. Project queries
-// that show counts therefore still refetch on every mount and go stale quickly; this
-// workaround remains for the journal paths only.
+// that show counts use refetchOnMount: 'always', so opening the Projects page always shows
+// fresh counts; the short staleTime only limits refetches from other triggers (e.g. window focus).
 export const PROJECT_STALE_TIME_MS = 5_000
 
 function isValidProjectId(id: number) {

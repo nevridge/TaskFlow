@@ -400,7 +400,7 @@ export function TasksPage() {
               task={editingTask ?? undefined}
               availableParents={parentOptions}
               projects={projects}
-              // Follows the UX advisory's smart default: preselect a specific project filter on create.
+              // Preselect the filtered project when creating a task.
               defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
               projectInvalid={createProjectInvalid || saveWithProject.projectInvalid}
               onProjectChange={() => { setCreateProjectInvalid(false); saveWithProject.setProjectInvalid(false) }}

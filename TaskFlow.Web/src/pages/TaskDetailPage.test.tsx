@@ -358,6 +358,19 @@ describe('TaskDetailPage', () => {
       expect(updateAsync).not.toHaveBeenCalled()
     })
 
+    it('quick change back to the original project still fires while the task has not refetched', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      renderPage()
+      const select = screen.getByRole('combobox', { name: /project/i })
+      await userEvent.selectOptions(select, 'Beta')
+      await userEvent.selectOptions(select, 'Alpha')
+      expect(changeMutate).toHaveBeenLastCalledWith(
+        { taskId: 1, fromProjectId: 2, toProjectId: 1 },
+        expect.any(Object),
+      )
+      expect(select).toHaveDisplayValue('Alpha')
+    })
+
     it('quick change on a task without a project assigns it (from null)', async () => {
       mockTask({ projectId: null, projectName: null })
       renderPage()
@@ -409,7 +422,7 @@ describe('TaskDetailPage', () => {
       renderPage()
       const select = screen.getByRole('combobox', { name: /project/i })
       await userEvent.selectOptions(select, 'Beta')
-      expect(await screen.findByRole('alert')).toHaveTextContent('That project no longer exists.')
+      expect(await screen.findByRole('alert')).toHaveTextContent('The task or project could not be found. It may have been changed or removed.')
       expect(select).toHaveDisplayValue('Alpha')
       expect(select).toHaveFocus()
     })
@@ -508,7 +521,7 @@ describe('TaskDetailPage', () => {
       const select = screen.getByRole('combobox', { name: 'Project' })
       await userEvent.selectOptions(select, 'Beta')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('That project no longer exists.')
+      expect(await screen.findByRole('alert')).toHaveTextContent('The task or project could not be found. It may have been changed or removed.')
       expect(select).toHaveAttribute('aria-invalid', 'true')
       expect(select).toHaveFocus()
       await userEvent.selectOptions(select, 'Alpha')

@@ -22,7 +22,7 @@ describe('getProjectErrorKind', () => {
 
 describe('getProjectMutationErrorMessage', () => {
   it('maps each kind to a friendly message', () => {
-    expect(getProjectMutationErrorMessage({ status: 404 })).toBe('That project no longer exists.')
+    expect(getProjectMutationErrorMessage({ status: 404 })).toBe('The task or project could not be found. It may have been changed or removed.')
     expect(getProjectMutationErrorMessage({ status: 409 })).toBe('This task is already in that project.')
     expect(getProjectMutationErrorMessage({ status: 500, message: 'raw server text' })).toBe(
       'Unable to change the project. Please try again.',

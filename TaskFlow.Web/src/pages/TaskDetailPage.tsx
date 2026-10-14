@@ -101,15 +101,15 @@ export function TaskDetailPage() {
 
   function handleQuickProjectChange(value: string) {
     const to = value ? Number(value) : null
-    if (to === serverProjectId) {
-      setQuickProjectValue(null)
-      return
-    }
+    // The project shown in the select: the optimistic value when a change has been made but the
+    // refetched task has not caught up (e.g. the refetch failed), otherwise the server's.
+    const current = quickProjectValue !== null ? normalizeProjectId(quickProjectValue) : serverProjectId
+    if (to === current) return
     setQuickProjectValue(value)
     setQuickProjectError(null)
     refocusProjectSelect.current = true
     changeProject.mutate(
-      { taskId, fromProjectId: serverProjectId, toProjectId: to },
+      { taskId, fromProjectId: current, toProjectId: to },
       {
         onError: err => {
           setQuickProjectValue(null)

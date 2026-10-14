@@ -86,7 +86,7 @@ describe('useSaveTaskWithProject', () => {
     await act(async () => { saved = await result.current.save({ id: 5, projectId: 1 }, form, false) })
 
     expect(saved).toBe(false)
-    expect(result.current.error).toBe('Task saved, but the project change failed: That project no longer exists.')
+    expect(result.current.error).toBe('Task saved, but the project change failed: The task or project could not be found. It may have been changed or removed.')
     expect(result.current.projectInvalid).toBe(true)
     const keys = invalidate.mock.calls.map(c => c[0]?.queryKey)
     expect(keys).toContainEqual(['tasks'])

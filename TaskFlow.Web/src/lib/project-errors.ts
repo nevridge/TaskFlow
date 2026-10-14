@@ -1,6 +1,8 @@
 export type ProjectErrorKind = 'notFound' | 'conflict' | 'generic'
 
-export const PROJECT_NOT_FOUND_MESSAGE = 'That project no longer exists.'
+// The API returns a bare 404 for a missing project, a missing task, and an unassign of a
+// task that is not in that project, so the wording must not blame the project alone.
+export const PROJECT_NOT_FOUND_MESSAGE = 'The task or project could not be found. It may have been changed or removed.'
 export const PROJECT_CONFLICT_MESSAGE = 'This task is already in that project.'
 export const PROJECT_GENERIC_MESSAGE = 'Unable to change the project. Please try again.'
 export const PROJECT_CREATE_NOT_FOUND_MESSAGE = 'The selected project was not found.'

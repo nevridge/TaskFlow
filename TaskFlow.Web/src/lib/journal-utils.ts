@@ -37,7 +37,8 @@ export function todayISO(): string {
 
 /** Minutes ahead of UTC for the browser's current offset (e.g. -300 for UTC-5). */
 export function getTimezoneOffsetMinutes(): number {
-  return -new Date().getTimezoneOffset()
+  // `|| 0` avoids returning -0 for UTC.
+  return -new Date().getTimezoneOffset() || 0
 }
 
 export function addDays(s: string, n: number): string {

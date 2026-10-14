@@ -65,7 +65,7 @@ export const carryForwardJournalEntry = (id: number, timezoneOffsetMinutes?: num
     { url: '/api/v1/JournalEntries/{id}/carry-forward', path: { id }, body: { timezoneOffsetMinutes }, headers: J },
   )
 
-export const updateJournalEntry =(id: number, body: UpdateJournalEntryDto) =>
+export const updateJournalEntry = (id: number, body: UpdateJournalEntryDto) =>
   client.put<{ 200: JournalEntryResponseDto }, unknown, true>(
     { url: '/api/v1/JournalEntries/{id}', path: { id }, body, headers: J },
   )

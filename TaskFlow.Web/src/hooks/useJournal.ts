@@ -72,11 +72,14 @@ export function useEnsureJournalEntry(isoDate: string) {
       })
       return { res, date, carriedInline: isToday }
     },
-    onSuccess: ({ date, carriedInline }) => {
+    onSuccess: ({ res, date, carriedInline }) => {
       // The server carried inline for today, so no separate carry-forward call is needed.
       if (carriedInline) carriedRef.current = date
-      // Inline carry may have moved tasks, so refresh the task list too.
-      if (carriedInline) qc.invalidateQueries({ queryKey: taskKeys.all })
+      // A brand-new entry only has todos if the server carried tasks into it inline,
+      // so refresh the task list only when the created entry came back with todos.
+      if (carriedInline && (res.data?.todoTaskItemIds?.length ?? 0) > 0) {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+      }
       return qc.invalidateQueries({ queryKey: journalKeys.all })
     },
     // 409 (another client created it first): refetch so the entry appears.

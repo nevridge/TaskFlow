@@ -407,10 +407,15 @@ public class JournalEntriesControllerV1Tests
         await using var h = new RealRepoHarness();
         var offset = OffsetWhereUserDateDiffersFromUtc();
         var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
-        var (_, open, _) = await h.SeedOldEntryAsync(userToday.AddDays(-2));
+        var utcDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        // userToday is utcDate +/- 1 (never equal), so offsets of -2, +5 from userToday cannot hit userToday or utcDate at any hour.
+        var oldDate = userToday.AddDays(-2);
+        var futureDate = userToday.AddDays(5);
+        new[] { oldDate, userToday, futureDate, utcDate }.Distinct().Should().HaveCount(4);
+        var (_, open, _) = await h.SeedOldEntryAsync(oldDate);
         var todayEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Today", Date = userToday });
-        var tomorrowEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Tomorrow", Date = userToday.AddDays(1) });
-        var utcEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Utc", Date = DateOnly.FromDateTime(DateTime.UtcNow) });
+        var tomorrowEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Future", Date = futureDate });
+        var utcEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Utc", Date = utcDate });
 
         var noOffset = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto());
         var tomorrow = await h.Controller.CarryForward(tomorrowEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });

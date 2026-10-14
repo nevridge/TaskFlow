@@ -224,6 +224,20 @@ public class ProjectsControllerV1Tests
         result.Should().BeOfType(expected);
     }
 
+    // TaskFlow.Web (lib/project-errors.ts) recognises the 409 conflict by this message, because
+    // the generated client throws only the parsed body. Update both if the wording changes.
+    [Fact]
+    public async Task AssignTask_ConflictMessage_ShouldMatchPatternUsedByFrontend()
+    {
+        _mockRepo.Setup(r => r.AssignTaskAsync(1, 2)).ReturnsAsync(AssignTaskResult.AlreadyAssigned);
+
+        var result = await _controller.AssignTask(1, new AssignProjectTaskDto { TaskItemId = 2 });
+
+        var conflict = result.Should().BeOfType<ConflictObjectResult>().Subject;
+        var message = conflict.Value!.GetType().GetProperty("message")!.GetValue(conflict.Value) as string;
+        message.Should().MatchRegex("(?i)already (assigned|in)");
+    }
+
     [Fact]
     public async Task AssignTask_ShouldReturnBadRequest_WhenValidationFails()
     {

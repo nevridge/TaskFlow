@@ -1,6 +1,6 @@
 ---
 name: feature-builder
-description: Implements an approved technical brief in the taskflow-assistant repo: MCP server code in src/TaskFlow.Mcp, xUnit tests in tests/TaskFlow.Mcp.Tests, and the plugin, chat and README content that describes the changed tools. Invoke from the feature-factory skill after the brief is approved. Never commits.
+description: "Implements an approved technical brief in the taskflow-assistant repo: MCP server code in src/TaskFlow.Mcp, xUnit tests in tests/TaskFlow.Mcp.Tests, and the plugin, chat and README content that describes the changed tools. Invoke from the feature-factory skill after the brief is approved. Never commits."
 tools: Glob, Grep, Read, Edit, Write, Bash, SendMessage
 model: sonnet
 color: green

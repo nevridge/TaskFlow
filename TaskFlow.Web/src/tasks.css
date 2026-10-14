@@ -168,6 +168,17 @@
 .t-select:focus { border-color: var(--accent); }
 html.is-dark .t-select { color-scheme: dark; }
 
+.t-filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+.t-filter-field .t-select {
+  max-width: min(220px, 100%);
+  min-width: 0;
+}
+
 /* ─── Task list table ─────────────────────────────────────────────────────── */
 
 .t-list-wrap {
@@ -422,6 +433,26 @@ html.is-dark .t-select { color-scheme: dark; }
   color: var(--accent-ink);
 }
 
+/* Project pill: quiet outline, keeps the project's own casing, truncates long names.
+   Declared after the other .t-badge-* rules so source order wins. */
+.t-badge-project {
+  text-transform: none;
+  display: inline-block;
+  max-width: 16rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.t-list-cell--title .t-badge-project {
+  max-width: 14rem;
+  margin-top: 4px;
+}
+
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
 
 .t-btn {
@@ -500,6 +531,9 @@ html.is-dark .t-select { color-scheme: dark; }
 }
 
 .t-detail-meta strong { color: var(--ink); font-weight: 600; }
+.t-detail-meta .t-select { max-width: 100%; }
+.t-detail-project { overflow-wrap: anywhere; }
+.t-detail-project .t-inline-error { margin: 4px 0 0; }
 
 .t-section-hdr {
   display: flex;

@@ -119,4 +119,24 @@ describe('TaskHistoryPanel', () => {
     render(<TaskHistoryPanel taskId={1} />)
     expect(screen.getByText('CustomEvent')).toBeInTheDocument()
   })
+
+  it('shows the changeSummary for a ProjectChanged event', () => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType: 'ProjectChanged', changeSummary: "Assigned to project 'Alpha'." })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText("Assigned to project 'Alpha'.")).toBeInTheDocument()
+    expect(screen.queryByText('ProjectChanged')).not.toBeInTheDocument()
+  })
+
+  it.each([null, ''])('shows "Project changed" for a ProjectChanged event with summary %j', summary => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType: 'ProjectChanged', changeSummary: summary })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText('Project changed')).toBeInTheDocument()
+    expect(screen.queryByText('ProjectChanged')).not.toBeInTheDocument()
+  })
 })

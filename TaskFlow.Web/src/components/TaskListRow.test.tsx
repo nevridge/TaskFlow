@@ -122,4 +122,31 @@ describe('TaskListRow', () => {
       expect(screen.queryByText('!', { selector: '.t-overdue-icon' })).not.toBeInTheDocument()
     })
   })
+
+  describe('project badge', () => {
+    it('shows the project name in the title cell without adding a column', () => {
+      const { container } = renderRow({ ...baseTask, projectId: 3, projectName: 'Alpha Launch' })
+      const badge = screen.getByText('Alpha Launch')
+      expect(badge).toHaveClass('t-badge-project')
+      expect(badge).toHaveAttribute('title', 'Alpha Launch')
+      expect(badge.closest('td')).toHaveClass('t-list-cell--title')
+      expect(container.querySelectorAll('td')).toHaveLength(5)
+    })
+
+    it('keeps the full name in the title for long names', () => {
+      const longName = 'An extremely long project name that must be truncated in a table cell'
+      renderRow({ ...baseTask, projectId: 3, projectName: longName })
+      expect(screen.getByText(longName)).toHaveAttribute('title', longName)
+    })
+
+    it.each([
+      ['null project', { projectId: null, projectName: null }],
+      ['undefined project', {}],
+      ['projectId without a name', { projectId: '3', projectName: null }],
+    ])('renders no badge for %s', (_label, extra) => {
+      const { container } = renderRow({ ...baseTask, ...extra })
+      expect(container.querySelector('.t-badge-project')).toBeNull()
+      expect(container.querySelectorAll('td')).toHaveLength(5)
+    })
+  })
 })

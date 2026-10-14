@@ -26,6 +26,9 @@ export function TaskCard({ task, onEdit, onDelete }: Props) {
       <div className="t-badges">
         <span className={`t-badge t-badge-${status}`}>{status}</span>
         <span className={`t-badge t-badge-${priority}`}>{priority}</span>
+        {task.projectName && (
+          <span className="t-badge t-badge-project" title={task.projectName}>{task.projectName}</span>
+        )}
       </div>
       {task.dueDate && (
         <span className="t-card-meta">Due {formatDate(task.dueDate)}</span>

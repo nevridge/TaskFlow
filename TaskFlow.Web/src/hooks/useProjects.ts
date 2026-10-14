@@ -11,17 +11,15 @@ import {
 } from '@/api/projects'
 import type { CreateProjectDto, UpdateProjectDto } from '@/api/projects'
 import { taskKeys } from '@/hooks/useTasks'
+import { projectKeys } from '@/hooks/projectKeys'
 
-export const projectKeys = {
-  all: ['projects'] as const,
-  detail: (id: number) => ['projects', id] as const,
-  tasks: (id: number) => ['projects', id, 'tasks'] as const,
-}
+// Re-exported so existing imports from '@/hooks/useProjects' keep working.
+export { projectKeys }
 
-// Task mutations elsewhere do not invalidate project keys, so project queries
-// that show counts refetch on every mount and go stale quickly. A still-mounted
-// page can show stale counts until its next refetch. TODO(#228): invalidate
-// projectKeys.all from the task create/update/delete mutations and drop this workaround.
+// The task create/update/delete mutations in useTasks.ts invalidate projectKeys.all,
+// but the journal toggle/create paths call the SDK directly and do not. Project queries
+// that show counts use refetchOnMount: 'always', so opening the Projects page always shows
+// fresh counts; the short staleTime only limits refetches from other triggers (e.g. window focus).
 export const PROJECT_STALE_TIME_MS = 5_000
 
 function isValidProjectId(id: number) {
@@ -77,7 +75,7 @@ export function useUpdateProjectMutation() {
   })
 }
 
-// Delete, assign and unassign have no UI yet; they are deliverables for #228.
+// Deleting a project has no UI yet.
 export function useDeleteProjectMutation() {
   const qc = useQueryClient()
   return useMutation({
@@ -112,5 +110,47 @@ export function useUnassignProjectTaskMutation() {
     mutationFn: ({ projectId, taskItemId }: { projectId: number; taskItemId: number }) =>
       unassignTaskFromProject(projectId, taskItemId),
     onSuccess: (_result, { projectId }) => invalidateAssignment(qc, projectId),
+  })
+}
+
+export interface ChangeTaskProjectInput {
+  taskId: number
+  fromProjectId: number | null
+  toProjectId: number | null
+}
+
+/**
+ * Moves a task between projects using the assign/unassign endpoints.
+ * - same project: no call (never sends a redundant assign)
+ * - to a project: one POST assign (the server moves it; never unassign first)
+ * - to no project: DELETE from the old project
+ * On any failure the project and task caches are refetched so the UI matches the server.
+ */
+export function useChangeTaskProject() {
+  const qc = useQueryClient()
+  const assign = useAssignProjectTaskMutation()
+  const unassign = useUnassignProjectTaskMutation()
+  return useMutation({
+    mutationFn: async ({ taskId, fromProjectId, toProjectId }: ChangeTaskProjectInput) => {
+      if (fromProjectId === toProjectId) return
+      if (toProjectId !== null) {
+        await assign.mutateAsync({ projectId: toProjectId, taskItemId: taskId })
+      } else if (fromProjectId !== null) {
+        await unassign.mutateAsync({ projectId: fromProjectId, taskItemId: taskId })
+      }
+    },
+    onSuccess: (_result, { fromProjectId, toProjectId }) => {
+      // Assignment hooks already invalidated the target project's task list; also
+      // refresh the project the task left.
+      if (fromProjectId !== null && toProjectId !== null && fromProjectId !== toProjectId) {
+        qc.invalidateQueries({ queryKey: projectKeys.tasks(fromProjectId) })
+      }
+    },
+    // Any failure refetches, so the UI converges on server state even when the error
+    // body (e.g. from a proxy) cannot be classified as 404/409.
+    onError: () => {
+      qc.invalidateQueries({ queryKey: projectKeys.all })
+      qc.invalidateQueries({ queryKey: taskKeys.all })
+    },
   })
 }

@@ -372,6 +372,16 @@ describe('useCreateTodoMutation', () => {
       expect.objectContaining({ body: expect.objectContaining({ title: 'Buy milk', journalDate: '2026-05-28' }) })
     )
   })
+
+  it('never sends projectId in the create body', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 1, title: 'Buy milk' }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useCreateTodoMutation(10, '2026-05-28'), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate('Buy milk') })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(vi.mocked(sdk.postApiV1TaskItems).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
+  })
 })
 
 describe('useToggleTodoMutation', () => {
@@ -390,6 +400,16 @@ describe('useToggleTodoMutation', () => {
         body: expect.objectContaining({ status: 'completed' }),
       })
     )
+  })
+
+  it('never sends projectId in the PUT body, so toggling cannot clear a task project', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ id: 1, title: 'Task A', done: true }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
   })
 
   it('calls putApiV1TaskItemsById with done=false (status todo)', async () => {
@@ -437,6 +457,16 @@ describe('useEditTodoMutation', () => {
     expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
       expect.objectContaining({ path: { id: 3 }, body: expect.objectContaining({ title: 'New title' }) })
     )
+  })
+
+  it('never sends projectId in the PUT body, so editing a todo title cannot clear its project', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
+    act(() => { result.current.mutate({ id: 3, title: 'New title' }) })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
   })
 })
 

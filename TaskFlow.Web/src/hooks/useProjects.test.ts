@@ -13,7 +13,9 @@ import {
   useDeleteProjectMutation,
   useAssignProjectTaskMutation,
   useUnassignProjectTaskMutation,
+  useChangeTaskProject,
 } from './useProjects'
+import { projectKeys as projectKeysDirect } from './projectKeys'
 import { taskKeys } from './useTasks'
 
 vi.mock('@/api/projects', () => ({
@@ -180,5 +182,96 @@ describe('project mutations and invalidation', () => {
     result.current.mutate({ name: 'A' })
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(invalidatedKeys()).toEqual([])
+  })
+})
+
+describe('useChangeTaskProject', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  function setup() {
+    const qc = makeClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => useChangeTaskProject(), { wrapper: makeWrapper(qc) })
+    const keys = () => invalidate.mock.calls.map(c => c[0]?.queryKey)
+    return { result, keys }
+  }
+
+  it('re-exports the same projectKeys object from useProjects', () => {
+    expect(projectKeys).toBe(projectKeysDirect)
+  })
+
+  it('assigns with a POST when the task had no project', async () => {
+    vi.mocked(api.assignTaskToProject).mockResolvedValue(ok)
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: null, toProjectId: 2 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.assignTaskToProject).toHaveBeenCalledWith(2, 9)
+    expect(api.unassignTaskFromProject).not.toHaveBeenCalled()
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, projectKeys.tasks(2), taskKeys.all]))
+  })
+
+  it('unassigns with a DELETE from the old project', async () => {
+    vi.mocked(api.unassignTaskFromProject).mockResolvedValue(ok)
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: 4, toProjectId: null })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.unassignTaskFromProject).toHaveBeenCalledWith(4, 9)
+    expect(api.assignTaskToProject).not.toHaveBeenCalled()
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, projectKeys.tasks(4), taskKeys.all]))
+  })
+
+  it('moves with a single POST to the new project and refreshes the old project tasks', async () => {
+    vi.mocked(api.assignTaskToProject).mockResolvedValue(ok)
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: 1, toProjectId: 2 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.assignTaskToProject).toHaveBeenCalledOnce()
+    expect(api.assignTaskToProject).toHaveBeenCalledWith(2, 9)
+    expect(api.unassignTaskFromProject).not.toHaveBeenCalled()
+    expect(keys()).toContainEqual(projectKeys.tasks(1))
+  })
+
+  it('makes no call when the project is unchanged', async () => {
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: 2, toProjectId: 2 })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.assignTaskToProject).not.toHaveBeenCalled()
+    expect(api.unassignTaskFromProject).not.toHaveBeenCalled()
+    expect(keys()).toEqual([])
+  })
+
+  it('makes no call when both are null', async () => {
+    const { result } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: null, toProjectId: null })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.assignTaskToProject).not.toHaveBeenCalled()
+    expect(api.unassignTaskFromProject).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['404', { status: 404 }],
+    ['409', { message: 'This task is already assigned to the project.' }],
+  ])('invalidates project and task keys after a %s so the UI matches the server', async (_label, error) => {
+    vi.mocked(api.assignTaskToProject).mockRejectedValue(error)
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: 1, toProjectId: 2 })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, taskKeys.all]))
+  })
+
+  it('unassign 404 invalidates project and task keys', async () => {
+    vi.mocked(api.unassignTaskFromProject).mockRejectedValue({ status: 404 })
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: 1, toProjectId: null })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, taskKeys.all]))
+  })
+
+  it('invalidates project and task keys on a generic failure too', async () => {
+    vi.mocked(api.assignTaskToProject).mockRejectedValue({ message: 'boom' })
+    const { result, keys } = setup()
+    result.current.mutate({ taskId: 9, fromProjectId: null, toProjectId: 2 })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(keys()).toEqual(expect.arrayContaining([projectKeys.all, taskKeys.all]))
   })
 })

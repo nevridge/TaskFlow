@@ -111,6 +111,11 @@ export function TaskListRow({
                 {daysTagged > 1 && <>Tagged {daysTagged} days</>}
               </div>
             )}
+            {task.projectName && (
+              <div>
+                <span className="t-badge t-badge-project" title={task.projectName}>{task.projectName}</span>
+              </div>
+            )}
           </div>
         </div>
       </td>

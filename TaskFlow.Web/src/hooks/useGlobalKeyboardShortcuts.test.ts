@@ -129,6 +129,19 @@ describe('useGlobalKeyboardShortcuts', () => {
     expect(handlers.onGoHome).toHaveBeenCalledOnce()
   })
 
+  it('typing g in a focused select (e.g. the Project select) does not start a chord', () => {
+    const select = document.createElement('select')
+    document.body.appendChild(select)
+    select.focus()
+
+    renderHook(() => useGlobalKeyboardShortcuts(handlers))
+    fireKey('g')
+    select.blur()
+    fireKey('h')
+
+    expect(handlers.onGoHome).not.toHaveBeenCalled()
+  })
+
   it('removes the keydown listener on unmount', () => {
     const { unmount } = renderHook(() => useGlobalKeyboardShortcuts(handlers))
     unmount()

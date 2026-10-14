@@ -20,9 +20,9 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
-            var today = InputParsing.Today(time);
+            var (today, offset) = InputParsing.LocalNow(time);
             var day = InputParsing.ParseDateOrToday(date, today, "date");
-            var entry = await JournalResolver.EnsureAsync(api, day, ct);
+            var entry = await JournalResolver.EnsureAsync(api, day, offset, ct);
 
             var todosTask = api.GetJournalTodosAsync(entry.Id, ct);
             var notesTask = api.GetJournalNotesAsync(entry.Id, ct);
@@ -84,17 +84,16 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid("Pass task ids in 'add' and/or 'remove'.");
             }
 
-            var today = InputParsing.Today(time);
+            var (today, offset) = InputParsing.LocalNow(time);
             var day = InputParsing.ParseDateOrToday(date, today, "date");
             var entry = toAdd.Count > 0
-                ? await JournalResolver.EnsureAsync(api, day, ct)
+                ? await JournalResolver.EnsureAsync(api, day, offset, ct)
                 : await JournalResolver.FindAsync(api, day, ct)
                     ?? throw ToolGuard.Invalid($"There is no journal entry for {day:yyyy-MM-dd}, so nothing can be removed.");
 
             var titles = (await api.GetTasksAsync(ct)).ToDictionary(t => t.Id, t => t.Title);
             string Label(int id) => titles.TryGetValue(id, out var title) ? $"#{id} {title}" : $"#{id}";
 
-            var offset = InputParsing.OffsetMinutes(time);
             var results = new List<string>();
             var succeeded = 0;
 
@@ -149,8 +148,9 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid("Log content is required.");
             }
 
-            var day = InputParsing.ParseDateOrToday(date, InputParsing.Today(time), "date");
-            var entry = await JournalResolver.EnsureAsync(api, day, ct);
+            var (today, offset) = InputParsing.LocalNow(time);
+            var day = InputParsing.ParseDateOrToday(date, today, "date");
+            var entry = await JournalResolver.EnsureAsync(api, day, offset, ct);
             var log = await api.AddLogEntryAsync(entry.Id, content.Trim(), taskId, ct);
 
             return $"Logged on {day:yyyy-MM-dd}{(log.TaskItemId is { } id ? $" (linked to task #{id}{(log.LinkedTaskTitle is null ? string.Empty : $" {log.LinkedTaskTitle}")})" : string.Empty)}: {Formatting.Preview(log.Content, 200)}";
@@ -170,8 +170,9 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid("Pass 'summary' and/or 'note'.");
             }
 
-            var day = InputParsing.ParseDateOrToday(date, InputParsing.Today(time), "date");
-            var entry = await JournalResolver.EnsureAsync(api, day, ct);
+            var (today, offset) = InputParsing.LocalNow(time);
+            var day = InputParsing.ParseDateOrToday(date, today, "date");
+            var entry = await JournalResolver.EnsureAsync(api, day, offset, ct);
             var done = new List<string>();
 
             if (summary is not null)

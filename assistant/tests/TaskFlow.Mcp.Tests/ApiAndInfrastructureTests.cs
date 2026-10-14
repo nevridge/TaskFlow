@@ -141,6 +141,17 @@ public class InputParsingTests
     }
 
     [Fact]
+    public void LocalNow_ReturnsDateAndOffset_FromOneRead()
+    {
+        var time = Fixtures.Time(new DateTimeOffset(2026, 10, 10, 2, 0, 0, TimeSpan.Zero), -300);
+
+        var (today, offset) = InputParsing.LocalNow(time);
+
+        today.Should().Be(Today);
+        offset.Should().Be(-300);
+    }
+
+    [Fact]
     public void Today_IsTheLocalDate_NotTheUtcDate()
     {
         var time = Fixtures.Time();

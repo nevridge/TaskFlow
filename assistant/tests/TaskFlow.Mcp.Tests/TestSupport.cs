@@ -91,6 +91,13 @@ internal static class Fixtures
         return time;
     }
 
+    public static FakeTimeProvider Time(DateTimeOffset utc, int offsetMinutes)
+    {
+        var time = new FakeTimeProvider(utc);
+        time.SetLocalTimeZone(TimeZoneInfo.CreateCustomTimeZone("test", TimeSpan.FromMinutes(offsetMinutes), "test", "test"));
+        return time;
+    }
+
     public static TaskFlowApiClient Client(StubHandler handler) =>
         new(new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8081/api/v1/") });
 

@@ -9,7 +9,7 @@ internal static class JournalResolver
     public static async Task<JournalEntryDto?> FindAsync(TaskFlowApiClient api, DateOnly date, CancellationToken ct) =>
         (await api.GetJournalEntriesAsync(ct)).FirstOrDefault(e => e.Date == date);
 
-    public static async Task<JournalEntryDto> EnsureAsync(TaskFlowApiClient api, DateOnly date, CancellationToken ct)
+    public static async Task<JournalEntryDto> EnsureAsync(TaskFlowApiClient api, DateOnly date, int timezoneOffsetMinutes, CancellationToken ct)
     {
         if (await FindAsync(api, date, ct) is { } existing)
         {
@@ -18,7 +18,7 @@ internal static class JournalResolver
 
         try
         {
-            return await api.CreateJournalEntryAsync(date, $"Journal {date:MM-dd-yyyy}", ct);
+            return await api.CreateJournalEntryAsync(date, $"Journal {date:MM-dd-yyyy}", timezoneOffsetMinutes, ct);
         }
         catch (TaskFlowApiException ex) when (ex.Status == HttpStatusCode.Conflict)
         {

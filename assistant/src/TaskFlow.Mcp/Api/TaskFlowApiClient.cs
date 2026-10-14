@@ -61,8 +61,8 @@ public sealed class TaskFlowApiClient(HttpClient http)
     public Task<List<JournalEntryDto>> GetJournalEntriesAsync(CancellationToken ct) =>
         SendAsync<List<JournalEntryDto>>(HttpMethod.Get, "JournalEntries", null, ct);
 
-    public Task<JournalEntryDto> CreateJournalEntryAsync(DateOnly date, string title, CancellationToken ct) =>
-        SendAsync<JournalEntryDto>(HttpMethod.Post, "JournalEntries", new { title, summary = (string?)null, date }, ct);
+    public Task<JournalEntryDto> CreateJournalEntryAsync(DateOnly date, string title, int timezoneOffsetMinutes, CancellationToken ct) =>
+        SendAsync<JournalEntryDto>(HttpMethod.Post, "JournalEntries", new { title, summary = (string?)null, date, timezoneOffsetMinutes }, ct);
 
     public Task<JournalEntryDto> UpdateJournalEntryAsync(int id, string title, string? summary, CancellationToken ct) =>
         SendAsync<JournalEntryDto>(HttpMethod.Put, $"JournalEntries/{id}", new { title, summary }, ct);

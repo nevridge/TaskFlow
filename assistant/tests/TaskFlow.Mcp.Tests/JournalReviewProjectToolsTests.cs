@@ -195,10 +195,30 @@ public class JournalToolsTests
     }
 
     [Fact]
-    public async Task JournalTools_ReadTheClockOnce_PerToolCall()
+    public async Task SetJournalTodos_CreatesANonTodayEntry_WithItsDateAndTheSameOffset()
     {
         var handler = new StubHandler()
-            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(8, "2026-10-10"), HttpStatusCode.Created)
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Planned") })
+            .Post("JournalEntries/8/todos", status: HttpStatusCode.NoContent);
+
+        await Tools(handler).SetJournalTodos(add: [1], date: "tomorrow");
+
+        var entry = handler.BodyOf(HttpMethod.Post, "JournalEntries");
+        entry.GetProperty("date").GetString().Should().Be("2026-10-10");
+        entry.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.BodyOf(HttpMethod.Post, "JournalEntries/8/todos").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task JournalTools_ReadTheClockOnce_PerToolCall(bool entryExists)
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", entryExists ? new object[] { Fixtures.Journal(3, "2026-10-09") } : Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(3, "2026-10-09"), HttpStatusCode.Created)
             .Get("JournalEntries/3/todos", Array.Empty<object>())
             .Get("JournalEntries/3/notes", Array.Empty<object>())
             .Get("TaskItems", new[] { Fixtures.Task(1, "Planned") })

@@ -106,6 +106,7 @@ Two execution tools are available on this Windows machine:
 - **Enum comparisons:** C# enum `.ToString()` produces PascalCase — always compare `status === 'Completed'`, never `'completed'`
 - **CSS specificity in journal:** The `.journal-page button` reset rule has specificity `0-1-1`. Any button needing its own `border` or `background` must be scoped as `.journal-page .classname` (`0-2-0`) to win the cascade
 - **`gen:api` scope:** Only regenerates `src/api/client/` — hand-written modules in `src/api/journal.ts` must be updated manually and will NOT be touched by the generator
+- **Journal carry-forward:** Creating or switching to a journal entry must never move tasks. Incomplete tasks carry forward only into the user's own today, derived from the client's timezone offset with no UTC fallback
 - **`docker-compose.yml` volume mappings:** Do not modify without confirmation
 - **`main` branch:** Direct pushes to `main` trigger an automatic production deployment via Portainer — always work on a `feature/` or `bugfix/` branch and open a PR
 

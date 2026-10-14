@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 
 namespace TaskFlow.Api.Repositories;
@@ -58,45 +59,71 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             throw new DuplicateJournalDateException(entry.Date);
         }
 
-        var previousEntry = await _context.JournalEntries
-            .Include(e => e.Todos)
-            .Where(e => e.Date < entry.Date)
-            .OrderByDescending(e => e.Date)
-            .FirstOrDefaultAsync();
+        return entry;
+    }
 
-        if (previousEntry is not null)
+    public async Task<int> CarryForwardIncompleteTasksAsync(int entryId, DateOnly userToday)
+    {
+        var target = await _context.JournalEntries
+            .Include(e => e.Todos)
+            .FirstOrDefaultAsync(e => e.Id == entryId);
+        if (target is null || target.Date != userToday)
         {
-            var tasksToMove = previousEntry.Todos
-                .Where(t => t.CurrentJournalEntryId == previousEntry.Id && t.Status != Status.Completed && !t.IsComplete)
+            return 0;
+        }
+
+        var sources = await _context.JournalEntries
+            .Include(e => e.Todos)
+            .Where(e => e.Date < userToday && e.Id != entryId
+                && e.Todos.Any(t => t.CurrentJournalEntryId == e.Id && t.Status != Status.Completed && !t.IsComplete))
+            .OrderBy(e => e.Date)
+            .ToListAsync();
+
+        var moved = 0;
+        foreach (var source in sources)
+        {
+            var tasksToMove = source.Todos
+                .Where(t => t.CurrentJournalEntryId == source.Id && t.Status != Status.Completed && !t.IsComplete)
+                .OrderBy(t => t.Id)
                 .ToList();
 
             foreach (var task in tasksToMove)
             {
-                previousEntry.Todos.Remove(task);
-                entry.Todos.Add(task);
-                task.CurrentJournalEntryId = entry.Id;
-                task.FirstTaggedDate ??= previousEntry.Date;
+                source.Todos.Remove(task);
+                target.Todos.Add(task);
+                task.CurrentJournalEntryId = target.Id;
+                task.FirstTaggedDate ??= source.Date;
                 task.MoveCount += 1;
                 _context.TaskItemEvents.Add(new TaskItemEvent
                 {
                     TaskItemId = task.Id,
                     EventType = "ReassignedToJournalDay",
                     OccurredAtUtc = DateTime.UtcNow,
-                    FromJournalEntryId = previousEntry.Id,
-                    ToJournalEntryId = entry.Id,
-                    FromJournalDate = previousEntry.Date,
-                    ToJournalDate = entry.Date,
+                    FromJournalEntryId = source.Id,
+                    ToJournalEntryId = target.Id,
+                    FromJournalDate = source.Date,
+                    ToJournalDate = target.Date,
                     ChangeSummary = "Automatically moved forward to the next journal day."
                 });
-            }
-
-            if (tasksToMove.Count > 0)
-            {
-                await _context.SaveChangesAsync();
+                moved++;
             }
         }
 
-        return entry;
+        if (moved == 0)
+        {
+            return 0;
+        }
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return moved;
+        }
+        catch (DbUpdateException)
+        {
+            // Race condition: another request already carried these tasks forward; the whole save rolled back.
+            return 0;
+        }
     }
 
     public async Task UpdateAsync(JournalEntry entry)
@@ -168,10 +195,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             return AddTodoResult.TaskNotFound;
         }
 
-        var userNow = timezoneOffsetMinutes.HasValue
-            ? DateTime.UtcNow.AddMinutes(timezoneOffsetMinutes.Value)
-            : DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(userNow);
+        var today = UserDateHelper.GetUserToday(DateTime.UtcNow, timezoneOffsetMinutes);
         if (entry.Date < today)
         {
             return AddTodoResult.PastDayNotAllowed;

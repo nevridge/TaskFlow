@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
@@ -19,11 +19,14 @@ import {
   useUpdateLogEntryMutation,
   openTodoCount,
   yesterdayOf,
+  journalKeys,
 } from './useJournal'
+import { taskKeys } from './useTasks'
 
 vi.mock('@/api/journal', () => ({
   getJournalEntries: vi.fn(),
   createJournalEntry: vi.fn(),
+  carryForwardJournalEntry: vi.fn(),
   getJournalTodos: vi.fn(),
   removeJournalTodo: vi.fn(),
   createLogEntry: vi.fn(),
@@ -101,6 +104,9 @@ describe('useEnsureJournalEntry', () => {
     await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
       expect.objectContaining({ date: '2026-05-28' })
     ))
+    // Non-today date never sends an offset
+    const body = vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]
+    expect(body).not.toHaveProperty('timezoneOffsetMinutes')
   })
 
   it('calls createJournalEntry at most once (ref guard)', async () => {
@@ -111,6 +117,192 @@ describe('useEnsureJournalEntry', () => {
     rerender()
     await act(async () => { await new Promise(r => setTimeout(r, 50)) })
     expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useEnsureJournalEntry carry-forward', () => {
+  const TODAY = '2026-06-10'
+  const TOMORROW = '2026-06-11'
+  const mkEntry = (id: number, date: string) =>
+    ({ id, date, title: date, todoTaskItemIds: [], logEntries: [], createdAt: '', summary: null, updatedAt: null })
+  const ok = (data: unknown) => ({ data, response: new Response() }) as never
+
+  function setup() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    return { queryClient, wrapper }
+  }
+  const settle = () => act(async () => { await new Promise(r => setTimeout(r, 50)) })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 5, 10, 12, 0, 0))
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(300)
+    vi.mocked(journalApi.carryForwardJournalEntry).mockResolvedValue(ok({ movedCount: 0 }))
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('creates today with the offset (AC9: 300 -> -300) and does not call carry-forward', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(1, TODAY)))
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ date: TODAY, timezoneOffsetMinutes: -300 })
+    ))
+    await settle()
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('does not send an offset or carry for a non-today missing entry', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(2, TOMORROW)))
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+    await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]).not.toHaveProperty('timezoneOffsetMinutes')
+    await settle()
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('carries forward exactly once for an existing today entry, despite rerenders and refetches', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(7, TODAY)]))
+    const { wrapper } = setup()
+    const { result, rerender } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(7, -300))
+    await settle()
+    rerender()
+    await settle()
+    expect(result.current.entry?.id).toBe(7)
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+    expect(journalApi.createJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('never carries for an existing non-today entry', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(8, TOMORROW)]))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+    await waitFor(() => expect(result.current.entry?.id).toBe(8))
+    await settle()
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('counts navigating away and back to today as a new load', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(7, TODAY), mkEntry(8, TOMORROW)]))
+    const { wrapper } = setup()
+    const { rerender } = renderHook(({ d }) => useEnsureJournalEntry(d), { wrapper, initialProps: { d: TODAY } })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1))
+    rerender({ d: TOMORROW })
+    await settle()
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+    rerender({ d: TODAY })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(2))
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenLastCalledWith(7, -300)
+  })
+
+  it('invalidates journal and task keys when movedCount > 0', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(7, TODAY)]))
+    vi.mocked(journalApi.carryForwardJournalEntry).mockResolvedValue(ok({ movedCount: 3 }))
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
+    expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all })
+  })
+
+  it('does not invalidate task keys when movedCount is 0', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(7, TODAY)]))
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    await settle()
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+  })
+
+  it('does not retry when the carry-forward call fails', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([mkEntry(7, TODAY)]))
+    vi.mocked(journalApi.carryForwardJournalEntry).mockRejectedValue(new Error('boom'))
+    const { wrapper } = setup()
+    const { result, rerender } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1))
+    await settle()
+    rerender()
+    await settle()
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+    // Failure is silent: no error surfaced, no loading state from the carry call
+    expect(result.current.error).toBeFalsy()
+    expect(result.current.isLoading).toBe(false)
+    expect(result.current.entry?.id).toBe(7)
+  })
+
+  it('on a 409 create for today, refetches entries and then carries once', async () => {
+    vi.mocked(journalApi.getJournalEntries)
+      .mockResolvedValueOnce(ok([]))
+      .mockResolvedValue(ok([mkEntry(9, TODAY)]))
+    vi.mocked(journalApi.createJournalEntry).mockRejectedValue({ type: 'about:blank', title: 'Conflict', status: 409 })
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(9, -300))
+    await settle()
+    expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1)
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+  })
+
+  it('decides "today" at create call time, so a midnight rollover while loading sends the offset', async () => {
+    let resolveEntries: (v: never) => void = () => {}
+    vi.mocked(journalApi.getJournalEntries).mockReturnValue(new Promise(r => { resolveEntries = r as never }) as never)
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(3, TOMORROW)))
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+
+    // Midnight passes while the entries request is still in flight.
+    vi.setSystemTime(new Date(2026, 5, 11, 0, 5, 0))
+    await act(async () => { resolveEntries(ok([])) })
+
+    await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ date: TOMORROW, timezoneOffsetMinutes: -300 })
+    ))
+  })
+
+  it('invalidates task keys after creating today when the entry came back with carried tasks', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok({ ...mkEntry(11, TODAY), todoTaskItemIds: [4, 5] }))
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
+    expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all })
+  })
+
+  it('does not invalidate task keys after creating today when the entry came back empty', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(12, TODAY)))
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    await settle()
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+  })
+
+  it('does not carry after creating today (server carried inline)', async () => {
+    vi.mocked(journalApi.getJournalEntries)
+      .mockResolvedValueOnce(ok([]))
+      .mockResolvedValue(ok([mkEntry(10, TODAY)]))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(10, TODAY)))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(result.current.entry?.id).toBe(10))
+    await settle()
+    expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1)
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
   })
 })
 

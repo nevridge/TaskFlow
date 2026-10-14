@@ -95,7 +95,7 @@ TaskFlow.Web/
 │   │   └── journal/
 │   │       ├── DateNav.tsx         # Prev/next date navigation bar
 │   │       ├── JournalHeader.tsx   # Day/week stat header (stat or minimal style)
-│   │       ├── TodosSection.tsx    # Linked tasks with toggle, edit, carry-over
+│   │       ├── TodosSection.tsx    # Linked tasks with toggle, edit
 │   │       ├── DailyLogSection.tsx # Timestamped activity log
 │   │       └── NotesSection.tsx    # Freeform notes (debounced auto-save)
 │   ├── lib/
@@ -158,7 +158,6 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 - `useToggleTodoMutation(entryId)` — toggles task status (`todo` ↔ `completed`)
 - `useEditTodoMutation(entryId)` — renames a linked task
 - `useRemoveTodoMutation(entryId)` — unlinks a task from the entry
-- `useCarryOverMutation()` — copies uncompleted todos from one entry into another
 - `useAddLogEntryMutation(entryId)` — adds a log entry, invalidates journal cache
 - `useDeleteLogEntryMutation(entryId)` — removes a log entry
 

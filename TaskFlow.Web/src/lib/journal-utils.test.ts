@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay } from './journal-utils'
+import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay, getTimezoneOffsetMinutes } from './journal-utils'
 
 describe('journal-utils date parsing', () => {
   it('rejects invalid URL dates and falls back to today', () => {
@@ -142,5 +142,22 @@ describe('formatMonthDay', () => {
   })
   it('formats 2026-01-01 as "Jan 1"', () => {
     expect(formatMonthDay('2026-01-01')).toBe('Jan 1')
+  })
+})
+
+describe('getTimezoneOffsetMinutes', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('negates getTimezoneOffset so UTC-5 gives -300', () => {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(300)
+    expect(getTimezoneOffsetMinutes()).toBe(-300)
+  })
+  it('returns +0 (not -0) for UTC', () => {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(0)
+    expect(Object.is(getTimezoneOffsetMinutes(), 0)).toBe(true)
+  })
+  it('returns a positive value for zones ahead of UTC', () => {
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(-330)
+    expect(getTimezoneOffsetMinutes()).toBe(330)
   })
 })

@@ -26,7 +26,10 @@ export type CreateJournalEntryDto = {
   title: string
   date: string
   summary?: string
+  timezoneOffsetMinutes?: number
 }
+
+export type CarryForwardResponseDto = { movedCount: number }
 
 export type UpdateJournalEntryDto = {
   title: string
@@ -55,6 +58,11 @@ export const getJournalEntries = () =>
 export const createJournalEntry = (body: CreateJournalEntryDto) =>
   client.post<{ 201: JournalEntryResponseDto }, unknown, true>(
     { url: '/api/v1/JournalEntries', body, headers: J },
+  )
+
+export const carryForwardJournalEntry = (id: number, timezoneOffsetMinutes?: number) =>
+  client.post<{ 200: CarryForwardResponseDto }, unknown, true>(
+    { url: '/api/v1/JournalEntries/{id}/carry-forward', path: { id }, body: { timezoneOffsetMinutes }, headers: J },
   )
 
 export const updateJournalEntry = (id: number, body: UpdateJournalEntryDto) =>

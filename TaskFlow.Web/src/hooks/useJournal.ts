@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getJournalEntries,
   createJournalEntry,
+  carryForwardJournalEntry,
   getJournalTodos,
   removeJournalTodo,
   createLogEntry,
@@ -17,7 +18,7 @@ import type { JournalEntryResponseDto, TaskItemResponseDto, JournalNoteResponseD
 import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
-import { addDays, formatEntryTitle } from '@/lib/journal-utils'
+import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
 import { usePrefs } from '@/context/usePrefs'
 
 export const journalKeys = {
@@ -56,10 +57,44 @@ export function useEnsureJournalEntry(isoDate: string) {
   const entries = (entriesQuery.data?.data as JournalEntryResponseDto[] | undefined) ?? []
   const entry = entries.find(e => e.date === isoDate)
 
+  const carriedRef = useRef<string | null>(null)
+  const viewedRef = useRef<string | null>(null)
+
   const { mutate: createEntry, isPending: isCreating, error: createError } = useMutation({
-    mutationFn: (date: string) =>
-      createJournalEntry({ title: formatEntryTitle(date), date }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+    mutationFn: async (date: string) => {
+      // Evaluated at call time (not render) so it stays correct across midnight.
+      // Only today's entry carries tasks forward; other dates never send an offset.
+      const isToday = date === todayISO()
+      const res = await createJournalEntry({
+        title: formatEntryTitle(date),
+        date,
+        ...(isToday ? { timezoneOffsetMinutes: getTimezoneOffsetMinutes() } : {}),
+      })
+      return { res, date, carriedInline: isToday }
+    },
+    onSuccess: ({ res, date, carriedInline }) => {
+      // The server carried inline for today, so no separate carry-forward call is needed.
+      if (carriedInline) carriedRef.current = date
+      // A brand-new entry only has todos if the server carried tasks into it inline,
+      // so refresh the task list only when the created entry came back with todos.
+      if (carriedInline && (res.data?.todoTaskItemIds?.length ?? 0) > 0) {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+      }
+      return qc.invalidateQueries({ queryKey: journalKeys.all })
+    },
+    // 409 (another client created it first): refetch so the entry appears.
+    onError: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+  })
+
+  const { mutate: carryForward } = useMutation({
+    mutationFn: ({ id }: { id: number }) =>
+      carryForwardJournalEntry(id, getTimezoneOffsetMinutes()),
+    onSuccess: (res) => {
+      const moved = Number(res.data?.movedCount ?? 0)
+      qc.invalidateQueries({ queryKey: journalKeys.all })
+      if (moved > 0) qc.invalidateQueries({ queryKey: taskKeys.all })
+    },
+    // Fail silently: no retry. carriedRef stays set for this page session.
   })
 
   useEffect(() => {
@@ -69,6 +104,21 @@ export function useEnsureJournalEntry(isoDate: string) {
     attemptedRef.current = isoDate
     createEntry(isoDate)
   }, [entriesQuery.isLoading, entriesQuery.isError, entry, isoDate, createEntry])
+
+  const entryId = entry?.id
+  useEffect(() => {
+    // A date change counts as a new load.
+    if (viewedRef.current !== isoDate) {
+      viewedRef.current = isoDate
+      carriedRef.current = null
+    }
+    if (entriesQuery.isLoading || entriesQuery.isError) return
+    if (entryId == null) return
+    if (isoDate !== todayISO()) return
+    if (carriedRef.current === isoDate) return
+    carriedRef.current = isoDate
+    carryForward({ id: entryId })
+  }, [entriesQuery.isLoading, entriesQuery.isError, entryId, isoDate, carryForward])
 
   return {
     entry,
@@ -119,7 +169,7 @@ export function useCreateTodoMutation(entryId: number, isoDate: string) {
   return useMutation({
     mutationFn: (title: string) => {
       // Pass browser timezone offset in minutes (e.g. -420 for PDT)
-      const timezoneOffsetMinutes = new Date().getTimezoneOffset() * -1;
+      const timezoneOffsetMinutes = getTimezoneOffsetMinutes();
       return postApiV1TaskItems({
         body: {
           title,

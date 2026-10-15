@@ -63,6 +63,7 @@ function renderSection(props?: Partial<{ entryId: number; isoDate: string; sort:
 describe('TodosSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    toggleTodoMutate.mockReset()
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(todayISO).mockReturnValue('2026-05-28')
   })
@@ -108,6 +109,34 @@ describe('TodosSection', () => {
       expect.objectContaining({ id: 1, title: 'Write tests', done: true }),
       expect.any(Object)
     )
+  })
+
+  it('toggle rejected with TASK_REOPEN_PAST_DAY_NOT_ALLOWED shows the past-days message and task stays completed', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+    toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' }))
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: /mark not done/i }))
+    expect(screen.getByText('Completed tasks assigned to past days cannot be reopened.')).toBeInTheDocument()
+    expect(screen.getByText('Fix bug').closest('li')?.className).toContain('is-done')
+  })
+
+  it('toggle rejected with an unrelated error shows the generic message', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+    toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError(new Error('boom')))
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
+    expect(screen.getByText('Unable to save task changes. Please try again.')).toBeInTheDocument()
+  })
+
+  it('a successful toggle after an error clears the error message', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+    toggleTodoMutate.mockImplementationOnce((_vars, opts) => opts.onError(new Error('boom')))
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
+    expect(screen.getByText('Unable to save task changes. Please try again.')).toBeInTheDocument()
+    toggleTodoMutate.mockImplementation(() => undefined)
+    await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
+    expect(screen.queryByText('Unable to save task changes. Please try again.')).not.toBeInTheDocument()
   })
 
   it('delete button calls removeTodo.mutate with id', async () => {

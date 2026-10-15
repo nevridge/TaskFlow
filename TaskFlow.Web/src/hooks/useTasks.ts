@@ -9,6 +9,7 @@ import {
 import type { CreateTaskItemDto, TaskItemResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { getTaskHistory } from '@/api/tasks'
 import { projectKeys } from '@/hooks/projectKeys'
+import { getTimezoneOffsetMinutes } from '@/lib/journal-utils'
 
 export type TaskItemViewModel = TaskItemResponseDto & {
   currentJournalEntryId?: number | null
@@ -17,7 +18,6 @@ export type TaskItemViewModel = TaskItemResponseDto & {
   lastMovedDate?: string | null
   daysTagged?: number
   moveCount?: number
-  isScheduledFuture?: boolean
   parentTaskItemId?: number | null
   childTaskCount?: number
 }
@@ -103,6 +103,7 @@ export function useUpdateTaskMutation() {
           dueDate: data.dueDate,
           parentTaskItemId: data.parentTaskItemId ?? null,
           autoCompleteParentWhenChildrenDone: data.autoCompleteParentWhenChildrenDone ?? false,
+          timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
         } as UpdateTaskItemDto,
       }),
     onSuccess: (_result, { id }) => {

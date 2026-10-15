@@ -576,6 +576,43 @@ describe('useEditTodoMutation', () => {
   })
 })
 
+describe('todo PUT mutations timezone offset', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.restoreAllMocks())
+
+  it('toggle sends the current timezoneOffsetMinutes on every call', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
+
+    spy.mockReturnValue(300)
+    await act(async () => { await result.current.mutateAsync({ id: 1, title: 'A', done: false }) })
+    spy.mockReturnValue(480)
+    await act(async () => { await result.current.mutateAsync({ id: 1, title: 'A', done: false }) })
+
+    const calls = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls
+    expect(calls[0][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -300 }))
+    expect(calls[1][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -480 }))
+  })
+
+  it('edit sends the current timezoneOffsetMinutes on every call', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
+    const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
+
+    spy.mockReturnValue(300)
+    await act(async () => { await result.current.mutateAsync({ id: 3, title: 'X' }) })
+    spy.mockReturnValue(-60)
+    await act(async () => { await result.current.mutateAsync({ id: 3, title: 'X' }) })
+
+    const calls = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls
+    expect(calls[0][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -300 }))
+    expect(calls[1][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: 60 }))
+  })
+})
+
 describe('useRemoveTodoMutation', () => {
   beforeEach(() => vi.clearAllMocks())
 

@@ -62,14 +62,14 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         return entry;
     }
 
-    public async Task<int> CarryForwardIncompleteTasksAsync(int entryId, DateOnly userToday)
+    public async Task<IReadOnlyList<int>> CarryForwardIncompleteTasksAsync(int entryId, DateOnly userToday)
     {
         var target = await _context.JournalEntries
             .Include(e => e.Todos)
             .FirstOrDefaultAsync(e => e.Id == entryId);
         if (target is null || target.Date != userToday)
         {
-            return 0;
+            return [];
         }
 
         var sources = await _context.JournalEntries
@@ -79,7 +79,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .OrderBy(e => e.Date)
             .ToListAsync();
 
-        var moved = 0;
+        var movedIds = new List<int>();
         foreach (var source in sources)
         {
             var tasksToMove = source.Todos
@@ -105,24 +105,24 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
                     ToJournalDate = target.Date,
                     ChangeSummary = "Automatically moved forward to the next journal day."
                 });
-                moved++;
+                movedIds.Add(task.Id);
             }
         }
 
-        if (moved == 0)
+        if (movedIds.Count == 0)
         {
-            return 0;
+            return [];
         }
 
         try
         {
             await _context.SaveChangesAsync();
-            return moved;
+            return movedIds;
         }
         catch (DbUpdateException)
         {
             // Race condition: another request already carried these tasks forward; the whole save rolled back.
-            return 0;
+            return [];
         }
     }
 

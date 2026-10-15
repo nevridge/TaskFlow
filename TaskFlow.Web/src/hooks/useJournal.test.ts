@@ -285,7 +285,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
   })
 
-  it('does not invalidate task keys when movedCount is 0 even with non-empty todoTaskItemIds', async () => {
+  it('invalidates task keys after creating today even when movedCount is 0 (lost carry-forward race)', async () => {
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
     vi.mocked(journalApi.createJournalEntry).mockResolvedValue(
       ok({ ...mkEntry(11, TODAY), todoTaskItemIds: [4, 5], movedCount: 0, movedTaskItemIds: [] }),
@@ -295,7 +295,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
     await settle()
-    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+    expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all })
   })
 
   it('does not invalidate task keys for a non-today create even when movedCount > 0', async () => {
@@ -312,7 +312,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     expect(vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]).not.toHaveProperty('timezoneOffsetMinutes')
   })
 
-  it('does not throw or invalidate task keys when the create response omits movedCount', async () => {
+  it('does not throw and invalidates task keys when the create response omits movedCount', async () => {
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
     vi.mocked(journalApi.createJournalEntry).mockResolvedValue(
       ok({ id: 14, date: TODAY, title: TODAY, todoTaskItemIds: [], logEntries: [], createdAt: '' }),
@@ -322,7 +322,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     const { result } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
     await settle()
-    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+    expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all })
     expect(result.current.error).toBeFalsy()
   })
 
@@ -387,7 +387,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
   })
 
-  it('does not invalidate task keys after creating today when the entry came back empty', async () => {
+  it('invalidates task keys after creating today even when the entry came back empty', async () => {
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
     vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(12, TODAY)))
     const { queryClient, wrapper } = setup()
@@ -395,7 +395,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
     await settle()
-    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+    expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all })
   })
 
   it('does not carry after creating today (server carried inline)', async () => {

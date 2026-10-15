@@ -72,13 +72,12 @@ export function useEnsureJournalEntry(isoDate: string) {
       })
       return { res, date, carriedInline: isToday }
     },
-    onSuccess: ({ res, date, carriedInline }) => {
+    onSuccess: ({ date, carriedInline }) => {
       // The server carried inline for today, so no separate carry-forward call is needed.
       if (carriedInline) carriedRef.current = date
-      // Refresh the task list only when the server actually moved tasks during the inline carry.
-      if (carriedInline && Number(res.data?.movedCount ?? 0) > 0) {
-        qc.invalidateQueries({ queryKey: taskKeys.all })
-      }
+      // Always refresh tasks after an inline carry: a lost race reports movedCount 0 although another
+      // request moved the tasks.
+      if (carriedInline) qc.invalidateQueries({ queryKey: taskKeys.all })
       return qc.invalidateQueries({ queryKey: journalKeys.all })
     },
     // 409 (another client created it first): refetch so the entry appears.

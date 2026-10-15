@@ -10,4 +10,9 @@ public class JournalEntryResponseDto
     public DateTime? UpdatedAt { get; set; }
     public IEnumerable<int> TodoTaskItemIds { get; set; } = [];
     public IEnumerable<JournalLogEntryResponseDto> LogEntries { get; set; } = [];
+
+    // Populated only by the Create response when tasks were carried forward into the new entry.
+    // GET, PUT and the 409 existingEntry payloads always return 0 and [].
+    public int MovedCount { get; set; }
+    public IEnumerable<int> MovedTaskItemIds { get; set; } = [];
 }

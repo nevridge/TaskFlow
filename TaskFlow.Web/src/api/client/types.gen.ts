@@ -19,6 +19,7 @@ export type CarryForwardRequestDto = {
 
 export type CarryForwardResponseDto = {
     movedCount?: number | string;
+    movedTaskItemIds?: Array<number | string>;
 };
 
 export type CreateJournalEntryDto = {
@@ -68,6 +69,8 @@ export type JournalEntryResponseDto = {
     updatedAt?: null | string;
     todoTaskItemIds?: Array<number | string>;
     logEntries?: Array<JournalLogEntryResponseDto>;
+    movedCount?: number | string;
+    movedTaskItemIds?: Array<number | string>;
 };
 
 export type JournalLogEntryResponseDto = {

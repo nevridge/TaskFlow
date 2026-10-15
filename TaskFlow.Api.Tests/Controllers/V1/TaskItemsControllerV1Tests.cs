@@ -390,6 +390,62 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_ShouldNotMoveOtherTasks_WhenJournalDateIsTomorrowAndTodayHasIncompleteTasks()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+        var options = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).Options;
+        await using var context = new TaskDbContext(options);
+        context.Database.EnsureCreated();
+
+        var journalRepo = new JournalEntryRepository(context);
+        var controller = new TaskItemsController(new TaskRepository(context), _mockValidator.Object, journalRepo, _mockProjectRepo.Object);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+
+        const int offset = 0;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var tomorrow = today.AddDays(1);
+        var todayEntry = await journalRepo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+        var seeded = new List<TaskItem>();
+        for (var i = 0; i < 3; i++)
+        {
+            var task = new TaskItem { Title = $"Seeded {i}", Status = Status.Todo };
+            context.TaskItems.Add(task);
+            await context.SaveChangesAsync();
+            await journalRepo.AddTodoAsync(todayEntry.Id, task.Id, offset);
+            seeded.Add(task);
+        }
+
+        var before = seeded.ToDictionary(t => t.Id, t => (t.CurrentJournalEntryId, t.MoveCount, t.FirstTaggedDate));
+        var eventsBefore = await context.TaskItemEvents.CountAsync();
+        (await journalRepo.GetByDateAsync(tomorrow)).Should().BeNull();
+
+        var result = await controller.Create(new CreateTaskItemDto
+        {
+            Title = "Tomorrow task",
+            JournalDate = tomorrow,
+            TimezoneOffsetMinutes = offset
+        });
+
+        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        var tomorrowEntry = await journalRepo.GetByDateAsync(tomorrow);
+        tomorrowEntry.Should().NotBeNull();
+        tomorrowEntry!.Todos.Select(t => t.Title).Should().BeEquivalentTo(["Tomorrow task"]);
+        foreach (var task in seeded)
+        {
+            var reloaded = await context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == task.Id);
+            (reloaded.CurrentJournalEntryId, reloaded.MoveCount, reloaded.FirstTaggedDate).Should().Be(before[task.Id]);
+        }
+
+        var seededIds = seeded.Select(t => t.Id).ToList();
+        (await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId) && e.EventType == "ReassignedToJournalDay"))
+            .Should().Be(0);
+        (await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId))).Should().Be(eventsBefore);
+        _mockJournalRepo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Create_ShouldForwardTimezoneOffsetToAddTodoAsync_WhenJournalDateIsToday()
     {
         // User in UTC-5 (timezoneOffsetMinutes = -300). Their "today" = utcNow - 5h.

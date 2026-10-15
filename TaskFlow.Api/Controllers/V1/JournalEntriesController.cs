@@ -76,18 +76,22 @@ public class JournalEntriesController(
         try
         {
             var created = await _journalRepo.AddAsync(entry);
+            IReadOnlyList<int> moved = [];
 
             // Carry-forward only when the entry is the user's today and an offset was supplied (no UTC fallback).
             if (dto.TimezoneOffsetMinutes.HasValue
                 && dto.Date == UserDateHelper.GetUserToday(DateTime.UtcNow, dto.TimezoneOffsetMinutes))
             {
-                await _journalRepo.CarryForwardIncompleteTasksAsync(created.Id, dto.Date);
+                moved = await _journalRepo.CarryForwardIncompleteTasksAsync(created.Id, dto.Date);
 
-                // Always re-read: a lost race returns 0 but leaves the unsaved moves on the tracked entity.
+                // Always re-read: a lost race returns empty but leaves the unsaved moves on the tracked entity.
                 created = await _journalRepo.GetByIdAsync(created.Id) ?? created;
             }
 
-            return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, ToDto(created));
+            var response = ToDto(created);
+            response.MovedCount = moved.Count;
+            response.MovedTaskItemIds = moved;
+            return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, response);
         }
         catch (DuplicateJournalDateException)
         {
@@ -120,17 +124,17 @@ public class JournalEntriesController(
 
         if (!dto.TimezoneOffsetMinutes.HasValue)
         {
-            return Ok(new CarryForwardResponseDto { MovedCount = 0 });
+            return Ok(new CarryForwardResponseDto { MovedCount = 0, MovedTaskItemIds = [] });
         }
 
         var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, dto.TimezoneOffsetMinutes);
         if (entry.Date != userToday)
         {
-            return Ok(new CarryForwardResponseDto { MovedCount = 0 });
+            return Ok(new CarryForwardResponseDto { MovedCount = 0, MovedTaskItemIds = [] });
         }
 
         var moved = await _journalRepo.CarryForwardIncompleteTasksAsync(id, userToday);
-        return Ok(new CarryForwardResponseDto { MovedCount = moved });
+        return Ok(new CarryForwardResponseDto { MovedCount = moved.Count, MovedTaskItemIds = moved });
     }
 
     // PUT: api/v1/JournalEntries/5

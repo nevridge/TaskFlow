@@ -513,4 +513,15 @@ describe('TodosSection', () => {
     const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
     expect(titles).toEqual(['First', 'Second', 'Third'])
   })
+
+  it.each(['manual', 'done last'] as const)('sort order is unchanged by priority in %s mode', sort => {
+    mockTodos([
+      { ...openTodo, id: 1, title: 'First', priority: 'Low' },
+      { ...openTodo, id: 2, title: 'Second', priority: 'High' },
+      { ...doneTodo, id: 3, title: 'Third', priority: 'High' },
+    ])
+    renderSection({ sort })
+    const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
+    expect(titles).toEqual(['First', 'Second', 'Third'])
+  })
 })

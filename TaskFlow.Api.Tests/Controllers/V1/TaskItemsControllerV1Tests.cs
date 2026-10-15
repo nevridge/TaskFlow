@@ -785,6 +785,85 @@ public class TaskItemsControllerV1Tests
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
+    [Theory]
+    [InlineData(840)]
+    [InlineData(-720)]
+    public async Task Update_ShouldAllowReopeningTaskAssignedToUserLocalToday_WhenOffsetSupplied(int offset)
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            TimezoneOffsetMinutes = offset
+        };
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = true,
+            Status = Status.Completed,
+            Priority = Priority.Low
+        };
+
+        var utcNow = DateTime.UtcNow;
+        var localToday = UserDateHelper.GetUserToday(utcNow, offset);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(localToday);
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
+            .ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
+
+        var result = await _controller.Update(1, updateDto);
+
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(840)]
+    [InlineData(-720)]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenReopeningTaskAssignedBeforeUserLocalToday(int offset)
+    {
+        var updateDto = new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = false,
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            TimezoneOffsetMinutes = offset
+        };
+        var existingTask = new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Description = "Desc",
+            IsComplete = true,
+            Status = Status.Completed,
+            Priority = Priority.Low
+        };
+
+        var utcNow = DateTime.UtcNow;
+        var assignedDate = UserDateHelper.GetUserToday(utcNow, offset).AddDays(-1);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(assignedDate);
+
+        var result = await _controller.Update(1, updateDto);
+
+        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        var value = unprocessable.Value!;
+        value.GetType().GetProperty("code")!.GetValue(value).Should().Be("TASK_REOPEN_PAST_DAY_NOT_ALLOWED");
+        value.GetType().GetProperty("message")!.GetValue(value)
+            .Should().Be("Completed tasks assigned to past days cannot be reopened.");
+        var details = value.GetType().GetProperty("details")!.GetValue(value)!;
+        details.GetType().GetProperty("assignedDate")!.GetValue(details).Should().Be(assignedDate);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
     [Fact]
     public async Task Update_ShouldReturnUnprocessableEntity_WhenParentTaskMatchesSelf()
     {

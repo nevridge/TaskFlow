@@ -17,7 +17,6 @@ public class TaskItemResponseDto
     public int? CurrentJournalEntryId { get; set; }
     public DateOnly? FirstTaggedDate { get; set; }
     public DateOnly? LastMovedDate { get; set; }
-    public bool IsScheduledFuture { get; set; }
     public int ChildTaskCount { get; set; }
     public DateOnly? CurrentJournalDate { get; set; }
     public int MoveCount { get; set; }

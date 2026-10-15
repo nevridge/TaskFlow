@@ -249,10 +249,7 @@ public class TaskItemsController(
         if (wasCompleted && !nowCompleted)
         {
             var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
-            var userNow = updateDto.TimezoneOffsetMinutes.HasValue
-                ? DateTime.UtcNow.AddMinutes(updateDto.TimezoneOffsetMinutes.Value)
-                : DateTime.UtcNow;
-            var today = DateOnly.FromDateTime(userNow);
+            var today = UserDateHelper.GetUserToday(DateTime.UtcNow, updateDto.TimezoneOffsetMinutes);
             if (assignedDate.HasValue && assignedDate.Value < today)
             {
                 return UnprocessableEntity(new
@@ -433,7 +430,6 @@ public class TaskItemsController(
     private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null)
     {
         var currentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var childTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id);
 
         return new TaskItemResponseDto
@@ -451,7 +447,6 @@ public class TaskItemsController(
             CurrentJournalEntryId = item.CurrentJournalEntryId,
             FirstTaggedDate = item.FirstTaggedDate,
             LastMovedDate = await GetLastMovedDateAsync(item.Id),
-            IsScheduledFuture = currentJournalDate.HasValue && currentJournalDate.Value > today,
             ChildTaskCount = childTaskCount,
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,

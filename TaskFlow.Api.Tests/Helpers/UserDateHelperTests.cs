@@ -14,6 +14,22 @@ public class UserDateHelperTests
     }
 
     [Fact]
+    public void GetUserToday_ShouldReturnLocalEveningDate_ForUsCentralDaylightOffset()
+    {
+        // 02:00 UTC on 10-14 is 21:00 on 10-13 in CDT (-300)
+        var result = UserDateHelper.GetUserToday(LateUtc, -300);
+
+        result.Should().Be(new DateOnly(2026, 10, 13));
+        result.Should().NotBe(DateOnly.FromDateTime(LateUtc));
+    }
+
+    [Fact]
+    public void GetUserToday_ShouldReturnUtcDate_WhenOffsetIsZero()
+    {
+        UserDateHelper.GetUserToday(LateUtc, 0).Should().Be(new DateOnly(2026, 10, 14));
+    }
+
+    [Fact]
     public void GetUserToday_ShouldRollForward_WhenOffsetIsPlus840()
     {
         var utc = new DateTime(2026, 10, 13, 12, 0, 0, DateTimeKind.Utc);

@@ -55,6 +55,8 @@ docker compose up -d
 docker compose -f docker-compose.prod.yml up
 ```
 
+**Skills** — `/ux-test PR#N` / `/ux-test #N` (`.claude/skills/ux-test/SKILL.md`) drives the Docker dev stack at `http://localhost:3000` with Playwright, checks the UI behaviour described in a PR or issue against the real API, and posts a pass/fail comment (marker `<!-- ux-test-results -->`) on the issue or PR. It rebuilds the stack, seeds and removes `uxtest-` fixtures, and never targets production.
+
 ## Shell & Command Execution
 
 Two execution tools are available on this Windows machine:

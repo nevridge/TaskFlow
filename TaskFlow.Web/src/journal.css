@@ -840,3 +840,29 @@
   padding: 1px 7px;
   white-space: nowrap;
 }
+
+.journal-page .todo-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.journal-page .todo-badges .t-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.journal-page .todo-badges .t-badge-project {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(16rem, 100%);
+}
+
+.journal-page .todo-child .todo-badges .t-badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
 import { useTasksQuery, useTaskQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from './useTasks'
@@ -66,6 +66,26 @@ describe('useUpdateTaskMutation', () => {
       path: { id: 2 },
       body: expect.objectContaining({ title: 'U' }),
     }))
+  })
+})
+
+describe('useUpdateTaskMutation timezone offset', () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.restoreAllMocks())
+
+  it('sends the current timezoneOffsetMinutes on every call (evaluated per call)', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
+    const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset')
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper() })
+
+    spy.mockReturnValue(300) // US Central CDT => -300
+    await act(async () => { await result.current.mutateAsync({ id: 2, data: { title: 'U' } }) })
+    spy.mockReturnValue(480) // UTC-8 => -480
+    await act(async () => { await result.current.mutateAsync({ id: 2, data: { title: 'U' } }) })
+
+    const calls = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls
+    expect(calls[0][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -300 }))
+    expect(calls[1][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -480 }))
   })
 })
 

@@ -141,7 +141,6 @@ export type TaskItemResponseDto = {
     currentJournalEntryId?: null | number | string;
     firstTaggedDate?: null | string;
     lastMovedDate?: null | string;
-    isScheduledFuture?: boolean;
     childTaskCount?: number | string;
     currentJournalDate?: null | string;
     moveCount?: number | string;

@@ -196,6 +196,7 @@ export function useToggleTodoMutation(entryId: number) {
           status: done ? 'completed' : 'todo',
           parentTaskItemId,
           autoCompleteParentWhenChildrenDone: overrideAutoComplete ?? autoCompleteParentWhenChildrenDone,
+          timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
         } as UpdateTaskItemDto,
       }),
     onSuccess: () => {
@@ -212,7 +213,12 @@ export function useEditTodoMutation(entryId: number) {
     mutationFn: ({ id, title, parentTaskItemId }: { id: number; title: string; parentTaskItemId?: number | null }) =>
       putApiV1TaskItemsById({
         path: { id },
-        body: { title, parentTaskItemId, autoCompleteParentWhenChildrenDone } as UpdateTaskItemDto,
+        body: {
+          title,
+          parentTaskItemId,
+          autoCompleteParentWhenChildrenDone,
+          timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
+        } as UpdateTaskItemDto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })

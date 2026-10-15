@@ -36,7 +36,6 @@ The snippets below describe the currently implemented contract additions used by
 - `lastMovedDate: string | null` (ISO date)
 - `daysTagged: number`
 - `moveCount: number`
-- `isScheduledFuture: boolean`
 - `parentTaskItemId: number | null`
 - `childTaskCount: number`
 
@@ -72,6 +71,10 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+
+#### Reopen past-day guard and `timezoneOffsetMinutes`
+
+`PUT /api/v1/TaskItems/{id}` accepts optional `timezoneOffsetMinutes` (minutes to add to UTC to get the user's local time; negative west of UTC, e.g. `-300` for US Central CDT). When a completed task is reopened, the offset is used to compute the user's local today for the past-day guard. A task assigned to the user's local today can be reopened; an earlier assigned date returns `422` `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` (the response `details` include the task's `assignedDate`). If `timezoneOffsetMinutes` is omitted, the guard falls back to the UTC date.
 
 ### List All Tasks
 

@@ -514,14 +514,27 @@ describe('TodosSection', () => {
     expect(titles).toEqual(['First', 'Second', 'Third'])
   })
 
-  it.each(['manual', 'done last'] as const)('sort order is unchanged by priority in %s mode', sort => {
+  it('manual mode keeps original order regardless of priority', () => {
+    // Medium, High, Low differs from both ascending and descending priority order.
     mockTodos([
-      { ...openTodo, id: 1, title: 'First', priority: 'Low' },
+      { ...openTodo, id: 1, title: 'First', priority: 'Medium' },
       { ...openTodo, id: 2, title: 'Second', priority: 'High' },
-      { ...doneTodo, id: 3, title: 'Third', priority: 'High' },
+      { ...openTodo, id: 3, title: 'Third', priority: 'Low' },
     ])
-    renderSection({ sort })
+    renderSection({ sort: 'manual' })
     const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
     expect(titles).toEqual(['First', 'Second', 'Third'])
+  })
+
+  it('done last mode only moves done items, ignoring priority', () => {
+    // A priority sort would put the done High item first (desc) or last-but-reordered (asc: Low, Medium, High).
+    mockTodos([
+      { ...doneTodo, id: 1, title: 'Done high', priority: 'High' },
+      { ...openTodo, id: 2, title: 'Open medium', priority: 'Medium' },
+      { ...openTodo, id: 3, title: 'Open low', priority: 'Low' },
+    ])
+    renderSection({ sort: 'done last' })
+    const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
+    expect(titles).toEqual(['Open medium', 'Open low', 'Done high'])
   })
 })

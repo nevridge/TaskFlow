@@ -353,6 +353,40 @@ describe('useEnsureJournalEntry carry-forward', () => {
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
   })
 
+  it('on a 409 create, task keys are not invalidated until the carry-forward response arrives', async () => {
+    vi.mocked(journalApi.getJournalEntries)
+      .mockResolvedValueOnce(ok([]))
+      .mockResolvedValue(ok([mkEntry(9, TODAY)]))
+    vi.mocked(journalApi.createJournalEntry).mockRejectedValue({ type: 'about:blank', title: 'Conflict', status: 409 })
+    let resolveCarry: (v: never) => void = () => {}
+    vi.mocked(journalApi.carryForwardJournalEntry).mockReturnValue(new Promise(r => { resolveCarry = r as never }) as never)
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(9, -300))
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    await settle()
+    // Carry-forward is in flight: the 409 path itself must not have touched task keys
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+
+    await act(async () => { resolveCarry(ok({ movedCount: 2, movedTaskItemIds: [4, 5] })) })
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
+  })
+
+  it('an existing today entry with pre-existing todos takes no create path and leaves task keys alone when carry-forward moves nothing', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([{ ...mkEntry(7, TODAY), todoTaskItemIds: [21, 22] }]))
+    vi.mocked(journalApi.carryForwardJournalEntry).mockResolvedValue(ok({ movedCount: 0, movedTaskItemIds: [] }))
+    const { queryClient, wrapper } = setup()
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(7, -300))
+    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    await settle()
+    expect(journalApi.createJournalEntry).not.toHaveBeenCalled()
+    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+  })
+
   it('does not invalidate task keys after creating today when the entry came back empty', async () => {
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue(ok([]))
     vi.mocked(journalApi.createJournalEntry).mockResolvedValue(ok(mkEntry(12, TODAY)))

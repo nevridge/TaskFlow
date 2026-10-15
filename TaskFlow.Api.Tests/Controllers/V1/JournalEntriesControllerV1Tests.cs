@@ -491,6 +491,77 @@ public class JournalEntriesControllerV1Tests
     }
 
     [Fact]
+    public async Task Create_EndToEnd_ShouldReportExactMovedTasks_WhenCreatingUserToday()
+    {
+        await using var h = new RealRepoHarness();
+        var offset = OffsetWhereUserDateDiffersFromUtc();
+        var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
+        var (_, open, done) = await h.SeedOldEntryAsync(userToday.AddDays(-3));
+
+        var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = userToday, TimezoneOffsetMinutes = offset });
+
+        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
+        body.MovedCount.Should().Be(1);
+        body.MovedTaskItemIds.Should().Equal(open.Id);
+        body.MovedTaskItemIds.Should().NotContain(done.Id);
+        body.TodoTaskItemIds.Should().Contain(body.MovedTaskItemIds);
+        var history = await h.Context.TaskItemEvents.AsNoTracking().SingleAsync(e => e.TaskItemId == open.Id);
+        history.ChangeSummary.Should().Be("Automatically moved forward to the next journal day.");
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(-1, true)]
+    public async Task Create_EndToEnd_ShouldReportZeroMovedAndEmptyIds_WhenOffsetMissingOrDateNotToday(int dayDelta, bool withOffset)
+    {
+        await using var h = new RealRepoHarness();
+        var utcDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        await h.SeedOldEntryAsync(utcDate.AddDays(-10));
+        int? offset = withOffset ? 0 : null;
+
+        var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = utcDate.AddDays(dayDelta), TimezoneOffsetMinutes = offset });
+
+        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
+        body.MovedCount.Should().Be(0);
+        body.MovedTaskItemIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Create_EndToEnd_ShouldReportZeroMovedAndEmptyIds_WhenNoIncompleteEarlierTasks()
+    {
+        await using var h = new RealRepoHarness();
+        var offset = OffsetWhereUserDateDiffersFromUtc();
+        var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
+
+        var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = userToday, TimezoneOffsetMinutes = offset });
+
+        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
+        body.MovedCount.Should().Be(0);
+        body.MovedTaskItemIds.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CarryForward_EndToEnd_ShouldReturnMovedIdsThenEmpty_WhenCalledTwiceForToday()
+    {
+        await using var h = new RealRepoHarness();
+        var offset = OffsetWhereUserDateDiffersFromUtc();
+        var userToday = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
+        var (_, open, _) = await h.SeedOldEntryAsync(userToday.AddDays(-2));
+        var todayEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Today", Date = userToday });
+
+        var first = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
+        var second = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
+
+        var firstBody = first.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
+        firstBody.MovedCount.Should().Be(1);
+        firstBody.MovedTaskItemIds.Should().Equal(open.Id);
+        var secondBody = second.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
+        secondBody.MovedCount.Should().Be(0);
+        secondBody.MovedTaskItemIds.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task CarryForward_EndToEnd_ShouldMoveNothing_WhenNoOffsetOrEntryNotUserToday()
     {
         await using var h = new RealRepoHarness();

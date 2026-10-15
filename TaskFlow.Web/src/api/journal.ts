@@ -20,6 +20,8 @@ export type JournalEntryResponseDto = {
   updatedAt?: string | null
   todoTaskItemIds: number[]
   logEntries: JournalLogEntryResponseDto[]
+  movedCount: number
+  movedTaskItemIds: number[]
 }
 
 export type CreateJournalEntryDto = {
@@ -29,7 +31,7 @@ export type CreateJournalEntryDto = {
   timezoneOffsetMinutes?: number
 }
 
-export type CarryForwardResponseDto = { movedCount: number }
+export type CarryForwardResponseDto = { movedCount: number; movedTaskItemIds: number[] }
 
 export type UpdateJournalEntryDto = {
   title: string

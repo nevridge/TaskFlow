@@ -170,8 +170,30 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = 0 });
 
-        result.Result.Should().BeOfType<ConflictObjectResult>();
+        var conflict = result.Result.Should().BeOfType<ConflictObjectResult>().Subject;
+        var existing = conflict.Value!.GetType().GetProperty("existingEntry")!.GetValue(conflict.Value)
+            .Should().BeOfType<JournalEntryResponseDto>().Subject;
+        existing.MovedCount.Should().Be(0);
+        existing.MovedTaskItemIds.Should().BeEmpty();
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnZeroMoved_WhenCarryForwardLosesRaceAndReturnsEmpty()
+    {
+        const int offset = 300;
+        var today = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
+        SetupCreate(today, id: 23);
+        _repo.Setup(r => r.CarryForwardIncompleteTasksAsync(23, today)).ReturnsAsync(new List<int>());
+        _repo.Setup(r => r.GetByIdAsync(23)).ReturnsAsync(new JournalEntry { Id = 23, Title = "t", Date = today });
+
+        var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
+
+        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value
+            .Should().BeOfType<JournalEntryResponseDto>().Subject;
+        body.MovedCount.Should().Be(0);
+        body.MovedTaskItemIds.Should().BeEmpty();
+        _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(23, today), Times.Once);
     }
 
     [Fact]

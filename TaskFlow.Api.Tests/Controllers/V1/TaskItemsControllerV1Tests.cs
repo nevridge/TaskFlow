@@ -8,6 +8,7 @@ using Moq;
 using TaskFlow.Api.Controllers.V1;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -403,8 +404,11 @@ public class TaskItemsControllerV1Tests
         var controller = new TaskItemsController(new TaskRepository(context), _mockValidator.Object, journalRepo, _mockProjectRepo.Object);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
 
-        const int offset = 0;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Pick the offset that puts the user's local time at about noon, so a run can never straddle the
+        // user's midnight and "today"/"tomorrow" stay stable between here and the controller's own clock read.
+        var now = DateTime.UtcNow;
+        var offset = 720 - (now.Hour * 60 + now.Minute);
+        var today = UserDateHelper.GetUserToday(now, offset);
         var tomorrow = today.AddDays(1);
         var todayEntry = await journalRepo.AddAsync(new JournalEntry { Title = "Today", Date = today });
         var seeded = new List<TaskItem>();

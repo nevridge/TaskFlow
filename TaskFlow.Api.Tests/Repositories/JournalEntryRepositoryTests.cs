@@ -667,9 +667,9 @@ public class JournalEntryRepositoryTests
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
         var today = new DateOnly(2026, 10, 13);
-        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
-        await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done", Status = Status.Completed, IsComplete = true });
-        context.TaskItems.RemoveRange(context.TaskItems.Where(t => t.Status != Status.Completed));
+        var (_, seeded) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        seeded.Status = Status.Completed;
+        seeded.IsComplete = true;
         await context.SaveChangesAsync();
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 

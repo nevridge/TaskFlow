@@ -379,4 +379,162 @@ describe('TodosSection', () => {
     // 1 top-level todo, 0 completed → counter shows "0/1"
     expect(screen.getByText('0/1')).toBeInTheDocument()
   })
+
+  // ── Priority and project badges ─────────────────────────────────────────────
+
+  function mockTodos(todos: TaskItemResponseDto[]) {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: todos }, isLoading: false } as never)
+  }
+
+  function rowBadges(title: string) {
+    return screen.getByText(title).parentElement!.querySelector(':scope > .todo-badges')
+  }
+
+  it.each([
+    ['Low', 'low'],
+    ['Medium', 'medium'],
+    ['High', 'high'],
+  ])('renders %s priority badge with matching class and text', (priority, expected) => {
+    mockTodos([{ ...openTodo, priority }])
+    renderSection()
+    const badge = screen.getByText(expected)
+    expect(badge).toHaveClass('t-badge', `t-badge-${expected}`)
+  })
+
+  it('renders project badge with name and title', () => {
+    mockTodos([{ ...openTodo, projectName: 'Alpha Project' } as TaskItemResponseDto])
+    renderSection()
+    const badge = screen.getByText('Alpha Project')
+    expect(badge).toHaveClass('t-badge-project')
+    expect(badge).toHaveAttribute('title', 'Alpha Project')
+  })
+
+  it('long project name is exposed in full as the title', () => {
+    const name = 'A very long project name '.repeat(4).trim()
+    mockTodos([{ ...openTodo, projectName: name } as TaskItemResponseDto])
+    renderSection()
+    expect(screen.getByTitle(name)).toBeInTheDocument()
+  })
+
+  it.each([null, undefined, ''])('renders no project badge when projectName is %s but keeps priority badge', projectName => {
+    mockTodos([{ ...openTodo, priority: 'High', projectName } as TaskItemResponseDto])
+    renderSection()
+    expect(document.querySelector('.t-badge-project')).toBeNull()
+    expect(rowBadges('Write tests')!.children).toHaveLength(1)
+    expect(screen.getByText('high')).toBeInTheDocument()
+  })
+
+  it.each([null, undefined, '', 'Urgent'])('falls back to low badge when priority is %s', priority => {
+    mockTodos([{ ...openTodo, priority } as unknown as TaskItemResponseDto])
+    renderSection()
+    expect(screen.getByText('low')).toHaveClass('t-badge-low')
+    expect(document.querySelector('.t-badge-urgent')).toBeNull()
+  })
+
+  it('priority badge precedes project badge', () => {
+    mockTodos([{ ...openTodo, priority: 'Medium', projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    const group = rowBadges('Write tests')!
+    expect(group.children[0]).toHaveTextContent('medium')
+    expect(group.children[1]).toHaveTextContent('Alpha')
+  })
+
+  it('subtask shows its own priority and project badges', () => {
+    const child = { ...childTodo, priority: 'High', projectName: 'Child Proj' } as TaskItemResponseDto
+    mockTodos([{ ...openTodo, priority: 'Low', projectName: 'Parent Proj', children: [child] } as TaskItemResponseDto])
+    renderSection()
+    const childBadges = rowBadges('Sub A')!
+    expect(childBadges).toHaveTextContent('high')
+    expect(childBadges).toHaveTextContent('Child Proj')
+    const parentBadges = rowBadges('Write tests')!
+    expect(parentBadges).toHaveTextContent('low')
+    expect(parentBadges).toHaveTextContent('Parent Proj')
+  })
+
+  it('future-dated subtask shows date badge before the new badges', () => {
+    const child = { ...childTodo, currentJournalDate: '2026-06-10', priority: 'High' }
+    mockTodos([{ ...openTodo, children: [child] }])
+    renderSection({ isoDate: '2026-06-02' })
+    const date = screen.getByText('Jun 10')
+    const group = rowBadges('Sub A')!
+    expect(date.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('badges stay visible in edit mode', async () => {
+    mockTodos([{ ...openTodo, priority: 'High', projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    await userEvent.dblClick(screen.getByText('Write tests'))
+    expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
+    expect(screen.getByText('high')).toBeInTheDocument()
+    expect(screen.getByText('Alpha')).toBeInTheDocument()
+  })
+
+  it('completed row keeps badges outside .todo-text', () => {
+    mockTodos([{ ...doneTodo, priority: 'Medium', projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    expect(screen.getByText('medium').closest('.todo-text')).toBeNull()
+    expect(screen.getByText('Alpha').closest('.todo-text')).toBeNull()
+  })
+
+  it('double-clicking or clicking a badge neither edits nor toggles', async () => {
+    mockTodos([{ ...openTodo, priority: 'High', projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    await userEvent.dblClick(screen.getByText('high'))
+    await userEvent.click(screen.getByText('Alpha'))
+    expect(screen.queryByDisplayValue('Write tests')).not.toBeInTheDocument()
+    expect(toggleTodoMutate).not.toHaveBeenCalled()
+  })
+
+  it('badges are not focusable or interactive', () => {
+    mockTodos([{ ...openTodo, projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    const group = rowBadges('Write tests')!
+    expect(group.querySelector('button, [tabindex], [role]')).toBeNull()
+  })
+
+  it('toggle, history and delete still work with badges present', async () => {
+    mockTodos([{ ...openTodo, priority: 'High', projectName: 'Alpha' } as TaskItemResponseDto])
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: 'Mark done' }))
+    expect(toggleTodoMutate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.any(Object))
+    await userEvent.click(screen.getByRole('button', { name: 'History' }))
+    expect(screen.getByTestId('history-panel')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(removeTodoMutate).toHaveBeenCalledWith(1)
+  })
+
+  it('sort order is unchanged by priority', () => {
+    mockTodos([
+      { ...openTodo, id: 1, title: 'First', priority: 'Low' },
+      { ...openTodo, id: 2, title: 'Second', priority: 'High' },
+      { ...doneTodo, id: 3, title: 'Third', priority: 'High' },
+    ])
+    renderSection({ sort: 'open first' })
+    const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
+    expect(titles).toEqual(['First', 'Second', 'Third'])
+  })
+
+  it('manual mode keeps original order regardless of priority', () => {
+    // Medium, High, Low differs from both ascending and descending priority order.
+    mockTodos([
+      { ...openTodo, id: 1, title: 'First', priority: 'Medium' },
+      { ...openTodo, id: 2, title: 'Second', priority: 'High' },
+      { ...openTodo, id: 3, title: 'Third', priority: 'Low' },
+    ])
+    renderSection({ sort: 'manual' })
+    const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
+    expect(titles).toEqual(['First', 'Second', 'Third'])
+  })
+
+  it('done last mode only moves done items, ignoring priority', () => {
+    // A priority sort would put the done High item first (desc) or last-but-reordered (asc: Low, Medium, High).
+    mockTodos([
+      { ...doneTodo, id: 1, title: 'Done high', priority: 'High' },
+      { ...openTodo, id: 2, title: 'Open medium', priority: 'Medium' },
+      { ...openTodo, id: 3, title: 'Open low', priority: 'Low' },
+    ])
+    renderSection({ sort: 'done last' })
+    const titles = Array.from(document.querySelectorAll('.todo-text')).map(e => e.textContent)
+    expect(titles).toEqual(['Open medium', 'Open low', 'Done high'])
+  })
 })

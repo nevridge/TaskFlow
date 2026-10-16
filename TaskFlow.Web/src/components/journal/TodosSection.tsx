@@ -9,6 +9,7 @@ import {
   useRemoveTodoMutation,
   openTodoCount,
 } from '@/hooks/useJournal'
+import { TodoBadges } from '@/components/journal/TodoBadges'
 import { todayISO, formatMonthDay } from '@/lib/journal-utils'
 
 const CheckSvg = () => (
@@ -212,6 +213,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                   </span>
                 )}
 
+                <TodoBadges priority={td.priority} projectName={td.projectName} />
+
                 <button
                   className="todo-history"
                   onClick={() => setHistoryTask(td)}
@@ -280,6 +283,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                               {formatMonthDay(child.currentJournalDate)}
                             </span>
                           )}
+
+                          <TodoBadges priority={child.priority} projectName={child.projectName} />
 
                           <button
                             className="todo-history"

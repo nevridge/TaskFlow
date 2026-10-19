@@ -18,7 +18,7 @@ jobs:
     outputs:
       sha_tag: ${{ steps.meta.outputs.sha_tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -63,7 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout deploy repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: nevridge/taskflow-deploy
           token: ${{ secrets.DEPLOY_REPO_TOKEN }}

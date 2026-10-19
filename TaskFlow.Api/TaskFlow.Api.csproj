@@ -28,7 +28,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPlatformVersion)" />
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.11.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <!-- Explicit Design reference: Tools 10.0.8 declares a dependency on Design 8.0.0, which breaks `dotnet ef`. -->

@@ -35,7 +35,7 @@ jobs:
 
       - name: Scan Dockerfile for misconfigurations
         if: steps.check-file.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '${{ matrix.dockerfile.path }}'
@@ -45,7 +45,7 @@ jobs:
 
       - name: Scan Dockerfile for misconfigurations (SARIF output)
         if: always() && steps.check-file.outputs.exists == 'true'
-        uses: aquasecurity/trivy-action@v0.35.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '${{ matrix.dockerfile.path }}'

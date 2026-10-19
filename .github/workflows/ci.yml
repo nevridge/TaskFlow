@@ -7,7 +7,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - run: dotnet format TaskFlow.sln --verify-no-changes
@@ -18,7 +18,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - run: dotnet build TaskFlow.sln --configuration Release
@@ -29,7 +29,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
       - name: Run tests with coverage and enforce threshold

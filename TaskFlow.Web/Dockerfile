@@ -1,11 +1,11 @@
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 # Base image CVEs: patch OpenSSL, and drop the bundled npm (unused at runtime; its vendored deps are flagged)
 RUN apk upgrade --no-cache libcrypto3 libssl3 \

@@ -152,8 +152,9 @@ The client is committed to source control so CI doesn't need a running API serve
 
 ### React Router v7
 
-Two routes:
-- `/` → `TasksPage` (task list)
+Key routes (see `src/App.tsx`):
+- `/` → redirects to today's journal
+- `/tasks` → `TasksPage` (task list)
 - `/tasks/:id` → `TaskDetailPage` (task detail + notes)
 
 ## API Client Generation
@@ -230,16 +231,18 @@ useDeleteNoteMutation(taskId: number)
 
 ## Pages and Components
 
-### TasksPage (`/`)
+### TasksPage (`/tasks`)
 
 The task list page. Responsibilities:
 - Fetch all tasks via `useTasksQuery`
-- Filter by status and priority (client-side, `.toLowerCase()` normalization applied to API values)
-- Sort by title, due date, or priority
+- Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and title search
+- Sort by title, status, priority, or due date
 - Open create/edit modal inline (no separate route)
 - Delegate delete to `useDeleteTaskMutation`
 
-The filter dropdowns use lowercase option values (`draft`, `todo`, `completed`) while API values are PascalCase (`Draft`, `Todo`, `Completed`). Normalisation happens at the filter comparison site, not in the hook or component props.
+The **Status** filter is a multi-select group of checkboxes (Draft, To-do, Completed) labelled "Status". It defaults to Draft and To-do selected, so completed tasks are hidden until Completed is checked. There is no "All" option: selecting all three shows everything, and an empty selection (all unchecked) applies no restriction and also shows every task. The selection is page state only (not persisted) and resets to Draft + To-do whenever the page is reopened. It does not affect the view chips, so the Completed history chip is empty until Completed is checked.
+
+Status values are lowercase in the filter (`draft`, `todo`, `completed`) while API values are PascalCase (`Draft`, `Todo`, `Completed`). Normalisation (`.toLowerCase()`) happens at the filter comparison site, not in the hook or component props.
 
 ### TaskDetailPage (`/tasks/:id`)
 
@@ -452,9 +455,9 @@ Failures in any step block the PR. The build step verifies the production bundle
 - If using `npm run dev`, check the Vite proxy is targeting the right host (default: `localhost:8080`)
 - If the Vite proxy is not routing correctly, check `vite.config.ts` — the proxy target defaults to `http://localhost:8080` and can be overridden with `API_TARGET`
 
-### Status/priority filters not working
+### Status filter not working
 
-The API returns status and priority as PascalCase strings (`"Draft"`, `"High"`) because `TaskItemResponseDto` stores them as `string` via `Status.ToString()`. The frontend normalises to lowercase via `.toLowerCase()` before filter comparisons and badge lookups. If you see this breaking after a `gen:api` regeneration, check whether the API DTO types changed from `string` to an actual enum type.
+The API returns status and priority as PascalCase strings (`"Draft"`, `"High"`) because `TaskItemResponseDto` stores them as `string` via `Status.ToString()`. The frontend normalises to lowercase via `.toLowerCase()` before the Status filter comparison and badge lookups. Remember the Status filter hides Completed tasks by default. If you see this breaking after a `gen:api` regeneration, check whether the API DTO types changed from `string` to an actual enum type.
 
 ### API client out of date after backend changes
 

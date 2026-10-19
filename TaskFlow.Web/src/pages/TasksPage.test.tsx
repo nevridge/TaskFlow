@@ -239,15 +239,15 @@ describe('TasksPage', () => {
       expect(screen.getByRole('combobox', { name: 'Project' })).toBe(filterSelect())
     })
 
-    it('puts the project select after the status select', () => {
+    it('puts the project select after the status group', () => {
       renderPage()
-      const status = screen.getByRole('combobox', { name: 'Status' })
+      const status = screen.getByRole('group', { name: 'Status' })
       expect(status.compareDocumentPosition(filterSelect()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('tab order in the filter row is Status then Project', async () => {
       renderPage()
-      screen.getByRole('combobox', { name: 'Status' }).focus()
+      screen.getByRole('checkbox', { name: 'Completed' }).focus()
       await userEvent.tab()
       expect(filterSelect()).toHaveFocus()
     })
@@ -269,11 +269,15 @@ describe('TasksPage', () => {
       expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
       await userEvent.selectOptions(filterSelect(), 'Beta')
       expect(screen.getByText('Alpha work')).toBeInTheDocument()
+      // Beta finished is Completed and hidden by the default Status filter
+      expect(screen.getByText('1 task')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
       expect(screen.getByText('2 tasks')).toBeInTheDocument()
     })
 
     it('shows only the selected project tasks, matching a string projectId by number', async () => {
       renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
       await userEvent.selectOptions(filterSelect(), 'Beta')
       expect(screen.getByText('Beta finished')).toBeInTheDocument()
       expect(screen.queryByText('Alpha work')).not.toBeInTheDocument()
@@ -311,10 +315,9 @@ describe('TasksPage', () => {
     it('composes with the status filter', async () => {
       renderPage()
       await userEvent.selectOptions(filterSelect(), 'Beta')
-      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Todo')
       expect(screen.queryByText('Beta finished')).not.toBeInTheDocument()
       expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
-      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Completed')
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
       expect(screen.getByText('Beta finished')).toBeInTheDocument()
     })
 
@@ -370,6 +373,168 @@ describe('TasksPage', () => {
       mockProjects(projectList)
       rerender(page())
       expect(filterSelect()).toHaveDisplayValue('Alpha')
+    })
+  })
+
+  describe('status filter', () => {
+    const mixed = [
+      { ...baseTask, id: 21, title: 'Draft one', status: 'Draft' },
+      { ...baseTask, id: 22, title: 'Todo one', status: 'Todo' },
+      { ...baseTask, id: 23, title: 'Completed one', status: 'Completed', isComplete: true },
+    ]
+
+    function useData(data: unknown[]) {
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data }, isLoading: false, error: null } as never)
+    }
+    const box = (name: string) => screen.getByRole('checkbox', { name })
+    const click = (name: string) => userEvent.click(box(name))
+
+    beforeEach(() => useData(mixed))
+
+    it('defaults to Draft and To-do checked, Completed unchecked, in a Status group', () => {
+      renderPage()
+      const group = screen.getByRole('group', { name: 'Status' })
+      expect(within(group).getAllByRole('checkbox').map(c => (c as HTMLInputElement).labels?.[0].textContent))
+        .toEqual(['Draft', 'To-do', 'Completed'])
+      expect(box('Draft')).toBeChecked()
+      expect(box('To-do')).toBeChecked()
+      expect(box('Completed')).not.toBeChecked()
+      expect(screen.queryByRole('checkbox', { name: 'All' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument()
+    })
+
+    it('lists only Draft and Todo by default with a matching count', () => {
+      renderPage()
+      expect(screen.getByText('Draft one')).toBeInTheDocument()
+      expect(screen.getByText('Todo one')).toBeInTheDocument()
+      expect(screen.queryByText('Completed one')).not.toBeInTheDocument()
+      expect(screen.getByText('2 tasks')).toBeInTheDocument()
+    })
+
+    it('checking Completed adds completed tasks; unchecking hides them again', async () => {
+      renderPage()
+      await click('Completed')
+      expect(screen.getByText('Completed one')).toBeInTheDocument()
+      expect(screen.getByText('3 tasks')).toBeInTheDocument()
+      await click('Completed')
+      expect(screen.queryByText('Completed one')).not.toBeInTheDocument()
+      expect(screen.getByText('2 tasks')).toBeInTheDocument()
+    })
+
+    it('Completed only', async () => {
+      renderPage()
+      await click('Draft')
+      await click('To-do')
+      await click('Completed')
+      expect(screen.getByText('Completed one')).toBeInTheDocument()
+      expect(screen.queryByText('Draft one')).not.toBeInTheDocument()
+      expect(screen.queryByText('Todo one')).not.toBeInTheDocument()
+      expect(screen.getByText('1 task')).toBeInTheDocument()
+    })
+
+    it('all three selected shows everything', async () => {
+      renderPage()
+      await click('Completed')
+      for (const t of ['Draft one', 'Todo one', 'Completed one']) expect(screen.getByText(t)).toBeInTheDocument()
+    })
+
+    it.each([
+      ['Draft', 'Draft one'],
+      ['To-do', 'Todo one'],
+      ['Completed', 'Completed one'],
+    ])('only %s selected shows just that status', async (label, title) => {
+      renderPage()
+      for (const l of ['Draft', 'To-do', 'Completed']) {
+        const want = l === label
+        if (box(l) instanceof HTMLInputElement && (box(l) as HTMLInputElement).checked !== want) await click(l)
+      }
+      expect(screen.getByText(title)).toBeInTheDocument()
+      expect(screen.getByText('1 task')).toBeInTheDocument()
+    })
+
+    it('deselecting every status shows all tasks', async () => {
+      renderPage()
+      await click('Draft')
+      await click('To-do')
+      for (const t of ['Draft one', 'Todo one', 'Completed one']) expect(screen.getByText(t)).toBeInTheDocument()
+      expect(screen.getByText('3 tasks')).toBeInTheDocument()
+    })
+
+    it('shows the empty state and 0 tasks when only Completed tasks exist', () => {
+      useData([mixed[2]])
+      renderPage()
+      expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
+      expect(screen.getByText('0 tasks')).toBeInTheDocument()
+    })
+
+    it('resets to the default selection on remount', async () => {
+      const first = renderPage()
+      await click('Completed')
+      await click('Draft')
+      first.unmount()
+      renderPage()
+      expect(box('Draft')).toBeChecked()
+      expect(box('To-do')).toBeChecked()
+      expect(box('Completed')).not.toBeChecked()
+    })
+
+    it('composes with search and project filters', async () => {
+      useData([...mixed, { ...baseTask, id: 24, title: 'Done in Beta', status: 'Completed', projectId: 2, projectName: 'Beta' }])
+      renderPage()
+      await click('Completed')
+      await userEvent.selectOptions(filterSelect(), 'Beta')
+      expect(screen.getByText('Done in Beta')).toBeInTheDocument()
+      expect(screen.queryByText('Completed one')).not.toBeInTheDocument()
+      await userEvent.selectOptions(filterSelect(), 'All projects')
+      await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'Completed')
+      await waitFor(() => expect(screen.queryByText('Draft one')).not.toBeInTheDocument())
+      expect(screen.getByText('Completed one')).toBeInTheDocument()
+      expect(screen.queryByText('Done in Beta')).not.toBeInTheDocument()
+    })
+
+    it('promotes a non-completed child whose Completed parent is filtered out', () => {
+      useData([
+        { ...baseTask, id: 31, title: 'Done parent', status: 'Completed', childTaskCount: 1 },
+        { ...baseTask, id: 32, title: 'Open child', status: 'Todo', parentTaskItemId: 31 },
+      ])
+      renderPage()
+      expect(screen.queryByText('Done parent')).not.toBeInTheDocument()
+      expect(screen.getByText('Open child')).toBeInTheDocument()
+    })
+
+    it('supports keyboard Tab and Space', async () => {
+      renderPage()
+      box('To-do').focus()
+      await userEvent.tab()
+      expect(box('Completed')).toHaveFocus()
+      await userEvent.keyboard(' ')
+      expect(box('Completed')).toBeChecked()
+      expect(box('Completed')).toHaveFocus()
+      expect(screen.getByText('Completed one')).toBeInTheDocument()
+    })
+
+    it('Completed history chip is empty by default and lists completed tasks once Completed is checked', async () => {
+      useData([{ ...mixed[2], currentJournalDate: '2020-01-01' }])
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Completed history' }))
+      expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
+      await click('Completed')
+      expect(screen.getByText('Completed one')).toBeInTheDocument()
+    })
+
+    it('excludes undefined status when a selection exists and includes it when empty', async () => {
+      useData([{ ...baseTask, id: 41, title: 'No status', status: undefined }, mixed[0]])
+      renderPage()
+      expect(screen.queryByText('No status')).not.toBeInTheDocument()
+      await click('Draft')
+      await click('To-do')
+      expect(screen.getByText('No status')).toBeInTheDocument()
+    })
+
+    it('matches status case-insensitively', () => {
+      useData([{ ...baseTask, id: 51, title: 'Lower todo', status: 'todo' }])
+      renderPage()
+      expect(screen.getByText('Lower todo')).toBeInTheDocument()
     })
   })
 
@@ -445,6 +610,7 @@ describe('TasksPage', () => {
 
     it('edit save with an untouched project makes no project call', async () => {
       renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
       await userEvent.click(within(rowFor('Beta finished')).getByRole('button', { name: 'Edit' }))
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalled())

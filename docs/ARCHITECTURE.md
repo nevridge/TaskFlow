@@ -621,7 +621,7 @@ export function useCreateTaskMutation() {
 
 #### PascalCase normalisation
 
-`TaskItemResponseDto` on the backend stores `Status` and `Priority` as `string` via `ToString()`, which produces PascalCase values (`"Draft"`, `"High"`). The frontend option values and badge class maps use lowercase keys. Normalisation via `.toLowerCase()` is applied at the comparison site (filter logic in `TasksPage`) and at the display site (`TaskCard`, `TaskForm` initial state) — not in the hooks or generated types.
+`TaskItemResponseDto` on the backend stores `Status` and `Priority` as `string` via `ToString()`, which produces PascalCase values (`"Draft"`, `"High"`). The frontend Status filter values (a multi-select defaulting to Draft + To-do) and badge class maps use lowercase keys. Normalisation via `.toLowerCase()` is applied at the comparison site (filter logic in `TasksPage`) and at the display site (`TaskCard`, `TaskForm` initial state) — not in the hooks or generated types.
 
 ### Frontend Structure
 

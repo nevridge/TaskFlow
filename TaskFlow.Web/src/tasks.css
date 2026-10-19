@@ -179,6 +179,36 @@ html.is-dark .t-select { color-scheme: dark; }
   min-width: 0;
 }
 
+.t-status-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.t-status-group .t-filter-label { padding: 0; margin-right: 2px; }
+.t-status-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.t-status-option input[type="checkbox"] {
+  accent-color: var(--accent);
+  margin: 0;
+  cursor: pointer;
+}
+.t-status-option input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
+
 /* ─── Task list table ─────────────────────────────────────────────────────── */
 
 .t-list-wrap {

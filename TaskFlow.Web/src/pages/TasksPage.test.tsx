@@ -536,6 +536,30 @@ describe('TasksPage', () => {
       renderPage()
       expect(screen.getByText('Lower todo')).toBeInTheDocument()
     })
+
+    it('removes a task and decrements the count when it becomes Completed under the default selection', () => {
+      const { rerender } = renderPage()
+      expect(screen.getByText('Todo one')).toBeInTheDocument()
+      expect(screen.getByText('2 tasks')).toBeInTheDocument()
+
+      useData(mixed.map(t => (t.id === 22 ? { ...t, status: 'Completed', isComplete: true } : t)))
+      rerender(page())
+
+      expect(screen.queryByText('Todo one')).not.toBeInTheDocument()
+      expect(screen.getByText('1 task')).toBeInTheDocument()
+    })
+
+    it('does not write the status selection to localStorage', async () => {
+      const setItem = vi.fn()
+      vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem, removeItem: vi.fn(), clear: vi.fn() })
+      try {
+        renderPage()
+        await click('Completed')
+        expect(setItem).not.toHaveBeenCalled()
+      } finally {
+        vi.unstubAllGlobals()
+      }
+    })
   })
 
   describe('create and edit forms', () => {

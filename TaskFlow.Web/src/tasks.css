@@ -179,13 +179,13 @@ html.is-dark .t-select { color-scheme: dark; }
   min-width: 0;
 }
 
-.t-status-group {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  min-width: 0;
-  flex-wrap: wrap;
-  row-gap: 4px;
+/* Label + options stay together (nowrap from .t-filter-field); the parent row
+   wraps the whole group. Only on very narrow viewports may the options wrap. */
+@media (max-width: 360px) {
+  .t-status-group {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
 }
 .t-status-group .t-filter-label { padding: 0; margin-right: 2px; }
 .t-status-option {

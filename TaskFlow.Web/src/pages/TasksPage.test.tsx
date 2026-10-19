@@ -319,6 +319,9 @@ describe('TasksPage', () => {
       expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
       expect(screen.getByText('Beta finished')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'To-do' }))
+      expect(screen.getByText('Beta finished')).toBeInTheDocument()
     })
 
     it('composes with the view filter', async () => {
@@ -386,7 +389,7 @@ describe('TasksPage', () => {
     function useData(data: unknown[]) {
       vi.mocked(useTasksQuery).mockReturnValue({ data: { data }, isLoading: false, error: null } as never)
     }
-    const box = (name: string) => screen.getByRole('checkbox', { name })
+    const box = (name: string) => screen.getByRole<HTMLInputElement>('checkbox', { name })
     const click = (name: string) => userEvent.click(box(name))
 
     beforeEach(() => useData(mixed))
@@ -445,8 +448,11 @@ describe('TasksPage', () => {
     ])('only %s selected shows just that status', async (label, title) => {
       renderPage()
       for (const l of ['Draft', 'To-do', 'Completed']) {
-        const want = l === label
-        if (box(l) instanceof HTMLInputElement && (box(l) as HTMLInputElement).checked !== want) await click(l)
+        if ((l === label) !== box(l).checked) await click(l)
+      }
+      for (const l of ['Draft', 'To-do', 'Completed']) {
+        if (l === label) expect(box(l)).toBeChecked()
+        else expect(box(l)).not.toBeChecked()
       }
       expect(screen.getByText(title)).toBeInTheDocument()
       expect(screen.getByText('1 task')).toBeInTheDocument()
@@ -549,12 +555,14 @@ describe('TasksPage', () => {
       expect(screen.getByText('1 task')).toBeInTheDocument()
     })
 
-    it('does not write the status selection to localStorage', async () => {
+    it('makes no localStorage writes while rendering and toggling every status checkbox', async () => {
       const setItem = vi.fn()
       vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem, removeItem: vi.fn(), clear: vi.fn() })
       try {
         renderPage()
         await click('Completed')
+        await click('Draft')
+        await click('To-do')
         expect(setItem).not.toHaveBeenCalled()
       } finally {
         vi.unstubAllGlobals()

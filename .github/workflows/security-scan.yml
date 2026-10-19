@@ -59,3 +59,44 @@ jobs:
           name: trivy-scan-results
           path: trivy-results.sarif
           retention-days: 30
+
+      - name: Build Web Docker image
+        if: always()
+        run: |
+          docker build -f TaskFlow.Web/Dockerfile -t taskflow-web:${{ github.sha }} ./TaskFlow.Web
+
+      - name: Run Trivy vulnerability scanner (Web)
+        uses: aquasecurity/trivy-action@v0.35.0
+        if: always()
+        with:
+          image-ref: 'taskflow-web:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (Web, SARIF output)
+        uses: aquasecurity/trivy-action@v0.35.0
+        if: always()
+        with:
+          image-ref: 'taskflow-web:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results-web.sarif'
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy Web results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results-web.sarif'
+          category: 'trivy-docker-scan-web'
+
+      - name: Upload Trivy Web scan results as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-scan-results-web
+          path: trivy-results-web.sarif
+          retention-days: 30

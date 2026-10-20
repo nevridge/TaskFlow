@@ -84,7 +84,7 @@ TaskFlow.Web/
 │   │   ├── useNotes.ts         # TanStack Query hooks for note CRUD
 │   │   └── useJournal.ts       # TanStack Query hooks for journal (entries, todos, logs)
 │   ├── pages/
-│   │   ├── TasksPage.tsx       # Task list — filter, sort, create, edit, delete
+│   │   ├── TasksPage.tsx       # Task list — filter (Status multi-select, default Draft + To-do), sort, create, edit, delete
 │   │   ├── TaskDetailPage.tsx  # Task detail + inline note management
 │   │   └── JournalPage.tsx     # Daily journal page + PrefsBar settings panel
 │   ├── components/

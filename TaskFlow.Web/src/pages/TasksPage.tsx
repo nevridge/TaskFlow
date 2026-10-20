@@ -19,7 +19,13 @@ import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
 import '@/tasks.css'
 
-type StatusFilter = 'all' | 'draft' | 'todo' | 'completed'
+type StatusValue = 'draft' | 'todo' | 'completed'
+const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'todo', label: 'To-do' },
+  { value: 'completed', label: 'Completed' },
+]
+const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo']
 type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 type ProjectFilter = 'all' | 'none' | number
 
@@ -58,7 +64,14 @@ export function TasksPage() {
     autoCompleteParentWhenChildrenDone,
   } = usePrefs()
 
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<Set<StatusValue>>(() => new Set(DEFAULT_STATUS_FILTER))
+  const toggleStatus = (v: StatusValue) =>
+    setStatusFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(v)) next.delete(v)
+      else next.add(v)
+      return next
+    })
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
   const [createProjectInvalid, setCreateProjectInvalid] = useState(false)
@@ -153,7 +166,7 @@ export function TasksPage() {
   const filtered = useMemo(() => {
     return tasks
       .filter(t => matchesViewFilter(t, viewFilter))
-      .filter(t => statusFilter === 'all' || (t.status ?? '').toLowerCase() === statusFilter)
+      .filter(t => statusFilter.size === 0 || statusFilter.has((t.status ?? '').toLowerCase() as StatusValue))
       .filter(t => {
         if (projectFilter === 'all') return true
         const taskProjectId = normalizeProjectId(t.projectId)
@@ -446,15 +459,15 @@ export function TasksPage() {
             <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
             <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
           </div>
-          <span className="t-filter-field">
-            <label htmlFor="status-filter" className="t-filter-label">Status</label>
-            <select id="status-filter" className="t-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}>
-              <option value="all">All</option>
-              <option value="draft">Draft</option>
-              <option value="todo">Todo</option>
-              <option value="completed">Completed</option>
-            </select>
-          </span>
+          <div className="t-filter-field t-status-group" role="group" aria-labelledby="status-filter-label">
+            <span id="status-filter-label" className="t-filter-label">Status</span>
+            {STATUS_OPTIONS.map(o => (
+              <label key={o.value} className="t-status-option">
+                <input type="checkbox" checked={statusFilter.has(o.value)} onChange={() => toggleStatus(o.value)} />
+                {o.label}
+              </label>
+            ))}
+          </div>
           <span className="t-filter-field">
             <label htmlFor="project-filter" className="t-filter-label">Project</label>
             <select

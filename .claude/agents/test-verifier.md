@@ -71,17 +71,17 @@ If any of 1–4 are missing, ask for them before proceeding.
 
 After writing the tests, run the full gates for BOTH stacks every time, from the repo root. These mirror CI (`.github/workflows/ci.yml`); if that file has changed, treat it as the source of truth.
 
-Develop with targeted runs first (`dotnet test --filter "FullyQualifiedName~<TestClassName>"`, `npm run test -- --run <file>`), then run the full gates once.
+Develop with targeted runs first (`dotnet test --project TaskFlow.Api.Tests --filter-class "<Namespace.TestClassName>"`, `npm run test -- --run <file>`), then run the full gates once.
 
 ### Backend
-In Git Bash, MSYS rewrites arguments that start with `/` (such as `/p:CollectCoverage=true`) into Windows paths, which fails with `MSB1008`. Prefix the coverage command with `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*"` (the other commands below do not need it).
+Tests run on xunit.v3 with Microsoft.Testing.Platform (selected by the root `global.json`), and coverage comes from coverlet.MTP. The coverage command uses only `--` options, so no MSYS path-conversion prefix is needed in Git Bash. The old `/p:CollectCoverage` and `/p:Threshold` flags no longer work.
 
 ```bash
 dotnet format TaskFlow.sln --verify-no-changes
 dotnet build TaskFlow.sln --configuration Release
-MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL="*" dotnet test TaskFlow.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage.cobertura.xml /p:Exclude="[xunit.*]*%2c[TaskFlow.Api]TaskFlow.Api.Program%2c[TaskFlow.Api]TaskFlow.Api.Migrations.*%2c[TaskFlow.Api]TaskFlow.Api.Middleware.*%2c[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*%2c[TaskFlow.Api]System.Runtime.CompilerServices.*%2c[TaskFlow.Api]TaskFlow.Api.DTOs.*" /p:Threshold=75 /p:ThresholdType=line /p:ThresholdStat=total
+dotnet test --project TaskFlow.Api.Tests --configuration Release --results-directory ./TestResults --coverlet --coverlet-output-format cobertura --coverlet-exclude-assemblies-without-sources MissingAll --coverlet-exclude "[xunit.*]*" --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Program" --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Migrations.*" --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Middleware.*" --coverlet-exclude "[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*" --coverlet-exclude "[TaskFlow.Api]System.Runtime.CompilerServices.*" --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.DTOs.*" --coverlet-threshold 75 --coverlet-threshold-type line --coverlet-threshold-stat total
 ```
-FAIL if any test fails or total line coverage is under **75%**. If `dotnet format` fails, fix only your own test files (`dotnet format TaskFlow.sln --include <your test files>`) and re-verify; if it still fails on a production file, report that file as a FAIL and do not reformat it. The repo root contains both `TaskFlow.sln` and `docker-compose.dcproj`, so always name `TaskFlow.sln`.
+FAIL if any test fails or total line coverage is under **75%** (the run exits with code 14 on a threshold miss). If `dotnet format` fails, fix only your own test files (`dotnet format TaskFlow.sln --include <your test files>`) and re-verify; if it still fails on a production file, report that file as a FAIL and do not reformat it. The repo root contains both `TaskFlow.sln` and `docker-compose.dcproj`, so always name `TaskFlow.sln`.
 
 ### Frontend
 Run each as `cd TaskFlow.Web && <command>` (inline the `cd`; run `npm install` first if `node_modules` is missing):

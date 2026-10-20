@@ -275,7 +275,7 @@ The application will automatically reload when you save code changes.
 dotnet test
 
 # Run with code coverage
-dotnet test /p:CollectCoverage=true
+dotnet test --project TaskFlow.Api.Tests --coverlet --coverlet-output-format cobertura
 
 # Watch mode for tests
 dotnet watch test --project TaskFlow.Api.Tests

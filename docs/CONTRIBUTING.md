@@ -317,10 +317,10 @@ public class TaskItemsControllerV1Tests
 dotnet test
 
 # Run tests with coverage
-dotnet test /p:CollectCoverage=true
+dotnet test --project TaskFlow.Api.Tests --coverlet --coverlet-output-format cobertura
 
-# Run specific test
-dotnet test --filter "FullyQualifiedName~TaskServiceTests.GetByIdAsync"
+# Run specific test (wildcards allowed at the start and/or end)
+dotnet test --project TaskFlow.Api.Tests --filter-method "*TaskRepositoryTests.GetAllAsync*"
 
 # Watch mode (reruns on changes)
 dotnet watch test --project TaskFlow.Api.Tests
@@ -346,15 +346,23 @@ The following types are excluded from coverage calculations (matching CI):
 
 **Check coverage locally (mirrors CI enforcement):**
 ```bash
-dotnet test --configuration Release \
-  /p:CollectCoverage=true \
-  /p:CoverletOutputFormat=cobertura \
-  /p:CoverletOutput=./TestResults/coverage.cobertura.xml \
-  /p:Exclude="[xunit.*]*,[TaskFlow.Api]TaskFlow.Api.Program,[TaskFlow.Api]TaskFlow.Api.Migrations.*,[TaskFlow.Api]TaskFlow.Api.Middleware.*,[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*,[TaskFlow.Api]System.Runtime.CompilerServices.*,[TaskFlow.Api]TaskFlow.Api.DTOs.*" \
-  /p:Threshold=75 \
-  /p:ThresholdType=line \
-  /p:ThresholdStat=total
+dotnet test --project TaskFlow.Api.Tests --configuration Release \
+  --results-directory ./TestResults \
+  --coverlet --coverlet-output-format cobertura \
+  --coverlet-exclude-assemblies-without-sources MissingAll \
+  --coverlet-exclude "[xunit.*]*" \
+  --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Program" \
+  --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Migrations.*" \
+  --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Middleware.*" \
+  --coverlet-exclude "[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*" \
+  --coverlet-exclude "[TaskFlow.Api]System.Runtime.CompilerServices.*" \
+  --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.DTOs.*" \
+  --coverlet-threshold 75 --coverlet-threshold-type line --coverlet-threshold-stat total
 ```
+
+The run exits non-zero (exit code 14) when total line coverage is below the threshold. The cobertura file is written to `./TestResults/coverage.cobertura.<timestamp>.xml`.
+
+`--coverlet-exclude-assemblies-without-sources MissingAll` is required: without it coverlet also instruments NuGet assemblies such as FluentValidation and Moq, and total coverage drops to about 29%. coverlet.MTP reports about 93% where the old coverlet.msbuild reported about 89.7%, because closure classes and `Models/*.cs` are reported differently, so the two figures are not directly comparable.
 
 ### Extension Registration Tests
 

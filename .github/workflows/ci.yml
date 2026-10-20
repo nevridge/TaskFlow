@@ -33,11 +33,23 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Run tests with coverage and enforce threshold
-        run: dotnet test TaskFlow.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./TestResults/coverage.cobertura.xml /p:Exclude="[xunit.*]*%2c[TaskFlow.Api]TaskFlow.Api.Program%2c[TaskFlow.Api]TaskFlow.Api.Migrations.*%2c[TaskFlow.Api]TaskFlow.Api.Middleware.*%2c[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*%2c[TaskFlow.Api]System.Runtime.CompilerServices.*%2c[TaskFlow.Api]TaskFlow.Api.DTOs.*" /p:Threshold=75 /p:ThresholdType=line /p:ThresholdStat=total
+        run: >-
+          dotnet test --project TaskFlow.Api.Tests --configuration Release
+          --results-directory ./TestResults
+          --coverlet --coverlet-output-format cobertura
+          --coverlet-exclude-assemblies-without-sources MissingAll
+          --coverlet-exclude "[xunit.*]*"
+          --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Program"
+          --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Migrations.*"
+          --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.Middleware.*"
+          --coverlet-exclude "[TaskFlow.Api]Microsoft.AspNetCore.OpenApi.*"
+          --coverlet-exclude "[TaskFlow.Api]System.Runtime.CompilerServices.*"
+          --coverlet-exclude "[TaskFlow.Api]TaskFlow.Api.DTOs.*"
+          --coverlet-threshold 75 --coverlet-threshold-type line --coverlet-threshold-stat total
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
       - name: Generate coverage report
-        run: reportgenerator -reports:"**/TestResults/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"TextSummary;Html"
+        run: reportgenerator -reports:"**/TestResults/coverage.cobertura*.xml" -targetdir:"coveragereport" -reporttypes:"TextSummary;Html"
       - name: Display coverage summary
         run: cat coveragereport/Summary.txt
   taskflow-web:

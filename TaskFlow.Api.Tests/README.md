@@ -32,13 +32,13 @@ dotnet test
 
 ### Run tests with coverage
 ```bash
-dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+dotnet test --project TaskFlow.Api.Tests --coverlet --coverlet-output-format cobertura
 ```
 
 ### Generate coverage report
 ```bash
 dotnet tool install -g dotnet-reportgenerator-globaltool
-reportgenerator -reports:"**/TestResults/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"Html;TextSummary"
+reportgenerator -reports:"**/TestResults/coverage.cobertura*.xml" -targetdir:"coveragereport" -reporttypes:"Html;TextSummary"
 ```
 
 ## Test Structure

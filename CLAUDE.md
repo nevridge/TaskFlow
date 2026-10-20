@@ -16,10 +16,10 @@ dotnet run --project TaskFlow.Api
 dotnet test
 
 # Backend — test (single)
-dotnet test --filter "FullyQualifiedName~TaskRepositoryTests.GetAllAsync_ShouldReturnAllTasks"
+dotnet test --project TaskFlow.Api.Tests --filter-method "TaskFlow.Api.Tests.Repositories.TaskRepositoryTests.GetAllAsync_ShouldReturnAllTasks"
 
-# Backend — test with coverage
-dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+# Backend — test with coverage (coverlet.MTP; cobertura lands in ./TestResults)
+dotnet test --project TaskFlow.Api.Tests --coverlet --coverlet-output-format cobertura
 
 # Backend — format check (CI enforces this)
 dotnet format --verify-no-changes

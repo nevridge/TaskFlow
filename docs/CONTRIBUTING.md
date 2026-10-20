@@ -362,6 +362,8 @@ dotnet test --project TaskFlow.Api.Tests --configuration Release \
 
 The run exits non-zero (exit code 14) when total line coverage is below the threshold. The cobertura file is written to `./TestResults/coverage.cobertura.<timestamp>.xml`.
 
+`--coverlet-exclude-assemblies-without-sources MissingAll` is required: without it coverlet also instruments NuGet assemblies such as FluentValidation and Moq, and total coverage drops to about 29%. coverlet.MTP reports about 93% where the old coverlet.msbuild reported about 89.7%, because closure classes and `Models/*.cs` are reported differently, so the two figures are not directly comparable.
+
 ### Extension Registration Tests
 
 DI registration tests should:

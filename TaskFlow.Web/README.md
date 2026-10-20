@@ -22,7 +22,7 @@ TaskFlow.Web is a single-page application (SPA) that provides a UI for managing 
 ## Getting Started
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 26+
 - The TaskFlow.Api running at `http://localhost:8080` (or via Docker Compose)
 
 ### Install and run
@@ -203,7 +203,7 @@ The production Dockerfile is a two-stage build:
 
 ```dockerfile
 # Stage 1: build
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -211,7 +211,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: serve
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules

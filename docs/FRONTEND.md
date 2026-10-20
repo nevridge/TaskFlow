@@ -33,7 +33,7 @@ TaskFlow.Web is a React 19 + TypeScript SPA that provides the task management UI
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 26+
 - `npm` (bundled with Node.js)
 - TaskFlow.Api running at `http://localhost:8080`
 
@@ -386,14 +386,14 @@ There are 24 tests covering all components and all query/mutation hooks. The CI 
 ### Dockerfile
 
 ```dockerfile
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules

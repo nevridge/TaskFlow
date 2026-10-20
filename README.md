@@ -43,7 +43,7 @@ While functional as a task management system, this project serves as a portfolio
 
 ### Prerequisites
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- [Node.js 20+](https://nodejs.org/) (for the frontend)
+- [Node.js 26+](https://nodejs.org/) (for the frontend)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) (for the full stack via Compose)
 
 ### Option 1 — Full Stack with Docker Compose (Recommended)

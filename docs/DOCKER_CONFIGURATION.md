@@ -49,8 +49,8 @@ A two-stage Node build. The build stage runs `npm run build`. The API client use
 | Aspect | Value |
 |--------|-------|
 | **Build Context** | `./TaskFlow.Web` |
-| **Stage 1** | `node:20-alpine` — `npm ci` + `npm run build` |
-| **Stage 2** | `node:20-alpine` — `vite preview` with `vite.preview.config.js` |
+| **Stage 1** | `node:26-alpine` — `npm ci` + `npm run build` |
+| **Stage 2** | `node:26-alpine` — `vite preview` with `vite.preview.config.js` |
 | **Port** | 3000 |
 | **SPA routing** | Handled by `vite preview` (all unmatched paths → `index.html`) |
 

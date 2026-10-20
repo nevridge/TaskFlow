@@ -6,7 +6,7 @@ This guide walks you through setting up the full TaskFlow stack (API + frontend)
 
 ### Required
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — for the API
-- [Node.js 20+](https://nodejs.org/) — for the frontend
+- [Node.js 26+](https://nodejs.org/) — for the frontend
 - A terminal/command prompt
 - A code editor (Visual Studio, VS Code, Rider, etc.)
 
@@ -334,7 +334,7 @@ If migrations fail to apply:
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 26+
 - TaskFlow.Api running at `http://localhost:8080`
 
 ### Install and start

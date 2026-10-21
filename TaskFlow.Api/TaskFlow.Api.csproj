@@ -28,6 +28,9 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPlatformVersion)" />
+    <!-- Pinned to 2.x on purpose (#279). 2.7.5 is the patched 2.x release for CVE-2026-49451 (GHSA-v5pm-xwqc-g5wc);
+         do not downgrade. 3.x is blocked: the Microsoft.AspNetCore.OpenApi source generator fails with CS0200
+         on IOpenApiMediaType.Example. Dependabot major bumps are ignored in .github/dependabot.yml. -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />

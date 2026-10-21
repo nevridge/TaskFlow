@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
@@ -36,13 +35,13 @@ public class ProjectRepositoryTests
         var repo = new ProjectRepository(context);
 
         var project = await repo.AddAsync(new Project { Name = "Alpha" });
-        project.CreatedAt.Should().NotBe(default);
-        project.UpdatedAt.Should().BeNull();
+        Assert.NotEqual(default, project.CreatedAt);
+        Assert.Null(project.UpdatedAt);
 
         project.Name = "Alpha 2";
         await repo.UpdateAsync(project);
 
-        (await repo.GetByIdAsync(project.Id))!.UpdatedAt.Should().NotBeNull();
+        Assert.NotNull((await repo.GetByIdAsync(project.Id))!.UpdatedAt);
     }
 
     [Fact]
@@ -57,8 +56,8 @@ public class ProjectRepositoryTests
 
         var all = (await repo.GetAllAsync()).ToList();
 
-        all.Select(p => p.Name).Should().ContainInOrder("Alpha", "Bravo");
-        all.Single(p => p.Name == "Bravo").Tasks.Should().HaveCount(1);
+        Assert.Equal(new[] { "Alpha", "Bravo" }, all.Select(p => p.Name).Where(n => n is "Alpha" or "Bravo"));
+        Assert.Single(all.Single(p => p.Name == "Bravo").Tasks);
     }
 
     [Fact]
@@ -68,9 +67,9 @@ public class ProjectRepositoryTests
         var repo = new ProjectRepository(context);
         var p = await repo.AddAsync(new Project { Name = "Alpha" });
 
-        (await repo.NameExistsAsync("Alpha")).Should().BeTrue();
-        (await repo.NameExistsAsync("Alpha", p.Id)).Should().BeFalse();
-        (await repo.NameExistsAsync("Other")).Should().BeFalse();
+        Assert.True(await repo.NameExistsAsync("Alpha"));
+        Assert.False(await repo.NameExistsAsync("Alpha", p.Id));
+        Assert.False(await repo.NameExistsAsync("Other"));
     }
 
     [Fact]
@@ -88,8 +87,8 @@ public class ProjectRepositoryTests
 
         var tasks = (await repo.GetTasksAsync(p1.Id)).ToList();
 
-        tasks.Should().ContainSingle().Which.Title.Should().Be("1");
-        tasks[0].Project!.Name.Should().Be("A");
+        Assert.Equal("1", Assert.Single(tasks).Title);
+        Assert.Equal("A", tasks[0].Project!.Name);
     }
 
     [Fact]
@@ -100,7 +99,7 @@ public class ProjectRepositoryTests
 
         var act = () => repo.DeleteAsync(123);
 
-        await act.Should().NotThrowAsync();
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 
     [Fact]
@@ -110,8 +109,8 @@ public class ProjectRepositoryTests
         var repo = new ProjectRepository(context);
         var p = await repo.AddAsync(new Project { Name = "A" });
 
-        (await repo.AssignTaskAsync(999, 1)).Should().Be(AssignTaskResult.ProjectNotFound);
-        (await repo.AssignTaskAsync(p.Id, 999)).Should().Be(AssignTaskResult.TaskNotFound);
+        Assert.Equal(AssignTaskResult.ProjectNotFound, (await repo.AssignTaskAsync(999, 1)));
+        Assert.Equal(AssignTaskResult.TaskNotFound, (await repo.AssignTaskAsync(p.Id, 999)));
     }
 
     [Fact]
@@ -124,14 +123,14 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        (await repo.AssignTaskAsync(p.Id, task.Id)).Should().Be(AssignTaskResult.Success);
-        (await repo.AssignTaskAsync(p.Id, task.Id)).Should().Be(AssignTaskResult.AlreadyAssigned);
+        Assert.Equal(AssignTaskResult.Success, (await repo.AssignTaskAsync(p.Id, task.Id)));
+        Assert.Equal(AssignTaskResult.AlreadyAssigned, (await repo.AssignTaskAsync(p.Id, task.Id)));
 
         var saved = await context.TaskItems.AsNoTracking().SingleAsync();
-        saved.ProjectId.Should().Be(p.Id);
+        Assert.Equal(p.Id, saved.ProjectId);
         var events = await context.TaskItemEvents.Where(e => e.TaskItemId == task.Id).ToListAsync();
-        events.Should().ContainSingle(e => e.EventType == "ProjectChanged")
-            .Which.ChangeSummary.Should().Be("Assigned to project 'Alpha'.");
+        var projectChanged = Assert.Single(events, e => e.EventType == "ProjectChanged");
+        Assert.Equal("Assigned to project 'Alpha'.", projectChanged.ChangeSummary);
     }
 
     [Fact]
@@ -145,10 +144,10 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        (await repo.AssignTaskAsync(b.Id, task.Id)).Should().Be(AssignTaskResult.Success);
+        Assert.Equal(AssignTaskResult.Success, (await repo.AssignTaskAsync(b.Id, task.Id)));
 
-        (await context.TaskItems.AsNoTracking().SingleAsync()).ProjectId.Should().Be(b.Id);
-        (await context.TaskItemEvents.SingleAsync()).ChangeSummary.Should().Be("Project changed from 'A' to 'B'.");
+        Assert.Equal(b.Id, (await context.TaskItems.AsNoTracking().SingleAsync()).ProjectId);
+        Assert.Equal("Project changed from 'A' to 'B'.", (await context.TaskItemEvents.SingleAsync()).ChangeSummary);
     }
 
     [Fact]
@@ -161,10 +160,10 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        (await repo.UnassignTaskAsync(p.Id, task.Id)).Should().BeTrue();
+        Assert.True(await repo.UnassignTaskAsync(p.Id, task.Id));
 
-        (await context.TaskItems.AsNoTracking().SingleAsync()).ProjectId.Should().BeNull();
-        (await context.TaskItemEvents.SingleAsync()).ChangeSummary.Should().Be("Removed from project 'Alpha'.");
+        Assert.Null((await context.TaskItems.AsNoTracking().SingleAsync()).ProjectId);
+        Assert.Equal("Removed from project 'Alpha'.", (await context.TaskItemEvents.SingleAsync()).ChangeSummary);
     }
 
     [Fact]
@@ -177,7 +176,7 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        (await repo.UnassignTaskAsync(p.Id, task.Id)).Should().BeFalse();
+        Assert.False(await repo.UnassignTaskAsync(p.Id, task.Id));
     }
 
     [Fact]
@@ -196,8 +195,8 @@ public class ProjectRepositoryTests
             await repo.DeleteAsync(p.Id);
 
             var task = await context.TaskItems.AsNoTracking().SingleAsync();
-            task.ProjectId.Should().BeNull();
-            (await context.Projects.CountAsync()).Should().Be(0);
+            Assert.Null(task.ProjectId);
+            Assert.Equal(0, (await context.Projects.CountAsync()));
         }
     }
 
@@ -211,10 +210,10 @@ public class ProjectRepositoryTests
             var repo = new ProjectRepository(context);
             await repo.AddAsync(new Project { Name = "Alpha" });
 
-            (await repo.NameExistsAsync("alpha")).Should().BeTrue();
+            Assert.True(await repo.NameExistsAsync("alpha"));
 
             var act = () => repo.AddAsync(new Project { Name = "ALPHA" });
-            await act.Should().ThrowAsync<DbUpdateException>();
+            await Assert.ThrowsAsync<DbUpdateException>(act);
         }
     }
 }

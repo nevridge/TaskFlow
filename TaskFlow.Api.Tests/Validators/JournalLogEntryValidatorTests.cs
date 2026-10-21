@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Validators;
 
@@ -15,8 +14,8 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Content");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Content");
     }
 
     [Fact]
@@ -26,7 +25,7 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -36,7 +35,7 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -46,7 +45,7 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -56,8 +55,8 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "TaskItemId");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "TaskItemId");
     }
 
     [Fact]
@@ -67,7 +66,7 @@ public class JournalLogEntryValidatorTests
 
         var result = await _validator.ValidateAsync(log);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "TaskItemId");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "TaskItemId");
     }
 }

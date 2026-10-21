@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Validators;
@@ -14,7 +13,7 @@ public class ProjectValidatorTests
     {
         var result = await _validator.ValidateAsync(new Project { Name = "Alpha", Description = "Work" });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -22,7 +21,7 @@ public class ProjectValidatorTests
     {
         var result = await _validator.ValidateAsync(new Project { Name = string.Empty });
 
-        result.Errors.Should().Contain(e => e.PropertyName == "Name" && e.ErrorMessage == "Name is required.");
+        Assert.Contains(result.Errors, e => e.PropertyName == "Name" && e.ErrorMessage == "Name is required.");
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class ProjectValidatorTests
     {
         var result = await _validator.ValidateAsync(new Project { Name = new string('a', 101) });
 
-        result.Errors.Should().Contain(e => e.PropertyName == "Name" && e.ErrorMessage == "Name must not exceed 100 characters.");
+        Assert.Contains(result.Errors, e => e.PropertyName == "Name" && e.ErrorMessage == "Name must not exceed 100 characters.");
     }
 
     [Fact]
@@ -38,7 +37,7 @@ public class ProjectValidatorTests
     {
         var result = await _validator.ValidateAsync(new Project { Name = new string('a', 100) });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -46,7 +45,7 @@ public class ProjectValidatorTests
     {
         var result = await _validator.ValidateAsync(new Project { Name = "Alpha", Description = new string('a', 2001) });
 
-        result.Errors.Should().Contain(e => e.PropertyName == "Description" && e.ErrorMessage == "Description must not exceed 2000 characters.");
+        Assert.Contains(result.Errors, e => e.PropertyName == "Description" && e.ErrorMessage == "Description must not exceed 2000 characters.");
     }
 }
 
@@ -59,7 +58,7 @@ public class AssignProjectTaskDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AssignProjectTaskDto { TaskItemId = 1 });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Theory]
@@ -69,6 +68,6 @@ public class AssignProjectTaskDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AssignProjectTaskDto { TaskItemId = id });
 
-        result.Errors.Should().Contain(e => e.PropertyName == "TaskItemId");
+        Assert.Contains(result.Errors, e => e.PropertyName == "TaskItemId");
     }
 }

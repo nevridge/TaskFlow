@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
@@ -31,8 +30,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -51,8 +50,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -71,8 +70,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -91,10 +90,10 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().HaveCount(1);
-        result.Errors[0].PropertyName.Should().Be("Title");
-        result.Errors[0].ErrorMessage.Should().Be("Title is required.");
+        Assert.False(result.IsValid);
+        Assert.Single(result.Errors);
+        Assert.Equal("Title", result.Errors[0].PropertyName);
+        Assert.Equal("Title is required.", result.Errors[0].ErrorMessage);
     }
 
     [Fact]
@@ -113,10 +112,10 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().HaveCount(1);
-        result.Errors[0].PropertyName.Should().Be("Title");
-        result.Errors[0].ErrorMessage.Should().Be("Title must not exceed 100 characters.");
+        Assert.False(result.IsValid);
+        Assert.Single(result.Errors);
+        Assert.Equal("Title", result.Errors[0].PropertyName);
+        Assert.Equal("Title must not exceed 100 characters.", result.Errors[0].ErrorMessage);
     }
 
     [Fact]
@@ -135,8 +134,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -155,8 +154,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -175,8 +174,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -195,8 +194,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -215,8 +214,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -235,8 +234,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 
     [Fact]
@@ -255,8 +254,8 @@ public class TaskItemValidatorTests
         var result = await _validator.ValidateAsync(task);
 
         // Assert
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e =>
             e.PropertyName == "Status" &&
             e.ErrorMessage == "Status must be a valid value (Draft, Todo, or Completed).");
     }

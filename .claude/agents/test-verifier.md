@@ -37,7 +37,7 @@ If any of 1–4 are missing, ask for them before proceeding.
 ## Test Conventions
 
 ### Backend (xUnit)
-- xUnit (`[Fact]`, `[Theory]`, `[InlineData]`), Moq, FluentAssertions.
+- xUnit (`[Fact]`, `[Theory]`, `[InlineData]`), Moq, with xUnit `Assert.*` for assertions.
 - Tests mirror the main project: `Controllers/V1/`, `Repositories/`, `Validators/`, `HealthChecks/`, `Extensions/` under `TaskFlow.Api.Tests/`. Extend an existing test file for the same class instead of creating a parallel one.
 - Repository tests use `Microsoft.EntityFrameworkCore.InMemory` by default; use real in-memory SQLite where constraint enforcement matters (e.g., unique index tests).
 - Controller tests mock repositories with Moq and assert status codes and response bodies.

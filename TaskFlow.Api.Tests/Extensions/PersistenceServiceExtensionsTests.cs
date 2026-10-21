@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 using TaskFlow.Api.Extensions;
@@ -12,7 +11,7 @@ public class PersistenceServiceExtensionsTests
     {
         var act = () => PersistenceServiceExtensions.EnsureSqliteDirectoryExists(null);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -20,7 +19,7 @@ public class PersistenceServiceExtensionsTests
     {
         var act = () => PersistenceServiceExtensions.EnsureSqliteDirectoryExists(string.Empty);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -28,7 +27,7 @@ public class PersistenceServiceExtensionsTests
     {
         var act = () => PersistenceServiceExtensions.EnsureSqliteDirectoryExists("Data Source=:memory:");
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -36,7 +35,7 @@ public class PersistenceServiceExtensionsTests
     {
         var act = () => PersistenceServiceExtensions.EnsureSqliteDirectoryExists("Data Source=file::memory:");
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -47,7 +46,7 @@ public class PersistenceServiceExtensionsTests
 
         var act = () => PersistenceServiceExtensions.EnsureSqliteDirectoryExists(connectionString);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -60,7 +59,7 @@ public class PersistenceServiceExtensionsTests
         {
             PersistenceServiceExtensions.EnsureSqliteDirectoryExists(connectionString);
 
-            Directory.Exists(tempDir).Should().BeTrue();
+            Assert.True(Directory.Exists(tempDir));
         }
         finally
         {

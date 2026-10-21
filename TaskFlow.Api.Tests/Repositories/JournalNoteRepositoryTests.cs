@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
@@ -31,9 +30,9 @@ public class JournalNoteRepositoryTests
 
         var notes = (await repo.GetAllByEntryIdAsync(entry.Id)).ToList();
 
-        notes.Should().HaveCount(2);
-        notes[0].Content.Should().Be("First");
-        notes[1].Content.Should().Be("Second");
+        Assert.Equal(2, notes.Count);
+        Assert.Equal("First", notes[0].Content);
+        Assert.Equal("Second", notes[1].Content);
     }
 
     [Fact]
@@ -51,8 +50,8 @@ public class JournalNoteRepositoryTests
 
         var notes = (await repo.GetAllByEntryIdAsync(entry1.Id)).ToList();
 
-        notes.Should().HaveCount(1);
-        notes[0].Content.Should().Be("Entry1 note");
+        Assert.Single(notes);
+        Assert.Equal("Entry1 note", notes[0].Content);
     }
 
     [Fact]
@@ -68,9 +67,9 @@ public class JournalNoteRepositoryTests
 
         var fetched = await repo.GetByIdAsync(entry.Id, note.Id);
 
-        fetched.Should().NotBeNull();
-        fetched!.Content.Should().Be("Test");
-        fetched.JournalEntryId.Should().Be(entry.Id);
+        Assert.NotNull(fetched);
+        Assert.Equal("Test", fetched!.Content);
+        Assert.Equal(entry.Id, fetched.JournalEntryId);
     }
 
     [Fact]
@@ -85,7 +84,7 @@ public class JournalNoteRepositoryTests
 
         var result = await repo.GetByIdAsync(entry.Id, 9999);
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -102,7 +101,7 @@ public class JournalNoteRepositoryTests
 
         var result = await repo.GetByIdAsync(entry2.Id, note.Id);
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -116,9 +115,9 @@ public class JournalNoteRepositoryTests
         var repo = new JournalNoteRepository(context);
         var note = await repo.AddAsync(new JournalNote { JournalEntryId = entry.Id, Content = "New note" });
 
-        note.Id.Should().BeGreaterThan(0);
-        note.CreatedAt.Should().NotBe(default);
-        note.Content.Should().Be("New note");
+        Assert.InRange(note.Id, 1, int.MaxValue);
+        Assert.NotEqual(default, note.CreatedAt);
+        Assert.Equal("New note", note.Content);
     }
 
     [Fact]
@@ -136,9 +135,9 @@ public class JournalNoteRepositoryTests
         await repo.UpdateAsync(note);
 
         var fetched = await repo.GetByIdAsync(entry.Id, note.Id);
-        fetched.Should().NotBeNull();
-        fetched!.Content.Should().Be("Updated");
-        fetched.UpdatedAt.Should().NotBeNull();
+        Assert.NotNull(fetched);
+        Assert.Equal("Updated", fetched!.Content);
+        Assert.NotNull(fetched.UpdatedAt);
     }
 
     [Fact]
@@ -155,7 +154,7 @@ public class JournalNoteRepositoryTests
         await repo.DeleteAsync(entry.Id, note.Id);
 
         var fetched = await repo.GetByIdAsync(entry.Id, note.Id);
-        fetched.Should().BeNull();
+        Assert.Null(fetched);
     }
 
     [Fact]
@@ -170,6 +169,6 @@ public class JournalNoteRepositoryTests
 
         var act = async () => await repo.DeleteAsync(entry.Id, 9999);
 
-        await act.Should().NotThrowAsync();
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 }

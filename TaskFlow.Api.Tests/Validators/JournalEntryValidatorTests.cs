@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Validators;
 
@@ -15,8 +14,8 @@ public class JournalEntryValidatorTests
 
         var result = await _validator.ValidateAsync(entry);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Date" && e.ErrorMessage == "Date is required.");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Date" && e.ErrorMessage == "Date is required.");
     }
 
     [Fact]
@@ -26,8 +25,8 @@ public class JournalEntryValidatorTests
 
         var result = await _validator.ValidateAsync(entry);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Summary" && e.ErrorMessage == "Summary must not exceed 10000 characters.");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Summary" && e.ErrorMessage == "Summary must not exceed 10000 characters.");
     }
 
     [Fact]
@@ -37,6 +36,6 @@ public class JournalEntryValidatorTests
 
         var result = await _validator.ValidateAsync(entry);
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 }

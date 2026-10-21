@@ -150,7 +150,7 @@ public void AddCaching_ShouldRegisterCachingServices()
     var serviceProvider = services.BuildServiceProvider();
 
     // Assert
-    serviceProvider.GetService<IMemoryCache>().Should().NotBeNull();
+    Assert.NotNull(serviceProvider.GetService<IMemoryCache>());
 }
 ```
 
@@ -296,8 +296,8 @@ public class ServiceCollectionExtensionsTests
         var serviceProvider = services.BuildServiceProvider();
 
         // Assert
-        serviceProvider.GetService<TaskDbContext>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskRepository>().Should().NotBeNull();
+        Assert.NotNull(serviceProvider.GetService<TaskDbContext>());
+        Assert.NotNull(serviceProvider.GetService<ITaskRepository>());
     }
 }
 ```

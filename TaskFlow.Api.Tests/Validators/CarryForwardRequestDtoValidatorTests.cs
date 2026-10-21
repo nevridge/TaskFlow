@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Validators;
 
@@ -15,7 +14,7 @@ public class CarryForwardRequestDtoValidatorTests
     [InlineData(840)]
     public void Validate_ShouldBeValid_ForNullOrInRangeOffset(int? offset)
     {
-        _validator.Validate(new CarryForwardRequestDto { TimezoneOffsetMinutes = offset }).IsValid.Should().BeTrue();
+        Assert.True(_validator.Validate(new CarryForwardRequestDto { TimezoneOffsetMinutes = offset }).IsValid);
     }
 
     [Theory]
@@ -23,6 +22,6 @@ public class CarryForwardRequestDtoValidatorTests
     [InlineData(841)]
     public void Validate_ShouldBeInvalid_ForOutOfRangeOffset(int offset)
     {
-        _validator.Validate(new CarryForwardRequestDto { TimezoneOffsetMinutes = offset }).IsValid.Should().BeFalse();
+        Assert.False(_validator.Validate(new CarryForwardRequestDto { TimezoneOffsetMinutes = offset }).IsValid);
     }
 }

@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -41,9 +40,9 @@ public class NotesControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<NoteResponseDto>>().Subject;
-        dtos.Should().HaveCount(2);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<NoteResponseDto>>(ok.Value);
+        Assert.Equal(2, dtos.Count());
         _mockNoteRepo.Verify(r => r.GetAllByTaskIdAsync(1), Times.Once);
     }
 
@@ -54,7 +53,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.GetAll(99);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
         _mockNoteRepo.Verify(r => r.GetAllByTaskIdAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -70,11 +69,11 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Get(1, 5);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<NoteResponseDto>().Subject;
-        dto.Id.Should().Be(5);
-        dto.Content.Should().Be("My note");
-        dto.TaskItemId.Should().Be(1);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<NoteResponseDto>(ok.Value);
+        Assert.Equal(5, dto.Id);
+        Assert.Equal("My note", dto.Content);
+        Assert.Equal(1, dto.TaskItemId);
     }
 
     [Fact]
@@ -84,7 +83,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Get(99, 1);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -96,7 +95,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Get(1, 99);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // --- POST ---
@@ -114,11 +113,11 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Create(1, createDto);
 
-        var createdResult = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var dto = createdResult.Value.Should().BeOfType<NoteResponseDto>().Subject;
-        dto.Id.Should().Be(3);
-        dto.Content.Should().Be("New note");
-        dto.TaskItemId.Should().Be(1);
+        var createdResult = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var dto = Assert.IsType<NoteResponseDto>(createdResult.Value);
+        Assert.Equal(3, dto.Id);
+        Assert.Equal("New note", dto.Content);
+        Assert.Equal(1, dto.TaskItemId);
     }
 
     [Fact]
@@ -128,7 +127,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Create(99, new CreateNoteDto { Content = "Note" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
         _mockNoteRepo.Verify(r => r.AddAsync(It.IsAny<Note>()), Times.Never);
     }
 
@@ -143,7 +142,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateNoteDto { Content = string.Empty });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _mockNoteRepo.Verify(r => r.AddAsync(It.IsAny<Note>()), Times.Never);
     }
 
@@ -162,9 +161,9 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Update(1, 5, new UpdateNoteDto { Content = "Updated" });
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<NoteResponseDto>().Subject;
-        dto.Content.Should().Be("Updated");
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<NoteResponseDto>(ok.Value);
+        Assert.Equal("Updated", dto.Content);
     }
 
     [Fact]
@@ -174,7 +173,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Update(99, 1, new UpdateNoteDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -186,7 +185,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Update(1, 99, new UpdateNoteDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // --- DELETE ---
@@ -202,7 +201,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Delete(1, 5);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _mockNoteRepo.Verify(r => r.DeleteAsync(1, 5), Times.Once);
     }
 
@@ -213,7 +212,7 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Delete(99, 1);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -225,6 +224,6 @@ public class NotesControllerV1Tests
 
         var result = await _controller.Delete(1, 99);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 }

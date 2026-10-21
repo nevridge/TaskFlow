@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -45,7 +44,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.GetAll(99);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -57,10 +56,10 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Get(1, 2);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<JournalLogEntryResponseDto>().Subject;
-        dto.Id.Should().Be(2);
-        dto.JournalEntryId.Should().Be(1);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(ok.Value);
+        Assert.Equal(2, dto.Id);
+        Assert.Equal(1, dto.JournalEntryId);
     }
 
     // ── CREATE ────────────────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = string.Empty });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _logRepo.Verify(s => s.AddAsync(It.IsAny<JournalLogEntry>()), Times.Never);
     }
 
@@ -88,9 +87,10 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = "Done" });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        created.RouteName.Should().Be("GetJournalLogEntryV1");
-        created.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(3);
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal("GetJournalLogEntryV1", created.RouteName);
+        Assert.True(created.RouteValues!.TryGetValue("id", out var createdId));
+        Assert.Equal(3, createdId);
     }
 
     [Fact]
@@ -103,10 +103,10 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = "Note" });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var dto = created.Value.Should().BeOfType<JournalLogEntryResponseDto>().Subject;
-        dto.TaskItemId.Should().BeNull();
-        dto.LinkedTaskDeleted.Should().BeFalse();
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(created.Value);
+        Assert.Null(dto.TaskItemId);
+        Assert.False(dto.LinkedTaskDeleted);
         _taskRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -128,11 +128,11 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = "Did work", TaskItemId = 10 });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var dto = created.Value.Should().BeOfType<JournalLogEntryResponseDto>().Subject;
-        dto.TaskItemId.Should().Be(10);
-        dto.LinkedTaskTitle.Should().Be("Build feature");
-        dto.LinkedTaskDeleted.Should().BeFalse();
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(created.Value);
+        Assert.Equal(10, dto.TaskItemId);
+        Assert.Equal("Build feature", dto.LinkedTaskTitle);
+        Assert.False(dto.LinkedTaskDeleted);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = "Work", TaskItemId = 99 });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _logRepo.Verify(s => s.AddAsync(It.IsAny<JournalLogEntry>()), Times.Never);
     }
 
@@ -157,7 +157,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Update(99, 1, new UpdateJournalLogEntryDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Update(1, 22, new UpdateJournalLogEntryDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "New", TaskItemId = 42 });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _logRepo.Verify(r => r.UpdateAsync(It.IsAny<JournalLogEntry>()), Times.Never);
     }
 
@@ -198,11 +198,11 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated", TaskItemId = 20 });
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<JournalLogEntryResponseDto>().Subject;
-        dto.TaskItemId.Should().Be(20);
-        dto.LinkedTaskTitle.Should().Be("New Task");
-        dto.LinkedTaskDeleted.Should().BeFalse();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(ok.Value);
+        Assert.Equal(20, dto.TaskItemId);
+        Assert.Equal("New Task", dto.LinkedTaskTitle);
+        Assert.False(dto.LinkedTaskDeleted);
         _logRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 
@@ -223,11 +223,11 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated" });
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<JournalLogEntryResponseDto>().Subject;
-        dto.TaskItemId.Should().BeNull();
-        dto.LinkedTaskTitle.Should().BeNull();
-        dto.LinkedTaskDeleted.Should().BeFalse();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(ok.Value);
+        Assert.Null(dto.TaskItemId);
+        Assert.Null(dto.LinkedTaskTitle);
+        Assert.False(dto.LinkedTaskDeleted);
         _taskRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -242,7 +242,7 @@ public class JournalLogEntriesControllerV1Tests
 
         var result = await _controller.Delete(1, 4);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _logRepo.Verify(s => s.DeleteAsync(1, 4), Times.Once);
     }
 }

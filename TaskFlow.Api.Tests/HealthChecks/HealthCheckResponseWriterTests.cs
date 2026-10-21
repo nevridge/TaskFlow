@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -58,10 +57,10 @@ public class HealthCheckResponseWriterTests
         using var reader = new StreamReader(responseBody);
         var response = await reader.ReadToEndAsync();
 
-        response.Should().NotBeNullOrEmpty();
-        response.Should().Contain("Healthy");
-        response.Should().Contain("database");
-        context.Response.ContentType.Should().Be("application/json; charset=utf-8");
+        Assert.False(string.IsNullOrEmpty(response));
+        Assert.Contains("Healthy", response);
+        Assert.Contains("database", response);
+        Assert.Equal("application/json; charset=utf-8", context.Response.ContentType);
     }
 
     [Fact]
@@ -92,10 +91,10 @@ public class HealthCheckResponseWriterTests
         using var reader = new StreamReader(responseBody);
         var response = await reader.ReadToEndAsync();
 
-        response.Should().NotBeNullOrEmpty();
-        response.Should().Contain("Unhealthy");
-        response.Should().Contain("database");
-        response.Should().Contain("Connection error");
+        Assert.False(string.IsNullOrEmpty(response));
+        Assert.Contains("Unhealthy", response);
+        Assert.Contains("database", response);
+        Assert.Contains("Connection error", response);
     }
 
     [Fact]
@@ -132,8 +131,8 @@ public class HealthCheckResponseWriterTests
         using var reader = new StreamReader(responseBody);
         var response = await reader.ReadToEndAsync();
 
-        response.Should().Contain("database");
-        response.Should().Contain("api");
+        Assert.Contains("database", response);
+        Assert.Contains("api", response);
     }
 
     [Fact]
@@ -164,7 +163,7 @@ public class HealthCheckResponseWriterTests
         using var reader = new StreamReader(responseBody);
         var response = await reader.ReadToEndAsync();
 
-        response.Should().Contain("Degraded");
+        Assert.Contains("Degraded", response);
     }
 
     [Fact]
@@ -201,8 +200,8 @@ public class HealthCheckResponseWriterTests
         using var reader = new StreamReader(responseBody);
         var response = await reader.ReadToEndAsync();
 
-        response.Should().Contain("ConnectionString");
-        response.Should().Contain("Version");
+        Assert.Contains("ConnectionString", response);
+        Assert.Contains("Version", response);
     }
 
     [Fact]
@@ -236,7 +235,8 @@ public class HealthCheckResponseWriterTests
         var json = await reader.ReadToEndAsync();
 
         var act = () => System.Text.Json.JsonDocument.Parse(json);
-        act.Should().NotThrow("the response must be valid JSON even when exception messages contain special characters");
-        json.Should().Contain("Unhealthy");
+        // the response must be valid JSON even when exception messages contain special characters
+        Assert.Null(Record.Exception(act));
+        Assert.Contains("Unhealthy", json);
     }
 }

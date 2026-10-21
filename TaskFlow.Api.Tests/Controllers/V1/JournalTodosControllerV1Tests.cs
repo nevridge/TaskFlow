@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +30,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -45,9 +44,9 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject;
-        todos.Should().ContainSingle(t => t.Id == 2 && t.Status == "Todo");
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value);
+        Assert.Single(todos, t => t.Id == 2 && t.Status == "Todo");
     }
 
     [Fact]
@@ -60,7 +59,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, dto);
 
-        result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     [Fact]
@@ -70,7 +69,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 9 });
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -80,7 +79,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 9 });
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -90,7 +89,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
 
-        result.Should().BeOfType<ConflictObjectResult>();
+        Assert.IsType<ConflictObjectResult>(result);
     }
 
     [Fact]
@@ -100,7 +99,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
 
-        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result);
     }
 
     [Fact]
@@ -110,7 +109,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _journalRepo.Verify(s => s.AddTodoAsync(1, 4), Times.Once);
     }
 
@@ -122,7 +121,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.RemoveTodo(1, 4);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 4), Times.Once);
     }
 
@@ -134,7 +133,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.RemoveTodo(1, 4);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -155,10 +154,10 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        todos.Should().ContainSingle(t => t.Id == 2);
-        todos[0].Children.Should().ContainSingle(c => c.Id == 10);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Single(todos, t => t.Id == 2);
+        Assert.Single(todos[0].Children!, c => c.Id == 10);
     }
 
     [Fact]
@@ -179,10 +178,10 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        todos.Should().ContainSingle(t => t.Id == 2);
-        todos[0].Children.Should().ContainSingle(c => c.Id == 10);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Single(todos, t => t.Id == 2);
+        Assert.Single(todos[0].Children!, c => c.Id == 10);
     }
 
     [Fact]
@@ -203,9 +202,9 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        todos.Should().BeEmpty();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Empty(todos);
     }
 
     [Fact]
@@ -225,10 +224,10 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        todos.Should().ContainSingle();
-        todos[0].Children.Should().BeNull();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Single(todos);
+        Assert.Null(todos[0].Children);
     }
 
     [Fact]
@@ -260,10 +259,10 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         var childDto = todos[0].Children!.Single();
-        childDto.CurrentJournalDate.Should().Be(childJournalDate);
+        Assert.Equal(childJournalDate, childDto.CurrentJournalDate);
     }
 
     [Fact]
@@ -297,11 +296,11 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         var childDto = todos[0].Children!.Single();
         // DaysTagged = childJournalDate.DayNumber - childFirstTaggedDate.DayNumber + 1 = 3
-        childDto.DaysTagged.Should().Be(3);
+        Assert.Equal(3, childDto.DaysTagged);
     }
 
     [Fact]
@@ -332,13 +331,13 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         // Parent is a root item, but its misconfigured child should still appear mapped under Children
         // because MapTodo iterates ChildTaskItems directly from the EF nav property.
         // The important assertion: the child does NOT appear in the root list.
-        todos.Should().ContainSingle(t => t.Id == 2);
-        todos.Should().NotContain(t => t.Id == 10);
+        Assert.Single(todos, t => t.Id == 2);
+        Assert.DoesNotContain(todos, t => t.Id == 10);
     }
 
     [Fact]
@@ -353,7 +352,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.RemoveTodo(1, 4);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 10), Times.Once);
     }
 
@@ -368,7 +367,7 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.RemoveTodo(1, 4);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _journalRepo.Verify(s => s.RemoveTodoAsync(1, 20), Times.Never);
     }
 
@@ -391,9 +390,9 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        todos.Single(t => t.Id == 2).ChildTaskCount.Should().Be(2);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Equal(2, todos.Single(t => t.Id == 2).ChildTaskCount);
     }
 
     [Fact]
@@ -413,10 +412,10 @@ public class JournalTodosControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var todos = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         var dto = todos.Single(t => t.Id == 2);
-        dto.ChildTaskCount.Should().Be(0);
-        dto.Children.Should().BeNull();
+        Assert.Equal(0, dto.ChildTaskCount);
+        Assert.Null(dto.Children);
     }
 }

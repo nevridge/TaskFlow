@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,9 +31,9 @@ public class ServiceCollectionExtensionsTests
         var serviceProvider = services.BuildServiceProvider();
 
         // Assert
-        serviceProvider.GetService<TaskDbContext>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskRepository>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskRepository>().Should().BeOfType<TaskRepository>();
+        Assert.NotNull(serviceProvider.GetService<TaskDbContext>());
+        Assert.NotNull(serviceProvider.GetService<ITaskRepository>());
+        Assert.IsType<TaskRepository>(serviceProvider.GetService<ITaskRepository>());
     }
 
     [Fact]
@@ -55,8 +54,8 @@ public class ServiceCollectionExtensionsTests
         var serviceProvider = services.BuildServiceProvider();
 
         // Assert
-        serviceProvider.GetService<IValidator<TaskItem>>().Should().NotBeNull();
-        serviceProvider.GetService<IValidator<TaskItem>>().Should().BeOfType<TaskItemValidator>();
+        Assert.NotNull(serviceProvider.GetService<IValidator<TaskItem>>());
+        Assert.IsType<TaskItemValidator>(serviceProvider.GetService<IValidator<TaskItem>>());
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public class ServiceCollectionExtensionsTests
 
         // Assert
         var healthCheckService = serviceProvider.GetService<HealthCheckService>();
-        healthCheckService.Should().NotBeNull();
+        Assert.NotNull(healthCheckService);
     }
 
     [Fact]
@@ -93,7 +92,7 @@ public class ServiceCollectionExtensionsTests
 
         // Assert
         // Microsoft.AspNetCore.OpenApi registers services with "OpenApi" in the name
-        services.Should().Contain(s => s.ServiceType.Name.Contains("OpenApi"));
+        Assert.Contains(services, s => s.ServiceType.Name.Contains("OpenApi"));
     }
 
     [Fact]
@@ -106,7 +105,7 @@ public class ServiceCollectionExtensionsTests
         services.ConfigureJsonSerialization();
 
         // Assert
-        services.Should().Contain(s =>
+        Assert.Contains(services, s =>
             s.ServiceType.Name.Contains("JsonOptions") ||
             s.ServiceType.Name.Contains("ConfigureOptions"));
     }
@@ -128,7 +127,7 @@ public class ServiceCollectionExtensionsTests
         services.AddOpenTelemetryObservability(configuration);
 
         // Assert
-        services.Should().Contain(s => s.ServiceType == typeof(TracerProvider));
+        Assert.Contains(services, s => s.ServiceType == typeof(TracerProvider));
     }
 
     [Fact]
@@ -148,7 +147,7 @@ public class ServiceCollectionExtensionsTests
         var result = services.AddOpenTelemetryObservability(configuration);
 
         // Assert
-        result.Should().BeSameAs(services);
+        Assert.Same(services, result);
     }
 
     [Fact]
@@ -174,10 +173,10 @@ public class ServiceCollectionExtensionsTests
         var serviceProvider = services.BuildServiceProvider();
 
         // Assert - verify all critical services are registered
-        serviceProvider.GetService<TaskDbContext>().Should().NotBeNull();
-        serviceProvider.GetService<ITaskRepository>().Should().NotBeNull();
-        serviceProvider.GetService<IValidator<TaskItem>>().Should().NotBeNull();
-        serviceProvider.GetService<HealthCheckService>().Should().NotBeNull();
+        Assert.NotNull(serviceProvider.GetService<TaskDbContext>());
+        Assert.NotNull(serviceProvider.GetService<ITaskRepository>());
+        Assert.NotNull(serviceProvider.GetService<IValidator<TaskItem>>());
+        Assert.NotNull(serviceProvider.GetService<HealthCheckService>());
     }
 
     [Fact]
@@ -204,11 +203,11 @@ public class ServiceCollectionExtensionsTests
         services.ConfigureJsonSerialization();
 
         // Assert - verify all services are registered in the collection
-        services.Should().Contain(s => s.ServiceType == typeof(TaskDbContext));
-        services.Should().Contain(s => s.ServiceType == typeof(ITaskRepository));
-        services.Should().Contain(s => s.ServiceType == typeof(IValidator<TaskItem>));
-        services.Should().Contain(s => s.ServiceType == typeof(HealthCheckService));
-        services.Should().Contain(s => s.ServiceType == typeof(TracerProvider));
+        Assert.Contains(services, s => s.ServiceType == typeof(TaskDbContext));
+        Assert.Contains(services, s => s.ServiceType == typeof(ITaskRepository));
+        Assert.Contains(services, s => s.ServiceType == typeof(IValidator<TaskItem>));
+        Assert.Contains(services, s => s.ServiceType == typeof(HealthCheckService));
+        Assert.Contains(services, s => s.ServiceType == typeof(TracerProvider));
     }
 
     [Fact]
@@ -224,7 +223,7 @@ public class ServiceCollectionExtensionsTests
             .GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value;
 
         // Assert
-        httpJsonOptions.SerializerOptions.WriteIndented.Should().BeTrue();
-        httpJsonOptions.SerializerOptions.PropertyNamingPolicy.Should().Be(System.Text.Json.JsonNamingPolicy.CamelCase);
+        Assert.True(httpJsonOptions.SerializerOptions.WriteIndented);
+        Assert.Equal(System.Text.Json.JsonNamingPolicy.CamelCase, httpJsonOptions.SerializerOptions.PropertyNamingPolicy);
     }
 }

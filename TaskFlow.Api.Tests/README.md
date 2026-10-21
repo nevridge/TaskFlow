@@ -1,6 +1,6 @@
 # TaskFlow.Api.Tests
 
-Comprehensive unit test suite for TaskFlow.Api using xUnit, Moq, and FluentAssertions.
+Comprehensive unit test suite for TaskFlow.Api using xUnit (built-in `Assert.*` assertions) and Moq.
 
 ## Test Coverage
 
@@ -89,7 +89,7 @@ TaskFlow.Api.Tests/
 
 - **xUnit** - Test framework
 - **Moq** - Mocking framework
-- **FluentAssertions** - Assertion library for better readability
+- **xUnit `Assert.*`** - Built-in assertions (no separate assertion library)
 - **Microsoft.EntityFrameworkCore.InMemory** - In-memory database for testing
 - **Coverlet** - Code coverage tool
 
@@ -103,7 +103,7 @@ All tests follow industry best practices:
 4. **Edge case coverage** - null values, empty collections, boundary conditions
 5. **Mocking external dependencies** - services, repositories, validators
 6. **In-memory database** for repository tests (realistic without external dependencies)
-7. **Clear assertions** using FluentAssertions for readability
+7. **Clear assertions** using xUnit `Assert.*`
 
 ## CI Integration
 

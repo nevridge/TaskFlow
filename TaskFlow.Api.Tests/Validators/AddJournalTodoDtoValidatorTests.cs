@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Validators;
@@ -17,8 +16,8 @@ public class AddJournalTodoDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = id });
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().ContainSingle(e =>
+        Assert.False(result.IsValid);
+        Assert.Single(result.Errors, e =>
             e.PropertyName == "TaskItemId" &&
             e.ErrorMessage == "TaskItemId must be greater than 0.");
     }
@@ -30,7 +29,7 @@ public class AddJournalTodoDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = id });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Theory]
@@ -41,8 +40,8 @@ public class AddJournalTodoDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = value });
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().ContainSingle(e =>
+        Assert.False(result.IsValid);
+        Assert.Single(result.Errors, e =>
             e.PropertyName == "TimezoneOffsetMinutes" &&
             e.ErrorMessage == "TimezoneOffsetMinutes must be between -720 and 840 (UTC-12:00 to UTC+14:00).");
     }
@@ -55,7 +54,7 @@ public class AddJournalTodoDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = value });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -63,6 +62,6 @@ public class AddJournalTodoDtoValidatorTests
     {
         var result = await _validator.ValidateAsync(new AddJournalTodoDto { TaskItemId = 1, TimezoneOffsetMinutes = null });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 }

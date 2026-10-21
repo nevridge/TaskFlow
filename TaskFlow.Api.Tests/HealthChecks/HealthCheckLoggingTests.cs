@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,13 +59,18 @@ public class HealthCheckLoggingTests
         await HealthCheckResponseWriter.WriteHealthCheckResponse(context, healthReport);
 
         // Assert
-        testLogger.Logs.Should().NotBeEmpty("health check failure should be logged");
+        // health check failure should be logged
+        Assert.NotEmpty(testLogger.Logs);
 
         var errorLog = testLogger.Logs.FirstOrDefault(e => e.Level == LogLevel.Error);
-        errorLog.Should().NotBeNull("unhealthy status should be logged at Error level");
-        errorLog!.Message.Should().Contain("Health check FAILED", "log should indicate failure");
-        errorLog.Message.Should().Contain("/health", "log should include endpoint");
-        errorLog.Message.Should().Contain("Unhealthy", "log should include status");
+        // unhealthy status should be logged at Error level
+        Assert.NotNull(errorLog);
+        // log should indicate failure
+        Assert.Contains("Health check FAILED", errorLog!.Message);
+        // log should include endpoint
+        Assert.Contains("/health", errorLog.Message);
+        // log should include status
+        Assert.Contains("Unhealthy", errorLog.Message);
     }
 
     [Fact]
@@ -94,13 +98,18 @@ public class HealthCheckLoggingTests
         await HealthCheckResponseWriter.WriteHealthCheckResponse(context, healthReport);
 
         // Assert
-        testLogger.Logs.Should().NotBeEmpty("degraded health check should be logged");
+        // degraded health check should be logged
+        Assert.NotEmpty(testLogger.Logs);
 
         var warningLog = testLogger.Logs.FirstOrDefault(e => e.Level == LogLevel.Warning);
-        warningLog.Should().NotBeNull("degraded status should be logged at Warning level");
-        warningLog!.Message.Should().Contain("Health check DEGRADED", "log should indicate degradation");
-        warningLog.Message.Should().Contain("/health/ready", "log should include endpoint");
-        warningLog.Message.Should().Contain("Degraded", "log should include status");
+        // degraded status should be logged at Warning level
+        Assert.NotNull(warningLog);
+        // log should indicate degradation
+        Assert.Contains("Health check DEGRADED", warningLog!.Message);
+        // log should include endpoint
+        Assert.Contains("/health/ready", warningLog.Message);
+        // log should include status
+        Assert.Contains("Degraded", warningLog.Message);
     }
 
     [Fact]
@@ -128,7 +137,8 @@ public class HealthCheckLoggingTests
         await HealthCheckResponseWriter.WriteHealthCheckResponse(context, healthReport);
 
         // Assert
-        testLogger.Logs.Should().BeEmpty("healthy status should not generate logs to reduce noise");
+        // healthy status should not generate logs to reduce noise
+        Assert.Empty(testLogger.Logs);
     }
 
     [Fact]
@@ -163,9 +173,11 @@ public class HealthCheckLoggingTests
 
         // Assert
         var errorLog = testLogger.Logs.FirstOrDefault(e => e.Level == LogLevel.Error);
-        errorLog.Should().NotBeNull();
-        errorLog!.Message.Should().Contain("database", "log should include first failed check");
-        errorLog.Message.Should().Contain("external-api", "log should include second failed check");
+        Assert.NotNull(errorLog);
+        // log should include first failed check
+        Assert.Contains("database", errorLog!.Message);
+        // log should include second failed check
+        Assert.Contains("external-api", errorLog.Message);
     }
 
     [Fact]
@@ -195,8 +207,9 @@ public class HealthCheckLoggingTests
 
         // Assert
         var errorLog = testLogger.Logs.FirstOrDefault(e => e.Level == LogLevel.Error);
-        errorLog.Should().NotBeNull();
-        errorLog!.Message.Should().Contain(exceptionMessage, "log should include exception message from health check");
+        Assert.NotNull(errorLog);
+        // log should include exception message from health check
+        Assert.Contains(exceptionMessage, errorLog!.Message);
     }
 
     /// <summary>

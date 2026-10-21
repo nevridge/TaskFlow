@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -45,10 +44,10 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.GetAll();
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeAssignableTo<IEnumerable<ProjectResponseDto>>().Subject.Single();
-        dto.OpenTaskCount.Should().Be(1);
-        dto.CompletedTaskCount.Should().Be(2);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<ProjectResponseDto>>(ok.Value).Single();
+        Assert.Equal(1, dto.OpenTaskCount);
+        Assert.Equal(2, dto.CompletedTaskCount);
     }
 
     [Fact]
@@ -58,7 +57,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Get(9);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -68,8 +67,8 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Get(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        ok.Value.Should().BeOfType<ProjectResponseDto>().Which.Name.Should().Be("Alpha");
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("Alpha", Assert.IsType<ProjectResponseDto>(ok.Value).Name);
     }
 
     [Fact]
@@ -79,7 +78,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.GetTasks(9);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -92,12 +91,12 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.GetTasks(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.Single();
-        dto.ProjectId.Should().Be(1);
-        dto.ProjectName.Should().Be("Alpha");
-        dto.Priority.Should().Be("High");
-        dto.Status.Should().Be("Todo");
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
+        Assert.Equal(1, dto.ProjectId);
+        Assert.Equal("Alpha", dto.ProjectName);
+        Assert.Equal("High", dto.Priority);
+        Assert.Equal("Todo", dto.Status);
     }
 
     [Fact]
@@ -112,10 +111,11 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Create(new CreateProjectDto { Name = "  Alpha  ", Description = "d" });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        created.RouteName.Should().Be("GetProjectV1");
-        created.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(5);
-        created.Value.Should().BeOfType<ProjectResponseDto>().Which.Name.Should().Be("Alpha");
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal("GetProjectV1", created.RouteName);
+        Assert.True(created.RouteValues!.TryGetValue("id", out var createdId));
+        Assert.Equal(5, createdId);
+        Assert.Equal("Alpha", Assert.IsType<ProjectResponseDto>(created.Value).Name);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Create(new CreateProjectDto { Name = "" });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<Project>()), Times.Never);
     }
 
@@ -136,7 +136,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Create(new CreateProjectDto { Name = "Alpha" });
 
-        result.Result.Should().BeOfType<ConflictObjectResult>();
+        Assert.IsType<ConflictObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<Project>()), Times.Never);
     }
 
@@ -147,7 +147,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Update(9, new UpdateProjectDto { Name = "X" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -159,9 +159,9 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Update(1, new UpdateProjectDto { Name = "New", Description = "d", IsArchived = true });
 
-        result.Result.Should().BeOfType<OkObjectResult>();
-        existing.Name.Should().Be("New");
-        existing.IsArchived.Should().BeTrue();
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("New", existing.Name);
+        Assert.True(existing.IsArchived);
         _mockRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 
@@ -173,7 +173,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Update(1, new UpdateProjectDto { Name = "" });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<Project>()), Times.Never);
     }
 
@@ -185,7 +185,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Update(1, new UpdateProjectDto { Name = "Taken" });
 
-        result.Result.Should().BeOfType<ConflictObjectResult>();
+        Assert.IsType<ConflictObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<Project>()), Times.Never);
     }
 
@@ -196,7 +196,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Delete(9);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 
     [Fact]
@@ -206,7 +206,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.Delete(1);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _mockRepo.Verify(r => r.DeleteAsync(1), Times.Once);
     }
 
@@ -221,7 +221,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.AssignTask(1, new AssignProjectTaskDto { TaskItemId = 2 });
 
-        result.Should().BeOfType(expected);
+        Assert.IsType(expected, result);
     }
 
     // TaskFlow.Web (lib/project-errors.ts) recognises the 409 conflict by this message, because
@@ -233,9 +233,9 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.AssignTask(1, new AssignProjectTaskDto { TaskItemId = 2 });
 
-        var conflict = result.Should().BeOfType<ConflictObjectResult>().Subject;
+        var conflict = Assert.IsType<ConflictObjectResult>(result);
         var message = conflict.Value!.GetType().GetProperty("message")!.GetValue(conflict.Value) as string;
-        message.Should().MatchRegex("(?i)already (assigned|in)");
+        Assert.Matches("(?i)already (assigned|in)", message);
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.AssignTask(1, new AssignProjectTaskDto { TaskItemId = 0 });
 
-        result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result);
         _mockRepo.Verify(r => r.AssignTaskAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
@@ -256,7 +256,7 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.UnassignTask(1, 2);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
     }
 
     [Fact]
@@ -266,6 +266,6 @@ public class ProjectsControllerV1Tests
 
         var result = await _controller.UnassignTask(1, 2);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
     }
 }

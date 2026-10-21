@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -28,7 +27,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         services.AddOpenTelemetryObservability(config);
 
-        services.Should().Contain(s => s.ServiceType == typeof(TracerProvider));
+        Assert.Contains(services, s => s.ServiceType == typeof(TracerProvider));
     }
 
     [Fact]
@@ -39,7 +38,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         var result = services.AddOpenTelemetryObservability(config);
 
-        result.Should().BeSameAs(services);
+        Assert.Same(services, result);
     }
 
     [Fact]
@@ -53,7 +52,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -67,8 +66,8 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*grpc*");
+        var ex = Assert.Throws<InvalidOperationException>(act);
+        Assert.Contains("grpc", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -82,8 +81,8 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*unsupported-protocol*");
+        var ex = Assert.Throws<InvalidOperationException>(act);
+        Assert.Contains("unsupported-protocol", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -97,7 +96,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -111,7 +110,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     [Fact]
@@ -125,7 +124,7 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddOpenTelemetryObservability(config);
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 
     // ── AddApplicationLogging ───────────────────────────────────────────────
@@ -150,7 +149,7 @@ public class OpenTelemetryServiceExtensionsTests
             capturedBuilder = builder.AddApplicationLogging(config, env);
         });
 
-        capturedBuilder.Should().NotBeNull();
+        Assert.NotNull(capturedBuilder);
     }
 
     [Fact]
@@ -173,7 +172,7 @@ public class OpenTelemetryServiceExtensionsTests
             capturedBuilder = builder.AddApplicationLogging(config, env);
         });
 
-        capturedBuilder.Should().NotBeNull();
+        Assert.NotNull(capturedBuilder);
     }
 
     [Fact]
@@ -191,8 +190,8 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddLogging(builder => builder.AddApplicationLogging(config, env));
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*grpc*");
+        var ex = Assert.Throws<InvalidOperationException>(act);
+        Assert.Contains("grpc", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -210,8 +209,8 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddLogging(builder => builder.AddApplicationLogging(config, env));
 
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("*invalid*");
+        var ex = Assert.Throws<InvalidOperationException>(act);
+        Assert.Contains("invalid", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -229,6 +228,6 @@ public class OpenTelemetryServiceExtensionsTests
 
         var act = () => services.AddLogging(builder => builder.AddApplicationLogging(config, env));
 
-        act.Should().NotThrow();
+        Assert.Null(Record.Exception(act));
     }
 }

@@ -152,7 +152,7 @@ TaskFlow/
 | Validation | FluentValidation |
 | Observability | OpenTelemetry (traces, metrics, logs → Seq) |
 | API docs | OpenAPI + Scalar UI |
-| Testing | xUnit, Moq, FluentAssertions, Coverlet |
+| Testing | xUnit, Moq, Coverlet |
 | Deployment | Docker, Portainer GitOps |
 | CI/CD | GitHub Actions |
 

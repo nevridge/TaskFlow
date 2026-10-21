@@ -11,23 +11,27 @@ updates:
       prefix: "chore(deps)"
     # Major upgrades of these are tracked as separate, deliberate work (see #277):
     # - typescript: typescript-eslint's peer range caps TypeScript below 6.1.0
-    # - vitest and @vitest/coverage-v8: pinned to each other, so they move in lockstep
+    # vitest and @vitest/* form their own group (see #285) because @vitest/coverage-v8
+    # peers on an exact vitest version; they must move in one PR, majors included.
     ignore:
       - dependency-name: "vite"
         update-types: ["version-update:semver-major"]
-      - dependency-name: "vitest"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@hey-api/*"
         update-types: ["version-update:semver-major"]
     groups:
+      vitest:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
       npm-minor-patch:
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "vitest"
+          - "@vitest/*"
 
   # Backend dependencies (TaskFlow.sln at the root references both projects)
   - package-ecosystem: "nuget"

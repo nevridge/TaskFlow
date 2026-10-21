@@ -43,7 +43,7 @@ public class JournalLogEntryRepositoryTests
 
         var logs = (await repo.GetAllByEntryIdAsync(entry.Id)).ToList();
 
-        Assert.Equal(2, logs.Count());
+        Assert.Equal(2, logs.Count);
         Assert.Equal("A", logs[0].Content);
         Assert.Equal("B", logs[1].Content);
     }
@@ -64,12 +64,12 @@ public class JournalLogEntryRepositoryTests
 
         var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
         Assert.NotNull(fetched);
-        Assert.NotNull(fetched!.UpdatedAt);
+        Assert.NotNull(fetched.UpdatedAt);
 
         await repo.DeleteAsync(entry.Id, log.Id);
         await repo.DeleteAsync(entry.Id, 999);
 
-        Assert.Null((await repo.GetByIdAsync(entry.Id, log.Id)));
+        Assert.Null(await repo.GetByIdAsync(entry.Id, log.Id));
     }
 
     [Fact]
@@ -97,8 +97,8 @@ public class JournalLogEntryRepositoryTests
             var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
 
             Assert.NotNull(fetched);
-            Assert.NotNull(fetched!.TaskItem);
-            Assert.Equal("Linked Task", fetched.TaskItem!.Title);
+            Assert.NotNull(fetched.TaskItem);
+            Assert.Equal("Linked Task", fetched.TaskItem.Title);
         }
     }
 
@@ -131,7 +131,7 @@ public class JournalLogEntryRepositoryTests
             var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
 
             Assert.NotNull(fetched);
-            Assert.Null(fetched!.TaskItemId);
+            Assert.Null(fetched.TaskItemId);
             Assert.Equal("Will Be Deleted", fetched.LinkedTaskTitleSnapshot);
         }
     }

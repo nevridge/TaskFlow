@@ -75,7 +75,7 @@ public class TaskRepositoryTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal(Status.Todo, result!.Status);
+        Assert.Equal(Status.Todo, result.Status);
         Assert.Equal("Task 1", result.Title);
     }
 
@@ -106,7 +106,7 @@ public class TaskRepositoryTests
 
         // Assert
         Assert.NotNull(result);
-        Assert.True(result.Id > 0);
+        Assert.InRange(result.Id, 1, int.MaxValue);
         Assert.Equal("New Task", result.Title);
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
@@ -135,7 +135,7 @@ public class TaskRepositoryTests
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
         Assert.NotNull(savedTask);
-        Assert.Null(savedTask!.Description);
+        Assert.Null(savedTask.Description);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public class TaskRepositoryTests
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
         Assert.NotNull(savedTask);
-        Assert.True(savedTask!.IsComplete);
+        Assert.True(savedTask.IsComplete);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class TaskRepositoryTests
         // Assert
         var updatedTask = await context.TaskItems.FindAsync(1);
         Assert.NotNull(updatedTask);
-        Assert.Equal("Updated", updatedTask!.Title);
+        Assert.Equal("Updated", updatedTask.Title);
         Assert.Equal("Updated Description", updatedTask.Description);
         Assert.True(updatedTask.IsComplete);
     }
@@ -203,7 +203,7 @@ public class TaskRepositoryTests
         // Assert
         var updatedTask = await context.TaskItems.FindAsync(1);
         Assert.NotNull(updatedTask);
-        Assert.Equal("Original", updatedTask!.Title);
+        Assert.Equal("Original", updatedTask.Title);
         Assert.Equal("Description", updatedTask.Description);
         Assert.True(updatedTask.IsComplete);
     }
@@ -220,7 +220,7 @@ public class TaskRepositoryTests
 
         var tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked!.Title = "Updated";
+        tracked.Title = "Updated";
         tracked.Priority = Priority.High;
 
         await repository.UpdateAsync(tracked);
@@ -246,14 +246,14 @@ public class TaskRepositoryTests
 
         var tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked!.IsComplete = true;
+        tracked.IsComplete = true;
         tracked.Status = Status.Completed;
         await repository.UpdateAsync(tracked);
 
         context.ChangeTracker.Clear();
         tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked!.IsComplete = false;
+        tracked.IsComplete = false;
         tracked.Status = Status.Todo;
         await repository.UpdateAsync(tracked);
 
@@ -287,7 +287,7 @@ public class TaskRepositoryTests
 
         var tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked!.Description = "Updated description";
+        tracked.Description = "Updated description";
         tracked.DueDate = dueDate.AddDays(3);
 
         await repository.UpdateAsync(tracked);

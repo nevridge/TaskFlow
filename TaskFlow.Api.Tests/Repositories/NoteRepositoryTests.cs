@@ -111,7 +111,7 @@ public class NoteRepositoryTests
 
         var result = await repo.AddAsync(note);
 
-        Assert.True(result.Id > 0);
+        Assert.InRange(result.Id, 1, int.MaxValue);
         Assert.Equal("New note", result.Content);
         Assert.Equal(1, result.TaskItemId);
         Assert.Equal(DateTime.UtcNow, result.CreatedAt, TimeSpan.FromSeconds(5));

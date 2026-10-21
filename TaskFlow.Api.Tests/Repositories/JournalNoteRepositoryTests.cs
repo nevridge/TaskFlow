@@ -30,7 +30,7 @@ public class JournalNoteRepositoryTests
 
         var notes = (await repo.GetAllByEntryIdAsync(entry.Id)).ToList();
 
-        Assert.Equal(2, notes.Count());
+        Assert.Equal(2, notes.Count);
         Assert.Equal("First", notes[0].Content);
         Assert.Equal("Second", notes[1].Content);
     }
@@ -115,7 +115,7 @@ public class JournalNoteRepositoryTests
         var repo = new JournalNoteRepository(context);
         var note = await repo.AddAsync(new JournalNote { JournalEntryId = entry.Id, Content = "New note" });
 
-        Assert.True(note.Id > 0);
+        Assert.InRange(note.Id, 1, int.MaxValue);
         Assert.NotEqual(default, note.CreatedAt);
         Assert.Equal("New note", note.Content);
     }

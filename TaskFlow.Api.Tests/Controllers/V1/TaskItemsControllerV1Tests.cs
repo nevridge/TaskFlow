@@ -387,7 +387,7 @@ public class TaskItemsControllerV1Tests
         Assert.IsType<CreatedAtRouteResult>(result.Result);
         var tomorrowEntry = await journalRepo.GetByDateAsync(today.AddDays(1));
         Assert.Equal("Tomorrow task", Assert.Single(tomorrowEntry!.Todos.Select(t => t.Title)));
-        Assert.Single((await journalRepo.GetTodosAsync(todayEntry.Id)), t => t.Id == todayTask.Id);
+        Assert.Single(await journalRepo.GetTodosAsync(todayEntry.Id), t => t.Id == todayTask.Id);
         Assert.Equal(0, context.TaskItems.Single(t => t.Id == todayTask.Id).MoveCount);
     }
 
@@ -424,7 +424,7 @@ public class TaskItemsControllerV1Tests
 
         var before = seeded.ToDictionary(t => t.Id, t => (t.CurrentJournalEntryId, t.MoveCount, t.FirstTaggedDate));
         var eventsBefore = await context.TaskItemEvents.CountAsync();
-        Assert.Null((await journalRepo.GetByDateAsync(tomorrow)));
+        Assert.Null(await journalRepo.GetByDateAsync(tomorrow));
 
         var result = await controller.Create(new CreateTaskItemDto
         {

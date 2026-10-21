@@ -67,9 +67,9 @@ public class ProjectRepositoryTests
         var repo = new ProjectRepository(context);
         var p = await repo.AddAsync(new Project { Name = "Alpha" });
 
-        Assert.True((await repo.NameExistsAsync("Alpha")));
-        Assert.False((await repo.NameExistsAsync("Alpha", p.Id)));
-        Assert.False((await repo.NameExistsAsync("Other")));
+        Assert.True(await repo.NameExistsAsync("Alpha"));
+        Assert.False(await repo.NameExistsAsync("Alpha", p.Id));
+        Assert.False(await repo.NameExistsAsync("Other"));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        Assert.True((await repo.UnassignTaskAsync(p.Id, task.Id)));
+        Assert.True(await repo.UnassignTaskAsync(p.Id, task.Id));
 
         Assert.Null((await context.TaskItems.AsNoTracking().SingleAsync()).ProjectId);
         Assert.Equal("Removed from project 'Alpha'.", (await context.TaskItemEvents.SingleAsync()).ChangeSummary);
@@ -176,7 +176,7 @@ public class ProjectRepositoryTests
         context.TaskItems.Add(task);
         await context.SaveChangesAsync();
 
-        Assert.False((await repo.UnassignTaskAsync(p.Id, task.Id)));
+        Assert.False(await repo.UnassignTaskAsync(p.Id, task.Id));
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class ProjectRepositoryTests
             var repo = new ProjectRepository(context);
             await repo.AddAsync(new Project { Name = "Alpha" });
 
-            Assert.True((await repo.NameExistsAsync("alpha")));
+            Assert.True(await repo.NameExistsAsync("alpha"));
 
             var act = () => repo.AddAsync(new Project { Name = "ALPHA" });
             await Assert.ThrowsAsync<DbUpdateException>(act);

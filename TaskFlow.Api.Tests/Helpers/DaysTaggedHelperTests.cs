@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.Helpers;
 
 namespace TaskFlow.Api.Tests.Helpers;
@@ -13,7 +12,7 @@ public class DaysTaggedHelperTests
 
         var result = DaysTaggedHelper.GetDaysTagged(firstTaggedDate, currentJournalDate);
 
-        result.Should().Be(3);
+        Assert.Equal(3, result);
     }
 
     [Fact]
@@ -24,7 +23,7 @@ public class DaysTaggedHelperTests
 
         var result = DaysTaggedHelper.GetDaysTagged(firstTaggedDate, currentJournalDate);
 
-        result.Should().Be(0);
+        Assert.Equal(0, result);
     }
 
     [Fact]
@@ -35,7 +34,7 @@ public class DaysTaggedHelperTests
 
         var result = DaysTaggedHelper.GetDaysTagged(firstTaggedDate, currentJournalDate);
 
-        result.Should().Be(0);
+        Assert.Equal(0, result);
     }
 
     [Fact]
@@ -46,7 +45,7 @@ public class DaysTaggedHelperTests
 
         var result = DaysTaggedHelper.GetDaysTagged(firstTaggedDate, currentJournalDate);
 
-        result.Should().Be(0);
+        Assert.Equal(0, result);
     }
 
     [Fact]
@@ -56,6 +55,6 @@ public class DaysTaggedHelperTests
 
         var result = DaysTaggedHelper.GetDaysTagged(date, date);
 
-        result.Should().Be(1);
+        Assert.Equal(1, result);
     }
 }

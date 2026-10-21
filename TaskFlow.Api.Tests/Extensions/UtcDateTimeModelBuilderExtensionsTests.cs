@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design.Internal;
@@ -64,11 +63,11 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.JournalEntries.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
-        loaded.UpdatedAt.Should().NotBeNull();
-        loaded.UpdatedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.UpdatedAt.Value.Ticks.Should().Be(InstantWithTicks.AddMinutes(1).Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
+        Assert.NotNull(loaded.UpdatedAt);
+        Assert.Equal(DateTimeKind.Utc, loaded.UpdatedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.AddMinutes(1).Ticks, loaded.UpdatedAt.Value.Ticks);
     }
 
     [Fact]
@@ -95,10 +94,10 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.JournalLogEntries.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
-        loaded.UpdatedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.UpdatedAt.Value.Ticks.Should().Be(InstantWithTicks.AddSeconds(5).Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.UpdatedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.AddSeconds(5).Ticks, loaded.UpdatedAt.Value.Ticks);
     }
 
     [Fact]
@@ -125,10 +124,10 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.JournalNotes.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
-        loaded.UpdatedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.UpdatedAt.Value.Ticks.Should().Be(InstantWithTicks.AddSeconds(5).Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.UpdatedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.AddSeconds(5).Ticks, loaded.UpdatedAt.Value.Ticks);
     }
 
     [Fact]
@@ -157,10 +156,10 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.Notes.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
-        loaded.UpdatedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.UpdatedAt.Value.Ticks.Should().Be(InstantWithTicks.AddSeconds(5).Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.UpdatedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.AddSeconds(5).Ticks, loaded.UpdatedAt.Value.Ticks);
     }
 
     [Fact]
@@ -185,10 +184,10 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.Projects.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
-        loaded.UpdatedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.UpdatedAt.Value.Ticks.Should().Be(InstantWithTicks.AddSeconds(5).Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.UpdatedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.AddSeconds(5).Ticks, loaded.UpdatedAt.Value.Ticks);
     }
 
     [Fact]
@@ -216,8 +215,8 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.TaskItemEvents.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.OccurredAtUtc.Kind.Should().Be(DateTimeKind.Utc);
-        loaded.OccurredAtUtc.Ticks.Should().Be(InstantWithTicks.Ticks);
+        Assert.Equal(DateTimeKind.Utc, loaded.OccurredAtUtc.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.OccurredAtUtc.Ticks);
     }
 
     [Fact]
@@ -237,8 +236,8 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var reader = new TaskDbContext(options);
         var loaded = await reader.Projects.AsNoTracking().SingleAsync(e => e.Id == id);
 
-        loaded.UpdatedAt.Should().BeNull();
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Utc);
+        Assert.Null(loaded.UpdatedAt);
+        Assert.Equal(DateTimeKind.Utc, loaded.CreatedAt.Kind);
     }
 
     [Fact]
@@ -265,8 +264,8 @@ public class UtcDateTimeModelBuilderExtensionsTests
         var json = JsonSerializer.Serialize(dto, JsonSerializerOptionsProvider.Default);
         using var doc = JsonDocument.Parse(json);
 
-        doc.RootElement.GetProperty("createdAt").GetString().Should().EndWith("Z");
-        doc.RootElement.GetProperty("updatedAt").GetString().Should().EndWith("Z");
+        Assert.EndsWith("Z", doc.RootElement.GetProperty("createdAt").GetString(), StringComparison.Ordinal);
+        Assert.EndsWith("Z", doc.RootElement.GetProperty("updatedAt").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -283,7 +282,7 @@ public class UtcDateTimeModelBuilderExtensionsTests
         command.CommandText = "SELECT CreatedAt FROM JournalEntries";
         var stored = (string?)await command.ExecuteScalarAsync();
 
-        stored.Should().Be(InstantWithTicks.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF"));
+        Assert.Equal(InstantWithTicks.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF"), stored);
     }
 
     [Fact]
@@ -305,8 +304,8 @@ public class UtcDateTimeModelBuilderExtensionsTests
         await using var plain = new PlainContext(plainOptions);
         var loaded = await plain.Notes.AsNoTracking().SingleAsync(n => n.Id == id);
 
-        loaded.CreatedAt.Kind.Should().Be(DateTimeKind.Unspecified);
-        loaded.CreatedAt.Ticks.Should().Be(InstantWithTicks.Ticks);
+        Assert.Equal(DateTimeKind.Unspecified, loaded.CreatedAt.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.CreatedAt.Ticks);
     }
 
     [Fact]
@@ -331,9 +330,9 @@ public class UtcDateTimeModelBuilderExtensionsTests
         var a = await reader.TaskItems.AsNoTracking().SingleAsync(t => t.Id == withDueId);
         var b = await reader.TaskItems.AsNoTracking().SingleAsync(t => t.Id == withoutDueId);
 
-        a.DueDate.Should().Be(due);
-        a.DueDate!.Value.Kind.Should().Be(DateTimeKind.Unspecified);
-        b.DueDate.Should().BeNull();
+        Assert.Equal(due, a.DueDate);
+        Assert.Equal(DateTimeKind.Unspecified, a.DueDate!.Value.Kind);
+        Assert.Null(b.DueDate);
     }
 
     [Fact]
@@ -356,11 +355,10 @@ public class UtcDateTimeModelBuilderExtensionsTests
 
                 var name = $"{entityType.ClrType.Name}.{property.Name}";
                 var isConverted = ReferenceEquals(property.GetValueConverter(), UtcDateTimeModelBuilderExtensions.UtcConverter);
-                (isConverted || allowlist.Contains(name))
-                    .Should().BeTrue($"New DateTime property {name}: apply UTC converter or add to allowlist.");
+                Assert.True(isConverted || allowlist.Contains(name), $"New DateTime property {name}: apply UTC converter or add to allowlist.");
                 if (allowlist.Contains(name))
                 {
-                    property.GetValueConverter().Should().BeNull();
+                    Assert.Null(property.GetValueConverter());
                 }
             }
         }
@@ -374,15 +372,14 @@ public class UtcDateTimeModelBuilderExtensionsTests
         using var context = new TaskDbContext(options);
 
         var snapshotModel = context.GetService<IMigrationsAssembly>().ModelSnapshot?.Model;
-        snapshotModel.Should().NotBeNull();
+        Assert.NotNull(snapshotModel);
 
         var finalized = context.GetService<IModelRuntimeInitializer>()
             .Initialize(((IMutableModel)snapshotModel!).FinalizeModel());
         var differ = context.GetService<IMigrationsModelDiffer>();
         var designModel = context.GetService<IDesignTimeModel>().Model;
 
-        differ.HasDifferences(finalized.GetRelationalModel(), designModel.GetRelationalModel())
-            .Should().BeFalse("the UTC converter must not change the schema or model snapshot");
+        Assert.False(differ.HasDifferences(finalized.GetRelationalModel(), designModel.GetRelationalModel()), "the UTC converter must not change the schema or model snapshot");
     }
 
     private sealed class PlainContext(DbContextOptions<PlainContext> options) : DbContext(options)

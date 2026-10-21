@@ -305,7 +305,7 @@ public class TaskItemsControllerV1Tests
         var result = await controller.Get(1);
 
         // Assert
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 }
 ```

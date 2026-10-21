@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using TaskFlow.Api.Extensions;
 
@@ -16,10 +15,10 @@ public class ApiVersioningServiceExtensionsTests
         var result = services.AddApiVersioningConfiguration();
 
         // Assert
-        result.Should().BeSameAs(services);
+        Assert.Same(services, result);
 
         // Verify that API versioning services are registered by checking the service collection
-        services.Should().Contain(s => s.ServiceType.FullName != null &&
+        Assert.Contains(services, s => s.ServiceType.FullName != null &&
                                        s.ServiceType.FullName.Contains("ApiVersion"));
     }
 
@@ -33,7 +32,7 @@ public class ApiVersioningServiceExtensionsTests
         var result = services.AddApiVersioningConfiguration();
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeOfType<ServiceCollection>();
+        Assert.NotNull(result);
+        Assert.IsType<ServiceCollection>(result);
     }
 }

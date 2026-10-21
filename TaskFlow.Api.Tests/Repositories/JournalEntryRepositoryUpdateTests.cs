@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
@@ -54,18 +53,20 @@ public class JournalEntryRepositoryUpdateTests
             using var context = NewContext(connection);
             var repo = new JournalEntryRepository(context);
             var loaded = (await repo.GetByIdAsync(entryId))!;
-            loaded.Todos.Should().HaveCount(2, "the scenario needs planned tasks for the bug to occur");
+            // the scenario needs planned tasks for the bug to occur
+            Assert.Equal(2, loaded.Todos.Count());
 
             loaded.Title = "Renamed";
             loaded.Summary = "new summary";
             var act = () => repo.UpdateAsync(loaded);
 
-            await act.Should().NotThrowAsync();
+            Assert.Null(await Record.ExceptionAsync(act));
             using var verify = NewContext(connection);
             var saved = await verify.JournalEntries.AsNoTracking().SingleAsync();
-            saved.Title.Should().Be("Renamed");
-            saved.Summary.Should().Be("new summary");
-            saved.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+            Assert.Equal("Renamed", saved.Title);
+            Assert.Equal("new summary", saved.Summary);
+            Assert.NotNull(saved.UpdatedAt);
+            Assert.Equal(DateTime.UtcNow, saved.UpdatedAt.Value, TimeSpan.FromSeconds(5));
         }
     }
 
@@ -99,10 +100,10 @@ public class JournalEntryRepositoryUpdateTests
             loaded.Summary = "works";
             var act = () => repo.UpdateAsync(loaded);
 
-            await act.Should().NotThrowAsync();
+            Assert.Null(await Record.ExceptionAsync(act));
             using var verify = NewContext(connection);
-            (await verify.JournalEntries.AsNoTracking().SingleAsync()).Summary.Should().Be("works");
-            (await verify.JournalEntries.Include(e => e.Todos).AsNoTracking().SingleAsync()).Todos.Should().ContainSingle();
+            Assert.Equal("works", (await verify.JournalEntries.AsNoTracking().SingleAsync()).Summary);
+            Assert.Single((await verify.JournalEntries.Include(e => e.Todos).AsNoTracking().SingleAsync()).Todos);
         }
     }
 
@@ -124,12 +125,12 @@ public class JournalEntryRepositoryUpdateTests
             await repo.UpdateAsync(loaded);
 
             using var verify = NewContext(connection);
-            (await verify.TaskItems.AsNoTracking().SingleAsync(t => t.Id == taskId)).Title.Should().Be("Linked task");
-            (await verify.TaskItems.AsNoTracking().SingleAsync(t => t.Id == childId)).Priority.Should().Be(Priority.Low);
-            (await verify.JournalLogEntries.AsNoTracking().SingleAsync()).Content.Should().Be("a log line");
+            Assert.Equal("Linked task", (await verify.TaskItems.AsNoTracking().SingleAsync(t => t.Id == taskId)).Title);
+            Assert.Equal(Priority.Low, (await verify.TaskItems.AsNoTracking().SingleAsync(t => t.Id == childId)).Priority);
+            Assert.Equal("a log line", (await verify.JournalLogEntries.AsNoTracking().SingleAsync()).Content);
 
             var reloaded = await new JournalEntryRepository(verify).GetByIdAsync(entryId);
-            reloaded!.Todos.Select(t => t.Id).Should().BeEquivalentTo([taskId, childId]);
+            Assert.Equal(new[] { taskId, childId }.Order(), reloaded!.Todos.Select(t => t.Id).Order());
         }
     }
 
@@ -150,8 +151,8 @@ public class JournalEntryRepositoryUpdateTests
 
             using var verify = NewContext(connection);
             var saved = await verify.JournalEntries.AsNoTracking().SingleAsync();
-            saved.Date.Should().Be(Day);
-            saved.CreatedAt.Should().Be(new DateTime(2026, 10, 9, 8, 0, 0, DateTimeKind.Utc));
+            Assert.Equal(Day, saved.Date);
+            Assert.Equal(new DateTime(2026, 10, 9, 8, 0, 0, DateTimeKind.Utc), saved.CreatedAt);
         }
     }
 
@@ -167,7 +168,9 @@ public class JournalEntryRepositoryUpdateTests
 
             await repo.UpdateAsync(loaded);
 
-            loaded.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5), "the controller returns this instance");
+            Assert.NotNull(loaded.UpdatedAt);
+            // the controller returns this instance
+            Assert.Equal(DateTime.UtcNow, loaded.UpdatedAt.Value, TimeSpan.FromSeconds(5));
         }
     }
 
@@ -182,7 +185,7 @@ public class JournalEntryRepositoryUpdateTests
         entry.Summary = "tracked edit";
         await repo.UpdateAsync(entry);
 
-        (await context.JournalEntries.AsNoTracking().SingleAsync()).Summary.Should().Be("tracked edit");
+        Assert.Equal("tracked edit", (await context.JournalEntries.AsNoTracking().SingleAsync()).Summary);
     }
 
     [Fact]
@@ -194,6 +197,7 @@ public class JournalEntryRepositoryUpdateTests
 
         var act = () => repo.UpdateAsync(new JournalEntry { Id = 404, Title = "ghost", Date = Day });
 
-        await act.Should().ThrowAsync<KeyNotFoundException>().WithMessage("*404*");
+        var ex = await Assert.ThrowsAsync<KeyNotFoundException>(act);
+        Assert.Contains("404", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

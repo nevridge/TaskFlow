@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Validators;
 
@@ -15,7 +14,7 @@ public class JournalNoteValidatorTests
 
         var result = await _validator.ValidateAsync(note);
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Fact]
@@ -25,8 +24,8 @@ public class JournalNoteValidatorTests
 
         var result = await _validator.ValidateAsync(note);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Content");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Content");
     }
 
     [Fact]
@@ -36,8 +35,8 @@ public class JournalNoteValidatorTests
 
         var result = await _validator.ValidateAsync(note);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e => e.PropertyName == "Content");
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.PropertyName == "Content");
     }
 
     [Fact]
@@ -47,8 +46,8 @@ public class JournalNoteValidatorTests
 
         var result = await _validator.ValidateAsync(note);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(e =>
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e =>
             e.PropertyName == "Content" &&
             e.ErrorMessage == "Content must not exceed 2000 characters.");
     }
@@ -60,7 +59,7 @@ public class JournalNoteValidatorTests
 
         var result = await _validator.ValidateAsync(note);
 
-        result.IsValid.Should().BeTrue();
-        result.Errors.Should().BeEmpty();
+        Assert.True(result.IsValid);
+        Assert.Empty(result.Errors);
     }
 }

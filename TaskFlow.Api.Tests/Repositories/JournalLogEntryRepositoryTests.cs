@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
@@ -44,9 +43,9 @@ public class JournalLogEntryRepositoryTests
 
         var logs = (await repo.GetAllByEntryIdAsync(entry.Id)).ToList();
 
-        logs.Should().HaveCount(2);
-        logs[0].Content.Should().Be("A");
-        logs[1].Content.Should().Be("B");
+        Assert.Equal(2, logs.Count());
+        Assert.Equal("A", logs[0].Content);
+        Assert.Equal("B", logs[1].Content);
     }
 
     [Fact]
@@ -64,13 +63,13 @@ public class JournalLogEntryRepositoryTests
         await repo.UpdateAsync(log);
 
         var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
-        fetched.Should().NotBeNull();
-        fetched!.UpdatedAt.Should().NotBeNull();
+        Assert.NotNull(fetched);
+        Assert.NotNull(fetched!.UpdatedAt);
 
         await repo.DeleteAsync(entry.Id, log.Id);
         await repo.DeleteAsync(entry.Id, 999);
 
-        (await repo.GetByIdAsync(entry.Id, log.Id)).Should().BeNull();
+        Assert.Null((await repo.GetByIdAsync(entry.Id, log.Id)));
     }
 
     [Fact]
@@ -97,9 +96,9 @@ public class JournalLogEntryRepositoryTests
 
             var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
 
-            fetched.Should().NotBeNull();
-            fetched!.TaskItem.Should().NotBeNull();
-            fetched.TaskItem!.Title.Should().Be("Linked Task");
+            Assert.NotNull(fetched);
+            Assert.NotNull(fetched!.TaskItem);
+            Assert.Equal("Linked Task", fetched.TaskItem!.Title);
         }
     }
 
@@ -131,9 +130,9 @@ public class JournalLogEntryRepositoryTests
 
             var fetched = await repo.GetByIdAsync(entry.Id, log.Id);
 
-            fetched.Should().NotBeNull();
-            fetched!.TaskItemId.Should().BeNull();
-            fetched.LinkedTaskTitleSnapshot.Should().Be("Will Be Deleted");
+            Assert.NotNull(fetched);
+            Assert.Null(fetched!.TaskItemId);
+            Assert.Equal("Will Be Deleted", fetched.LinkedTaskTitleSnapshot);
         }
     }
 }

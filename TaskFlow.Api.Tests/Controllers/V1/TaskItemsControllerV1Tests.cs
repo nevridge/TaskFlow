@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -50,11 +49,11 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.GetAll();
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject;
-        dtos.Should().HaveCount(2);
-        dtos.Should().Contain(d => d.Id == 1 && d.Title == "Task 1" && d.Status == "Todo" && d.Priority == "Low" && d.DueDate == dueDate);
-        dtos.Should().Contain(d => d.Id == 2 && d.Title == "Task 2" && d.Status == "Completed" && d.Priority == "High" && d.DueDate == null);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(okResult.Value);
+        Assert.Equal(2, dtos.Count());
+        Assert.Contains(dtos, d => d.Id == 1 && d.Title == "Task 1" && d.Status == "Todo" && d.Priority == "Low" && d.DueDate == dueDate);
+        Assert.Contains(dtos, d => d.Id == 2 && d.Title == "Task 2" && d.Status == "Completed" && d.Priority == "High" && d.DueDate == null);
         _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
     }
 
@@ -79,15 +78,15 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Get(1);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        dto.Id.Should().Be(1);
-        dto.Title.Should().Be("Task 1");
-        dto.Description.Should().Be("Description");
-        dto.IsComplete.Should().BeFalse();
-        dto.Status.Should().Be("Todo");
-        dto.Priority.Should().Be("Medium");
-        dto.DueDate.Should().Be(dueDate);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<TaskItemResponseDto>(okResult.Value);
+        Assert.Equal(1, dto.Id);
+        Assert.Equal("Task 1", dto.Title);
+        Assert.Equal("Description", dto.Description);
+        Assert.False(dto.IsComplete);
+        Assert.Equal("Todo", dto.Status);
+        Assert.Equal("Medium", dto.Priority);
+        Assert.Equal(dueDate, dto.DueDate);
         _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
     }
 
@@ -101,7 +100,7 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Get(1);
 
         // Assert
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
         _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
     }
 
@@ -138,20 +137,22 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Create(createDto);
 
         // Assert
-        var createdResult = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        createdResult.RouteName.Should().Be("GetTaskV1");
-        createdResult.RouteValues.Should().ContainKey("version").WhoseValue.Should().Be("1.0");
-        createdResult.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(1);
+        var createdResult = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal("GetTaskV1", createdResult.RouteName);
+        Assert.True(createdResult.RouteValues!.TryGetValue("version", out var versionValue));
+        Assert.Equal("1.0", versionValue);
+        Assert.True(createdResult.RouteValues.TryGetValue("id", out var idValue));
+        Assert.Equal(1, idValue);
 
         // Controller now returns TaskItemResponseDto, not TaskItem
-        var responseDto = createdResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        responseDto.Id.Should().Be(1);
-        responseDto.Title.Should().Be("New Task");
-        responseDto.Description.Should().Be("New Description");
-        responseDto.IsComplete.Should().BeFalse();
-        responseDto.Status.Should().Be("Todo");
-        responseDto.Priority.Should().Be("High");
-        responseDto.DueDate.Should().Be(dueDate);
+        var responseDto = Assert.IsType<TaskItemResponseDto>(createdResult.Value);
+        Assert.Equal(1, responseDto.Id);
+        Assert.Equal("New Task", responseDto.Title);
+        Assert.Equal("New Description", responseDto.Description);
+        Assert.False(responseDto.IsComplete);
+        Assert.Equal("Todo", responseDto.Status);
+        Assert.Equal("High", responseDto.Priority);
+        Assert.Equal(dueDate, responseDto.DueDate);
     }
 
     [Fact]
@@ -175,12 +176,12 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        captured.Should().NotBeNull();
-        captured!.ProjectId.Should().Be(7);
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var dto = created.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        dto.ProjectId.Should().Be(7);
-        dto.ProjectName.Should().Be("Alpha");
+        Assert.NotNull(captured);
+        Assert.Equal(7, captured!.ProjectId);
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var dto = Assert.IsType<TaskItemResponseDto>(created.Value);
+        Assert.Equal(7, dto.ProjectId);
+        Assert.Equal("Alpha", dto.ProjectName);
     }
 
     [Fact]
@@ -191,9 +192,9 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
-        unprocessable.Value.Should().NotBeNull();
-        unprocessable.Value!.ToString().Should().Contain("TASK_PROJECT_NOT_FOUND");
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        Assert.NotNull(unprocessable.Value);
+        Assert.Contains("TASK_PROJECT_NOT_FOUND", unprocessable.Value!.ToString());
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -207,10 +208,10 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(3, new UpdateTaskItemDto { Title = "New" });
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        dto.ProjectId.Should().Be(7);
-        existing.ProjectId.Should().Be(7);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<TaskItemResponseDto>(ok.Value);
+        Assert.Equal(7, dto.ProjectId);
+        Assert.Equal(7, existing.ProjectId);
     }
 
     [Fact]
@@ -227,7 +228,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -242,7 +243,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -263,7 +264,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -294,7 +295,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id), Times.Once);
     }
 
@@ -331,7 +332,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         _mockJournalRepo.Verify(r => r.AddTodoAsync(existingEntry.Id, createdTask.Id, null), Times.Once);
         _mockJournalRepo.Verify(r => r.GetByDateAsync(targetDate), Times.Exactly(2));
     }
@@ -350,7 +351,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(new CreateTaskItemDto { Title = "Tomorrow", JournalDate = targetDate, TimezoneOffsetMinutes = 0 });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         _mockJournalRepo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -383,11 +384,11 @@ public class TaskItemsControllerV1Tests
             TimezoneOffsetMinutes = offset
         });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         var tomorrowEntry = await journalRepo.GetByDateAsync(today.AddDays(1));
-        tomorrowEntry!.Todos.Select(t => t.Title).Should().BeEquivalentTo(["Tomorrow task"]);
-        (await journalRepo.GetTodosAsync(todayEntry.Id)).Should().ContainSingle(t => t.Id == todayTask.Id);
-        context.TaskItems.Single(t => t.Id == todayTask.Id).MoveCount.Should().Be(0);
+        Assert.Equal("Tomorrow task", Assert.Single(tomorrowEntry!.Todos.Select(t => t.Title)));
+        Assert.Single((await journalRepo.GetTodosAsync(todayEntry.Id)), t => t.Id == todayTask.Id);
+        Assert.Equal(0, context.TaskItems.Single(t => t.Id == todayTask.Id).MoveCount);
     }
 
     [Fact]
@@ -423,7 +424,7 @@ public class TaskItemsControllerV1Tests
 
         var before = seeded.ToDictionary(t => t.Id, t => (t.CurrentJournalEntryId, t.MoveCount, t.FirstTaggedDate));
         var eventsBefore = await context.TaskItemEvents.CountAsync();
-        (await journalRepo.GetByDateAsync(tomorrow)).Should().BeNull();
+        Assert.Null((await journalRepo.GetByDateAsync(tomorrow)));
 
         var result = await controller.Create(new CreateTaskItemDto
         {
@@ -432,20 +433,19 @@ public class TaskItemsControllerV1Tests
             TimezoneOffsetMinutes = offset
         });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         var tomorrowEntry = await journalRepo.GetByDateAsync(tomorrow);
-        tomorrowEntry.Should().NotBeNull();
-        tomorrowEntry!.Todos.Select(t => t.Title).Should().BeEquivalentTo(["Tomorrow task"]);
+        Assert.NotNull(tomorrowEntry);
+        Assert.Equal("Tomorrow task", Assert.Single(tomorrowEntry!.Todos.Select(t => t.Title)));
         foreach (var task in seeded)
         {
             var reloaded = await context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == task.Id);
-            (reloaded.CurrentJournalEntryId, reloaded.MoveCount, reloaded.FirstTaggedDate).Should().Be(before[task.Id]);
+            Assert.Equal(before[task.Id], (reloaded.CurrentJournalEntryId, reloaded.MoveCount, reloaded.FirstTaggedDate));
         }
 
         var seededIds = seeded.Select(t => t.Id).ToList();
-        (await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId) && e.EventType == "ReassignedToJournalDay"))
-            .Should().Be(0);
-        (await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId))).Should().Be(eventsBefore);
+        Assert.Equal(0, await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId) && e.EventType == "ReassignedToJournalDay"));
+        Assert.Equal(eventsBefore, (await context.TaskItemEvents.CountAsync(e => seededIds.Contains(e.TaskItemId))));
         _mockJournalRepo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -477,7 +477,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id, offsetMinutes), Times.Once);
     }
 
@@ -500,7 +500,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Create(createDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -537,15 +537,15 @@ public class TaskItemsControllerV1Tests
 
         // Assert
         // Controller now returns 200 OK with TaskItemResponseDto instead of 204 NoContent
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        responseDto.Id.Should().Be(1);
-        responseDto.Title.Should().Be("Updated Task");
-        responseDto.Description.Should().Be("Updated Description");
-        responseDto.IsComplete.Should().BeTrue();
-        responseDto.Status.Should().Be("Completed");
-        responseDto.Priority.Should().Be("Medium");
-        responseDto.DueDate.Should().Be(dueDate);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var responseDto = Assert.IsType<TaskItemResponseDto>(okResult.Value);
+        Assert.Equal(1, responseDto.Id);
+        Assert.Equal("Updated Task", responseDto.Title);
+        Assert.Equal("Updated Description", responseDto.Description);
+        Assert.True(responseDto.IsComplete);
+        Assert.Equal("Completed", responseDto.Status);
+        Assert.Equal("Medium", responseDto.Priority);
+        Assert.Equal(dueDate, responseDto.DueDate);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
@@ -561,7 +561,7 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Delete(1);
 
         // Assert
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _mockRepo.Verify(r => r.DeleteAsync(1), Times.Once);
     }
 
@@ -575,7 +575,7 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Delete(1);
 
         // Assert
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
         _mockRepo.Verify(r => r.DeleteAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -589,9 +589,9 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.GetAll();
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject;
-        dtos.Should().BeEmpty();
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(okResult.Value);
+        Assert.Empty(dtos);
         _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
     }
 
@@ -611,8 +611,8 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Create(createDto);
 
         // Assert
-        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequestResult.Value.Should().BeEquivalentTo(validationFailures);
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equivalent(validationFailures, badRequestResult.Value, strict: true);
         _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -630,12 +630,12 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Create(createDto);
 
         // Assert
-        var createdResult = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var dto = createdResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        dto.Title.Should().Be("Task");
-        dto.Description.Should().BeNull();
-        dto.IsComplete.Should().BeFalse();
-        dto.Status.Should().Be("Draft");
+        var createdResult = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var dto = Assert.IsType<TaskItemResponseDto>(createdResult.Value);
+        Assert.Equal("Task", dto.Title);
+        Assert.Null(dto.Description);
+        Assert.False(dto.IsComplete);
+        Assert.Equal("Draft", dto.Status);
     }
 
     [Fact]
@@ -649,7 +649,7 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(999, updateDto);
 
         // Assert
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
         _mockRepo.Verify(r => r.GetByIdAsync(999), Times.Once);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
@@ -672,8 +672,8 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(1, updateDto);
 
         // Assert
-        var badRequestResult = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
-        badRequestResult.Value.Should().BeEquivalentTo(validationFailures);
+        var badRequestResult = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equivalent(validationFailures, badRequestResult.Value, strict: true);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -707,9 +707,9 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(1, updateDto);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        responseDto.Priority.Should().Be("High"); // Priority preserved from existing task
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var responseDto = Assert.IsType<TaskItemResponseDto>(okResult.Value);
+        Assert.Equal("High", responseDto.Priority); // Priority preserved from existing task
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
@@ -743,8 +743,8 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(1, updateDto);
 
         // Assert
-        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
-        unprocessable.Value.Should().NotBeNull();
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        Assert.NotNull(unprocessable.Value);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -781,7 +781,7 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(1, updateDto);
 
         // Assert
-        result.Result.Should().BeOfType<OkObjectResult>();
+        Assert.IsType<OkObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
@@ -819,7 +819,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<OkObjectResult>();
+        Assert.IsType<OkObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
@@ -854,13 +854,12 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         var value = unprocessable.Value!;
-        value.GetType().GetProperty("code")!.GetValue(value).Should().Be("TASK_REOPEN_PAST_DAY_NOT_ALLOWED");
-        value.GetType().GetProperty("message")!.GetValue(value)
-            .Should().Be("Completed tasks assigned to past days cannot be reopened.");
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", value.GetType().GetProperty("code")!.GetValue(value));
+        Assert.Equal("Completed tasks assigned to past days cannot be reopened.", value.GetType().GetProperty("message")!.GetValue(value));
         var details = value.GetType().GetProperty("details")!.GetValue(value)!;
-        details.GetType().GetProperty("assignedDate")!.GetValue(details).Should().Be(assignedDate);
+        Assert.Equal(assignedDate, details.GetType().GetProperty("assignedDate")!.GetValue(details));
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -891,13 +890,13 @@ public class TaskItemsControllerV1Tests
 
         var utcNow = DateTime.UtcNow;
         var assignedDate = DateOnly.FromDateTime(utcNow);
-        UserDateHelper.GetUserToday(utcNow, offset).Should().Be(assignedDate.AddDays(1));
+        Assert.Equal(assignedDate.AddDays(1), UserDateHelper.GetUserToday(utcNow, offset));
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(assignedDate);
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -932,7 +931,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<OkObjectResult>();
+        Assert.IsType<OkObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
@@ -964,9 +963,9 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        var unprocessable = result.Result.Should().BeOfType<UnprocessableEntityObjectResult>().Subject;
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         var value = unprocessable.Value!;
-        value.GetType().GetProperty("code")!.GetValue(value).Should().Be("TASK_REOPEN_PAST_DAY_NOT_ALLOWED");
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", value.GetType().GetProperty("code")!.GetValue(value));
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -997,7 +996,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1029,7 +1028,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1066,7 +1065,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1118,7 +1117,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1160,7 +1159,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1187,7 +1186,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(1, updateDto);
 
-        result.Result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -1198,7 +1197,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.GetHistory(7);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -1220,9 +1219,9 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.GetHistory(1);
 
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var history = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemEventResponseDto>>().Subject;
-        history.Should().ContainSingle(e => e.Id == 10 && e.EventType == "AssignedToJournalDay");
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var history = Assert.IsAssignableFrom<IEnumerable<TaskItemEventResponseDto>>(okResult.Value);
+        Assert.Single(history, e => e.Id == 10 && e.EventType == "AssignedToJournalDay");
     }
 
     [Fact]
@@ -1236,7 +1235,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Delete(1);
 
-        result.Should().BeOfType<UnprocessableEntityObjectResult>();
+        Assert.IsType<UnprocessableEntityObjectResult>(result);
         _mockRepo.Verify(r => r.DeleteAsync(It.IsAny<int>()), Times.Never);
     }
 
@@ -1286,7 +1285,7 @@ public class TaskItemsControllerV1Tests
 
         var result = await _controller.Update(2, updateDto);
 
-        result.Result.Should().BeOfType<OkObjectResult>();
+        Assert.IsType<OkObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 2)), Times.Once);
         _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 10 && t.IsComplete && t.Status == Status.Completed)), Times.Once);
     }
@@ -1309,9 +1308,9 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Get(1);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        dto.ChildTaskCount.Should().Be(2);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<TaskItemResponseDto>(okResult.Value);
+        Assert.Equal(2, dto.ChildTaskCount);
         _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
     }
 
@@ -1319,8 +1318,8 @@ public class TaskItemsControllerV1Tests
     public void Get_ResponseDto_DoesNotExposeChildCount_ReflectionGuard()
     {
         // Assert: ChildCount must never be reintroduced; ChildTaskCount is the sole source of truth.
-        typeof(TaskItemResponseDto).GetProperty("ChildCount").Should().BeNull();
-        typeof(TaskItemResponseDto).GetProperty("ChildTaskCount").Should().NotBeNull();
+        Assert.Null(typeof(TaskItemResponseDto).GetProperty("ChildCount"));
+        Assert.NotNull(typeof(TaskItemResponseDto).GetProperty("ChildTaskCount"));
     }
 
     [Fact]
@@ -1350,9 +1349,9 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Create(createDto);
 
         // Assert
-        var createdResult = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var responseDto = createdResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        responseDto.ChildTaskCount.Should().Be(2);
+        var createdResult = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var responseDto = Assert.IsType<TaskItemResponseDto>(createdResult.Value);
+        Assert.Equal(2, responseDto.ChildTaskCount);
     }
 
     [Fact]
@@ -1383,9 +1382,9 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.Update(1, updateDto);
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var responseDto = okResult.Value.Should().BeOfType<TaskItemResponseDto>().Subject;
-        responseDto.ChildTaskCount.Should().Be(3);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var responseDto = Assert.IsType<TaskItemResponseDto>(okResult.Value);
+        Assert.Equal(3, responseDto.ChildTaskCount);
     }
 
     [Fact]
@@ -1405,10 +1404,10 @@ public class TaskItemsControllerV1Tests
         var result = await _controller.GetAll();
 
         // Assert
-        var okResult = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = okResult.Value.Should().BeAssignableTo<IEnumerable<TaskItemResponseDto>>().Subject.ToList();
-        dtos.Single(d => d.Id == 1).ChildTaskCount.Should().Be(2);
-        dtos.Single(d => d.Id == 2).ChildTaskCount.Should().Be(0);
-        dtos.Single(d => d.Id == 4).ChildTaskCount.Should().Be(0);
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(okResult.Value).ToList();
+        Assert.Equal(2, dtos.Single(d => d.Id == 1).ChildTaskCount);
+        Assert.Equal(0, dtos.Single(d => d.Id == 2).ChildTaskCount);
+        Assert.Equal(0, dtos.Single(d => d.Id == 4).ChildTaskCount);
     }
 }

@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +20,7 @@ public class CorsServiceExtensionsTests
 
         services.AddCorsPolicy(configuration);
 
-        services.Should().Contain(s => s.ServiceType == typeof(ICorsService));
+        Assert.Contains(services, s => s.ServiceType == typeof(ICorsService));
     }
 
     [Fact]
@@ -37,7 +36,7 @@ public class CorsServiceExtensionsTests
 
         var result = services.AddCorsPolicy(configuration);
 
-        result.Should().BeSameAs(services);
+        Assert.Same(services, result);
     }
 
     [Fact]
@@ -50,7 +49,7 @@ public class CorsServiceExtensionsTests
 
         services.AddCorsPolicy(configuration);
 
-        services.Should().NotContain(s => s.ServiceType == typeof(ICorsService));
+        Assert.DoesNotContain(services, s => s.ServiceType == typeof(ICorsService));
     }
 
     [Fact]
@@ -66,7 +65,7 @@ public class CorsServiceExtensionsTests
 
         var origins = CorsServiceExtensions.GetConfiguredOrigins(configuration);
 
-        origins.Should().BeEquivalentTo(["http://localhost:5173", "http://localhost:3000"]);
+        Assert.Equal(new[] { "http://localhost:5173", "http://localhost:3000" }.Order(), origins.Order());
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class CorsServiceExtensionsTests
 
         var origins = CorsServiceExtensions.GetConfiguredOrigins(configuration);
 
-        origins.Should().BeEmpty();
+        Assert.Empty(origins);
     }
 
     [Fact]
@@ -93,6 +92,6 @@ public class CorsServiceExtensionsTests
 
         var origins = CorsServiceExtensions.GetConfiguredOrigins(configuration);
 
-        origins.Should().BeEquivalentTo(["https://taskflow.skalaforge.com"]);
+        Assert.Equal("https://taskflow.skalaforge.com", Assert.Single(origins));
     }
 }

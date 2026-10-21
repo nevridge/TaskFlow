@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
@@ -35,8 +34,8 @@ public class TaskRepositoryTests
         var result = await repository.GetAllAsync();
 
         // Assert
-        result.Should().HaveCount(2);
-        result.Should().AllSatisfy(t => t.Status.Should().BeOneOf(Status.Draft, Status.Todo, Status.Completed));
+        Assert.Equal(2, result.Count());
+        Assert.All(result, t => Assert.Contains(t.Status, new[] { Status.Draft, Status.Todo, Status.Completed }));
     }
 
     [Fact]
@@ -50,7 +49,7 @@ public class TaskRepositoryTests
         var result = await repository.GetAllAsync();
 
         // Assert
-        result.Should().BeEmpty();
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -75,9 +74,9 @@ public class TaskRepositoryTests
         var result = await repository.GetByIdAsync(1);
 
         // Assert
-        result.Should().NotBeNull();
-        result!.Status.Should().Be(Status.Todo);
-        result.Title.Should().Be("Task 1");
+        Assert.NotNull(result);
+        Assert.Equal(Status.Todo, result!.Status);
+        Assert.Equal("Task 1", result.Title);
     }
 
     [Fact]
@@ -91,7 +90,7 @@ public class TaskRepositoryTests
         var result = await repository.GetByIdAsync(999);
 
         // Assert
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -106,16 +105,17 @@ public class TaskRepositoryTests
         var result = await repository.AddAsync(newTask);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Id.Should().BeGreaterThan(0);
-        result.Title.Should().Be("New Task");
+        Assert.NotNull(result);
+        Assert.True(result.Id > 0);
+        Assert.Equal("New Task", result.Title);
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
-        savedTask.Should().NotBeNull();
-        savedTask.Should().BeEquivalentTo(result);
+        Assert.NotNull(savedTask);
+        // FindAsync returns the tracked instance AddAsync saved, so this is the same object
+        Assert.Same(result, savedTask);
 
         var createdEvent = await context.TaskItemEvents.SingleAsync(e => e.TaskItemId == result.Id);
-        createdEvent.EventType.Should().Be("TaskCreated");
+        Assert.Equal("TaskCreated", createdEvent.EventType);
     }
 
     [Fact]
@@ -130,12 +130,12 @@ public class TaskRepositoryTests
         var result = await repository.AddAsync(newTask);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Description.Should().BeNull();
+        Assert.NotNull(result);
+        Assert.Null(result.Description);
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
-        savedTask.Should().NotBeNull();
-        savedTask!.Description.Should().BeNull();
+        Assert.NotNull(savedTask);
+        Assert.Null(savedTask!.Description);
     }
 
     [Fact]
@@ -150,12 +150,12 @@ public class TaskRepositoryTests
         var result = await repository.AddAsync(newTask);
 
         // Assert
-        result.Should().NotBeNull();
-        result.IsComplete.Should().BeTrue();
+        Assert.NotNull(result);
+        Assert.True(result.IsComplete);
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
-        savedTask.Should().NotBeNull();
-        savedTask!.IsComplete.Should().BeTrue();
+        Assert.NotNull(savedTask);
+        Assert.True(savedTask!.IsComplete);
     }
 
     [Fact]
@@ -178,10 +178,10 @@ public class TaskRepositoryTests
 
         // Assert
         var updatedTask = await context.TaskItems.FindAsync(1);
-        updatedTask.Should().NotBeNull();
-        updatedTask!.Title.Should().Be("Updated");
-        updatedTask.Description.Should().Be("Updated Description");
-        updatedTask.IsComplete.Should().BeTrue();
+        Assert.NotNull(updatedTask);
+        Assert.Equal("Updated", updatedTask!.Title);
+        Assert.Equal("Updated Description", updatedTask.Description);
+        Assert.True(updatedTask.IsComplete);
     }
 
     [Fact]
@@ -202,10 +202,10 @@ public class TaskRepositoryTests
 
         // Assert
         var updatedTask = await context.TaskItems.FindAsync(1);
-        updatedTask.Should().NotBeNull();
-        updatedTask!.Title.Should().Be("Original");
-        updatedTask.Description.Should().Be("Description");
-        updatedTask.IsComplete.Should().BeTrue();
+        Assert.NotNull(updatedTask);
+        Assert.Equal("Original", updatedTask!.Title);
+        Assert.Equal("Description", updatedTask.Description);
+        Assert.True(updatedTask.IsComplete);
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public class TaskRepositoryTests
         context.ChangeTracker.Clear();
 
         var tracked = await context.TaskItems.FindAsync(1);
-        tracked.Should().NotBeNull();
+        Assert.NotNull(tracked);
         tracked!.Title = "Updated";
         tracked.Priority = Priority.High;
 
@@ -230,8 +230,8 @@ public class TaskRepositoryTests
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync();
 
-        events.Should().Contain(e => e.EventType == "TitleChanged");
-        events.Should().Contain(e => e.EventType == "PriorityChanged");
+        Assert.Contains(events, e => e.EventType == "TitleChanged");
+        Assert.Contains(events, e => e.EventType == "PriorityChanged");
     }
 
     [Fact]
@@ -245,14 +245,14 @@ public class TaskRepositoryTests
         context.ChangeTracker.Clear();
 
         var tracked = await context.TaskItems.FindAsync(1);
-        tracked.Should().NotBeNull();
+        Assert.NotNull(tracked);
         tracked!.IsComplete = true;
         tracked.Status = Status.Completed;
         await repository.UpdateAsync(tracked);
 
         context.ChangeTracker.Clear();
         tracked = await context.TaskItems.FindAsync(1);
-        tracked.Should().NotBeNull();
+        Assert.NotNull(tracked);
         tracked!.IsComplete = false;
         tracked.Status = Status.Todo;
         await repository.UpdateAsync(tracked);
@@ -262,8 +262,8 @@ public class TaskRepositoryTests
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync();
 
-        events.Should().Contain(e => e.EventType == "Completed");
-        events.Should().Contain(e => e.EventType == "Reopened");
+        Assert.Contains(events, e => e.EventType == "Completed");
+        Assert.Contains(events, e => e.EventType == "Reopened");
     }
 
     [Fact]
@@ -286,7 +286,7 @@ public class TaskRepositoryTests
         context.ChangeTracker.Clear();
 
         var tracked = await context.TaskItems.FindAsync(1);
-        tracked.Should().NotBeNull();
+        Assert.NotNull(tracked);
         tracked!.Description = "Updated description";
         tracked.DueDate = dueDate.AddDays(3);
 
@@ -297,8 +297,8 @@ public class TaskRepositoryTests
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync();
 
-        events.Should().Contain(e => e.EventType == "DescriptionChanged");
-        events.Should().Contain(e => e.EventType == "DueDateChanged");
+        Assert.Contains(events, e => e.EventType == "DescriptionChanged");
+        Assert.Contains(events, e => e.EventType == "DueDateChanged");
     }
 
     [Fact]
@@ -316,7 +316,7 @@ public class TaskRepositoryTests
 
         // Assert
         var deletedTask = await context.TaskItems.FindAsync(1);
-        deletedTask.Should().BeNull();
+        Assert.Null(deletedTask);
     }
 
     [Fact]
@@ -330,7 +330,7 @@ public class TaskRepositoryTests
         var act = async () => await repository.DeleteAsync(999);
 
         // Assert
-        await act.Should().NotThrowAsync();
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 
     [Fact]
@@ -352,7 +352,7 @@ public class TaskRepositoryTests
 
         // Assert
         var remainingTasks = await context.TaskItems.ToListAsync();
-        remainingTasks.Should().HaveCount(1);
-        remainingTasks.First().Id.Should().Be(2);
+        Assert.Single(remainingTasks);
+        Assert.Equal(2, remainingTasks.First().Id);
     }
 }

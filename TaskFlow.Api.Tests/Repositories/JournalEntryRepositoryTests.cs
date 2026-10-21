@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -41,9 +40,9 @@ public class JournalEntryRepositoryTests
 
         var found = await repo.GetByDateAsync(date);
 
-        found.Should().NotBeNull();
-        found!.Title.Should().Be("May 10");
-        found.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        Assert.NotNull(found);
+        Assert.Equal("May 10", found!.Title);
+        Assert.Equal(DateTime.UtcNow, found.CreatedAt, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -58,8 +57,8 @@ public class JournalEntryRepositoryTests
 
         var all = (await repo.GetAllAsync()).ToList();
 
-        all.Should().HaveCount(2);
-        all[0].Title.Should().Be("Newer");
+        Assert.Equal(2, all.Count());
+        Assert.Equal("Newer", all[0].Title);
     }
 
     [Fact]
@@ -75,13 +74,13 @@ public class JournalEntryRepositoryTests
 
         await repo.AddTodoAsync(entry.Id, task.Id);
 
-        (await repo.TodoExistsAsync(entry.Id, task.Id)).Should().BeTrue();
-        (await repo.GetTodosAsync(entry.Id)).Should().ContainSingle(t => t.Id == task.Id);
+        Assert.True((await repo.TodoExistsAsync(entry.Id, task.Id)));
+        Assert.Single((await repo.GetTodosAsync(entry.Id)), t => t.Id == task.Id);
 
         await repo.RemoveTodoAsync(entry.Id, task.Id);
 
-        (await repo.TodoExistsAsync(entry.Id, task.Id)).Should().BeFalse();
-        task.CurrentJournalEntryId.Should().BeNull();
+        Assert.False((await repo.TodoExistsAsync(entry.Id, task.Id)));
+        Assert.Null(task.CurrentJournalEntryId);
     }
 
     [Fact]
@@ -97,10 +96,10 @@ public class JournalEntryRepositoryTests
 
         var result = await repo.AddTodoAsync(entry.Id, task.Id);
 
-        result.Should().Be(AddTodoResult.Success);
-        task.CurrentJournalEntryId.Should().Be(entry.Id);
-        task.FirstTaggedDate.Should().Be(entry.Date);
-        task.MoveCount.Should().Be(0);
+        Assert.Equal(AddTodoResult.Success, result);
+        Assert.Equal(entry.Id, task.CurrentJournalEntryId);
+        Assert.Equal(entry.Date, task.FirstTaggedDate);
+        Assert.Equal(0, task.MoveCount);
     }
 
     [Fact]
@@ -119,12 +118,12 @@ public class JournalEntryRepositoryTests
         await repo.AddTodoAsync(firstEntry.Id, task.Id);
         var moveResult = await repo.AddTodoAsync(secondEntry.Id, task.Id);
 
-        moveResult.Should().Be(AddTodoResult.Success);
-        task.CurrentJournalEntryId.Should().Be(secondEntry.Id);
-        task.FirstTaggedDate.Should().Be(firstEntry.Date);
-        task.MoveCount.Should().Be(1);
-        (await repo.TodoExistsAsync(firstEntry.Id, task.Id)).Should().BeFalse();
-        (await repo.TodoExistsAsync(secondEntry.Id, task.Id)).Should().BeTrue();
+        Assert.Equal(AddTodoResult.Success, moveResult);
+        Assert.Equal(secondEntry.Id, task.CurrentJournalEntryId);
+        Assert.Equal(firstEntry.Date, task.FirstTaggedDate);
+        Assert.Equal(1, task.MoveCount);
+        Assert.False((await repo.TodoExistsAsync(firstEntry.Id, task.Id)));
+        Assert.True((await repo.TodoExistsAsync(secondEntry.Id, task.Id)));
     }
 
     [Fact]
@@ -141,7 +140,7 @@ public class JournalEntryRepositoryTests
         await repo.AddTodoAsync(entry.Id, task.Id);
         var result = await repo.AddTodoAsync(entry.Id, task.Id);
 
-        result.Should().Be(AddTodoResult.AlreadyLinked);
+        Assert.Equal(AddTodoResult.AlreadyLinked, result);
     }
 
     [Fact]
@@ -152,7 +151,7 @@ public class JournalEntryRepositoryTests
 
         var result = await repo.AddTodoAsync(999, 1);
 
-        result.Should().Be(AddTodoResult.EntryNotFound);
+        Assert.Equal(AddTodoResult.EntryNotFound, result);
     }
 
     [Fact]
@@ -164,7 +163,7 @@ public class JournalEntryRepositoryTests
         var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
         var result = await repo.AddTodoAsync(entry.Id, 999);
 
-        result.Should().Be(AddTodoResult.TaskNotFound);
+        Assert.Equal(AddTodoResult.TaskNotFound, result);
     }
 
     [Fact]
@@ -180,7 +179,7 @@ public class JournalEntryRepositoryTests
 
         var act = async () => await repo.AddAsync(new JournalEntry { Title = "Duplicate", Date = date });
 
-        await act.Should().ThrowAsync<DuplicateJournalDateException>();
+        await Assert.ThrowsAsync<DuplicateJournalDateException>(act);
     }
 
     [Fact]
@@ -194,7 +193,7 @@ public class JournalEntryRepositoryTests
         await repo.DeleteAsync(entry.Id);
         await repo.DeleteAsync(999);
 
-        (await repo.GetByIdAsync(entry.Id)).Should().BeNull();
+        Assert.Null((await repo.GetByIdAsync(entry.Id)));
     }
 
     [Fact]
@@ -209,12 +208,12 @@ public class JournalEntryRepositoryTests
         var future = await repo.AddAsync(new JournalEntry { Title = "Future", Date = today.AddDays(1) });
         var past = await repo.AddAsync(new JournalEntry { Title = "Past", Date = today.AddDays(-5) });
 
-        (await repo.GetTodosAsync(source.Id)).Should().ContainSingle(t => t.Id == task.Id);
-        (await repo.GetTodosAsync(future.Id)).Should().BeEmpty();
-        (await repo.GetTodosAsync(past.Id)).Should().BeEmpty();
-        task.CurrentJournalEntryId.Should().Be(source.Id);
-        task.MoveCount.Should().Be(0);
-        context.TaskItemEvents.Should().BeEmpty();
+        Assert.Single((await repo.GetTodosAsync(source.Id)), t => t.Id == task.Id);
+        Assert.Empty((await repo.GetTodosAsync(future.Id)));
+        Assert.Empty((await repo.GetTodosAsync(past.Id)));
+        Assert.Equal(source.Id, task.CurrentJournalEntryId);
+        Assert.Equal(0, task.MoveCount);
+        Assert.Empty(context.TaskItemEvents);
     }
 
     [Fact]
@@ -229,11 +228,11 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(open.Id);
-        (await repo.GetTodosAsync(target.Id)).Should().ContainSingle(t => t.Id == open.Id);
-        (await repo.GetTodosAsync(source.Id)).Should().ContainSingle(t => t.Id == done.Id);
-        done.CurrentJournalEntryId.Should().Be(source.Id);
-        done.MoveCount.Should().Be(0);
+        Assert.Equal(new[] { open.Id }, moved);
+        Assert.Single((await repo.GetTodosAsync(target.Id)), t => t.Id == open.Id);
+        Assert.Single((await repo.GetTodosAsync(source.Id)), t => t.Id == done.Id);
+        Assert.Equal(source.Id, done.CurrentJournalEntryId);
+        Assert.Equal(0, done.MoveCount);
     }
 
     [Fact]
@@ -248,12 +247,12 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(olderTask.Id, newerTask.Id);
-        (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Should().BeEquivalentTo([olderTask.Id, newerTask.Id]);
-        (await repo.GetTodosAsync(older.Id)).Should().BeEmpty();
-        (await repo.GetTodosAsync(newer.Id)).Should().BeEmpty();
-        olderTask.FirstTaggedDate.Should().Be(older.Date);
-        newerTask.FirstTaggedDate.Should().Be(newer.Date);
+        Assert.Equal(new[] { olderTask.Id, newerTask.Id }, moved);
+        Assert.Equal(new[] { olderTask.Id, newerTask.Id }.Order(), (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Order());
+        Assert.Empty((await repo.GetTodosAsync(older.Id)));
+        Assert.Empty((await repo.GetTodosAsync(newer.Id)));
+        Assert.Equal(older.Date, olderTask.FirstTaggedDate);
+        Assert.Equal(newer.Date, newerTask.FirstTaggedDate);
     }
 
     [Fact]
@@ -275,11 +274,11 @@ public class JournalEntryRepositoryTests
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync();
 
-        events.Should().HaveCount(2);
-        events[0].EventType.Should().Be("AssignedToJournalDay");
-        events[0].ToJournalEntryId.Should().Be(entry.Id);
-        events[1].EventType.Should().Be("RemovedFromJournalDay");
-        events[1].FromJournalEntryId.Should().Be(entry.Id);
+        Assert.Equal(2, events.Count());
+        Assert.Equal("AssignedToJournalDay", events[0].EventType);
+        Assert.Equal(entry.Id, events[0].ToJournalEntryId);
+        Assert.Equal("RemovedFromJournalDay", events[1].EventType);
+        Assert.Equal(entry.Id, events[1].FromJournalEntryId);
     }
 
     // Verifies the GetAllAsync include chain specifically — the controller path uses GetTodosAsync,
@@ -305,7 +304,7 @@ public class JournalEntryRepositoryTests
 
         var foundEntry = all.First(e => e.Id == entry.Id);
         var parentTodo = foundEntry.Todos.First(t => t.Id == parent.Id);
-        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 
     [Fact]
@@ -331,7 +330,7 @@ public class JournalEntryRepositoryTests
         var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
 
         var parentTodo = todos.First(t => t.Id == parent.Id);
-        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 
     [Fact]
@@ -353,9 +352,9 @@ public class JournalEntryRepositoryTests
 
         var found = await repo.GetByIdAsync(entry.Id);
 
-        found.Should().NotBeNull();
+        Assert.NotNull(found);
         var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
-        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 
     [Fact]
@@ -378,9 +377,9 @@ public class JournalEntryRepositoryTests
 
         var found = await repo.GetByDateAsync(date);
 
-        found.Should().NotBeNull();
+        Assert.NotNull(found);
         var parentTodo = found!.Todos.First(t => t.Id == parent.Id);
-        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == child.Id);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 
     [Fact]
@@ -439,17 +438,17 @@ public class JournalEntryRepositoryTests
         // Without AsNoTracking, the identity map collision causes the child's ParentTaskItemId
         // to read as null, which makes it falsely appear as a root item in the controller filter.
         var rootItems = todos.Where(t => t.ParentTaskItemId is null).ToList();
-        rootItems.Should().ContainSingle(t => t.Id == parentId);
+        Assert.Single(rootItems, t => t.Id == parentId);
 
         // Assert 2: the parent has exactly one child with the expected Id.
         var parentTodo = todos.First(t => t.Id == parentId);
-        parentTodo.ChildTaskItems.Should().ContainSingle(c => c.Id == childId);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == childId);
 
         // Assert 3: the child's ParentTaskItemId is not null and correctly points to the parent.
         // This is the key assertion: without AsNoTracking this would be null due to identity map collision.
         var childItem = parentTodo.ChildTaskItems.First(c => c.Id == childId);
-        childItem.ParentTaskItemId.Should().NotBeNull();
-        childItem.ParentTaskItemId.Should().Be(parentId);
+        Assert.NotNull(childItem.ParentTaskItemId);
+        Assert.Equal(parentId, childItem.ParentTaskItemId);
     }
 
     [Fact]
@@ -485,8 +484,8 @@ public class JournalEntryRepositoryTests
 
         var parentTodo = todos.First(t => t.Id == parent.Id);
         var childItem = parentTodo.ChildTaskItems.First(c => c.Id == child.Id);
-        childItem.CurrentJournalEntry.Should().NotBeNull();
-        childItem.CurrentJournalEntry!.Id.Should().Be(secondEntry.Id);
+        Assert.NotNull(childItem.CurrentJournalEntry);
+        Assert.Equal(secondEntry.Id, childItem.CurrentJournalEntry!.Id);
     }
 
     [Fact]
@@ -504,21 +503,21 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(taskA.Id, taskB.Id);
-        taskA.CurrentJournalEntryId.Should().Be(target.Id);
-        taskA.MoveCount.Should().Be(1);
-        taskA.FirstTaggedDate.Should().Be(a.Date);
-        taskB.MoveCount.Should().Be(3);
-        taskB.FirstTaggedDate.Should().Be(today.AddDays(-9));
+        Assert.Equal(new[] { taskA.Id, taskB.Id }, moved);
+        Assert.Equal(target.Id, taskA.CurrentJournalEntryId);
+        Assert.Equal(1, taskA.MoveCount);
+        Assert.Equal(a.Date, taskA.FirstTaggedDate);
+        Assert.Equal(3, taskB.MoveCount);
+        Assert.Equal(today.AddDays(-9), taskB.FirstTaggedDate);
         var events = context.TaskItemEvents.ToList();
-        events.Should().HaveCount(2);
-        events.Should().OnlyContain(e => e.EventType == "ReassignedToJournalDay"
+        Assert.Equal(2, events.Count());
+        Assert.All(events, e => Assert.True(e.EventType == "ReassignedToJournalDay"
             && e.ChangeSummary == "Automatically moved forward to the next journal day."
-            && e.ToJournalEntryId == target.Id && e.ToJournalDate == today);
-        events.Single(e => e.TaskItemId == taskA.Id).FromJournalEntryId.Should().Be(a.Id);
-        events.Single(e => e.TaskItemId == taskA.Id).FromJournalDate.Should().Be(a.Date);
-        events.Single(e => e.TaskItemId == taskB.Id).FromJournalEntryId.Should().Be(b.Id);
-        events.Single(e => e.TaskItemId == taskB.Id).FromJournalDate.Should().Be(b.Date);
+            && e.ToJournalEntryId == target.Id && e.ToJournalDate == today));
+        Assert.Equal(a.Id, events.Single(e => e.TaskItemId == taskA.Id).FromJournalEntryId);
+        Assert.Equal(a.Date, events.Single(e => e.TaskItemId == taskA.Id).FromJournalDate);
+        Assert.Equal(b.Id, events.Single(e => e.TaskItemId == taskB.Id).FromJournalEntryId);
+        Assert.Equal(b.Date, events.Single(e => e.TaskItemId == taskB.Id).FromJournalDate);
     }
 
     [Fact]
@@ -534,9 +533,9 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(openTask.Id);
-        statusOnly.CurrentJournalEntryId.Should().Be(source.Id);
-        flagOnly.CurrentJournalEntryId.Should().Be(source.Id);
+        Assert.Equal(new[] { openTask.Id }, moved);
+        Assert.Equal(source.Id, statusOnly.CurrentJournalEntryId);
+        Assert.Equal(source.Id, flagOnly.CurrentJournalEntryId);
     }
 
     [Fact]
@@ -554,12 +553,12 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(taskA.Id);
-        taskA.CurrentJournalEntryId.Should().Be(target.Id);
-        (await repo.GetTodosAsync(a.Id)).Should().BeEmpty();
-        taskFuture.MoveCount.Should().Be(0);
-        taskFuture.CurrentJournalEntryId.Should().NotBe(target.Id);
-        orphan.CurrentJournalEntryId.Should().BeNull();
+        Assert.Equal(new[] { taskA.Id }, moved);
+        Assert.Equal(target.Id, taskA.CurrentJournalEntryId);
+        Assert.Empty((await repo.GetTodosAsync(a.Id)));
+        Assert.Equal(0, taskFuture.MoveCount);
+        Assert.NotEqual(target.Id, taskFuture.CurrentJournalEntryId);
+        Assert.Null(orphan.CurrentJournalEntryId);
     }
 
     [Fact]
@@ -574,9 +573,9 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().Equal(old.Id);
-        (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Should().BeEquivalentTo([existing.Id, old.Id]);
-        existing.MoveCount.Should().Be(0);
+        Assert.Equal(new[] { old.Id }, moved);
+        Assert.Equal(new[] { existing.Id, old.Id }.Order(), (await repo.GetTodosAsync(target.Id)).Select(t => t.Id).Order());
+        Assert.Equal(0, existing.MoveCount);
     }
 
     [Fact]
@@ -588,11 +587,11 @@ public class JournalEntryRepositoryTests
         var (_, task) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
-        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().Equal(task.Id);
-        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().BeEmpty();
+        Assert.Equal(new[] { task.Id }, (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)));
+        Assert.Empty((await repo.CarryForwardIncompleteTasksAsync(target.Id, today)));
 
-        task.MoveCount.Should().Be(1);
-        context.TaskItemEvents.Should().HaveCount(1);
+        Assert.Equal(1, task.MoveCount);
+        Assert.Single(context.TaskItemEvents);
     }
 
     [Fact]
@@ -611,11 +610,11 @@ public class JournalEntryRepositoryTests
         await context.SaveChangesAsync();
         await repo.RemoveTodoAsync(target.Id, removedLater.Id);
 
-        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().BeEmpty();
-        completedLater.CurrentJournalEntryId.Should().Be(target.Id);
-        removedLater.CurrentJournalEntryId.Should().BeNull();
-        completedLater.MoveCount.Should().Be(1);
-        removedLater.MoveCount.Should().Be(1);
+        Assert.Empty((await repo.CarryForwardIncompleteTasksAsync(target.Id, today)));
+        Assert.Equal(target.Id, completedLater.CurrentJournalEntryId);
+        Assert.Null(removedLater.CurrentJournalEntryId);
+        Assert.Equal(1, completedLater.MoveCount);
+        Assert.Equal(1, removedLater.MoveCount);
     }
 
     [Fact]
@@ -632,9 +631,9 @@ public class JournalEntryRepositoryTests
 
         await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        openChild.CurrentJournalEntryId.Should().Be(target.Id);
-        doneChild.CurrentJournalEntryId.Should().Be(source.Id);
-        doneParent.CurrentJournalEntryId.Should().Be(source.Id);
+        Assert.Equal(target.Id, openChild.CurrentJournalEntryId);
+        Assert.Equal(source.Id, doneChild.CurrentJournalEntryId);
+        Assert.Equal(source.Id, doneParent.CurrentJournalEntryId);
     }
 
     [Fact]
@@ -646,10 +645,10 @@ public class JournalEntryRepositoryTests
         var (_, task) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
         var tomorrow = await repo.AddAsync(new JournalEntry { Title = "Tomorrow", Date = today.AddDays(1) });
 
-        (await repo.CarryForwardIncompleteTasksAsync(tomorrow.Id, today)).Should().BeEmpty();
+        Assert.Empty((await repo.CarryForwardIncompleteTasksAsync(tomorrow.Id, today)));
 
-        task.MoveCount.Should().Be(0);
-        context.TaskItemEvents.Should().BeEmpty();
+        Assert.Equal(0, task.MoveCount);
+        Assert.Empty(context.TaskItemEvents);
     }
 
     [Fact]
@@ -658,7 +657,7 @@ public class JournalEntryRepositoryTests
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
 
-        (await repo.CarryForwardIncompleteTasksAsync(999, new DateOnly(2026, 10, 13))).Should().BeEmpty();
+        Assert.Empty((await repo.CarryForwardIncompleteTasksAsync(999, new DateOnly(2026, 10, 13))));
     }
 
     [Fact]
@@ -673,8 +672,8 @@ public class JournalEntryRepositoryTests
         await context.SaveChangesAsync();
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
-        (await repo.CarryForwardIncompleteTasksAsync(target.Id, today)).Should().BeEmpty();
-        context.TaskItemEvents.Should().BeEmpty();
+        Assert.Empty((await repo.CarryForwardIncompleteTasksAsync(target.Id, today)));
+        Assert.Empty(context.TaskItemEvents);
     }
 
     [Fact]
@@ -698,9 +697,9 @@ public class JournalEntryRepositoryTests
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        moved.Should().HaveCount(50);
-        moved.Should().Equal(expectedOlder.Order().Concat(expectedNewer.Order()));
-        context.TaskItemEvents.Count(e => e.EventType == "ReassignedToJournalDay").Should().Be(moved.Count);
+        Assert.Equal(50, moved.Count());
+        Assert.Equal(expectedOlder.Order().Concat(expectedNewer.Order()), moved);
+        Assert.Equal(moved.Count, context.TaskItemEvents.Count(e => e.EventType == "ReassignedToJournalDay"));
     }
 
     [Fact]
@@ -731,15 +730,15 @@ public class JournalEntryRepositoryTests
         await using (var loser = new TaskDbContext(options))
         {
             var moved = await new JournalEntryRepository(loser).CarryForwardIncompleteTasksAsync(targetId, today);
-            moved.Should().BeEmpty();
+            Assert.Empty(moved);
         }
 
-        interceptor.Fired.Should().BeTrue();
+        Assert.True(interceptor.Fired);
         await using var verify = new TaskDbContext(seedOptions);
         var reloaded = await verify.TaskItems.SingleAsync(t => t.Id == taskId);
-        reloaded.MoveCount.Should().Be(0);
-        reloaded.CurrentJournalEntryId.Should().Be(sourceId);
-        (await verify.TaskItemEvents.CountAsync()).Should().Be(0);
+        Assert.Equal(0, reloaded.MoveCount);
+        Assert.Equal(sourceId, reloaded.CurrentJournalEntryId);
+        Assert.Equal(0, (await verify.TaskItemEvents.CountAsync()));
     }
 
     private sealed class InsertJoinRowInterceptor(int entryId, int taskId) : SaveChangesInterceptor

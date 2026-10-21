@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -39,9 +38,9 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.GetAll(1);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<JournalNoteResponseDto>>().Subject;
-        dtos.Should().HaveCount(2);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<JournalNoteResponseDto>>(ok.Value);
+        Assert.Equal(2, dtos.Count());
     }
 
     [Fact]
@@ -51,7 +50,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.GetAll(99);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // ── GetById ─────────────────────────────────────────────────────────────
@@ -64,10 +63,10 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Get(1, 5);
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<JournalNoteResponseDto>().Subject;
-        dto.Id.Should().Be(5);
-        dto.JournalEntryId.Should().Be(1);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalNoteResponseDto>(ok.Value);
+        Assert.Equal(5, dto.Id);
+        Assert.Equal(1, dto.JournalEntryId);
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Get(1, 99);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -88,7 +87,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Get(99, 1);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     // ── Create ──────────────────────────────────────────────────────────────
@@ -104,9 +103,10 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalNoteDto { Content = "A note" });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        created.RouteName.Should().Be("GetJournalNoteV1");
-        created.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(7);
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal("GetJournalNoteV1", created.RouteName);
+        Assert.True(created.RouteValues!.TryGetValue("id", out var createdId));
+        Assert.Equal(7, createdId);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Create(99, new CreateJournalNoteDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
         _noteRepo.Verify(s => s.AddAsync(It.IsAny<JournalNote>()), Times.Never);
     }
 
@@ -129,7 +129,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Create(1, new CreateJournalNoteDto { Content = string.Empty });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _noteRepo.Verify(s => s.AddAsync(It.IsAny<JournalNote>()), Times.Never);
     }
 
@@ -145,9 +145,9 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Update(1, 3, new UpdateJournalNoteDto { Content = "Updated" });
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dto = ok.Value.Should().BeOfType<JournalNoteResponseDto>().Subject;
-        dto.Content.Should().Be("Updated");
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalNoteResponseDto>(ok.Value);
+        Assert.Equal("Updated", dto.Content);
         _noteRepo.Verify(s => s.UpdateAsync(It.IsAny<JournalNote>()), Times.Once);
     }
 
@@ -158,7 +158,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Update(99, 1, new UpdateJournalNoteDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Update(1, 99, new UpdateJournalNoteDto { Content = "x" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Update(1, 3, new UpdateJournalNoteDto { Content = string.Empty });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _noteRepo.Verify(s => s.UpdateAsync(It.IsAny<JournalNote>()), Times.Never);
     }
 
@@ -196,7 +196,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Delete(1, 4);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _noteRepo.Verify(s => s.DeleteAsync(1, 4), Times.Once);
     }
 
@@ -207,7 +207,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Delete(99, 1);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
         _noteRepo.Verify(s => s.DeleteAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
@@ -219,7 +219,7 @@ public class JournalNotesControllerV1Tests
 
         var result = await _controller.Delete(1, 99);
 
-        result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result);
         _noteRepo.Verify(s => s.DeleteAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 }

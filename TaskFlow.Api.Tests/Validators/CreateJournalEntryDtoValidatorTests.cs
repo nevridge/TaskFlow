@@ -1,4 +1,3 @@
-using FluentAssertions;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Validators;
 
@@ -17,7 +16,7 @@ public class CreateJournalEntryDtoValidatorTests
     {
         var result = _validator.Validate(new CreateJournalEntryDto { Title = "t", TimezoneOffsetMinutes = offset });
 
-        result.IsValid.Should().BeTrue();
+        Assert.True(result.IsValid);
     }
 
     [Theory]
@@ -27,6 +26,6 @@ public class CreateJournalEntryDtoValidatorTests
     {
         var result = _validator.Validate(new CreateJournalEntryDto { Title = "t", TimezoneOffsetMinutes = offset });
 
-        result.IsValid.Should().BeFalse();
+        Assert.False(result.IsValid);
     }
 }

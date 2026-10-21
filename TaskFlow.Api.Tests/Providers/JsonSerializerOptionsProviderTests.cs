@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FluentAssertions;
 using TaskFlow.Api.Providers;
 
 namespace TaskFlow.Api.Tests.Providers;
@@ -11,9 +10,9 @@ public class JsonSerializerOptionsProviderTests
     {
         var options = JsonSerializerOptionsProvider.Default;
 
-        options.Should().NotBeNull();
-        options.WriteIndented.Should().BeTrue();
-        options.PropertyNamingPolicy.Should().Be(JsonNamingPolicy.CamelCase);
+        Assert.NotNull(options);
+        Assert.True(options.WriteIndented);
+        Assert.Equal(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
     }
 
     [Fact]
@@ -22,7 +21,7 @@ public class JsonSerializerOptionsProviderTests
         var first = JsonSerializerOptionsProvider.Default;
         var second = JsonSerializerOptionsProvider.Default;
 
-        first.Should().BeSameAs(second);
+        Assert.Same(second, first);
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class JsonSerializerOptionsProviderTests
     {
         var options = JsonSerializerOptionsProvider.Default;
 
-        options.IsReadOnly.Should().BeTrue();
+        Assert.True(options.IsReadOnly);
     }
 
     [Fact]
@@ -40,7 +39,7 @@ public class JsonSerializerOptionsProviderTests
 
         JsonSerializerOptionsProvider.ConfigureOptions(options);
 
-        options.WriteIndented.Should().BeTrue();
+        Assert.True(options.WriteIndented);
     }
 
     [Fact]
@@ -50,6 +49,6 @@ public class JsonSerializerOptionsProviderTests
 
         JsonSerializerOptionsProvider.ConfigureOptions(options);
 
-        options.PropertyNamingPolicy.Should().Be(JsonNamingPolicy.CamelCase);
+        Assert.Equal(JsonNamingPolicy.CamelCase, options.PropertyNamingPolicy);
     }
 }

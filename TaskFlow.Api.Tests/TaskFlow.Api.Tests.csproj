@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.MTP" Version="10.1.0" />
-    <PackageReference Include="FluentAssertions" Version="8.10.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Moq" Version="4.20.72" />

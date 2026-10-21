@@ -1,4 +1,3 @@
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -47,7 +46,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = offset });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -58,7 +57,7 @@ public class JournalEntriesControllerV1Tests
     {
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = new DateOnly(2026, 5, 11), TimezoneOffsetMinutes = offset });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _repo.Verify(r => r.AddAsync(It.IsAny<JournalEntry>()), Times.Never);
     }
 
@@ -72,7 +71,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = offset });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
     }
 
     [Theory]
@@ -93,11 +92,11 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var body = created.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.TodoTaskItemIds.Should().BeEquivalentTo([5, 6]);
-        body.MovedCount.Should().Be(2);
-        body.MovedTaskItemIds.Should().Equal(3, 5);
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var body = Assert.IsType<JournalEntryResponseDto>(created.Value);
+        Assert.Equal(new[] { 5, 6 }, body.TodoTaskItemIds.Order());
+        Assert.Equal(2, body.MovedCount);
+        Assert.Equal(new[] { 3, 5 }, body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(21, today), Times.Once);
     }
 
@@ -116,11 +115,11 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        var body = created.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.TodoTaskItemIds.Should().BeEmpty();
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        var body = Assert.IsType<JournalEntryResponseDto>(created.Value);
+        Assert.Empty(body.TodoTaskItemIds);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(22, today), Times.Once);
     }
 
@@ -135,10 +134,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value
-            .Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -150,11 +148,10 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = 0 });
 
-        var conflict = result.Result.Should().BeOfType<ConflictObjectResult>().Subject;
-        var existing = conflict.Value!.GetType().GetProperty("existingEntry")!.GetValue(conflict.Value)
-            .Should().BeOfType<JournalEntryResponseDto>().Subject;
-        existing.MovedCount.Should().Be(0);
-        existing.MovedTaskItemIds.Should().BeEmpty();
+        var conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        var existing = Assert.IsType<JournalEntryResponseDto>(conflict.Value!.GetType().GetProperty("existingEntry")!.GetValue(conflict.Value));
+        Assert.Equal(0, existing.MovedCount);
+        Assert.Empty(existing.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -170,11 +167,10 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = date, TimezoneOffsetMinutes = 0 });
 
-        var conflict = result.Result.Should().BeOfType<ConflictObjectResult>().Subject;
-        var existing = conflict.Value!.GetType().GetProperty("existingEntry")!.GetValue(conflict.Value)
-            .Should().BeOfType<JournalEntryResponseDto>().Subject;
-        existing.MovedCount.Should().Be(0);
-        existing.MovedTaskItemIds.Should().BeEmpty();
+        var conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        var existing = Assert.IsType<JournalEntryResponseDto>(conflict.Value!.GetType().GetProperty("existingEntry")!.GetValue(conflict.Value));
+        Assert.Equal(0, existing.MovedCount);
+        Assert.Empty(existing.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -189,10 +185,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value
-            .Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(23, today), Times.Once);
     }
 
@@ -202,8 +197,10 @@ public class JournalEntriesControllerV1Tests
         var entryJson = System.Text.Json.JsonSerializer.Serialize(new JournalEntryResponseDto { Title = "t" });
         var carryJson = System.Text.Json.JsonSerializer.Serialize(new CarryForwardResponseDto());
 
-        entryJson.Should().Contain("\"MovedCount\":0").And.Contain("\"MovedTaskItemIds\":[]");
-        carryJson.Should().Contain("\"MovedCount\":0").And.Contain("\"MovedTaskItemIds\":[]");
+        Assert.Contains("\"MovedCount\":0", entryJson);
+        Assert.Contains("\"MovedTaskItemIds\":[]", entryJson);
+        Assert.Contains("\"MovedCount\":0", carryJson);
+        Assert.Contains("\"MovedTaskItemIds\":[]", carryJson);
     }
 
     [Fact]
@@ -215,9 +212,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.CarryForward(3, new CarryForwardRequestDto { TimezoneOffsetMinutes = 0 });
 
-        var body = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
     }
 
     [Fact]
@@ -225,7 +222,7 @@ public class JournalEntriesControllerV1Tests
     {
         var result = await _controller.CarryForward(1, new CarryForwardRequestDto { TimezoneOffsetMinutes = 841 });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
     [Fact]
@@ -235,7 +232,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.CarryForward(5, new CarryForwardRequestDto { TimezoneOffsetMinutes = 0 });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Theory]
@@ -248,9 +245,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.CarryForward(3, nullBody ? null : new CarryForwardRequestDto());
 
-        var body = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -262,9 +259,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.CarryForward(3, new CarryForwardRequestDto { TimezoneOffsetMinutes = 0 });
 
-        var body = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
         _repo.Verify(r => r.CarryForwardIncompleteTasksAsync(It.IsAny<int>(), It.IsAny<DateOnly>()), Times.Never);
     }
 
@@ -277,9 +274,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.CarryForward(3, new CarryForwardRequestDto { TimezoneOffsetMinutes = 840 });
 
-        var body = result.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        body.MovedCount.Should().Be(4);
-        body.MovedTaskItemIds.Should().Equal(7, 8, 9, 12);
+        var body = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(4, body.MovedCount);
+        Assert.Equal(new[] { 7, 8, 9, 12 }, body.MovedTaskItemIds);
     }
 
     [Fact]
@@ -293,9 +290,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.GetAll();
 
-        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var dtos = ok.Value.Should().BeAssignableTo<IEnumerable<JournalEntryResponseDto>>().Subject;
-        dtos.Should().ContainSingle(d => d.Id == 1 && d.Date == new DateOnly(2026, 5, 10));
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<JournalEntryResponseDto>>(ok.Value);
+        Assert.Single(dtos, d => d.Id == 1 && d.Date == new DateOnly(2026, 5, 10));
     }
 
     [Fact]
@@ -305,7 +302,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Get(123);
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -317,7 +314,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "New", Date = date });
 
-        result.Result.Should().BeOfType<ConflictObjectResult>();
+        Assert.IsType<ConflictObjectResult>(result.Result);
         _repo.Verify(r => r.AddAsync(It.IsAny<JournalEntry>()), Times.Never);
     }
 
@@ -331,7 +328,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = string.Empty, Date = date });
 
-        result.Result.Should().BeOfType<BadRequestObjectResult>();
+        Assert.IsType<BadRequestObjectResult>(result.Result);
         _repo.Verify(r => r.AddAsync(It.IsAny<JournalEntry>()), Times.Never);
     }
 
@@ -347,9 +344,10 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "May 11", Date = date });
 
-        var created = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject;
-        created.RouteName.Should().Be("GetJournalEntryV1");
-        created.RouteValues.Should().ContainKey("id").WhoseValue.Should().Be(9);
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal("GetJournalEntryV1", created.RouteName);
+        Assert.True(created.RouteValues!.TryGetValue("id", out var createdId));
+        Assert.Equal(9, createdId);
     }
 
     [Fact]
@@ -365,7 +363,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "May 12", Date = date });
 
-        result.Result.Should().BeOfType<ConflictObjectResult>();
+        Assert.IsType<ConflictObjectResult>(result.Result);
     }
 
     [Fact]
@@ -375,7 +373,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Update(44, new UpdateJournalEntryDto { Title = "x", Summary = "s" });
 
-        result.Result.Should().BeOfType<NotFoundResult>();
+        Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
@@ -385,7 +383,7 @@ public class JournalEntriesControllerV1Tests
 
         var result = await _controller.Delete(7);
 
-        result.Should().BeOfType<NoContentResult>();
+        Assert.IsType<NoContentResult>(result);
         _repo.Verify(r => r.DeleteAsync(7), Times.Once);
     }
 
@@ -450,13 +448,13 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = userToday, TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.TodoTaskItemIds.Should().BeEquivalentTo([open.Id]);
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(new[] { open.Id }, body.TodoTaskItemIds.Order());
         var reloaded = await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id);
-        reloaded.MoveCount.Should().Be(1);
-        reloaded.CurrentJournalEntryId.Should().Be(body.Id);
-        (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == done.Id)).CurrentJournalEntryId.Should().Be(old.Id);
-        (await h.Context.TaskItemEvents.CountAsync()).Should().Be(1);
+        Assert.Equal(1, reloaded.MoveCount);
+        Assert.Equal(body.Id, reloaded.CurrentJournalEntryId);
+        Assert.Equal(old.Id, (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == done.Id)).CurrentJournalEntryId);
+        Assert.Equal(1, (await h.Context.TaskItemEvents.CountAsync()));
     }
 
     [Fact]
@@ -469,8 +467,8 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = utcDate, TimezoneOffsetMinutes = offset });
 
-        result.Result.Should().BeOfType<CreatedAtRouteResult>();
-        (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount.Should().Be(0);
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal(0, (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount);
     }
 
     [Theory]
@@ -486,10 +484,10 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = utcDate.AddDays(dayDelta), TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.TodoTaskItemIds.Should().BeEmpty();
-        (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount.Should().Be(0);
-        (await h.Context.TaskItemEvents.CountAsync()).Should().Be(0);
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Empty(body.TodoTaskItemIds);
+        Assert.Equal(0, (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount);
+        Assert.Equal(0, (await h.Context.TaskItemEvents.CountAsync()));
     }
 
     [Fact]
@@ -504,12 +502,12 @@ public class JournalEntriesControllerV1Tests
         var first = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
         var second = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
 
-        first.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<CarryForwardResponseDto>().Which.MovedCount.Should().Be(1);
-        second.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<CarryForwardResponseDto>().Which.MovedCount.Should().Be(0);
+        Assert.Equal(1, Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(first.Result).Value).MovedCount);
+        Assert.Equal(0, Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(second.Result).Value).MovedCount);
         var reloaded = await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id);
-        reloaded.MoveCount.Should().Be(1);
-        reloaded.CurrentJournalEntryId.Should().Be(todayEntry.Id);
-        (await h.Context.TaskItemEvents.CountAsync()).Should().Be(1);
+        Assert.Equal(1, reloaded.MoveCount);
+        Assert.Equal(todayEntry.Id, reloaded.CurrentJournalEntryId);
+        Assert.Equal(1, (await h.Context.TaskItemEvents.CountAsync()));
     }
 
     [Fact]
@@ -522,13 +520,13 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = userToday, TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.MovedCount.Should().Be(1);
-        body.MovedTaskItemIds.Should().Equal(open.Id);
-        body.MovedTaskItemIds.Should().NotContain(done.Id);
-        body.TodoTaskItemIds.Should().Contain(body.MovedTaskItemIds);
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(1, body.MovedCount);
+        Assert.Equal(new[] { open.Id }, body.MovedTaskItemIds);
+        Assert.DoesNotContain(done.Id, body.MovedTaskItemIds);
+        Assert.All(body.MovedTaskItemIds, movedId => Assert.Contains(movedId, body.TodoTaskItemIds));
         var history = await h.Context.TaskItemEvents.AsNoTracking().SingleAsync(e => e.TaskItemId == open.Id);
-        history.ChangeSummary.Should().Be("Automatically moved forward to the next journal day.");
+        Assert.Equal("Automatically moved forward to the next journal day.", history.ChangeSummary);
     }
 
     [Theory]
@@ -544,9 +542,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = utcDate.AddDays(dayDelta), TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
     }
 
     [Fact]
@@ -558,9 +556,9 @@ public class JournalEntriesControllerV1Tests
 
         var result = await h.Controller.Create(new CreateJournalEntryDto { Title = "t", Date = userToday, TimezoneOffsetMinutes = offset });
 
-        var body = result.Result.Should().BeOfType<CreatedAtRouteResult>().Subject.Value.Should().BeOfType<JournalEntryResponseDto>().Subject;
-        body.MovedCount.Should().Be(0);
-        body.MovedTaskItemIds.Should().BeEmpty();
+        var body = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+        Assert.Equal(0, body.MovedCount);
+        Assert.Empty(body.MovedTaskItemIds);
     }
 
     [Fact]
@@ -575,12 +573,12 @@ public class JournalEntriesControllerV1Tests
         var first = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
         var second = await h.Controller.CarryForward(todayEntry.Id, new CarryForwardRequestDto { TimezoneOffsetMinutes = offset });
 
-        var firstBody = first.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        firstBody.MovedCount.Should().Be(1);
-        firstBody.MovedTaskItemIds.Should().Equal(open.Id);
-        var secondBody = second.Result.Should().BeOfType<OkObjectResult>().Subject.Value.Should().BeOfType<CarryForwardResponseDto>().Subject;
-        secondBody.MovedCount.Should().Be(0);
-        secondBody.MovedTaskItemIds.Should().BeEmpty();
+        var firstBody = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(first.Result).Value);
+        Assert.Equal(1, firstBody.MovedCount);
+        Assert.Equal(new[] { open.Id }, firstBody.MovedTaskItemIds);
+        var secondBody = Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(second.Result).Value);
+        Assert.Equal(0, secondBody.MovedCount);
+        Assert.Empty(secondBody.MovedTaskItemIds);
     }
 
     [Fact]
@@ -593,7 +591,7 @@ public class JournalEntriesControllerV1Tests
         // userToday is utcDate +/- 1 (never equal), so offsets of -2, +5 from userToday cannot hit userToday or utcDate at any hour.
         var oldDate = userToday.AddDays(-2);
         var futureDate = userToday.AddDays(5);
-        new[] { oldDate, userToday, futureDate, utcDate }.Distinct().Should().HaveCount(4);
+        Assert.Equal(4, new[] { oldDate, userToday, futureDate, utcDate }.Distinct().Count());
         var (_, open, _) = await h.SeedOldEntryAsync(oldDate);
         var todayEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Today", Date = userToday });
         var tomorrowEntry = await h.Repo.AddAsync(new JournalEntry { Title = "Future", Date = futureDate });
@@ -605,9 +603,9 @@ public class JournalEntriesControllerV1Tests
 
         foreach (var r in new[] { noOffset, tomorrow, utcOnly })
         {
-            r.Result.Should().BeOfType<OkObjectResult>().Which.Value.Should().BeOfType<CarryForwardResponseDto>().Which.MovedCount.Should().Be(0);
+            Assert.Equal(0, Assert.IsType<CarryForwardResponseDto>(Assert.IsType<OkObjectResult>(r.Result).Value).MovedCount);
         }
 
-        (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount.Should().Be(0);
+        Assert.Equal(0, (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount);
     }
 }

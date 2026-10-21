@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
@@ -41,8 +40,8 @@ public class NoteRepositoryTests
 
         var result = await repo.GetAllByTaskIdAsync(1);
 
-        result.Should().HaveCount(2);
-        result.Should().AllSatisfy(n => n.TaskItemId.Should().Be(1));
+        Assert.Equal(2, result.Count());
+        Assert.All(result, n => Assert.Equal(1, n.TaskItemId));
     }
 
     [Fact]
@@ -54,7 +53,7 @@ public class NoteRepositoryTests
 
         var result = await repo.GetAllByTaskIdAsync(1);
 
-        result.Should().BeEmpty();
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -69,9 +68,9 @@ public class NoteRepositoryTests
 
         var result = await repo.GetByIdAsync(1, note.Id);
 
-        result.Should().NotBeNull();
-        result!.Content.Should().Be("Test note");
-        result.TaskItemId.Should().Be(1);
+        Assert.NotNull(result);
+        Assert.Equal("Test note", result!.Content);
+        Assert.Equal(1, result.TaskItemId);
     }
 
     [Fact]
@@ -87,7 +86,7 @@ public class NoteRepositoryTests
 
         var result = await repo.GetByIdAsync(1, note.Id);
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -99,7 +98,7 @@ public class NoteRepositoryTests
 
         var result = await repo.GetByIdAsync(1, 999);
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -112,13 +111,13 @@ public class NoteRepositoryTests
 
         var result = await repo.AddAsync(note);
 
-        result.Id.Should().BeGreaterThan(0);
-        result.Content.Should().Be("New note");
-        result.TaskItemId.Should().Be(1);
-        result.CreatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        Assert.True(result.Id > 0);
+        Assert.Equal("New note", result.Content);
+        Assert.Equal(1, result.TaskItemId);
+        Assert.Equal(DateTime.UtcNow, result.CreatedAt, TimeSpan.FromSeconds(5));
 
         var saved = await context.Notes.FindAsync(result.Id);
-        saved.Should().NotBeNull();
+        Assert.NotNull(saved);
     }
 
     [Fact]
@@ -135,9 +134,9 @@ public class NoteRepositoryTests
         await repo.UpdateAsync(note);
 
         var updated = await context.Notes.FindAsync(note.Id);
-        updated!.Content.Should().Be("Updated");
-        updated.UpdatedAt.Should().NotBeNull();
-        updated.UpdatedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
+        Assert.Equal("Updated", updated!.Content);
+        Assert.NotNull(updated.UpdatedAt);
+        Assert.Equal(DateTime.UtcNow, updated.UpdatedAt.Value, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
@@ -153,7 +152,7 @@ public class NoteRepositoryTests
         await repo.DeleteAsync(1, note.Id);
 
         var deleted = await context.Notes.FindAsync(note.Id);
-        deleted.Should().BeNull();
+        Assert.Null(deleted);
     }
 
     [Fact]
@@ -164,7 +163,7 @@ public class NoteRepositoryTests
 
         var act = async () => await repo.DeleteAsync(1, 999);
 
-        await act.Should().NotThrowAsync();
+        Assert.Null(await Record.ExceptionAsync(act));
     }
 
     [Fact]
@@ -181,7 +180,7 @@ public class NoteRepositoryTests
         await repo.DeleteAsync(1, note.Id);
 
         var stillExists = await context.Notes.FindAsync(note.Id);
-        stillExists.Should().NotBeNull();
+        Assert.NotNull(stillExists);
     }
 
     [Fact]
@@ -212,7 +211,7 @@ public class NoteRepositoryTests
         await using (var context = new TaskDbContext(options))
         {
             var remainingNotes = await context.Notes.ToListAsync();
-            remainingNotes.Should().BeEmpty();
+            Assert.Empty(remainingNotes);
         }
 
         connection.Close();

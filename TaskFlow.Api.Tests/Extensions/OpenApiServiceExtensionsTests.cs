@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Microsoft.AspNetCore.Mvc.ApiExplorer;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,10 +29,10 @@ public class OpenApiServiceExtensionsTests
         await transformer.TransformAsync(document, context, CancellationToken.None);
 
         // Assert
-        document.Info.Should().NotBeNull();
-        document.Info.Title.Should().Be("TaskFlow API");
-        document.Info.Version.Should().Be("v1");
-        document.Info.Description.Should().Contain("RESTful");
+        Assert.NotNull(document.Info);
+        Assert.Equal("TaskFlow API", document.Info.Title);
+        Assert.Equal("v1", document.Info.Version);
+        Assert.Contains("RESTful", document.Info.Description);
     }
 
     [Fact]
@@ -49,7 +48,7 @@ public class OpenApiServiceExtensionsTests
         await task;
 
         // Assert
-        task.IsCompleted.Should().BeTrue();
-        document.Info.Version.Should().Be("v2");
+        Assert.True(task.IsCompleted);
+        Assert.Equal("v2", document.Info.Version);
     }
 }

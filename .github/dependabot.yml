@@ -41,6 +41,13 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: "chore(deps)"
+    # Major upgrades of these are tracked as separate, deliberate work (see #279):
+    # - Microsoft.OpenApi: pinned to 2.x (2.7.5 is the CVE-2026-49451 fix for 2.x). 3.x cannot
+    #   compile against Microsoft.AspNetCore.OpenApi 10.x (CS0200 on IOpenApiMediaType.Example).
+    #   Revisit when the project decides to move to .NET 11, then remove this ignore.
+    ignore:
+      - dependency-name: "Microsoft.OpenApi"
+        update-types: ["version-update:semver-major"]
     groups:
       nuget-minor-patch:
         update-types:

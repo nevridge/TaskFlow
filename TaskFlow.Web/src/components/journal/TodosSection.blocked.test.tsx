@@ -256,7 +256,7 @@ describe('TodosSection blocked tasks', () => {
       renderSection()
       const add = screen.getByRole('button', { name: 'Add blocked reason' })
       expect(add).toHaveTextContent('Add reason')
-      await userEvent.dblClick(add)
+      await userEvent.click(add)
       const input = screen.getByRole('textbox', { name: 'Blocked reason, optional' })
       expect(input).toHaveValue('')
       await userEvent.type(input, 'Waiting on Sam{Enter}')

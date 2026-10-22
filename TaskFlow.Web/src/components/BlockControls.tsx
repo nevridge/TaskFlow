@@ -90,8 +90,8 @@ export function BlockedReasonText({ reason, onEdit, ...rest }: BlockedReasonText
       title={empty ? undefined : reason}
       aria-label={empty ? 'Add blocked reason' : `Blocked reason: ${reason}. Edit`}
       onClick={e => {
-        // Enter/Space fire click with detail 0; a mouse needs a double-click.
-        if (e.detail === 0) onEdit()
+        // Enter/Space fire click with detail 0; a mouse needs a double-click, except on the "Add reason" prompt.
+        if (empty || e.detail === 0) onEdit()
       }}
       onDoubleClick={onEdit}
     >

@@ -142,7 +142,7 @@ describe('TaskListRow blocked tasks', () => {
   it('a Blocked row with no reason shows an "Add reason" prompt that opens the editor', async () => {
     const noReason = { ...blocked, blockedReason: null }
     const { onEditBlockedReason } = renderRow(noReason)
-    await userEvent.dblClick(screen.getByRole('button', { name: 'Add blocked reason' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add blocked reason' }))
     const input = screen.getByRole('textbox', { name: 'Blocked reason, optional' })
     expect(input).toHaveValue('')
     await userEvent.type(input, 'Waiting on Sam{Enter}')

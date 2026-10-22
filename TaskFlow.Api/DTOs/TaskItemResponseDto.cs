@@ -20,6 +20,9 @@ public class TaskItemResponseDto
     public DateOnly? CurrentJournalDate { get; set; }
     public int MoveCount { get; set; }
     public int DaysTagged { get; set; }
+    public string? BlockedReason { get; set; }
+    public DateTime? BlockedAt { get; set; }
+    public string? PreviousStatus { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ICollection<TaskItemResponseDto>? Children { get; set; }

@@ -24,6 +24,14 @@ public class UpdateTaskItemDto
     public Priority? Priority { get; set; }
     public DateTime? DueDate { get; set; }
     public int? ParentTaskItemId { get; set; }
+
+    /// <summary>
+    /// Optional blocked reason (merge-on-null): <c>null</c> keeps the stored reason, <c>""</c> clears it,
+    /// a non-empty value is trimmed and saved. Note the asymmetry with PATCH, where a present
+    /// <c>null</c> clears the reason.
+    /// </summary>
+    public string? BlockedReason { get; set; }
+
     public bool AutoCompleteParentWhenChildrenDone { get; set; }
     public int? TimezoneOffsetMinutes { get; set; }
 }

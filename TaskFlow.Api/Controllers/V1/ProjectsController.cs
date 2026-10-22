@@ -67,6 +67,9 @@ public class ProjectsController(
             CurrentJournalEntryId = t.CurrentJournalEntryId,
             FirstTaggedDate = t.FirstTaggedDate,
             MoveCount = t.MoveCount,
+            BlockedReason = t.BlockedReason,
+            BlockedAt = t.BlockedAt,
+            PreviousStatus = t.PreviousStatus?.ToString(),
         }));
     }
 
@@ -175,5 +178,7 @@ public class ProjectsController(
         UpdatedAt = project.UpdatedAt,
         OpenTaskCount = project.Tasks.Count(t => t.Status != Status.Completed),
         CompletedTaskCount = project.Tasks.Count(t => t.Status == Status.Completed),
+        // Blocked tasks are also counted in OpenTaskCount; BlockedCount reports how many of the open ones are blocked.
+        BlockedCount = project.Tasks.Count(t => t.Status == Status.Blocked),
     };
 }

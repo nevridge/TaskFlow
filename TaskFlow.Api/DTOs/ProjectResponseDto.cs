@@ -10,4 +10,5 @@ public class ProjectResponseDto
     public DateTime? UpdatedAt { get; set; }
     public int OpenTaskCount { get; set; }
     public int CompletedTaskCount { get; set; }
+    public int BlockedCount { get; set; }
 }

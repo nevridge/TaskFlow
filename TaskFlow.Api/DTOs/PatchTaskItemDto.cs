@@ -24,6 +24,7 @@ public class PatchTaskItemDto
     private Priority? _priority;
     private DateTime? _dueDate;
     private int? _parentTaskItemId;
+    private string? _blockedReason;
 
     public string? Title
     {
@@ -59,6 +60,18 @@ public class PatchTaskItemDto
     {
         get => _parentTaskItemId;
         set { _parentTaskItemId = value; _present.Add(nameof(ParentTaskItemId)); }
+    }
+
+    /// <summary>
+    /// Optional reason for a blocked task. Absent keeps the stored reason; present with <c>null</c> or
+    /// <c>""</c> clears it; a non-empty value is trimmed and saved. Only meaningful while the task is
+    /// (or is becoming) Blocked, otherwise a non-empty value is rejected with 422. Note the asymmetry
+    /// with PUT, where <c>null</c> keeps the reason.
+    /// </summary>
+    public string? BlockedReason
+    {
+        get => _blockedReason;
+        set { _blockedReason = value; _present.Add(nameof(BlockedReason)); }
     }
 
     public bool AutoCompleteParentWhenChildrenDone { get; set; }

@@ -23,6 +23,12 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
             entity.Property(t => t.Status)
                   .HasConversion<int>();
 
+            entity.Property(t => t.PreviousStatus)
+                  .HasConversion<int>();
+
+            entity.Property(t => t.BlockedReason)
+                  .HasMaxLength(200);
+
             entity.HasOne(t => t.ParentTaskItem)
                 .WithMany(t => t.ChildTaskItems)
                 .HasForeignKey(t => t.ParentTaskItemId)

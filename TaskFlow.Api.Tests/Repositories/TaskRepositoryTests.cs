@@ -287,6 +287,167 @@ public class TaskRepositoryTests
         Assert.Equal(expectedEvent, statusEvent.EventType);
     }
 
+    private static async Task<TaskItem> SeedAndTrackAsync(TaskDbContext context, TaskItem seed)
+    {
+        await context.TaskItems.AddAsync(seed);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var tracked = await context.TaskItems.FindAsync(seed.Id);
+        Assert.NotNull(tracked);
+        return tracked;
+    }
+
+    private static async Task<List<TaskItemEvent>> EventsAsync(TaskDbContext context) =>
+        await context.TaskItemEvents.Where(e => e.TaskItemId == 1).ToListAsync();
+
+    [Theory]
+    [InlineData("Waiting on Sam", "Blocked: Waiting on Sam.")]
+    [InlineData(null, "Blocked.")]
+    [InlineData("   ", "Blocked.")]
+    public async Task UpdateAsync_ShouldWriteBlockedEvent_WhenEnteringBlocked(string? reason, string expectedSummary)
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var tracked = await SeedAndTrackAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo });
+
+        tracked.Status = Status.Blocked;
+        tracked.BlockedReason = reason;
+        tracked.BlockedAt = DateTime.UtcNow;
+        tracked.PreviousStatus = Status.Todo;
+        await repository.UpdateAsync(tracked);
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("Blocked", evt.EventType);
+        Assert.Equal(expectedSummary, evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteUnblockedEvent_NeverStatusChanged_WhenLeavingBlocked()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var tracked = await SeedAndTrackAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "x",
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        });
+
+        tracked.Status = Status.Todo;
+        tracked.BlockedReason = null;
+        tracked.BlockedAt = null;
+        tracked.PreviousStatus = null;
+        await repository.UpdateAsync(tracked);
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("Unblocked", evt.EventType);
+        Assert.Equal("Unblocked, back to Todo.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteSingleCompletedEvent_WhenBlockedTaskCompleted()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var tracked = await SeedAndTrackAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        });
+
+        tracked.Status = Status.Completed;
+        tracked.BlockedReason = null;
+        tracked.BlockedAt = null;
+        tracked.PreviousStatus = null;
+        await repository.UpdateAsync(tracked);
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("Completed", evt.EventType);
+        Assert.Equal("Marked complete (was blocked).", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteBlockedReasonChangedEvent_WhenReasonChangesWhileBlocked()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var tracked = await SeedAndTrackAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "Old",
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        });
+
+        tracked.BlockedReason = "New";
+        await repository.UpdateAsync(tracked);
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("BlockedReasonChanged", evt.EventType);
+        Assert.Equal("Blocked reason updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteBlockedReasonChangedEvent_WhenDetachedTaskGainsReason()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var blockedAt = DateTime.UtcNow;
+        await context.TaskItems.AddAsync(new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = null,
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo
+        });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        await repository.UpdateAsync(new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "Now with reason",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo
+        });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("BlockedReasonChanged", evt.EventType);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteNoEvent_WhenBlockedReasonUnchangedOrOnlyWhitespaceDiffers()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var tracked = await SeedAndTrackAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "Same",
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        });
+
+        tracked.BlockedReason = " Same ";
+        await repository.UpdateAsync(tracked);
+
+        Assert.Empty(await EventsAsync(context));
+    }
+
     [Fact]
     public async Task UpdateAsync_ShouldWriteNoStatusEvent_WhenStatusUnchanged()
     {

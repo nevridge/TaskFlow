@@ -108,6 +108,9 @@ public class JournalTodosController(
             CurrentJournalDate = entryDate,
             DaysTagged = DaysTaggedHelper.GetDaysTagged(task.FirstTaggedDate, entryDate),
             ChildTaskCount = children.Count,
+            BlockedReason = task.BlockedReason,
+            BlockedAt = task.BlockedAt,
+            PreviousStatus = task.PreviousStatus?.ToString(),
             Children = children.Count > 0 ? children : null,
         };
     }

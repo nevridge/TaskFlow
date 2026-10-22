@@ -106,6 +106,7 @@ export type PatchTaskItemDto = {
     priority?: null | Priority;
     dueDate?: null | string;
     parentTaskItemId?: null | number | string;
+    blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
 };
@@ -121,9 +122,10 @@ export type ProjectResponseDto = {
     updatedAt?: null | string;
     openTaskCount?: number | string;
     completedTaskCount?: number | string;
+    blockedCount?: number | string;
 };
 
-export type Status = 'draft' | 'todo' | 'completed';
+export type Status = 'draft' | 'todo' | 'completed' | 'blocked';
 
 export type TaskItemEventResponseDto = {
     id?: number | string;
@@ -154,6 +156,9 @@ export type TaskItemResponseDto = {
     currentJournalDate?: null | string;
     moveCount?: number | string;
     daysTagged?: number | string;
+    blockedReason?: null | string;
+    blockedAt?: null | string;
+    previousStatus?: null | string;
     children?: null | Array<TaskItemResponseDto>;
 };
 
@@ -188,6 +193,7 @@ export type UpdateTaskItemDto = {
     priority?: null | Priority;
     dueDate?: null | string;
     parentTaskItemId?: null | number | string;
+    blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
 };

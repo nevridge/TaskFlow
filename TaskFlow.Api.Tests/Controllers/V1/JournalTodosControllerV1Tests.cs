@@ -50,6 +50,47 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldReturnBlockedFields_ForBlockedTodoAndItsChild()
+    {
+        var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Blocked parent",
+            Status = Status.Blocked,
+            BlockedReason = "Waiting on Sam",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo,
+            ChildTaskItems =
+            [
+                new TaskItem
+                {
+                    Id = 3,
+                    Title = "Blocked child",
+                    Status = Status.Blocked,
+                    BlockedReason = "Child reason",
+                    BlockedAt = blockedAt,
+                    PreviousStatus = Status.Todo,
+                    ParentTaskItemId = 2
+                }
+            ]
+        };
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
+        Assert.Equal("Waiting on Sam", dto.BlockedReason);
+        Assert.Equal(blockedAt, dto.BlockedAt);
+        Assert.Equal("Todo", dto.PreviousStatus);
+        var child = Assert.Single(dto.Children!);
+        Assert.Equal("Child reason", child.BlockedReason);
+        Assert.Equal("Todo", child.PreviousStatus);
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnBadRequest_WhenTaskIdInvalid()
     {
         var dto = new AddJournalTodoDto { TaskItemId = 0 };

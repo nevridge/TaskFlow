@@ -27,6 +27,10 @@ public class TaskItemsController(
     private const string ParentCycleNotAllowedErrorCode = "TASK_PARENT_CYCLE_NOT_ALLOWED";
     private const string ParentCompleteBlockedByChildrenErrorCode = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN";
     private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
+    private const string BlockDraftNotAllowedErrorCode = "TASK_BLOCK_DRAFT_NOT_ALLOWED";
+    private const string BlockCompletedNotAllowedErrorCode = "TASK_BLOCK_COMPLETED_NOT_ALLOWED";
+    private const string BlockedReasonRequiresBlockedStatusErrorCode = "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS";
+    private const string CreateBlockedNotAllowedErrorCode = "TASK_CREATE_BLOCKED_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -89,6 +93,16 @@ public class TaskItemsController(
     [HttpPost]
     public async Task<ActionResult<TaskItemResponseDto>> Create([FromBody] CreateTaskItemDto createDto)
     {
+        if (createDto.Status == Status.Blocked)
+        {
+            return UnprocessableEntity(new
+            {
+                code = CreateBlockedNotAllowedErrorCode,
+                message = "New tasks cannot be created as Blocked. Create the task first, then block it.",
+                details = new { status = createDto.Status.ToString() }
+            });
+        }
+
         if (createDto.JournalDate.HasValue)
         {
             // Use timezone offset if provided, otherwise fallback to UTC
@@ -185,6 +199,9 @@ public class TaskItemsController(
             DueDate = updateDto.DueDate,
             HasParent = true,
             ParentTaskItemId = updateDto.ParentTaskItemId,
+            // PUT: null keeps the stored reason, "" clears it.
+            HasBlockedReason = updateDto.BlockedReason != null,
+            BlockedReason = updateDto.BlockedReason,
             AutoCompleteParentWhenChildrenDone = updateDto.AutoCompleteParentWhenChildrenDone,
             TimezoneOffsetMinutes = updateDto.TimezoneOffsetMinutes
         });
@@ -208,6 +225,9 @@ public class TaskItemsController(
             DueDate = patchDto.DueDate,
             HasParent = patchDto.IsPresent(nameof(PatchTaskItemDto.ParentTaskItemId)),
             ParentTaskItemId = patchDto.ParentTaskItemId,
+            // PATCH: absent keeps the stored reason; present null or "" clears it.
+            HasBlockedReason = patchDto.IsPresent(nameof(PatchTaskItemDto.BlockedReason)),
+            BlockedReason = patchDto.BlockedReason,
             AutoCompleteParentWhenChildrenDone = patchDto.AutoCompleteParentWhenChildrenDone,
             TimezoneOffsetMinutes = patchDto.TimezoneOffsetMinutes
         });
@@ -226,6 +246,8 @@ public class TaskItemsController(
         public DateTime? DueDate { get; init; }
         public bool HasParent { get; init; }
         public int? ParentTaskItemId { get; init; }
+        public bool HasBlockedReason { get; init; }
+        public string? BlockedReason { get; init; }
         public bool AutoCompleteParentWhenChildrenDone { get; init; }
         public int? TimezoneOffsetMinutes { get; init; }
     }
@@ -293,8 +315,14 @@ public class TaskItemsController(
             }
         }
 
+        var (blockedError, blocked) = ResolveBlockedTransition(existing, changes);
+        if (blockedError is not null)
+        {
+            return blockedError;
+        }
+
         var wasCompleted = IsCompleted(existing.Status);
-        var nextStatus = changes.HasStatus && changes.Status.HasValue ? changes.Status.Value : existing.Status;
+        var nextStatus = blocked.Status;
         var nowCompleted = IsCompleted(nextStatus);
 
         if (!wasCompleted && nowCompleted && await HasIncompleteChildrenAsync(id))
@@ -333,6 +361,9 @@ public class TaskItemsController(
         }
 
         existing.Status = nextStatus;
+        existing.BlockedReason = blocked.Reason;
+        existing.BlockedAt = blocked.BlockedAt;
+        existing.PreviousStatus = blocked.PreviousStatus;
 
         if (changes.HasPriority && changes.Priority.HasValue)
         {
@@ -372,6 +403,92 @@ public class TaskItemsController(
 
     private static bool IsCompleted(Status status) => status == Status.Completed;
 
+    // Statuses a task may be blocked from. Add InProgress here when #239 lands.
+    private static bool IsBlockable(Status status) => status == Status.Todo;
+
+    // Statuses an unblock may restore. Add InProgress here when #239 lands; anything else restores Todo.
+    private static bool IsRestorable(Status status) => status == Status.Todo;
+
+    private sealed record BlockedState(Status Status, string? Reason, DateTime? BlockedAt, Status? PreviousStatus);
+
+    private static string? NormalizeReason(string? reason)
+    {
+        var trimmed = reason?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    /// <summary>
+    /// Applies the Blocked transition rules and returns the resulting status and blocked fields,
+    /// or an error result when the transition is not allowed. Does not mutate the entity.
+    /// </summary>
+    private (ActionResult? Error, BlockedState State) ResolveBlockedTransition(TaskItem existing, TaskChanges changes)
+    {
+        var was = existing.Status;
+        var next = changes.HasStatus && changes.Status.HasValue ? changes.Status.Value : was;
+        var reason = NormalizeReason(changes.BlockedReason);
+
+        if (was != Status.Blocked && next == Status.Blocked)
+        {
+            if (was == Status.Completed)
+            {
+                return (UnprocessableEntity(new
+                {
+                    code = BlockCompletedNotAllowedErrorCode,
+                    message = "Completed tasks cannot be blocked.",
+                    details = new { status = was.ToString() }
+                }), default!);
+            }
+
+            if (!IsBlockable(was))
+            {
+                return (UnprocessableEntity(new
+                {
+                    code = BlockDraftNotAllowedErrorCode,
+                    message = "Only open Todo tasks can be blocked.",
+                    details = new { status = was.ToString() }
+                }), default!);
+            }
+
+            return (null, new BlockedState(
+                Status.Blocked,
+                changes.HasBlockedReason ? reason : null,
+                DateTime.UtcNow,
+                was));
+        }
+
+        if (was == Status.Blocked && next == Status.Blocked)
+        {
+            // Only the reason may change. PreviousStatus and BlockedAt are never touched.
+            return (null, new BlockedState(
+                Status.Blocked,
+                changes.HasBlockedReason ? reason : existing.BlockedReason,
+                existing.BlockedAt,
+                existing.PreviousStatus));
+        }
+
+        if (was == Status.Blocked)
+        {
+            // Leaving Blocked: clear all blocked fields; a reason sent in the same request is ignored.
+            // An explicit Todo restores the previous status when restorable. Any other explicit status wins.
+            var restored = next == Status.Todo && existing.PreviousStatus is { } previous && IsRestorable(previous)
+                ? previous
+                : next;
+            return (null, new BlockedState(restored, null, null, null));
+        }
+
+        if (reason is not null)
+        {
+            return (UnprocessableEntity(new
+            {
+                code = BlockedReasonRequiresBlockedStatusErrorCode,
+                message = "A blocked reason can only be set on a blocked task.",
+                details = new { status = next.ToString() }
+            }), default!);
+        }
+
+        return (null, new BlockedState(next, null, null, null));
+    }
+
     private async Task<bool> HasIncompleteChildrenAsync(int taskId)
     {
         var allTasks = await _repo.GetAllAsync();
@@ -394,6 +511,12 @@ public class TaskItemsController(
     {
         var parent = await _repo.GetByIdAsync(parentTaskId);
         if (parent is null || IsCompleted(parent.Status))
+        {
+            return;
+        }
+
+        // Blocked parents are never auto-completed.
+        if (parent.Status == Status.Blocked)
         {
             return;
         }
@@ -526,7 +649,10 @@ public class TaskItemsController(
             ChildTaskCount = childTaskCount,
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,
-            DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate)
+            DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate),
+            BlockedReason = item.BlockedReason,
+            BlockedAt = item.BlockedAt,
+            PreviousStatus = item.PreviousStatus?.ToString()
         };
     }
 

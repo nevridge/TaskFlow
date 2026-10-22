@@ -51,6 +51,69 @@ public class ProjectsControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldCountBlockedTasksAsOpenAndReportBlockedCount()
+    {
+        var project = new Project
+        {
+            Id = 1,
+            Name = "Alpha",
+            Tasks =
+            [
+                new TaskItem { Id = 1, Title = "Open", Status = Status.Todo },
+                new TaskItem { Id = 2, Title = "Blocked 1", Status = Status.Blocked },
+                new TaskItem { Id = 3, Title = "Blocked 2", Status = Status.Blocked },
+                new TaskItem { Id = 4, Title = "Done", Status = Status.Completed },
+            ]
+        };
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([project]);
+
+        var result = await _controller.GetAll();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<ProjectResponseDto>>(ok.Value).Single();
+        Assert.Equal(3, dto.OpenTaskCount);
+        Assert.Equal(2, dto.BlockedCount);
+        Assert.Equal(1, dto.CompletedTaskCount);
+    }
+
+    [Fact]
+    public async Task GetTasks_ShouldIncludeBlockedTasksWithBlockedFields()
+    {
+        var project = new Project { Id = 1, Name = "Alpha" };
+        var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
+        [
+            new TaskItem
+            {
+                Id = 4,
+                Title = "T",
+                ProjectId = 1,
+                Project = project,
+                Status = Status.Blocked,
+                BlockedReason = "Waiting",
+                BlockedAt = blockedAt,
+                PreviousStatus = Status.Todo
+            },
+            new TaskItem { Id = 5, Title = "Plain", ProjectId = 1, Project = project, Status = Status.Todo }
+        ]);
+
+        var result = await _controller.GetTasks(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        var blocked = dtos.Single(d => d.Id == 4);
+        Assert.Equal("Blocked", blocked.Status);
+        Assert.Equal("Waiting", blocked.BlockedReason);
+        Assert.Equal(blockedAt, blocked.BlockedAt);
+        Assert.Equal("Todo", blocked.PreviousStatus);
+        var plain = dtos.Single(d => d.Id == 5);
+        Assert.Null(plain.BlockedReason);
+        Assert.Null(plain.BlockedAt);
+        Assert.Null(plain.PreviousStatus);
+    }
+
+    [Fact]
     public async Task Get_ShouldReturnNotFound_WhenMissing()
     {
         _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync((Project?)null);

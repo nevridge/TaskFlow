@@ -72,6 +72,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             return [];
         }
 
+        // Status != Completed intentionally includes Blocked: blocked tasks carry forward into today,
+        // stay Blocked and keep BlockedReason/BlockedAt/PreviousStatus. BlockedAt never resets.
         var sources = await _context.JournalEntries
             .Include(e => e.Todos)
             .Where(e => e.Date < userToday && e.Id != entryId
@@ -82,6 +84,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var movedIds = new List<int>();
         foreach (var source in sources)
         {
+            // Blocked tasks are moved too (Status != Completed); only the journal link changes, not the blocked fields.
             var tasksToMove = source.Todos
                 .Where(t => t.CurrentJournalEntryId == source.Id && t.Status != Status.Completed)
                 .OrderBy(t => t.Id)

@@ -150,4 +150,27 @@ describe('TaskHistoryPanel', () => {
     expect(screen.getByText('Project changed')).toBeInTheDocument()
     expect(screen.queryByText('ProjectChanged')).not.toBeInTheDocument()
   })
+
+  it.each([
+    ['Blocked', 'Blocked'],
+    ['Unblocked', 'Unblocked'],
+    ['BlockedReasonChanged', 'Blocked reason updated'],
+  ])('falls back to a readable label for %s events without a summary', (eventType, label) => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType, changeSummary: null })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.queryByText('Status changed')).not.toBeInTheDocument()
+  })
+
+  it('prefers the server change summary for blocked events', () => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType: 'Blocked', changeSummary: 'Blocked: Waiting on Sam.' })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText('Blocked: Waiting on Sam.')).toBeInTheDocument()
+  })
 })

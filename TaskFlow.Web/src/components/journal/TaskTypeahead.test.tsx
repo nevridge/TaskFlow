@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
-const mockTasks = [
+const mockTasks: Array<{ id: number; title: string; status: string }> = [
   { id: 1, title: 'Fix login bug', status: 'Todo' },
   { id: 2, title: 'Write tests', status: 'Todo' },
   { id: 3, title: 'Deploy to production', status: 'Completed' },
@@ -183,6 +183,22 @@ describe('TaskTypeahead', () => {
       // Now type to filter — activeIndex should reset
       await userEvent.type(input, 'test')
       expect(screen.getByText('None')).not.toHaveClass('active')
+    })
+  })
+
+  describe('blocked badge', () => {
+    it('shows a Blocked badge only on blocked rows', async () => {
+      mockTasks.push({ id: 4, title: 'Stuck task', status: 'Blocked' })
+      try {
+        renderTypeahead(null)
+        await userEvent.click(screen.getByRole('combobox'))
+        const stuck = screen.getByText('Stuck task').closest('li') as HTMLElement
+        expect(stuck).toHaveTextContent('Blocked')
+        const other = screen.getByText('Fix login bug').closest('li') as HTMLElement
+        expect(other).not.toHaveTextContent('Blocked')
+      } finally {
+        mockTasks.pop()
+      }
     })
   })
 })

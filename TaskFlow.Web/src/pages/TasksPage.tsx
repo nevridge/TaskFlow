@@ -4,6 +4,9 @@ import {
   useCreateTaskMutation,
   useUpdateTaskMutation,
   useDeleteTaskMutation,
+  useBlockTaskMutation,
+  useUnblockTaskMutation,
+  useEditBlockedReasonMutation,
   type CreateTaskPayload,
   type TaskItemViewModel,
   type UpdateTaskPayload,
@@ -17,15 +20,25 @@ import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
+import {
+  STATUS_LABELS,
+  STATUS_ORDER,
+  getBlockErrorMessage,
+  isBlocked,
+  isCompleted,
+  nextCycleStatus,
+  statusRank,
+  toRequestStatus,
+  type RequestStatus,
+} from '@/lib/task-status'
 import '@/tasks.css'
 
-type StatusValue = 'draft' | 'todo' | 'completed'
-const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = [
-  { value: 'draft', label: 'Draft' },
-  { value: 'todo', label: 'To-do' },
-  { value: 'completed', label: 'Completed' },
-]
-const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo']
+type StatusValue = RequestStatus
+const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = STATUS_ORDER.map(status => ({
+  value: toRequestStatus(status),
+  label: STATUS_LABELS[status],
+}))
+const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'blocked']
 type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 type ProjectFilter = 'all' | 'none' | number
 
@@ -36,12 +49,6 @@ type PriorityGroup = {
   label: string
   cssModifier: string
   tasks: Array<{ task: TaskListModel; depth: number }>
-}
-
-const STATUS_CYCLE: Record<string, string> = {
-  draft: 'todo',
-  todo: 'completed',
-  completed: 'draft',
 }
 
 const COLUMNS: Array<{ key: TaskSortKey; label: string }> = [
@@ -56,6 +63,9 @@ export function TasksPage() {
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
   const deleteMutation = useDeleteTaskMutation()
+  const blockMutation = useBlockTaskMutation()
+  const unblockMutation = useUnblockTaskMutation()
+  const editReasonMutation = useEditBlockedReasonMutation()
   const {
     taskSortKey,
     setTaskSortKey,
@@ -85,6 +95,7 @@ export function TasksPage() {
   const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [liveMessage, setLiveMessage] = useState('')
   const [expandedParentIds, setExpandedParentIds] = useState<Set<number>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const [addingChildForTaskId, setAddingChildForTaskId] = useState<number | null>(null)
@@ -185,7 +196,7 @@ export function TasksPage() {
     if (taskSortKey === 'title') {
       cmp = a.title.localeCompare(b.title)
     } else if (taskSortKey === 'status') {
-      cmp = (a.status ?? '').localeCompare(b.status ?? '')
+      cmp = statusRank(a.status) - statusRank(b.status)
     } else if (taskSortKey === 'priority') {
       const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 2
       const pb = PRIORITY_ORDER[(b.priority ?? '').toLowerCase()] ?? 2
@@ -207,13 +218,17 @@ export function TasksPage() {
   )
 
   const childStatsByParentId = useMemo(() => {
-    const stats = new Map<number, { done: number; total: number }>()
+    const stats = new Map<number, { done: number; total: number; blocked: number }>()
     tasks.forEach(task => {
       const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
       if (!parentId) return
-      const prev = stats.get(parentId) ?? { done: 0, total: 0 }
-      const isDone = (task.status ?? '').toLowerCase() === 'completed'
-      stats.set(parentId, { total: prev.total + 1, done: prev.done + (isDone ? 1 : 0) })
+      const prev = stats.get(parentId) ?? { done: 0, total: 0, blocked: 0 }
+      stats.set(parentId, {
+        total: prev.total + 1,
+        done: prev.done + (isCompleted(task.status) ? 1 : 0),
+        // Blocked subtasks are not done; they are reported separately.
+        blocked: prev.blocked + (isBlocked(task.status) ? 1 : 0),
+      })
     })
     return stats
   }, [tasks])
@@ -317,8 +332,9 @@ export function TasksPage() {
   }
 
   function handleStatusCycle(task: TaskListModel) {
-    const currentStatus = (task.status ?? 'draft').toLowerCase()
-    const nextStatus = STATUS_CYCLE[currentStatus] ?? 'draft'
+    // Unknown and Blocked statuses are not in the cycle (Blocked is unblocked via its badge).
+    const nextStatus = nextCycleStatus(task.status)
+    if (!nextStatus) return
     setMutationError(null)
     updateMutation.mutate(
       {
@@ -326,7 +342,7 @@ export function TasksPage() {
         data: {
           title: task.title,
           description: task.description,
-          status: nextStatus as 'draft' | 'todo' | 'completed',
+          status: nextStatus,
           priority: task.priority as 'low' | 'medium' | 'high' | undefined,
           dueDate: task.dueDate,
           parentTaskItemId: task.parentTaskItemId,
@@ -335,6 +351,38 @@ export function TasksPage() {
       },
       { onError: err => setMutationError(getTaskMutationErrorMessage(err)) }
     )
+  }
+
+  async function handleBlock(task: TaskListModel, reason: string) {
+    setMutationError(null)
+    try {
+      await blockMutation.mutateAsync({ id: Number(task.id), reason })
+      setLiveMessage(`Task blocked: ${task.title}`)
+    } catch (err) {
+      setMutationError(getTaskMutationErrorMessage(err))
+      throw err
+    }
+  }
+
+  function handleUnblock(task: TaskListModel) {
+    setMutationError(null)
+    unblockMutation.mutate(
+      { id: Number(task.id) },
+      {
+        onSuccess: () => setLiveMessage(`Task unblocked: ${task.title}`),
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+      },
+    )
+  }
+
+  async function handleEditBlockedReason(task: TaskListModel, reason: string) {
+    setMutationError(null)
+    try {
+      await editReasonMutation.mutateAsync({ id: Number(task.id), reason })
+    } catch (err) {
+      setMutationError(getTaskMutationErrorMessage(err))
+      throw err
+    }
   }
 
   const parentOptions = tasks
@@ -391,6 +439,7 @@ export function TasksPage() {
   }
 
   const formError = mutationError ?? saveWithProject.error
+  const blockedTotal = tasks.filter(t => isBlocked(t.status)).length
   const totalFiltered = priorityGroups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks...</p></div></div>
@@ -464,6 +513,7 @@ export function TasksPage() {
               <label key={o.value} className="t-status-option">
                 <input type="checkbox" checked={statusFilter.has(o.value)} onChange={() => toggleStatus(o.value)} />
                 {o.label}
+                {o.value === 'blocked' && <>{' '}<span className="t-status-count">({blockedTotal})</span></>}
               </label>
             ))}
           </div>
@@ -487,6 +537,9 @@ export function TasksPage() {
           </span>
           <span className="t-filter-count">{totalFiltered} task{totalFiltered !== 1 ? 's' : ''}</span>
         </div>
+
+        {/* Persistent polite live region for block/unblock announcements. */}
+        <div role="status" className="sr-only">{liveMessage}</div>
 
         {mutationError && !showCreate && !editingTask && <p className="t-inline-error" role="alert">{mutationError}</p>}
 
@@ -530,7 +583,9 @@ export function TasksPage() {
                         const children = childrenByParentId.get(taskId) ?? []
                         const hasChildren = children.length > 0
                         const childStats = childStatsByParentId.get(taskId)
-                        const childProgress = childStats ? `${childStats.done}/${childStats.total} subtasks complete` : null
+                        const childProgress = childStats
+                          ? `${childStats.done}/${childStats.total} subtasks complete${childStats.blocked > 0 ? `, ${childStats.blocked} blocked` : ''}`
+                          : null
 
                         return (
                           <Fragment key={`row-group-${taskId}`}>
@@ -547,6 +602,9 @@ export function TasksPage() {
                               onHistory={setHistoryTask}
                               onDelete={handleDelete}
                               onStatusCycle={handleStatusCycle}
+                              onBlock={handleBlock}
+                              onUnblock={handleUnblock}
+                              onEditBlockedReason={handleEditBlockedReason}
                             />
                             {addingChildForTaskId === taskId && (
                               <tr key={`add-child-${taskId}`} className="t-list-row t-list-row--child-editor">
@@ -595,6 +653,8 @@ function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_NOT_FOUND') return 'The selected parent task was not found.'
   if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') return 'You cannot create new tasks on a past journal day.'
   if (code === 'TASK_PROJECT_NOT_FOUND') return PROJECT_CREATE_NOT_FOUND_MESSAGE
+  const blockMessage = getBlockErrorMessage(code)
+  if (blockMessage) return blockMessage
   return 'Unable to save task changes. Please try again.'
 }
 
@@ -606,12 +666,12 @@ function getErrorCode(error: unknown): string | null {
 
 function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {
   const assignedDate = task.currentJournalDate ?? null
-  const status = (task.status ?? '').toLowerCase()
-  const isCompleted = status === 'completed'
+  // Blocked counts as not completed.
+  const completed = isCompleted(task.status)
   switch (viewFilter) {
-    case 'activeToday': return assignedDate === todayISO() && !isCompleted
+    case 'activeToday': return assignedDate === todayISO() && !completed
     case 'scheduledFuture': return assignedDate != null && assignedDate > todayISO()
-    case 'completedHistory': return isCompleted && assignedDate != null && assignedDate < todayISO()
+    case 'completedHistory': return completed && assignedDate != null && assignedDate < todayISO()
     default: return true
   }
 }

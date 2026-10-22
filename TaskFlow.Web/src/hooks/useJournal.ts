@@ -17,7 +17,15 @@ import {
 import type { JournalEntryResponseDto, TaskItemResponseDto, JournalNoteResponseDto } from '@/api/journal'
 import type { CreateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, patchApiV1TaskItemsById } from '@/api/client/sdk.gen'
-import { taskKeys } from '@/hooks/useTasks'
+import {
+  taskKeys,
+  useBlockTaskMutation,
+  useUnblockTaskMutation,
+  useEditBlockedReasonMutation,
+  applyOptimisticTaskUpdate,
+  rollbackTaskCache,
+} from '@/hooks/useTasks'
+import { isBlocked, withBlockedCompleted } from '@/lib/task-status'
 import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
 import { usePrefs } from '@/context/usePrefs'
 
@@ -196,12 +204,39 @@ export function useToggleTodoMutation(entryId: number) {
           autoCompleteParentWhenChildrenDone: overrideAutoComplete ?? autoCompleteParentWhenChildrenDone,
           timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
         },
+        throwOnError: true,
       }),
+    // Completing a Blocked row clears its blocked fields right away; other toggles wait for the server.
+    onMutate: ({ id, done }) =>
+      done
+        ? applyOptimisticTaskUpdate(
+            qc,
+            [journalKeys.todos(entryId), taskKeys.all],
+            id,
+            task => (isBlocked(task.status) ? withBlockedCompleted(task) : task),
+          )
+        : undefined,
+    onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
       qc.invalidateQueries({ queryKey: taskKeys.all })
     },
   })
+}
+
+/** Block a journal todo: optimistic, rolled back on failure. */
+export function useBlockTodoMutation(entryId: number) {
+  return useBlockTaskMutation([journalKeys.todos(entryId)])
+}
+
+/** Unblock a journal todo (server restores the previous status): optimistic, rolled back on failure. */
+export function useUnblockTodoMutation(entryId: number) {
+  return useUnblockTaskMutation([journalKeys.todos(entryId)])
+}
+
+/** Edit the reason of a blocked journal todo (PATCH { blockedReason } only). */
+export function useEditBlockedReasonTodoMutation(entryId: number) {
+  return useEditBlockedReasonMutation([journalKeys.todos(entryId)])
 }
 
 export function useEditTodoMutation(entryId: number) {
@@ -260,7 +295,13 @@ export function useDeleteLogEntryMutation(entryId: number) {
 
 /** Count open todos in a journal entry's todos list. */
 export function openTodoCount(todos: TaskItemResponseDto[]): number {
+  // Blocked counts as open (not done).
   return todos.filter(t => t.status !== 'Completed').length
+}
+
+/** Count blocked todos in a journal entry's todos list. */
+export function blockedTodoCount(todos: TaskItemResponseDto[]): number {
+  return todos.filter(t => t.status === 'Blocked').length
 }
 
 /** ISO date of yesterday relative to a given ISO date. */

@@ -236,6 +236,87 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldCarryBlockedTaskIntoToday_AndKeepBlockedFields()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-2));
+        var blockedAt = new DateTime(2026, 10, 10, 8, 30, 0, DateTimeKind.Utc);
+        var blocked = await LinkNewTaskAsync(context, source, new TaskItem
+        {
+            Title = "Blocked",
+            Status = Status.Blocked,
+            BlockedReason = "Waiting on Sam",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo
+        });
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        Assert.Contains(blocked.Id, moved);
+        Assert.Single(await repo.GetTodosAsync(target.Id), t => t.Id == blocked.Id);
+        context.ChangeTracker.Clear();
+        var reloaded = await context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == blocked.Id);
+        Assert.Equal(target.Id, reloaded.CurrentJournalEntryId);
+        Assert.Equal(Status.Blocked, reloaded.Status);
+        Assert.Equal("Waiting on Sam", reloaded.BlockedReason);
+        Assert.Equal(blockedAt, reloaded.BlockedAt);
+        Assert.Equal(Status.Todo, reloaded.PreviousStatus);
+    }
+
+    [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldNotResetBlockedAt_WhenCarriedAcrossSeveralDays()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var day1 = new DateOnly(2026, 10, 11);
+        var day2 = day1.AddDays(1);
+        var day3 = day1.AddDays(2);
+        var (source, _) = await SeedLinkedTaskAsync(context, day1.AddDays(-1));
+        var blockedAt = new DateTime(2026, 10, 9, 8, 30, 0, DateTimeKind.Utc);
+        var blocked = await LinkNewTaskAsync(context, source, new TaskItem
+        {
+            Title = "Blocked",
+            Status = Status.Blocked,
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo
+        });
+
+        var entry2 = await repo.AddAsync(new JournalEntry { Title = "Day 2", Date = day2 });
+        await repo.CarryForwardIncompleteTasksAsync(entry2.Id, day2);
+        var entry3 = await repo.AddAsync(new JournalEntry { Title = "Day 3", Date = day3 });
+        var moved = await repo.CarryForwardIncompleteTasksAsync(entry3.Id, day3);
+
+        Assert.Contains(blocked.Id, moved);
+        Assert.Equal(blockedAt, blocked.BlockedAt);
+        Assert.Equal(Status.Blocked, blocked.Status);
+        Assert.Equal(entry3.Id, blocked.CurrentJournalEntryId);
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldNotMoveBlockedTask_WhenCreatingEntry()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
+        var blocked = await LinkNewTaskAsync(context, source, new TaskItem
+        {
+            Title = "Blocked",
+            Status = Status.Blocked,
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        });
+
+        await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        Assert.Equal(source.Id, blocked.CurrentJournalEntryId);
+        Assert.Equal(0, blocked.MoveCount);
+    }
+
+    [Fact]
     public async Task CarryForwardIncompleteTasksAsync_ShouldMoveTasksFromAllEarlierEntries_WhenDatesHaveGaps()
     {
         using var context = CreateInMemoryContext();

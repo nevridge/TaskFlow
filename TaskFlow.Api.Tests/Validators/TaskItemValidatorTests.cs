@@ -245,6 +245,70 @@ public class TaskItemValidatorTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e =>
             e.PropertyName == "Status" &&
-            e.ErrorMessage == "Status must be a valid value (Draft, Todo, or Completed).");
+            e.ErrorMessage == "Status must be a valid value (Draft, Todo, Blocked, or Completed).");
+    }
+
+    [Fact]
+    public async Task Validate_ShouldPass_WhenBlockedWithAllBlockedFields()
+    {
+        var task = new TaskItem
+        {
+            Title = "Blocked",
+            Status = Status.Blocked,
+            BlockedReason = new string('a', 200),
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        };
+
+        var result = await _validator.ValidateAsync(task);
+
+        Assert.True(result.IsValid);
+    }
+
+    [Fact]
+    public async Task Validate_ShouldFail_WhenBlockedReasonExceeds200Characters()
+    {
+        var task = new TaskItem
+        {
+            Title = "Blocked",
+            Status = Status.Blocked,
+            BlockedReason = new string('a', 201),
+            BlockedAt = DateTime.UtcNow,
+            PreviousStatus = Status.Todo
+        };
+
+        var result = await _validator.ValidateAsync(task);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e =>
+            e.PropertyName == "BlockedReason" &&
+            e.ErrorMessage == "Blocked reason must not exceed 200 characters.");
+    }
+
+    [Theory]
+    [InlineData(Status.Draft)]
+    [InlineData(Status.Todo)]
+    [InlineData(Status.Completed)]
+    public async Task Validate_ShouldFail_WhenNonBlockedTaskHasBlockedFields(Status status)
+    {
+        var reason = new TaskItem { Title = "T", Status = status, BlockedReason = "x" };
+        var at = new TaskItem { Title = "T", Status = status, BlockedAt = DateTime.UtcNow };
+        var previous = new TaskItem { Title = "T", Status = status, PreviousStatus = Status.Todo };
+
+        foreach (var task in new[] { reason, at, previous })
+        {
+            var result = await _validator.ValidateAsync(task);
+
+            Assert.False(result.IsValid);
+            Assert.Contains(result.Errors, e => e.ErrorMessage == "Blocked details can only be set while the task is Blocked.");
+        }
+    }
+
+    [Fact]
+    public async Task Validate_ShouldPass_WhenNonBlockedTaskHasNoBlockedFields()
+    {
+        var result = await _validator.ValidateAsync(new TaskItem { Title = "T", Status = Status.Todo });
+
+        Assert.True(result.IsValid);
     }
 }

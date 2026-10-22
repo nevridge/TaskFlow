@@ -186,6 +186,13 @@ namespace TaskFlow.Api.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("BlockedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlockedReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("CurrentJournalEntryId")
                         .HasColumnType("INTEGER");
 
@@ -202,6 +209,9 @@ namespace TaskFlow.Api.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int?>("ParentTaskItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("PreviousStatus")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Priority")

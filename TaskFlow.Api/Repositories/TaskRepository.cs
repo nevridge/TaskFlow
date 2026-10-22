@@ -59,6 +59,10 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
         var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
         var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateTime?>(nameof(TaskItem.DueDate));
+        // A null stored reason is meaningful, so do not fall back to OriginalValues when a persisted row exists.
+        var originalBlockedReason = persisted is not null
+            ? persisted.BlockedReason
+            : entry.OriginalValues.GetValue<string?>(nameof(TaskItem.BlockedReason));
 
         if (!string.Equals(originalTitle, task.Title, StringComparison.Ordinal))
         {
@@ -106,7 +110,54 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
         var wasCompleted = IsCompleted(originalStatus);
         var isCompletedNow = IsCompleted(task.Status);
-        if (!wasCompleted && isCompletedNow)
+        var wasBlocked = originalStatus == Status.Blocked;
+        var isBlockedNow = task.Status == Status.Blocked;
+        if (!wasBlocked && isBlockedNow)
+        {
+            var reason = NormalizeReason(task.BlockedReason);
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "Blocked",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = reason is null ? "Blocked." : $"Blocked: {reason}."
+            });
+        }
+        else if (wasBlocked && isCompletedNow)
+        {
+            // Single event: completing a blocked task never also writes an Unblocked event.
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "Completed",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = "Marked complete (was blocked)."
+            });
+        }
+        else if (wasBlocked && !isBlockedNow)
+        {
+            _context.TaskItemEvents.Add(new TaskItemEvent
+            {
+                TaskItemId = task.Id,
+                EventType = "Unblocked",
+                OccurredAtUtc = DateTime.UtcNow,
+                ChangeSummary = $"Unblocked, back to {task.Status}."
+            });
+        }
+        else if (wasBlocked && isBlockedNow)
+        {
+            if (!string.Equals(NormalizeReason(originalBlockedReason), NormalizeReason(task.BlockedReason), StringComparison.Ordinal))
+            {
+                _context.TaskItemEvents.Add(new TaskItemEvent
+                {
+                    TaskItemId = task.Id,
+                    EventType = "BlockedReasonChanged",
+                    OccurredAtUtc = DateTime.UtcNow,
+                    ChangeSummary = "Blocked reason updated."
+                });
+            }
+        }
+        else if (!wasCompleted && isCompletedNow)
         {
             _context.TaskItemEvents.Add(new TaskItemEvent
             {
@@ -154,6 +205,12 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     }
 
     private static bool IsCompleted(Status status) => status == Status.Completed;
+
+    private static string? NormalizeReason(string? reason)
+    {
+        var trimmed = reason?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 
     private static string FormatDueDate(DateTime? value) =>
         value?.ToString("yyyy-MM-dd") ?? "none";

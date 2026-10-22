@@ -9,6 +9,7 @@ export type ProjectResponseDto = {
   updatedAt?: string | null
   openTaskCount: number
   completedTaskCount: number
+  blockedCount?: number
 }
 
 export type CreateProjectDto = { name: string; description?: string | null }
@@ -19,7 +20,9 @@ export type ProjectTaskDto = {
   title: string
   description?: string | null
   dueDate?: string | null
-  status: 'Draft' | 'Todo' | 'Completed'
+  /** PascalCase status. Typed as string so an unknown value renders as itself (see normalizeStatus). */
+  status: string
+  blockedReason?: string | null
   priority: 'Low' | 'Medium' | 'High'
   parentTaskItemId?: number | null
   projectId?: number | null

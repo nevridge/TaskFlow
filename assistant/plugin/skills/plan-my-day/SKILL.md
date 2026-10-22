@@ -10,10 +10,11 @@ Plan the user's day in TaskFlow. Optional argument: a date (default today) or a 
 
 1. Gather, in parallel where you can:
    - `get_journal` for the date (what is already planned and logged), and `get_journal` for the previous day to see what was left unfinished.
-   - `list_tasks` with `view=overdue`, then `view=due_soon` (dueWithinDays 3), then `view=stale`.
+   - `list_tasks` with `view=overdue`, then `view=due_soon` (dueWithinDays 3), then `view=stale`, then `view=blocked`.
    - If a project was named, add `project` to those calls.
-2. Propose a focus list of 3-7 tasks, most important first. For each give: `#id title`, and one short reason (overdue Nd, due soon, high priority, unblocks something). Mention anything already planned. Do not add tasks the user did not need to do today just to fill the list.
+2. Propose a focus list of 3-7 tasks, most important first. For each give: `#id title`, and one short reason (overdue Nd, due soon, high priority, unblocks something). Mention anything already planned. Do not add tasks the user did not need to do today just to fill the list. Blocked tasks (flagged `blocked: <reason> (Nd)`) are not suggested for today unless the user asks.
 3. List stale tasks (moved 3+ times) separately and suggest one decision each: do it today, re-scope, or drop. Do not change or delete them yourself.
+   List Blocked tasks as their own group (`#id title`, reason, days blocked). If the wait may be over, offer to unblock with `update_task status=todo`. Wait for a yes. If the user says another task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters) and wait for a yes. Do not log it with `add_log_entry`. Only Todo tasks can be blocked: a Draft must be made Todo first, a Completed task reopened first. If they gave no reason, ask; never invent one.
 4. Ask the user to confirm or adjust the list. Wait for their answer.
 5. Once confirmed, call `set_journal_todos` with the agreed ids (and `remove` for anything they dropped). Report what is now planned.
 

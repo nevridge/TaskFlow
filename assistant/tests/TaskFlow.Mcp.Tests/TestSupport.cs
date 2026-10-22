@@ -114,7 +114,10 @@ internal static class Fixtures
         int moveCount = 0,
         int daysTagged = 0,
         string? plannedOn = null,
-        string? description = null) => new
+        string? description = null,
+        string? blockedReason = null,
+        string? blockedAt = null,
+        string? previousStatus = null) => new
         {
             id,
             title,
@@ -131,9 +134,12 @@ internal static class Fixtures
             currentJournalDate = plannedOn,
             moveCount,
             daysTagged,
+            blockedReason,
+            blockedAt,
+            previousStatus,
         };
 
-    public static object Project(int id, string name, bool archived = false, int open = 0, int done = 0, string? description = null) => new
+    public static object Project(int id, string name, bool archived = false, int open = 0, int done = 0, string? description = null, int blockedCount = 0) => new
     {
         id,
         name,
@@ -142,6 +148,7 @@ internal static class Fixtures
         createdAt = "2026-10-01T00:00:00Z",
         openTaskCount = open,
         completedTaskCount = done,
+        blockedCount,
     };
 
     public static object Journal(int id, string date, string? summary = null, object[]? logs = null) => new

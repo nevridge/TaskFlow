@@ -162,7 +162,117 @@ public class ListTasksTests
 
         var act = () => tools.ListTasks(view: "bogus");
 
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("open, all, completed, overdue, due_soon, stale, unassigned, today");
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("open, all, completed, overdue, due_soon, stale, unassigned, today, blocked");
+    }
+
+    private static readonly object[] WithBlocked =
+    [
+        Fixtures.Task(1, "Plain"),
+        Fixtures.Task(2, "Waiting", status: "Blocked", priority: "High", due: "2026-10-01", blockedReason: "Waiting on vendor", blockedAt: "2026-10-05T10:00:00Z", moveCount: 4),
+        Fixtures.Task(3, "No reason", status: "Blocked", blockedAt: "2026-10-09T10:00:00Z", plannedOn: "2026-10-09", projectId: null),
+        Fixtures.Task(4, "Done", status: "Completed", isComplete: true),
+    ];
+
+    [Fact]
+    public async Task StatusBlocked_ReturnsOnlyBlockedTasks()
+    {
+        var (tools, _) = Setup(WithBlocked);
+
+        var text = await tools.ListTasks(view: "all", status: "BLOCKED");
+
+        text.Should().StartWith("2 task(s) match (view=all, status=blocked).").And.Contain("#2 ").And.Contain("#3 ").And.NotContain("#1 ");
+    }
+
+    [Fact]
+    public async Task BlockedView_ReturnsOnlyBlockedTasks_WithReasonAndDuration()
+    {
+        var (tools, _) = Setup(WithBlocked);
+
+        var text = await tools.ListTasks(view: "blocked");
+
+        text.Should().Contain("#2 [High/Blocked] Waiting | blocked: Waiting on vendor (4d) | due 2026-10-01 (OVERDUE 8d)");
+        text.Should().Contain("#3 [Low/Blocked] No reason | blocked (<1d)").And.NotContain("blocked: |").And.NotContain("#1 ");
+    }
+
+    [Theory]
+    [InlineData("open", "#2 #3")]
+    [InlineData("overdue", "#2")]
+    [InlineData("stale", "#2")]
+    [InlineData("unassigned", "#2 #3")]
+    [InlineData("today", "#3")]
+    [InlineData("due_soon", "#2")]
+    public async Task BlockedTasks_StillAppearInOtherOpenViews_Flagged(string view, string expectedIds)
+    {
+        var (tools, _) = Setup(WithBlocked);
+
+        var text = await tools.ListTasks(view: view);
+
+        foreach (var id in expectedIds.Split(' '))
+        {
+            text.Should().Contain(id + " [");
+        }
+
+        text.Should().Contain("blocked");
+    }
+
+    [Fact]
+    public async Task DetailedBlockedTask_ShowsBlockedSince()
+    {
+        var (tools, _) = Setup(WithBlocked);
+
+        var text = await tools.ListTasks(view: "blocked", responseFormat: "detailed");
+
+        text.Should().Contain("blocked since 2026-10-05 10:00 UTC");
+    }
+
+    [Fact]
+    public async Task ReasonWithNewlines_StaysOnOneLine()
+    {
+        var (tools, _) = Setup(Fixtures.Task(1, "T", status: "Blocked", blockedReason: "line one\nline two\t\u0007x", blockedAt: "2026-10-08T17:00:00Z"));
+
+        var text = await tools.ListTasks(view: "blocked");
+
+        text.Should().Contain("blocked: line one line two x (1d)");
+        text.Split('\n').Should().HaveCount(2);
+    }
+}
+
+public class FormattingBlockedTests
+{
+    private static TaskFlow.Mcp.Api.TaskItemDto Blocked(DateTime? at, string? reason = "r") =>
+        new(1, "T", null, false, null, "Blocked", "Low", null, null, null, null, null, null, 0, null, 0, 0, reason, at);
+
+    private static readonly DateTimeOffset Now = new(2026, 10, 9, 17, 0, 0, TimeSpan.Zero);
+
+    [Theory]
+    [InlineData("2026-10-09T16:00:01Z", "(<1d)")]
+    [InlineData("2026-10-08T17:00:01Z", "(<1d)")]
+    [InlineData("2026-10-08T17:00:00Z", "(1d)")]
+    [InlineData("2026-10-05T14:00:00Z", "(4d)")]
+    [InlineData("2026-10-20T00:00:00Z", "(<1d)")]
+    public void Task_RendersWholeDaysBlocked_ClampedAtZero(string blockedAt, string expected)
+    {
+        var at = DateTime.Parse(blockedAt, null, System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal);
+
+        Formatting.Task(Blocked(at), Fixtures.Today, nowUtc: Now).Should().Contain(expected);
+    }
+
+    [Fact]
+    public void Task_WithoutNowUtc_OrBlockedAt_OmitsDuration()
+    {
+        Formatting.Task(Blocked(new DateTime(2026, 10, 5, 0, 0, 0, DateTimeKind.Utc)), Fixtures.Today).Should().EndWith("| blocked: r");
+        Formatting.Task(Blocked(null), Fixtures.Today, nowUtc: Now).Should().EndWith("| blocked: r");
+    }
+
+    [Fact]
+    public void Task_WhitespaceReason_RendersPlainBlocked() =>
+        Formatting.Task(Blocked(null, "   "), Fixtures.Today, nowUtc: Now).Should().EndWith("| blocked");
+
+    [Fact]
+    public void Project_ShowsBlockedCount_OnlyWhenAboveZero()
+    {
+        Formatting.Project(new(1, "A", null, false, DateTime.UtcNow, null, 5, 3, 2)).Should().Contain("5 open (2 blocked) / 3 done");
+        Formatting.Project(new(1, "A", null, false, DateTime.UtcNow, null, 5, 3)).Should().Contain("5 open / 3 done");
     }
 }
 
@@ -185,6 +295,26 @@ public class GetTaskTests
 
         text.Should().Contain("#5 [High/Todo] Spec").And.Contain("Notes (1):").And.Contain("[2026-10-08] Call Sam");
         text.IndexOf("Completed", StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("TaskCreated", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task BlockedTask_ShowsReasonDurationBlockedSince_AndBlockEvents()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Fixtures.Task(5, "Spec", status: "Blocked", blockedReason: "Waiting on vendor", blockedAt: "2026-10-05T10:00:00Z"))
+            .Get("TaskItems/5/notes", Array.Empty<object>())
+            .Get("TaskItems/5/history", new[]
+            {
+                Fixtures.Event(5, "Blocked", "2026-10-05T10:00:00Z", "Blocked: Waiting on vendor"),
+                Fixtures.Event(5, "BlockedReasonChanged", "2026-10-06T10:00:00Z", "Reason changed."),
+                Fixtures.Event(5, "Unblocked", "2026-10-07T10:00:00Z", "Unblocked."),
+            });
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var text = await tools.GetTask(5);
+
+        text.Should().Contain("blocked: Waiting on vendor (4d)").And.Contain("blocked since 2026-10-05 10:00 UTC");
+        text.Should().Contain("Blocked: Blocked: Waiting on vendor").And.Contain("BlockedReasonChanged:").And.Contain("Unblocked:");
     }
 }
 
@@ -263,6 +393,29 @@ public class CreateTasksTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message
             .Should().Contain("Created 0 of 1").And.Contain("past journal day").And.Contain("TASK_CREATION_PAST_DAY_NOT_ALLOWED");
+    }
+
+    [Fact]
+    public async Task BlockedItem_IsRejectedWithoutApiCall_OthersUnaffected()
+    {
+        var (tools, handler) = Setup(new StubHandler().Post("TaskItems", Fixtures.Task(10, "Good"), HttpStatusCode.Created));
+
+        var text = await tools.CreateTasks([new NewTask { Title = "Good" }, new NewTask { Title = "Wait", Status = "Blocked" }]);
+
+        text.Should().StartWith("Created 1 of 2 task(s).").And.Contain("+ #10 ")
+            .And.Contain("x \"Wait\": Cannot create a task as blocked. Create it first, then call update_task with status=blocked and a blockedReason.");
+        handler.Sent(HttpMethod.Post, "TaskItems").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task OnlyBlockedItems_ThrowsWithGuidance_AndMakesNoCall()
+    {
+        var (tools, handler) = Setup();
+
+        var act = () => tools.CreateTasks([new NewTask { Title = "Wait", Status = "blocked" }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Created 0 of 1").And.Contain("update_task with status=blocked");
+        handler.Requests.Should().BeEmpty();
     }
 
     [Fact]
@@ -439,6 +592,216 @@ public class UpdateTaskTests
         await FluentActions.Awaiting(() => tools.UpdateTask(5, dueDate: "someday")).Should().ThrowAsync<McpException>();
 
         handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    private static object BlockedTask(string? reason = "Waiting on vendor") =>
+        Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", blockedReason: reason, blockedAt: "2026-10-05T10:00:00Z", previousStatus: "Todo");
+
+    [Fact]
+    public async Task StatusBlocked_WithReason_SendsTrimmedReason_AndSummarisesBlock()
+    {
+        var (tools, handler) = Setup(Existing(), BlockedTask());
+
+        var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "  Waiting on vendor  ");
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("status").GetString().Should().Be("blocked");
+        body.GetProperty("blockedReason").GetString().Should().Be("Waiting on vendor");
+        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        text.Should().Contain("Changed blocked (reason: \"Waiting on vendor\").").And.NotContain("status")
+            .And.Contain("[High/Blocked]").And.Contain("blocked: Waiting on vendor (4d)").And.Contain("blocked since 2026-10-05 10:00 UTC");
+    }
+
+    [Fact]
+    public async Task StatusBlocked_WithoutReason_SendsNullReason()
+    {
+        var (tools, handler) = Setup(Existing(), BlockedTask(null));
+
+        var text = await tools.UpdateTask(5, status: "blocked");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        text.Should().Contain("Changed blocked.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task EmptyReason_OnBlockedTask_ClearsReason_AndStaysBlocked(string reason)
+    {
+        var (tools, handler) = Setup(BlockedTask(), BlockedTask(null));
+
+        var text = await tools.UpdateTask(5, blockedReason: reason);
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("status").GetString().Should().Be("blocked");
+        body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.String);
+        body.GetProperty("blockedReason").GetString().Should().BeEmpty();
+        text.Should().Contain("blocked reason (cleared)");
+    }
+
+    [Fact]
+    public async Task NewReason_OnBlockedTask_IsSummarisedAsBlockedReason()
+    {
+        var (tools, handler) = Setup(BlockedTask(), BlockedTask("Now waiting on legal"));
+
+        var text = await tools.UpdateTask(5, blockedReason: "Now waiting on legal");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Now waiting on legal");
+        text.Should().Contain("Changed blocked reason.");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TitleOrPriorityOnly_OnBlockedTask_ResendsBlockedWithNullReason(bool byTitle)
+    {
+        var (tools, handler) = Setup(BlockedTask());
+
+        var text = byTitle ? await tools.UpdateTask(5, title: "New title") : await tools.UpdateTask(5, priority: "low");
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("status").GetString().Should().Be("blocked");
+        body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        text.Should().Contain("[High/Blocked]").And.Contain("blocked: Waiting on vendor").And.NotContain("Changed status").And.NotContain("blocked reason");
+    }
+
+    [Fact]
+    public async Task StatusTodo_UnblocksTask()
+    {
+        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", priority: "High"));
+
+        var text = await tools.UpdateTask(5, status: "todo");
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("status").GetString().Should().Be("todo");
+        body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        text.Should().Contain("Changed unblocked.").And.Contain("[High/Todo]").And.NotContain("blocked:");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CompletingABlockedTask_CompletesIt(bool useComplete)
+    {
+        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", status: "Completed", isComplete: true));
+
+        var text = useComplete ? await tools.UpdateTask(5, complete: true) : await tools.UpdateTask(5, status: "completed");
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("status").GetString().Should().Be("completed");
+        body.GetProperty("isComplete").GetBoolean().Should().BeTrue();
+        text.Should().Contain("Changed status.").And.NotContain("blocked");
+    }
+
+    [Fact]
+    public async Task ReasonOver200Chars_IsRejected_WithoutAnyPut()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        var act = () => tools.UpdateTask(5, status: "blocked", blockedReason: new string('x', 201));
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("blockedReason is 201 characters; the limit is 200.");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task ReasonOfExactly200Chars_AfterTrim_IsAccepted()
+    {
+        var (tools, handler) = Setup(Existing(), BlockedTask());
+
+        await tools.UpdateTask(5, status: "blocked", blockedReason: " " + new string('x', 200) + " ");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().HaveLength(200);
+    }
+
+    [Theory]
+    [InlineData("todo")]
+    [InlineData("draft")]
+    [InlineData("completed")]
+    public async Task ReasonWithNonBlockedStatus_IsRejected_WithoutAnyCallToPut(string status)
+    {
+        var (tools, handler) = Setup(Existing());
+
+        var act = () => tools.UpdateTask(5, status: status, blockedReason: "Waiting");
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("blockedReason needs status=blocked").And.Contain(status);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task ReasonOnPlainTodoTask_WithoutStatus_IsRejected()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        await FluentActions.Awaiting(() => tools.UpdateTask(5, blockedReason: "Waiting")).Should().ThrowAsync<McpException>().WithMessage("*status=blocked*");
+
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task EmptyReason_WhenFinalStatusIsNotBlocked_SendsNullWithoutError()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        await tools.UpdateTask(5, blockedReason: "");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "make the task todo first", "Make the task Todo first")]
+    [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "reopen", "Reopen the task first")]
+    [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "needs status", "omit blockedReason")]
+    public async Task Api422BlockCodes_SurfaceMessageAndOneGuidanceLine(string code, string apiMessage, string guidance)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing())
+            .Put("TaskItems/5", new { code, message = apiMessage }, HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, status: "blocked");
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().StartWith($"{apiMessage} [{code}]\n").And.Contain(guidance).And.NotContain("{").And.NotContain("   at ");
+        message.Split('\n').Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Api422WithErrorsMapAndRootCode_StillGetsGuidance()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing())
+            .Put("TaskItems/5", """{"title":"Validation","errors":{"status":["Drafts cannot be blocked."]},"code":"TASK_BLOCK_DRAFT_NOT_ALLOWED"}""", HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, status: "blocked");
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("[TASK_BLOCK_DRAFT_NOT_ALLOWED]").And.Contain("Make the task Todo first");
+    }
+
+    [Fact]
+    public async Task BlockedParent_AlwaysSendsAutoCompleteFalse_AndSummaryDoesNotMentionIt()
+    {
+        var (tools, handler) = Setup(Existing(), BlockedTask());
+
+        var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
+        text.Should().NotContainEquivalentOf("autocomplete");
+    }
+
+    [Fact]
+    public async Task StaleCopy_ApiError_IsSurfacedPlainly()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", BlockedTask())
+            .Put("TaskItems/5", new { message = "The task is already completed." }, HttpStatusCode.BadRequest);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, title: "x");
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("The task is already completed.");
     }
 }
 

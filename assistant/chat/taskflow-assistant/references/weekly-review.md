@@ -7,6 +7,7 @@ Goal: summarize a period from real data and draft a status update in the user's 
 3. Draft the update with these sections, omitting empty ones:
    - **Done**: completed work grouped by project.
    - **In progress / next**: the most urgent open tasks per project.
+   - **Blocked**: currently Blocked tasks with their reasons and how long they have been blocked. Do not suggest them as work for today unless asked, and do not report what was blocked or unblocked during the period (the review does not show it).
    - **At risk**: overdue and stalled tasks, each with a one-line suggestion (re-date, split, drop, escalate).
    - **Notes**: anything notable from the journal summaries and logs.
 4. Keep to what the data shows. Do not invent accomplishments or reasons for delays; phrase guesses as questions.

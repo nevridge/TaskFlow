@@ -1,3 +1,4 @@
+using System.Net;
 using ModelContextProtocol;
 using TaskFlow.Mcp.Api;
 
@@ -22,7 +23,7 @@ internal static class ToolGuard
         }
         catch (TaskFlowApiException ex)
         {
-            throw new McpException(ex.Message, ex);
+            throw new McpException(WithGuidance(ex), ex);
         }
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
@@ -35,6 +36,25 @@ internal static class ToolGuard
                 + "or set TASKFLOW_API_URL if it runs elsewhere.",
                 ex);
         }
+    }
+
+    /// <summary>Appends one line of next-step guidance for known 422 codes. Other errors pass through unchanged.</summary>
+    internal static string WithGuidance(TaskFlowApiException ex)
+    {
+        if (ex.Status != HttpStatusCode.UnprocessableEntity || ex.Code is null)
+        {
+            return ex.Message;
+        }
+
+        var guidance = ex.Code switch
+        {
+            "TASK_BLOCK_DRAFT_NOT_ALLOWED" => "Only Todo tasks can be blocked. Make the task Todo first (status=todo), then block it.",
+            "TASK_BLOCK_COMPLETED_NOT_ALLOWED" => "Only Todo tasks can be blocked. Reopen the task first (complete=false), then block it.",
+            "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS" => "A blockedReason needs status=blocked on a Todo task; pass status=blocked with it, or omit blockedReason.",
+            _ => null,
+        };
+
+        return guidance is null ? ex.Message : ex.Message + "\n" + guidance;
     }
 
     public static McpException Invalid(string message) => new(message);

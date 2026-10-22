@@ -33,6 +33,24 @@ public class JournalToolsTests
     }
 
     [Fact]
+    public async Task GetJournal_PlannedBlockedTask_ShowsReasonAndDuration()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[]
+            {
+                Fixtures.Task(5, "Spec", status: "Blocked", priority: "High", blockedReason: "On vendor", blockedAt: "2026-10-05T10:00:00Z"),
+                Fixtures.Task(6, "Plain"),
+            })
+            .Get("JournalEntries/3/notes", Array.Empty<object>());
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("#5 [High/Blocked] Spec | blocked: On vendor (4d)").And.Contain("#6 [Low/Todo] Plain");
+        text.Should().NotContain("#6 [Low/Todo] Plain |");
+    }
+
+    [Fact]
     public async Task GetJournal_CreatesTheEntry_WhenMissing()
     {
         var handler = new StubHandler()
@@ -465,6 +483,31 @@ public class ProjectToolsTests
     }
 
     [Fact]
+    public async Task ProjectStatus_ListsBlockedSeparately_CountsThemOpen_AndDoesNotStallThem()
+    {
+        var handler = new StubHandler()
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha") })
+            .Get("TaskItems", new[]
+            {
+                Fixtures.Task(1, "Waiting", status: "Blocked", priority: "High", moveCount: 5, projectId: 1, projectName: "Alpha", blockedReason: "On vendor", blockedAt: "2026-10-05T10:00:00Z"),
+                Fixtures.Task(2, "No reason", status: "Blocked", projectId: 1, projectName: "Alpha", blockedAt: "2026-10-09T10:00:00Z"),
+                Fixtures.Task(3, "Open", projectId: 1, projectName: "Alpha"),
+                Fixtures.Task(4, "Done 1", status: "Completed", isComplete: true, projectId: 1),
+                Fixtures.Task(5, "Done 2", status: "Completed", isComplete: true, projectId: 1),
+                Fixtures.Task(6, "Done 3", status: "Completed", isComplete: true, projectId: 1),
+            });
+
+        var text = await Tools(handler).ProjectStatus("Alpha");
+
+        text.Should().Contain("Project Alpha (#1): 3 open (2 blocked) / 3 done")
+            .And.Contain("Blocked (2):")
+            .And.Contain("#1 [High/Blocked] Waiting | blocked: On vendor (4d)")
+            .And.Contain("#2 [Low/Blocked] No reason | blocked (<1d)")
+            .And.NotContain("Stalled")
+            .And.Contain("Most urgent open (3):");
+    }
+
+    [Fact]
     public async Task ProjectStatus_WithNoOpenTasks_SaysSo()
     {
         var handler = new StubHandler()
@@ -520,6 +563,66 @@ public class WeeklyReviewTests
         var tools = new ReviewTools(Fixtures.Client(handler), Fixtures.Time());
 
         (await tools.WeeklyReview(from: "2026-10-09", to: "2026-10-09")).Should().Contain("Completed (1):");
+    }
+
+    private static StubHandler ReviewHandler(object[] tasks, object[]? projects = null)
+    {
+        return new StubHandler()
+            .Get("TaskItems", tasks)
+            .Get("Projects", projects ?? [])
+            .Get("JournalEntries", Array.Empty<object>());
+    }
+
+    [Fact]
+    public async Task BlockedGroup_ListsCurrentlyBlocked_WithReasonDuration_AndOverdueInBoth()
+    {
+        var handler = ReviewHandler(
+            [
+                Fixtures.Task(1, "Waiting", status: "Blocked", priority: "High", due: "2026-10-01", projectId: 7, projectName: "Alpha", blockedReason: "On vendor", blockedAt: "2026-10-05T10:00:00Z"),
+                Fixtures.Task(2, "Stuck blocked", status: "Blocked", moveCount: 6, blockedAt: "2026-10-09T10:00:00Z"),
+                Fixtures.Task(3, "Plain"),
+            ],
+            [Fixtures.Project(7, "Alpha", open: 1, done: 0, blockedCount: 1)])
+            .Get("TaskItems/1/history", Array.Empty<object>())
+            .Get("TaskItems/2/history", Array.Empty<object>())
+            .Get("TaskItems/3/history", Array.Empty<object>());
+        var tools = new ReviewTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var text = await tools.WeeklyReview();
+
+        text.Should().Contain("Blocked:").And.Contain("#2 [Low/Blocked] Stuck blocked | blocked (<1d)");
+        System.Text.RegularExpressions.Regex.Matches(text, @"#1 \[High/Blocked\] Waiting \| blocked: On vendor \(4d\)").Should().HaveCount(2, "in Blocked and Overdue");
+        text.IndexOf("Blocked:", StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("Overdue:", StringComparison.Ordinal));
+        text.Should().NotContain("Stalled (", "blocked tasks are not shown as stalled");
+        text.Should().Contain("Open now: 3 (overdue 1, stalled 0)").And.Contain("Alpha: 1 open (1 blocked) / 0 done");
+    }
+
+    [Fact]
+    public async Task BlockedGroup_IsOmitted_WhenNothingIsBlocked()
+    {
+        var handler = ReviewHandler([Fixtures.Task(1, "Plain")]).Get("TaskItems/1/history", Array.Empty<object>());
+        var tools = new ReviewTools(Fixtures.Client(handler), Fixtures.Time());
+
+        (await tools.WeeklyReview()).Should().NotContain("Blocked");
+    }
+
+    [Fact]
+    public async Task BlockedGroup_StillListsTasksBeyondTheHistoryLookupCap()
+    {
+        var tasks = Enumerable.Range(1, 305)
+            .Select(i => i == 1
+                ? Fixtures.Task(1, "Old blocked", status: "Blocked", blockedReason: "Waiting", blockedAt: "2026-10-05T10:00:00Z")
+                : Fixtures.Task(i, $"T{i}"))
+            .ToArray();
+        var handler = ReviewHandler(tasks);
+        for (var i = 6; i <= 305; i++)
+        {
+            handler.Get($"TaskItems/{i}/history", Array.Empty<object>());
+        }
+
+        var text = await new ReviewTools(Fixtures.Client(handler), Fixtures.Time()).WeeklyReview();
+
+        text.Should().Contain("Blocked:").And.Contain("#1 [Low/Blocked] Old blocked | blocked: Waiting (4d)").And.Contain("most recent of 305 tasks");
     }
 
     [Fact]

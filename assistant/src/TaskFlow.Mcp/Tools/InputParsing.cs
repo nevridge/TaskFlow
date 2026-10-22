@@ -6,7 +6,7 @@ namespace TaskFlow.Mcp.Tools;
 internal static class InputParsing
 {
     private static readonly string[] Priorities = ["low", "medium", "high"];
-    private static readonly string[] Statuses = ["draft", "todo", "completed"];
+    private static readonly string[] Statuses = ["draft", "todo", "blocked", "completed"];
 
     public static DateOnly Today(TimeProvider time) => DateOnly.FromDateTime(time.GetLocalNow().DateTime);
 

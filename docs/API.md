@@ -90,14 +90,12 @@ Retrieves all task items with status information.
     "id": 1,
     "title": "Complete project documentation",
     "description": "Write comprehensive API documentation",
-    "isComplete": false,
     "statusName": "To Do"
   },
   {
     "id": 2,
     "title": "Deploy to Azure",
     "description": "Set up production environment",
-    "isComplete": true,
     "statusName": "Done"
   }
 ]
@@ -126,7 +124,6 @@ Retrieves a specific task item with status information.
   "id": 1,
   "title": "Complete project documentation",
   "description": "Write comprehensive API documentation",
-  "isComplete": false,
   "statusName": "To Do"
 }
 ```
@@ -160,8 +157,7 @@ Creates a new task item with status assignment.
 {
   "title": "Complete project documentation",
   "description": "Write comprehensive API documentation",
-  "statusId": 1,
-  "isComplete": false
+  "statusId": 1
 }
 ```
 
@@ -169,7 +165,6 @@ Creates a new task item with status assignment.
 - `title` (string, required, max 100 chars) - Task title
 - `description` (string, optional) - Task description
 - `statusId` (integer, optional, defaults to 1) - Status ID to assign
-- `isComplete` (boolean, required) - Completion status
 
 **Response:** `201 Created`
 
@@ -178,7 +173,6 @@ Creates a new task item with status assignment.
   "id": 3,
   "title": "Complete project documentation",
   "description": "Write comprehensive API documentation",
-  "isComplete": false,
   "statusName": "To Do"
 }
 ```
@@ -205,8 +199,7 @@ curl -X POST http://localhost:8080/api/v1/TaskItems \
   -d '{
     "title": "New Task",
     "description": "Task description",
-    "statusId": 1,
-    "isComplete": false
+    "statusId": 1
   }'
 ```
 
@@ -227,8 +220,7 @@ Updates an existing task item, including status assignment.
 {
   "title": "Updated task title",
   "description": "Updated description",
-  "statusId": 2,
-  "isComplete": true
+  "statusId": 2
 }
 ```
 
@@ -236,7 +228,6 @@ Updates an existing task item, including status assignment.
 - `title` (string, required, max 100 chars) - Task title
 - `description` (string, optional) - Task description
 - `statusId` (integer, required) - Status ID to assign
-- `isComplete` (boolean, required) - Completion status
 
 **Response:** `200 OK`
 
@@ -245,7 +236,6 @@ Updates an existing task item, including status assignment.
   "id": 1,
   "title": "Updated task title",
   "description": "Updated description",
-  "isComplete": true,
   "statusName": "In Progress"
 }
 ```
@@ -280,9 +270,31 @@ curl -X PUT http://localhost:8080/api/v1/TaskItems/1 \
   -d '{
     "title": "Updated Title",
     "description": "Updated description",
-    "statusId": 2,
-    "isComplete": true
+    "statusId": 2
   }'
+```
+
+---
+
+### Partially Update Task
+
+Updates only the fields present in the request body (JSON Merge Patch semantics).
+
+**Endpoint:** `PATCH /api/v1/TaskItems/{id}`
+
+**Request Body:** any subset of `title`, `description`, `status`, `priority`, `dueDate`, `parentTaskItemId`, `autoCompleteParentWhenChildrenDone`, `timezoneOffsetMinutes`.
+
+- An omitted field is left unchanged and writes no history event.
+- An explicit `null` clears `description`, `dueDate` or `parentTaskItemId`.
+- `status` or `priority` set to `null` or omitted means unchanged.
+- An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
+- Completion is set only through `status` (`Completed`); `isComplete` is not part of the contract and is ignored if sent.
+
+**Example:**
+```bash
+curl -X PATCH http://localhost:8080/api/v1/TaskItems/1 \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Renamed"}'
 ```
 
 ---
@@ -694,9 +706,9 @@ All error responses follow RFC 7807 Problem Details format:
 - Optional
 - Maximum 1000 characters when provided
 
-**IsComplete:**
-- Required boolean value
-- Defaults to `false` if not specified
+**Status:**
+- Optional on create and update; an omitted value keeps the stored status
+- Completion is expressed only through `Completed`; there is no `isComplete` field
 
 ### Status
 
@@ -760,7 +772,7 @@ Currently not implemented. All tasks are returned in database order.
 
 **Future enhancements:**
 ```
-GET /api/TaskItems?isComplete=true
+GET /api/TaskItems?status=Completed
 GET /api/TaskItems?sortBy=createdAt&order=desc
 ```
 
@@ -772,7 +784,7 @@ GET /api/TaskItems?sortBy=createdAt&order=desc
 # 1. Create a task
 TASK_ID=$(curl -s -X POST http://localhost:8080/api/TaskItems \
   -H "Content-Type: application/json" \
-  -d '{"title":"New Task","description":"Description","isComplete":false}' \
+  -d '{"title":"New Task","description":"Description"}' \
   | jq -r '.id')
 
 echo "Created task with ID: $TASK_ID"
@@ -783,7 +795,7 @@ curl http://localhost:8080/api/TaskItems/$TASK_ID
 # 3. Update the task
 curl -X PUT http://localhost:8080/api/TaskItems/$TASK_ID \
   -H "Content-Type: application/json" \
-  -d '{"title":"Updated Task","description":"Updated description","isComplete":true}'
+  -d '{"title":"Updated Task","description":"Updated description"}'
 
 # 4. Get all tasks
 curl http://localhost:8080/api/TaskItems
@@ -801,7 +813,7 @@ curl -I http://localhost:8080/api/TaskItems/$TASK_ID
 # 1. Create a task with status
 TASK_ID=$(curl -s -X POST http://localhost:8080/api/v1/TaskItems \
   -H "Content-Type: application/json" \
-  -d '{"title":"New Task","description":"Description","statusId":1,"isComplete":false}' \
+  -d '{"title":"New Task","description":"Description","statusId":1}' \
   | jq -r '.id')
 
 echo "Created task with ID: $TASK_ID"
@@ -812,7 +824,7 @@ curl http://localhost:8080/api/v1/TaskItems/$TASK_ID
 # 3. Update the task with new status
 curl -X PUT http://localhost:8080/api/v1/TaskItems/$TASK_ID \
   -H "Content-Type: application/json" \
-  -d '{"title":"Updated Task","description":"Updated description","statusId":2,"isComplete":true}'
+  -d '{"title":"Updated Task","description":"Updated description","statusId":2}'
 
 # 4. Get all tasks
 curl http://localhost:8080/api/v1/TaskItems

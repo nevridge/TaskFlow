@@ -51,7 +51,6 @@ export type CreateTaskItemDto = {
     title?: string;
     description?: null | string;
     status?: Status;
-    isComplete?: boolean;
     priority?: Priority;
     dueDate?: null | string;
     journalDate?: null | string;
@@ -100,6 +99,17 @@ export type NoteResponseDto = {
     updatedAt?: null | string;
 };
 
+export type PatchTaskItemDto = {
+    title?: null | string;
+    description?: null | string;
+    status?: null | Status;
+    priority?: null | Priority;
+    dueDate?: null | string;
+    parentTaskItemId?: null | number | string;
+    autoCompleteParentWhenChildrenDone?: boolean;
+    timezoneOffsetMinutes?: null | number | string;
+};
+
 export type Priority = 'low' | 'medium' | 'high';
 
 export type ProjectResponseDto = {
@@ -131,7 +141,6 @@ export type TaskItemResponseDto = {
     id?: number | string;
     title: string;
     description?: null | string;
-    isComplete?: boolean;
     dueDate?: null | string;
     status?: string;
     priority?: string;
@@ -176,7 +185,6 @@ export type UpdateTaskItemDto = {
     title?: string;
     description?: null | string;
     status?: null | Status;
-    isComplete?: boolean;
     priority?: null | Priority;
     dueDate?: null | string;
     parentTaskItemId?: null | number | string;
@@ -810,6 +818,24 @@ export type GetTaskV1Responses = {
 };
 
 export type GetTaskV1Response = GetTaskV1Responses[keyof GetTaskV1Responses];
+
+export type PatchApiV1TaskItemsByIdData = {
+    body: PatchTaskItemDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/TaskItems/{id}';
+};
+
+export type PatchApiV1TaskItemsByIdResponses = {
+    /**
+     * OK
+     */
+    200: TaskItemResponseDto;
+};
+
+export type PatchApiV1TaskItemsByIdResponse = PatchApiV1TaskItemsByIdResponses[keyof PatchApiV1TaskItemsByIdResponses];
 
 export type PutApiV1TaskItemsByIdData = {
     body: UpdateTaskItemDto;

@@ -15,7 +15,7 @@ namespace TaskFlow.Api.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.8");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
             modelBuilder.Entity("JournalEntryTaskItem", b =>
                 {
@@ -197,9 +197,6 @@ namespace TaskFlow.Api.Migrations
 
                     b.Property<DateOnly?>("FirstTaggedDate")
                         .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsComplete")
-                        .HasColumnType("INTEGER");
 
                     b.Property<int>("MoveCount")
                         .HasColumnType("INTEGER");

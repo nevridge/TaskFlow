@@ -142,7 +142,7 @@ jobs:
           echo "Test 6: Verifying basic CRUD operations"
           task_response=$(curl -s -X POST http://localhost:8080/api/v1/TaskItems \
             -H "Content-Type: application/json" \
-            -d '{"title": "Smoke Test Task", "description": "Integration test", "isComplete": false}')
+            -d '{"title": "Smoke Test Task", "description": "Integration test"}')
           task_id=$(echo "$task_response" | jq -r '.id')
           echo "Created task with ID: $task_id"
           if [ -z "$task_id" ] || [ "$task_id" = "null" ]; then

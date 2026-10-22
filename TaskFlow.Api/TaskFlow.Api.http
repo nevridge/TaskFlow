@@ -31,8 +31,18 @@ Content-Type: application/json
 {
   "title": "Updated Task",
   "description": "Updated description",
-  "isCompleted": true,
+  "status": "completed",
   "dueDate": "2025-12-31T00:00:00Z"
+}
+
+###
+
+### Partially update task (v1): only the fields present are changed; null clears description/dueDate
+PATCH {{TaskFlow.Api_HostAddress}}/api/v1/taskitems/1
+Content-Type: application/json
+
+{
+  "status": "completed"
 }
 
 ###

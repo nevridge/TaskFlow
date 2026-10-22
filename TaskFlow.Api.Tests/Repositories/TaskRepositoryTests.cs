@@ -24,8 +24,8 @@ public class TaskRepositoryTests
 
         var tasks = new List<TaskItem>
         {
-            new() { Id = 1, Title = "Task 1", Description = "Description 1", IsComplete = false, Status = Status.Todo },
-            new() { Id = 2, Title = "Task 2", Description = "Description 2", IsComplete = true, Status = Status.Completed }
+            new() { Id = 1, Title = "Task 1", Description = "Description 1", Status = Status.Todo },
+            new() { Id = 2, Title = "Task 2", Description = "Description 2", Status = Status.Completed }
         };
         await context.TaskItems.AddRangeAsync(tasks);
         await context.SaveChangesAsync();
@@ -64,7 +64,6 @@ public class TaskRepositoryTests
             Id = 1,
             Title = "Task 1",
             Description = "Description 1",
-            IsComplete = false,
             Status = Status.Todo
         };
         await context.TaskItems.AddAsync(task);
@@ -99,7 +98,7 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var newTask = new TaskItem { Title = "New Task", Description = "Description", IsComplete = false };
+        var newTask = new TaskItem { Title = "New Task", Description = "Description" };
 
         // Act
         var result = await repository.AddAsync(newTask);
@@ -124,7 +123,7 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var newTask = new TaskItem { Title = "Task", Description = null, IsComplete = false };
+        var newTask = new TaskItem { Title = "Task", Description = null };
 
         // Act
         var result = await repository.AddAsync(newTask);
@@ -144,18 +143,18 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var newTask = new TaskItem { Title = "Completed Task", Description = "Done", IsComplete = true };
+        var newTask = new TaskItem { Title = "Completed Task", Description = "Done", Status = Status.Completed };
 
         // Act
         var result = await repository.AddAsync(newTask);
 
         // Assert
         Assert.NotNull(result);
-        Assert.True(result.IsComplete);
+        Assert.Equal(Status.Completed, result.Status);
 
         var savedTask = await context.TaskItems.FindAsync(result.Id);
         Assert.NotNull(savedTask);
-        Assert.True(savedTask.IsComplete);
+        Assert.Equal(Status.Completed, savedTask.Status);
     }
 
     [Fact]
@@ -164,14 +163,14 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var task = new TaskItem { Id = 1, Title = "Original", Description = "Original Description", IsComplete = false };
+        var task = new TaskItem { Id = 1, Title = "Original", Description = "Original Description", Status = Status.Todo };
         await context.TaskItems.AddAsync(task);
         await context.SaveChangesAsync();
 
         // Modify the task
         task.Title = "Updated";
         task.Description = "Updated Description";
-        task.IsComplete = true;
+        task.Status = Status.Completed;
 
         // Act
         await repository.UpdateAsync(task);
@@ -181,7 +180,7 @@ public class TaskRepositoryTests
         Assert.NotNull(updatedTask);
         Assert.Equal("Updated", updatedTask.Title);
         Assert.Equal("Updated Description", updatedTask.Description);
-        Assert.True(updatedTask.IsComplete);
+        Assert.Equal(Status.Completed, updatedTask.Status);
     }
 
     [Fact]
@@ -190,12 +189,12 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var task = new TaskItem { Id = 1, Title = "Original", Description = "Description", IsComplete = false };
+        var task = new TaskItem { Id = 1, Title = "Original", Description = "Description", Status = Status.Todo };
         await context.TaskItems.AddAsync(task);
         await context.SaveChangesAsync();
 
-        // Modify only IsComplete
-        task.IsComplete = true;
+        // Modify only Status
+        task.Status = Status.Completed;
 
         // Act
         await repository.UpdateAsync(task);
@@ -205,7 +204,7 @@ public class TaskRepositoryTests
         Assert.NotNull(updatedTask);
         Assert.Equal("Original", updatedTask.Title);
         Assert.Equal("Description", updatedTask.Description);
-        Assert.True(updatedTask.IsComplete);
+        Assert.Equal(Status.Completed, updatedTask.Status);
     }
 
     [Fact]
@@ -213,7 +212,7 @@ public class TaskRepositoryTests
     {
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var task = new TaskItem { Id = 1, Title = "Original", Description = "Description", IsComplete = false, Priority = Priority.Low, Status = Status.Todo };
+        var task = new TaskItem { Id = 1, Title = "Original", Description = "Description", Priority = Priority.Low, Status = Status.Todo };
         await context.TaskItems.AddAsync(task);
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
@@ -239,21 +238,19 @@ public class TaskRepositoryTests
     {
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var task = new TaskItem { Id = 1, Title = "Task", Description = "Description", IsComplete = false, Status = Status.Todo };
+        var task = new TaskItem { Id = 1, Title = "Task", Description = "Description", Status = Status.Todo };
         await context.TaskItems.AddAsync(task);
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();
 
         var tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked.IsComplete = true;
         tracked.Status = Status.Completed;
         await repository.UpdateAsync(tracked);
 
         context.ChangeTracker.Clear();
         tracked = await context.TaskItems.FindAsync(1);
         Assert.NotNull(tracked);
-        tracked.IsComplete = false;
         tracked.Status = Status.Todo;
         await repository.UpdateAsync(tracked);
 
@@ -264,6 +261,48 @@ public class TaskRepositoryTests
 
         Assert.Contains(events, e => e.EventType == "Completed");
         Assert.Contains(events, e => e.EventType == "Reopened");
+    }
+
+    [Theory]
+    [InlineData(Status.Todo, Status.Completed, "Completed")]
+    [InlineData(Status.Draft, Status.Completed, "Completed")]
+    [InlineData(Status.Completed, Status.Todo, "Reopened")]
+    [InlineData(Status.Completed, Status.Draft, "Reopened")]
+    [InlineData(Status.Draft, Status.Todo, "StatusChanged")]
+    [InlineData(Status.Todo, Status.Draft, "StatusChanged")]
+    public async Task UpdateAsync_ShouldWriteStatusOnlyHistoryEvent_WhenStatusChanges(Status from, Status to, string expectedEvent)
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddAsync(new TaskItem { Id = 1, Title = "Task", Status = from });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        Assert.NotNull(tracked);
+        tracked.Status = to;
+        await repository.UpdateAsync(tracked);
+
+        var statusEvent = Assert.Single(await context.TaskItemEvents.Where(e => e.TaskItemId == 1).ToListAsync());
+        Assert.Equal(expectedEvent, statusEvent.EventType);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteNoStatusEvent_WhenStatusUnchanged()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddAsync(new TaskItem { Id = 1, Title = "Task", Status = Status.Completed });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var tracked = await context.TaskItems.FindAsync(1);
+        Assert.NotNull(tracked);
+        tracked.Title = "Renamed";
+        await repository.UpdateAsync(tracked);
+
+        var events = await context.TaskItemEvents.Where(e => e.TaskItemId == 1).ToListAsync();
+        Assert.Equal("TitleChanged", Assert.Single(events).EventType);
     }
 
     [Fact]
@@ -277,7 +316,6 @@ public class TaskRepositoryTests
             Id = 1,
             Title = "Task",
             Description = "Initial description",
-            IsComplete = false,
             Status = Status.Todo,
             DueDate = dueDate
         };
@@ -307,7 +345,7 @@ public class TaskRepositoryTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var task = new TaskItem { Id = 1, Title = "Task to Delete", Description = "Description", IsComplete = false };
+        var task = new TaskItem { Id = 1, Title = "Task to Delete", Description = "Description" };
         await context.TaskItems.AddAsync(task);
         await context.SaveChangesAsync();
 
@@ -341,8 +379,8 @@ public class TaskRepositoryTests
         var repository = new TaskRepository(context);
         var tasks = new List<TaskItem>
         {
-            new() { Id = 1, Title = "Task 1", Description = "Description 1", IsComplete = false },
-            new() { Id = 2, Title = "Task 2", Description = "Description 2", IsComplete = true }
+            new() { Id = 1, Title = "Task 1", Description = "Description 1", Status = Status.Todo },
+            new() { Id = 2, Title = "Task 2", Description = "Description 2", Status = Status.Completed }
         };
         await context.TaskItems.AddRangeAsync(tasks);
         await context.SaveChangesAsync();

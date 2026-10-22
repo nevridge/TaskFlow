@@ -96,7 +96,6 @@ public class JournalTodosController(
             Id = task.Id,
             Title = task.Title,
             Description = task.Description,
-            IsComplete = task.IsComplete,
             DueDate = task.DueDate,
             Status = task.Status.ToString(),
             Priority = task.Priority.ToString(),

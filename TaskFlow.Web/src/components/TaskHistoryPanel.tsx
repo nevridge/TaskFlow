@@ -59,6 +59,12 @@ function describeEvent(event: TaskItemEventResponseDto): string {
       return 'Description updated'
     case 'DueDateChanged':
       return 'Due date changed'
+    case 'Blocked':
+      return 'Blocked'
+    case 'Unblocked':
+      return 'Unblocked'
+    case 'BlockedReasonChanged':
+      return 'Blocked reason updated'
     case 'StatusChanged':
       return 'Status changed'
     case 'ProjectChanged':

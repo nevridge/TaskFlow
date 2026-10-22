@@ -97,4 +97,14 @@ describe('ProjectRow', () => {
     expect(screen.getByRole('button', { name: 'Edit Alpha' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Archive Alpha' })).toBeDisabled()
   })
+
+  it('adds "(M blocked)" to the open count only when M > 0', () => {
+    setup({ ...project, openTaskCount: 7, completedTaskCount: 5, blockedCount: 2 })
+    expect(screen.getByText('7 open (2 blocked) · 5 completed')).toBeInTheDocument()
+  })
+
+  it('hides the blocked part when blockedCount is 0 or missing', () => {
+    setup({ ...project, blockedCount: 0 })
+    expect(screen.getByText('2 open · 5 completed')).toBeInTheDocument()
+  })
 })

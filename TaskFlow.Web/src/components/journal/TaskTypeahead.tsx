@@ -1,6 +1,8 @@
 import { useState, useRef, useMemo } from 'react'
 import { useTasksQuery } from '@/hooks/useTasks'
 import type { TaskItemViewModel } from '@/hooks/useTasks'
+import { BlockIcon } from '@/components/BlockControls'
+import { isBlocked } from '@/lib/task-status'
 
 interface Props {
   value: number | null
@@ -124,6 +126,11 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
               onClick={() => handleSelect(task)}
             >
               {task.title}
+              {isBlocked(task.status) && (
+                <span className="task-typeahead-blocked">
+                  <BlockIcon size={10} /> Blocked
+                </span>
+              )}
             </li>
           ))}
           {filtered.length === 0 && (

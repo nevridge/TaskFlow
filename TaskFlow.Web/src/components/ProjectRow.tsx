@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ProjectResponseDto } from '@/api/projects'
 import { getApiErrorMessage } from '@/lib/api-error'
+import { formatProjectCounts } from '@/lib/project-counts'
 import { ProjectForm, type ProjectFormSubmit } from '@/components/ProjectForm'
 
 interface ProjectRowProps {
@@ -60,7 +61,7 @@ export function ProjectRow({ project, onSave, onToggleArchive, disabled = false 
         <Link className="p-row-name" to={`/projects/${project.id}`}>{project.name}</Link>
         {project.isArchived && <span className="p-badge">Archived</span>}
         <div className="p-counts">
-          {project.openTaskCount} open · {project.completedTaskCount} completed
+          {formatProjectCounts(project)}
         </div>
         {project.description && <p className="p-desc p-desc--clamp">{project.description}</p>}
         {archiveError && <p className="p-error" role="alert">{archiveError}</p>}

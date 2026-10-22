@@ -1,12 +1,16 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import { normalizeProjectId } from '@/lib/project-errors'
+import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
+import { normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
 import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
 
 export type TaskFormPayload = CreateTaskItemDto & {
   parentTaskItemId?: number | null
   /** number = project, null = "No project", undefined = not set */
   projectId?: number | null
+  /** Only present while the status is Blocked. "" clears the reason; omitted keeps it (PUT semantics). */
+  blockedReason?: string
 }
 
 export type { ProjectOption }
@@ -51,6 +55,10 @@ export function TaskForm({
   const [status, setStatus] = useState<string>((task?.status ?? 'draft').toLowerCase())
   const [priority, setPriority] = useState<string>((task?.priority ?? 'low').toLowerCase())
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '')
+  const originalStatus = normalizeStatus(task?.status)
+  // Blocking is only valid from Todo (or while already Blocked); the server answers 422 otherwise.
+  const canChooseBlocked = originalStatus === 'Todo' || originalStatus === 'Blocked'
+  const [blockedReason, setBlockedReason] = useState(task?.blockedReason ?? '')
   const [parentTaskId, setParentTaskId] = useState<string>(task?.parentTaskItemId ? String(task.parentTaskItemId) : '')
 
   const serverProjectId = normalizeProjectId(task?.projectId)
@@ -83,12 +91,14 @@ export function TaskForm({
     onSubmit({
       title,
       description: description || null,
-      status: status as 'draft' | 'todo' | 'completed',
+      status: status as RequestStatus,
       priority: priority as 'low' | 'medium' | 'high',
       // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
       dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
       parentTaskItemId: parentTaskId ? Number(parentTaskId) : undefined,
       projectId: effectiveProjectId ? Number(effectiveProjectId) : null,
+      // A non-empty reason with a non-Blocked status is a 422, so it is only sent while Blocked.
+      ...(status === toRequestStatus('Blocked') && { blockedReason: blockedReason.trim() }),
     })
   }
 
@@ -114,6 +124,7 @@ export function TaskForm({
           <select id="status" className="t-input" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
+            <option value="blocked" disabled={!canChooseBlocked}>Blocked</option>
             <option value="completed">Completed</option>
           </select>
         </div>
@@ -126,6 +137,18 @@ export function TaskForm({
           </select>
         </div>
       </div>
+      {status === 'blocked' && (
+        <div className="t-field">
+          <label htmlFor="blockedReason" className="t-label">Blocked reason (optional)</label>
+          <input
+            id="blockedReason"
+            className="t-input"
+            value={blockedReason}
+            maxLength={BLOCK_REASON_MAX_LENGTH}
+            onChange={e => setBlockedReason(e.target.value)}
+          />
+        </div>
+      )}
       <div className="t-field">
         <label htmlFor="dueDate" className="t-label">Due Date</label>
         <input id="dueDate" type="date" className="t-input" value={dueDate} onChange={e => setDueDate(e.target.value)} />

@@ -207,4 +207,42 @@ describe('ProjectDetailPage', () => {
     expect(updateAsync).not.toHaveBeenCalled()
     expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
   })
+
+  it('shows the blocked part of the open count only when blockedCount > 0', () => {
+    mockProject({ data: { data: { ...project, openTaskCount: 7, completedTaskCount: 3, blockedCount: 2 } } })
+    const { unmount } = renderAt('/projects/7')
+    expect(screen.getByText('7 open (2 blocked) · 3 completed')).toBeInTheDocument()
+    unmount()
+    mockProject({ data: { data: { ...project, blockedCount: 0 } } })
+    renderAt('/projects/7')
+    expect(screen.getByText('1 open · 2 completed')).toBeInTheDocument()
+  })
+
+  describe('status badge', () => {
+    it('renders Blocked with its modifier and the reason', () => {
+      mockTasks({ data: { data: [task({ status: 'Blocked', blockedReason: 'Waiting on Sam' })] } })
+      renderAt('/projects/7')
+      expect(screen.getByText('Blocked')).toHaveClass('p-badge--blocked')
+      expect(screen.getByText('Blocked: Waiting on Sam')).toBeInTheDocument()
+    })
+
+    it('renders an unknown status as its raw value, never as Draft', () => {
+      mockTasks({ data: { data: [task({ status: 'Archived' })] } })
+      renderAt('/projects/7')
+      expect(screen.getByText('Archived')).toBeInTheDocument()
+      expect(screen.queryByText('Draft')).not.toBeInTheDocument()
+    })
+
+    it('still renders Draft, Todo and Completed', () => {
+      mockTasks({ data: { data: [
+        task({ id: 1, title: 'a', status: 'Draft' }),
+        task({ id: 2, title: 'b', status: 'Todo' }),
+        task({ id: 3, title: 'c', status: 'Completed' }),
+      ] } })
+      renderAt('/projects/7')
+      expect(screen.getByText('Draft')).toBeInTheDocument()
+      expect(screen.getByText('Todo')).toBeInTheDocument()
+      expect(screen.getByText('Completed')).toHaveClass('p-badge--completed')
+    })
+  })
 })

@@ -1,6 +1,9 @@
+import { Fragment, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
+import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
+import { canBlock, isBlocked as isBlockedStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
 type TaskRowModel = TaskItemResponseDto & {
@@ -25,6 +28,11 @@ interface Props {
   onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
   onStatusCycle: (task: TaskRowModel) => void
+  /** Block with an optional reason. Must reject on failure so the reason input can re-open with the typed text. */
+  onBlock?: (task: TaskRowModel, reason: string) => Promise<void>
+  onUnblock?: (task: TaskRowModel) => void
+  /** Save a new reason for a Blocked task (""clears it). Must reject on failure. */
+  onEditBlockedReason?: (task: TaskRowModel, reason: string) => Promise<void>
 }
 
 function isOverdue(dueDate: string | null | undefined, status: string | undefined): boolean {
@@ -64,7 +72,20 @@ export function TaskListRow({
   onHistory,
   onDelete,
   onStatusCycle,
+  onBlock,
+  onUnblock,
+  onEditBlockedReason,
 }: Props) {
+  const [blocking, setBlocking] = useState(false)
+  const [reasonEditing, setReasonEditing] = useState(false)
+  const [blockDraft, setBlockDraft] = useState('')
+  const submittingRef = useRef(false)
+  const blockBtnRef = useRef<HTMLButtonElement>(null)
+  const titleLinkRef = useRef<HTMLAnchorElement>(null)
+  const reasonBtnRef = useRef<HTMLButtonElement>(null)
+  const blocked = isBlockedStatus(task.status)
+  const blockable = canBlock(task.status) && !!onBlock
+
   const status = (task.status ?? 'draft').toLowerCase()
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
@@ -80,9 +101,48 @@ export function TaskListRow({
     isCompleted && 't-row--completed',
     !isCompleted && overdue && 't-row--overdue',
     !isCompleted && !overdue && highDeferral && 't-row--high-deferral',
+    blocked && 't-row--blocked',
   ].filter(Boolean).join(' ')
 
+  async function submitBlock(reason: string) {
+    if (submittingRef.current || !onBlock) return
+    submittingRef.current = true
+    setBlocking(false)
+    // The row's primary control after blocking is the title link.
+    const focusFrame = requestAnimationFrame(() => titleLinkRef.current?.focus())
+    try {
+      await onBlock(task, reason)
+    } catch {
+      // Re-open with the typed text (its autoFocus wins); the page shows the error message.
+      cancelAnimationFrame(focusFrame)
+      setBlockDraft(reason)
+      setBlocking(true)
+    } finally {
+      submittingRef.current = false
+    }
+  }
+
+  async function submitReason(reason: string) {
+    setReasonEditing(false)
+    requestAnimationFrame(() => titleLinkRef.current?.focus())
+    if (reason === (task.blockedReason ?? '') || !onEditBlockedReason) return
+    try {
+      await onEditBlockedReason(task, reason)
+    } catch {
+      // The page shows the error; the previous reason is restored by the cache rollback.
+    }
+  }
+
+  function cancelInput(via: 'escape' | 'blur', returnTo: 'block' | 'reason') {
+    setBlocking(false)
+    setReasonEditing(false)
+    if (via === 'escape') {
+      requestAnimationFrame(() => (returnTo === 'block' ? blockBtnRef : reasonBtnRef).current?.focus())
+    }
+  }
+
   return (
+    <Fragment>
     <tr className={rowClasses}>
       <td className="t-list-cell t-list-cell--title">
         <div className={`t-title-wrap t-depth-${depth}`}>
@@ -99,10 +159,18 @@ export function TaskListRow({
             <span className="t-tree-spacer" aria-hidden="true" />
           )}
           <div>
-            <Link to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
+            <Link ref={titleLinkRef} to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
               {task.title}
             </Link>
             {childProgress && <div className="t-deferral-line">{childProgress}</div>}
+            {blocked && task.blockedReason && !reasonEditing && (
+              <BlockedReasonText
+                ref={reasonBtnRef}
+                className="t-blocked-reason"
+                reason={task.blockedReason}
+                onEdit={() => setReasonEditing(true)}
+              />
+            )}
             {showDeferral && (
               <div className="t-deferral-line">
                 {highDeferral && <span className="t-deferral-badge">{'↻'} {moveCount}</span>}
@@ -120,16 +188,29 @@ export function TaskListRow({
         </div>
       </td>
       <td className="t-list-cell">
-        <span
-          className={`t-badge t-badge-${status} t-badge-clickable`}
-          onClick={() => onStatusCycle(task)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStatusCycle(task) } }}
-          aria-label={`Status: ${status}. Click to change.`}
-        >
-          {status}
-        </span>
+        {blocked ? (
+          <button
+            type="button"
+            className="t-badge t-badge-blocked t-badge-clickable"
+            aria-label={`Unblock task: ${task.title}`}
+            title="Unblock"
+            onClick={() => onUnblock?.(task)}
+          >
+            <BlockIcon size={11} />
+            <span>{status}</span>
+          </button>
+        ) : (
+          <span
+            className={`t-badge t-badge-${status} t-badge-clickable`}
+            onClick={() => onStatusCycle(task)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStatusCycle(task) } }}
+            aria-label={`Status: ${status}. Click to change.`}
+          >
+            {status}
+          </span>
+        )}
       </td>
       <td className="t-list-cell">
         <span className={`t-badge t-badge-${priority}`}>{priority}</span>
@@ -152,6 +233,17 @@ export function TaskListRow({
           <button className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`} aria-label="Add subtask" title="Add subtask" onClick={() => onAddChild?.(task)}>
             <PlusIcon />
           </button>
+          {blockable && !blocking && (
+            <button
+              ref={blockBtnRef}
+              className="t-btn-icon t-btn-icon--block"
+              aria-label={`Block task: ${task.title}`}
+              title="Block"
+              onClick={() => { setBlockDraft(''); setBlocking(true) }}
+            >
+              <BlockIcon size={14} />
+            </button>
+          )}
           <button className="t-btn-icon" aria-label="Task history" title="Task history" onClick={() => onHistory(task)}>
             <ClockIcon />
           </button>
@@ -164,5 +256,18 @@ export function TaskListRow({
         </div>
       </td>
     </tr>
+    {(blocking || reasonEditing) && (
+      <tr className="t-list-row t-list-row--block-editor">
+        <td className="t-list-cell" colSpan={5}>
+          <BlockReasonInput
+            className="t-input t-block-input"
+            initialValue={blocking ? blockDraft : (task.blockedReason ?? '')}
+            onSubmit={blocking ? submitBlock : submitReason}
+            onCancel={(_reason, via) => cancelInput(via, blocking ? 'block' : 'reason')}
+          />
+        </td>
+      </tr>
+    )}
+    </Fragment>
   )
 }

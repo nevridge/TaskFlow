@@ -8,6 +8,8 @@ import {
   useUpdateProjectMutation,
 } from '@/hooks/useProjects'
 import { formatDate } from '@/lib/utils'
+import { formatProjectCounts } from '@/lib/project-counts'
+import { normalizeStatus, STATUS_LABELS } from '@/lib/task-status'
 import '@/projects.css'
 
 function NotFound() {
@@ -23,10 +25,13 @@ function NotFound() {
 }
 
 function StatusBadge({ status }: { status: ProjectTaskDto['status'] }) {
-  // Strict PascalCase comparisons: the API serializes enums as 'Draft' | 'Todo' | 'Completed'.
-  if (status === 'Completed') return <span className="p-badge p-badge--completed">Completed</span>
-  if (status === 'Todo') return <span className="p-badge">Todo</span>
-  return <span className="p-badge">Draft</span>
+  // The API serializes enums as PascalCase. An unknown status renders as itself, never as "Draft".
+  const known = normalizeStatus(status)
+  if (known === 'Completed') return <span className="p-badge p-badge--completed">{STATUS_LABELS.Completed}</span>
+  if (known === 'Blocked') return <span className="p-badge p-badge--blocked">{STATUS_LABELS.Blocked}</span>
+  if (known === 'Todo') return <span className="p-badge">Todo</span>
+  if (known === 'Draft') return <span className="p-badge">{STATUS_LABELS.Draft}</span>
+  return <span className="p-badge">{status}</span>
 }
 
 function ProjectTasks({ id }: { id: number }) {
@@ -49,6 +54,9 @@ function ProjectTasks({ id }: { id: number }) {
               <div className="p-row-main">
                 <Link className="p-row-name" to={`/tasks/${task.id}`}>{task.title}</Link>
                 <StatusBadge status={task.status} />
+                {normalizeStatus(task.status) === 'Blocked' && task.blockedReason && (
+                  <div className="p-task-meta" title={task.blockedReason}>Blocked: {task.blockedReason}</div>
+                )}
                 <div className="p-task-meta">
                   <span>Priority: {task.priority}</span>
                   {task.dueDate && <span>Due {formatDate(task.dueDate)}</span>}
@@ -126,7 +134,7 @@ export function ProjectDetailPage() {
                 <h1 className="p-title">{project.name}</h1>
                 {project.isArchived && <span className="p-badge p-badge--block">Archived</span>}
                 <div className="p-counts">
-                  {project.openTaskCount} open · {project.completedTaskCount} completed
+                  {formatProjectCounts(project)}
                 </div>
                 {project.description && <p className="p-desc">{project.description}</p>}
               </div>

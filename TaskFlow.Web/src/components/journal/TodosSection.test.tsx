@@ -9,6 +9,9 @@ const createTodoMutate = vi.fn()
 const toggleTodoMutate = vi.fn()
 const editTodoMutate = vi.fn()
 const removeTodoMutate = vi.fn()
+const blockTodoMutate = vi.fn()
+const unblockTodoMutate = vi.fn()
+const editReasonMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
   useJournalTodos: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
@@ -16,7 +19,11 @@ vi.mock('@/hooks/useJournal', () => ({
   useToggleTodoMutation: vi.fn(() => ({ mutate: toggleTodoMutate, isPending: false })),
   useEditTodoMutation: vi.fn(() => ({ mutate: editTodoMutate, isPending: false })),
   useRemoveTodoMutation: vi.fn(() => ({ mutate: removeTodoMutate, isPending: false })),
+  useBlockTodoMutation: vi.fn(() => ({ mutate: blockTodoMutate, isPending: false })),
+  useUnblockTodoMutation: vi.fn(() => ({ mutate: unblockTodoMutate, isPending: false })),
+  useEditBlockedReasonTodoMutation: vi.fn(() => ({ mutate: editReasonMutate, isPending: false })),
   openTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status !== 'Completed').length),
+  blockedTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status === 'Blocked').length),
 }))
 
 vi.mock('@/components/TaskHistoryPanel', () => ({

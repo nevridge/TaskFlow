@@ -10,6 +10,9 @@ vi.mock('@/hooks/useTasks', () => ({
   useCreateTaskMutation: vi.fn(),
   useUpdateTaskMutation: vi.fn(),
   useDeleteTaskMutation: vi.fn(),
+  useBlockTaskMutation: vi.fn(),
+  useUnblockTaskMutation: vi.fn(),
+  useEditBlockedReasonMutation: vi.fn(),
   taskKeys: {
     all: ['tasks'],
     detail: (id: number) => ['tasks', id],
@@ -30,7 +33,15 @@ vi.mock('@/context/usePrefs', () => ({
   usePrefs: vi.fn(),
 }))
 
-import { useTasksQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from '@/hooks/useTasks'
+import {
+  useTasksQuery,
+  useCreateTaskMutation,
+  useUpdateTaskMutation,
+  useDeleteTaskMutation,
+  useBlockTaskMutation,
+  useUnblockTaskMutation,
+  useEditBlockedReasonMutation,
+} from '@/hooks/useTasks'
 import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
 import { useJournalEntries } from '@/hooks/useJournal'
 import { usePrefs } from '@/context/usePrefs'
@@ -42,6 +53,9 @@ const taskMutations = {
   isPending: false,
 }
 const changeAsync = vi.fn()
+const blockAsync = vi.fn()
+const unblockMutate = vi.fn()
+const editReasonAsync = vi.fn()
 
 const baseTask = {
   description: null,
@@ -171,6 +185,12 @@ describe('TasksPage', () => {
     vi.mocked(useCreateTaskMutation).mockReturnValue(taskMutations as never)
     vi.mocked(useUpdateTaskMutation).mockReturnValue(taskMutations as never)
     vi.mocked(useDeleteTaskMutation).mockReturnValue(taskMutations as never)
+    blockAsync.mockReset().mockResolvedValue({})
+    unblockMutate.mockReset()
+    editReasonAsync.mockReset().mockResolvedValue({})
+    vi.mocked(useBlockTaskMutation).mockReturnValue({ mutateAsync: blockAsync, isPending: false } as never)
+    vi.mocked(useUnblockTaskMutation).mockReturnValue({ mutate: unblockMutate, isPending: false } as never)
+    vi.mocked(useEditBlockedReasonMutation).mockReturnValue({ mutateAsync: editReasonAsync, isPending: false } as never)
     vi.mocked(useChangeTaskProject).mockReturnValue({ mutateAsync: changeAsync, mutate: vi.fn(), isPending: false } as never)
     mockProjects(projectList)
 
@@ -392,13 +412,14 @@ describe('TasksPage', () => {
 
     beforeEach(() => useData(mixed))
 
-    it('defaults to Draft and To-do checked, Completed unchecked, in a Status group', () => {
+    it('defaults to Draft, To-do and Blocked checked, Completed unchecked, in a Status group', () => {
       renderPage()
       const group = screen.getByRole('group', { name: 'Status' })
       expect(within(group).getAllByRole('checkbox').map(c => (c as HTMLInputElement).labels?.[0].textContent))
-        .toEqual(['Draft', 'To-do', 'Completed'])
+        .toEqual(['Draft', 'To-do', 'Blocked (0)', 'Completed'])
       expect(box('Draft')).toBeChecked()
       expect(box('To-do')).toBeChecked()
+      expect(box('Blocked (0)')).toBeChecked()
       expect(box('Completed')).not.toBeChecked()
       expect(screen.queryByRole('checkbox', { name: 'All' })).not.toBeInTheDocument()
       expect(screen.queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument()
@@ -460,6 +481,7 @@ describe('TasksPage', () => {
       renderPage()
       await click('Draft')
       await click('To-do')
+      await click('Blocked (0)')
       for (const t of ['Draft one', 'Todo one', 'Completed one']) expect(screen.getByText(t)).toBeInTheDocument()
       expect(screen.getByText('3 tasks')).toBeInTheDocument()
     })
@@ -508,7 +530,7 @@ describe('TasksPage', () => {
 
     it('supports keyboard Tab and Space', async () => {
       renderPage()
-      box('To-do').focus()
+      box('Blocked (0)').focus()
       await userEvent.tab()
       expect(box('Completed')).toHaveFocus()
       await userEvent.keyboard(' ')
@@ -532,6 +554,7 @@ describe('TasksPage', () => {
       expect(screen.queryByText('No status')).not.toBeInTheDocument()
       await click('Draft')
       await click('To-do')
+      await click('Blocked (0)')
       expect(screen.getByText('No status')).toBeInTheDocument()
     })
 
@@ -737,6 +760,124 @@ describe('TasksPage', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes.')
       expect(changeAsync).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('blocked tasks', () => {
+    const rowsWithBlocked = [
+      { ...baseTask, id: 61, title: 'Draft task', status: 'Draft' },
+      { ...baseTask, id: 62, title: 'Todo task', status: 'Todo' },
+      { ...baseTask, id: 63, title: 'Stuck task', status: 'Blocked', blockedReason: 'Waiting on Sam', previousStatus: 'Todo' },
+      { ...baseTask, id: 64, title: 'Done task', status: 'Completed' },
+    ]
+
+    beforeEach(() => {
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data: rowsWithBlocked }, isLoading: false, error: null } as never)
+    })
+
+    it('shows a Blocked chip with the count, checked by default', () => {
+      renderPage()
+      const box = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Blocked (1)' })
+      expect(box).toBeChecked()
+      expect(screen.getByText('Stuck task')).toBeInTheDocument()
+      expect(screen.queryByText('Done task')).not.toBeInTheDocument()
+    })
+
+    it('unchecking Blocked hides blocked tasks', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Blocked (1)' }))
+      expect(screen.queryByText('Stuck task')).not.toBeInTheDocument()
+    })
+
+    it('Draft rows have no Block button; Todo rows do', () => {
+      renderPage()
+      expect(within(rowFor('Draft task')).queryByRole('button', { name: /^Block task/ })).not.toBeInTheDocument()
+      expect(within(rowFor('Todo task')).getByRole('button', { name: 'Block task: Todo task' })).toBeInTheDocument()
+    })
+
+    it('blocking a Todo row sends id and trimmed reason through the block mutation', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Block task: Todo task' }))
+      await userEvent.type(screen.getByRole('textbox', { name: 'Blocked reason, optional' }), ' Waiting {Enter}')
+      expect(blockAsync).toHaveBeenCalledWith({ id: 62, reason: 'Waiting' })
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Task blocked: Todo task'))
+    })
+
+    it('a failed block shows a plain-language alert and re-opens the input with the typed text', async () => {
+      blockAsync.mockRejectedValueOnce({ code: 'TASK_BLOCK_DRAFT_NOT_ALLOWED' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Block task: Todo task' }))
+      await userEvent.type(screen.getByRole('textbox', { name: 'Blocked reason, optional' }), 'Waiting{Enter}')
+      expect(await screen.findByRole('alert')).toHaveTextContent('Only open Todo tasks can be blocked.')
+      expect(await screen.findByRole('textbox', { name: 'Blocked reason, optional' })).toHaveValue('Waiting')
+    })
+
+    it('the Unblock badge unblocks the task', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
+      expect(unblockMutate).toHaveBeenCalledWith({ id: 63 }, expect.any(Object))
+    })
+
+    it('a failed unblock shows an alert', async () => {
+      unblockMutate.mockImplementation((_vars, opts: { onError: (e: unknown) => void }) => opts.onError({}))
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes.')
+    })
+
+    it('editing the reason sends a reason-only mutation', async () => {
+      renderPage()
+      await userEvent.dblClick(screen.getByText('Waiting on Sam'))
+      const input = screen.getByRole('textbox', { name: 'Blocked reason, optional' })
+      await userEvent.clear(input)
+      await userEvent.type(input, 'Other{Enter}')
+      expect(editReasonAsync).toHaveBeenCalledWith({ id: 63, reason: 'Other' })
+    })
+
+    it('clicking the status badge of a Blocked row does not cycle it', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
+      expect(taskMutations.mutate).not.toHaveBeenCalled()
+    })
+
+    it('subtask progress reports blocked children only when there are some', () => {
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: {
+          data: [
+            { ...baseTask, id: 71, title: 'Parent', status: 'Todo', childTaskCount: 3 },
+            { ...baseTask, id: 72, title: 'Kid done', status: 'Completed', parentTaskItemId: 71 },
+            { ...baseTask, id: 73, title: 'Kid blocked', status: 'Blocked', parentTaskItemId: 71 },
+            { ...baseTask, id: 74, title: 'Kid open', status: 'Todo', parentTaskItemId: 71 },
+          ],
+        },
+        isLoading: false,
+        error: null,
+      } as never)
+      renderPage()
+      expect(screen.getByText('1/3 subtasks complete, 1 blocked')).toBeInTheDocument()
+    })
+
+    it('sorts by status in Draft, Todo, Blocked, Completed order', async () => {
+      vi.mocked(usePrefs).mockReturnValue({ ...vi.mocked(usePrefs)(), taskSortKey: 'status' } as never)
+      renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
+      const order = Array.from(document.querySelectorAll('.t-task-link')).map(n => n.textContent)
+      expect(order.indexOf('Todo task')).toBeLessThan(order.indexOf('Stuck task'))
+      expect(order.indexOf('Stuck task')).toBeLessThan(order.indexOf('Done task'))
+    })
+
+    it('does not cycle an unknown status', async () => {
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: [{ ...baseTask, id: 81, title: 'Odd', status: 'Mystery' }] },
+        isLoading: false,
+        error: null,
+      } as never)
+      renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' })) // empty selection shows everything
+      await userEvent.click(screen.getByRole('checkbox', { name: 'To-do' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Blocked (0)' }))
+      await userEvent.click(within(rowFor('Odd')).getByRole('button', { name: /Status: mystery/i }))
+      expect(taskMutations.mutate).not.toHaveBeenCalled()
     })
   })
 })

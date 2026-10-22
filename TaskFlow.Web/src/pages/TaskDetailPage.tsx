@@ -18,6 +18,7 @@ import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
 import { formatShort } from '@/lib/journal-utils'
+import { getBlockErrorMessage, isBlocked } from '@/lib/task-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
@@ -167,6 +168,9 @@ export function TaskDetailPage() {
               {task.description && <p className="t-detail-desc">{task.description}</p>}
               <div className="t-detail-meta">
                 <span>Status: <strong>{task.status}</strong></span>
+                {isBlocked(task.status) && task.blockedReason && (
+                  <span title={task.blockedReason}>Blocked reason: <strong>{task.blockedReason}</strong></span>
+                )}
                 <span>Priority: <strong>{task.priority}</strong></span>
                 <div className="t-detail-project" title={task.projectName ?? undefined}>
                   <label htmlFor="task-project">Project: </label>
@@ -284,6 +288,8 @@ function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_NOT_FOUND') {
     return 'The selected parent task was not found.'
   }
+  const blockMessage = getBlockErrorMessage(code)
+  if (blockMessage) return blockMessage
 
   return 'Unable to save task changes. Please try again.'
 }

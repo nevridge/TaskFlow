@@ -280,4 +280,73 @@ describe('TaskForm', () => {
       expect(optionLabels()).toEqual(['No project'])
     })
   })
+
+  describe('blocked status', () => {
+    const todoTask = { id: 7, title: 'T', status: 'Todo' as const, priority: 'Medium' as const }
+    const statusSelect = () => screen.getByRole('combobox', { name: 'Status' })
+    const blockedOption = () => within(statusSelect()).getByRole('option', { name: 'Blocked' })
+
+    it('offers a Blocked option', () => {
+      renderForm(todoTask)
+      expect(blockedOption()).toBeInTheDocument()
+    })
+
+    it.each(['Draft', 'Completed'] as const)('disables Blocked when the task is %s', status => {
+      renderForm({ ...todoTask, status })
+      expect(blockedOption()).toBeDisabled()
+    })
+
+    it('disables Blocked when creating a new task', () => {
+      renderForm()
+      expect(blockedOption()).toBeDisabled()
+    })
+
+    it('enables Blocked for Todo and for already Blocked tasks', () => {
+      const { unmount } = renderForm(todoTask)
+      expect(blockedOption()).toBeEnabled()
+      unmount()
+      renderForm({ ...todoTask, status: 'Blocked' as never })
+      expect(blockedOption()).toBeEnabled()
+    })
+
+    it('shows the reason field only while the status is Blocked', async () => {
+      renderForm(todoTask)
+      expect(screen.queryByLabelText('Blocked reason (optional)')).not.toBeInTheDocument()
+      await userEvent.selectOptions(statusSelect(), 'blocked')
+      const reason = screen.getByLabelText('Blocked reason (optional)')
+      expect(reason).toHaveAttribute('maxlength', '200')
+      await userEvent.selectOptions(statusSelect(), 'todo')
+      expect(screen.queryByLabelText('Blocked reason (optional)')).not.toBeInTheDocument()
+    })
+
+    it('pre-fills the stored reason and submits it with status blocked', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...todoTask, status: 'Blocked' as never, blockedReason: 'Waiting on Sam' }, onSubmit)
+      const reason = screen.getByLabelText('Blocked reason (optional)')
+      expect(reason).toHaveValue('Waiting on Sam')
+      await userEvent.clear(reason)
+      await userEvent.type(reason, '  New reason ')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ status: 'blocked', blockedReason: 'New reason' }))
+    })
+
+    it('submits an empty reason (clears it) while Blocked', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...todoTask, status: 'Blocked' as never, blockedReason: 'Old' }, onSubmit)
+      await userEvent.clear(screen.getByLabelText('Blocked reason (optional)'))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit.mock.calls[0][0]).toHaveProperty('blockedReason', '')
+    })
+
+    it('omits blockedReason when the status is not Blocked, even after typing one and switching away', async () => {
+      const onSubmit = vi.fn()
+      renderForm(todoTask, onSubmit)
+      await userEvent.selectOptions(statusSelect(), 'blocked')
+      await userEvent.type(screen.getByLabelText('Blocked reason (optional)'), 'typed')
+      await userEvent.selectOptions(statusSelect(), 'todo')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('blockedReason')
+      expect(onSubmit.mock.calls[0][0]).toHaveProperty('status', 'todo')
+    })
+  })
 })

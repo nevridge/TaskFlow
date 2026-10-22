@@ -38,6 +38,13 @@ describe('journal blocked styles', () => {
     expect(badge).toMatch(/color-mix\([^)]*var\(--danger-bg\)/)
   })
 
+  it('styles the typeahead Blocked marker at 0-2-0 with a dashed danger-ink border', () => {
+    const marker = rule('.journal-page .task-typeahead-blocked')
+    expect(marker).toMatch(/border:\s*1px dashed var\(--danger-ink\)/)
+    expect(marker).toMatch(/color:\s*var\(--danger-ink\)/)
+    expect(journalCss).not.toMatch(/(^|\n)\.task-typeahead-blocked\s*[{,]/)
+  })
+
   it('gives blocked rows a 3px left accent and reserves its width on every row', () => {
     expect(rule('.journal-page .todo')).toMatch(/border-left:\s*3px solid transparent/)
     expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*var\(--danger-ink\)/)

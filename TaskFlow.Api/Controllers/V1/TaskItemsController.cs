@@ -195,6 +195,7 @@ public class TaskItemsController(
     public Task<ActionResult<TaskItemResponseDto>> Patch(int id, [FromBody] PatchTaskItemDto patchDto) =>
         ApplyUpdateAsync(id, new TaskChanges
         {
+            // A present null/empty title becomes "" so the validator returns 400.
             HasTitle = patchDto.IsPresent(nameof(PatchTaskItemDto.Title)),
             Title = patchDto.Title ?? string.Empty,
             HasDescription = patchDto.IsPresent(nameof(PatchTaskItemDto.Description)),

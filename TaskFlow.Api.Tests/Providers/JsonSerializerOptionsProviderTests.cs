@@ -121,6 +121,10 @@ public class JsonSerializerOptionsProviderTests
     {
         var json = JsonSerializer.Serialize(new PatchTaskItemDto { Title = "t" }, CreateRequestOptions());
 
-        Assert.DoesNotContain("present", json, StringComparison.OrdinalIgnoreCase);
+        using var document = JsonDocument.Parse(json);
+        var names = document.RootElement.EnumerateObject().Select(p => p.Name).Order().ToList();
+        Assert.Equal(
+            ["autoCompleteParentWhenChildrenDone", "description", "dueDate", "parentTaskItemId", "priority", "status", "timezoneOffsetMinutes", "title"],
+            names);
     }
 }

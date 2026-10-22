@@ -92,6 +92,11 @@ public class RemoveTaskItemIsCompleteMigrationTests : IDisposable
         Exec("INSERT INTO \"JournalEntryTaskItem\" (\"JournalEntryId\", \"TodosId\") VALUES (1, 1)");
         Exec("INSERT INTO \"TaskItemEvents\" (\"TaskItemId\", \"EventType\", \"OccurredAtUtc\", \"ChangeSummary\") " +
              "VALUES (3, 'TaskCreated', '2026-01-01 00:00:00.000', 'seeded')");
+
+        // Other tables referencing TaskItems: Notes (cascade) and JournalLogEntries (set null).
+        Exec("INSERT INTO \"Notes\" (\"Id\", \"Content\", \"CreatedAt\", \"TaskItemId\") VALUES (1, 'Note', '2026-01-01 00:00:00', 1)");
+        Exec("INSERT INTO \"JournalLogEntries\" (\"Id\", \"Content\", \"CreatedAt\", \"JournalEntryId\", \"TaskItemId\") " +
+             "VALUES (1, 'Log', '2026-01-01 00:00:00', 1, 1)");
     }
 
     [Fact]
@@ -163,6 +168,8 @@ public class RemoveTaskItemIsCompleteMigrationTests : IDisposable
         Assert.Equal("Desc 1", Scalar<string>("SELECT \"Description\" FROM \"TaskItems\" WHERE \"Id\" = 1"));
         Assert.Equal(1L, Scalar<long>("SELECT COUNT(*) FROM \"JournalEntryTaskItem\""));
         Assert.Equal(6L, Scalar<long>("SELECT COUNT(*) FROM \"TaskItems\""));
+        Assert.Equal(1L, Scalar<long>("SELECT COUNT(*) FROM \"Notes\" WHERE \"TaskItemId\" = 1"));
+        Assert.Equal(1L, Scalar<long>("SELECT COUNT(*) FROM \"JournalLogEntries\" WHERE \"TaskItemId\" = 1"));
         Assert.Equal(0L, Scalar<long>("SELECT COUNT(*) FROM pragma_foreign_key_check()"));
     }
 

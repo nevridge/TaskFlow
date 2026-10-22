@@ -497,18 +497,21 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
-    public async Task Patch_ShouldReturnUnprocessable_WhenParentWouldCreateCycle()
+    public async Task Patch_ShouldReturnDepthError_WhenProposedParentIsOwnChild()
     {
+        // The cycle guard (TASK_PARENT_CYCLE_NOT_ALLOWED) is unreachable in a one-level hierarchy: the walk starts at
+        // the proposed parent, which has already passed the depth guard (no parent of its own) and the self guard
+        // (it is not the task), so the walk ends immediately. It is kept identical to PUT, so only the depth guard
+        // is asserted here.
         var root = new TaskItem { Id = 1, Title = "Root" };
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
         _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([root, child]);
 
-        // Depth guard would fire first for a child, so use a root-level candidate whose chain leads back.
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 2 });
 
-        Assert.Contains(ErrorCode(result), new[] { "TASK_PARENT_DEPTH_NOT_ALLOWED", "TASK_PARENT_CYCLE_NOT_ALLOWED" });
+        Assert.Equal("TASK_PARENT_DEPTH_NOT_ALLOWED", ErrorCode(result));
         _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 

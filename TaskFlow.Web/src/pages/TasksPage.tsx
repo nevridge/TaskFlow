@@ -213,7 +213,7 @@ export function TasksPage() {
       if (!parentId) return
       const prev = stats.get(parentId) ?? { done: 0, total: 0 }
       const isDone = (task.status ?? '').toLowerCase() === 'completed'
-stats.set(parentId, { total: prev.total + 1, done: prev.done + (isDone ? 1 : 0) })
+      stats.set(parentId, { total: prev.total + 1, done: prev.done + (isDone ? 1 : 0) })
     })
     return stats
   }, [tasks])

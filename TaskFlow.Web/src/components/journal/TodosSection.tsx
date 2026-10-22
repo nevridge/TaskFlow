@@ -356,11 +356,11 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             onCancel={(_reason, via) => closeReasonInput(id, via)}
           />
         )}
-        {isBlocked && reasonEditId !== id && td.blockedReason && (
+        {isBlocked && reasonEditId !== id && (
           <BlockedReasonText
             className="todo-block-reason"
             data-todo-reason={id}
-            reason={td.blockedReason}
+            reason={td.blockedReason ?? ''}
             onEdit={() => setReasonEditId(id)}
           />
         )}

@@ -139,6 +139,16 @@ describe('TaskListRow blocked tasks', () => {
     expect(onEditBlockedReason).toHaveBeenCalledWith(blocked, 'Waiting on Alex')
   })
 
+  it('a Blocked row with no reason shows an "Add reason" prompt that opens the editor', async () => {
+    const noReason = { ...blocked, blockedReason: null }
+    const { onEditBlockedReason } = renderRow(noReason)
+    await userEvent.dblClick(screen.getByRole('button', { name: 'Add blocked reason' }))
+    const input = screen.getByRole('textbox', { name: 'Blocked reason, optional' })
+    expect(input).toHaveValue('')
+    await userEvent.type(input, 'Waiting on Sam{Enter}')
+    expect(onEditBlockedReason).toHaveBeenCalledWith(noReason, 'Waiting on Sam')
+  })
+
   it('Escape cancels the reason edit without saving', async () => {
     const { onEditBlockedReason } = renderRow(blocked)
     await userEvent.dblClick(screen.getByText('Waiting on Sam'))

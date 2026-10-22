@@ -77,21 +77,25 @@ type BlockedReasonTextProps = Omit<ComponentProps<'button'>, 'onClick' | 'title'
   onEdit: () => void
 }
 
-/** Single-line muted reason (ellipsis, full text in the title). A real button so the keyboard can reach it. */
+/**
+ * Single-line muted reason (ellipsis, full text in the title). A real button so the keyboard can reach it.
+ * An empty reason renders an "Add reason" prompt so a reason can still be added later.
+ */
 export function BlockedReasonText({ reason, onEdit, ...rest }: BlockedReasonTextProps) {
+  const empty = reason === ''
   return (
     <button
       {...rest}
       type="button"
-      title={reason}
-      aria-label={`Blocked reason: ${reason}. Edit`}
+      title={empty ? undefined : reason}
+      aria-label={empty ? 'Add blocked reason' : `Blocked reason: ${reason}. Edit`}
       onClick={e => {
         // Enter/Space fire click with detail 0; a mouse needs a double-click.
         if (e.detail === 0) onEdit()
       }}
       onDoubleClick={onEdit}
     >
-      {reason}
+      {empty ? 'Add reason' : reason}
     </button>
   )
 }

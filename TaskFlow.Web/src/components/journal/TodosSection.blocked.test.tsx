@@ -251,10 +251,16 @@ describe('TodosSection blocked tasks', () => {
       expect(reason.tagName).toBe('BUTTON')
     })
 
-    it('shows no reason element when there is no reason', () => {
+    it('shows an "Add reason" prompt when there is no reason, and it opens the editor', async () => {
       load([{ ...blockedRow, blockedReason: null }])
       renderSection()
-      expect(document.querySelector('.todo-block-reason')).toBeNull()
+      const add = screen.getByRole('button', { name: 'Add blocked reason' })
+      expect(add).toHaveTextContent('Add reason')
+      await userEvent.dblClick(add)
+      const input = screen.getByRole('textbox', { name: 'Blocked reason, optional' })
+      expect(input).toHaveValue('')
+      await userEvent.type(input, 'Waiting on Sam{Enter}')
+      expect(editReasonMutate).toHaveBeenCalledWith({ id: 2, reason: 'Waiting on Sam' }, expect.any(Object))
     })
 
     it('double-click opens the editor; Enter saves the new reason via a reason-only mutation', async () => {

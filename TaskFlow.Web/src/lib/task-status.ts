@@ -53,11 +53,6 @@ export function isCompleted(raw: string | null | undefined): boolean {
   return normalizeStatus(raw) === 'Completed'
 }
 
-/** Open = not completed. Blocked counts as open. */
-export function isOpen(raw: string | null | undefined): boolean {
-  return !isCompleted(raw)
-}
-
 /** Position in STATUS_ORDER; unknown statuses sort last. */
 export function statusRank(raw: string | null | undefined): number {
   const status = normalizeStatus(raw)

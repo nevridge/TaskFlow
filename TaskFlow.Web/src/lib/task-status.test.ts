@@ -7,7 +7,6 @@ import {
   getBlockErrorMessage,
   isBlocked,
   isCompleted,
-  isOpen,
   journalSortTier,
   mapCachedTask,
   nextCycleStatus,
@@ -60,11 +59,9 @@ describe('ordering, labels and request values', () => {
 })
 
 describe('predicates', () => {
-  it('treats Blocked as open and not completed', () => {
+  it('treats Blocked as not completed', () => {
     expect(isBlocked('Blocked')).toBe(true)
     expect(isCompleted('Blocked')).toBe(false)
-    expect(isOpen('Blocked')).toBe(true)
-    expect(isOpen('Completed')).toBe(false)
   })
 
   it('only Todo can be blocked', () => {

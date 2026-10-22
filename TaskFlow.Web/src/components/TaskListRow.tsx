@@ -163,11 +163,11 @@ export function TaskListRow({
               {task.title}
             </Link>
             {childProgress && <div className="t-deferral-line">{childProgress}</div>}
-            {blocked && task.blockedReason && !reasonEditing && (
+            {blocked && !reasonEditing && (
               <BlockedReasonText
                 ref={reasonBtnRef}
                 className="t-blocked-reason"
-                reason={task.blockedReason}
+                reason={task.blockedReason ?? ''}
                 onEdit={() => setReasonEditing(true)}
               />
             )}

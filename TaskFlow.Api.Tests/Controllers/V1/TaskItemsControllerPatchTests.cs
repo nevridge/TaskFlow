@@ -321,6 +321,31 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
+    public async Task Put_ThenPatchReopen_ShouldBeIncludedInCarryForward()
+    {
+        using var stack = new RealStack();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var tomorrow = today.AddDays(1);
+        var journalRepo = new JournalEntryRepository(stack.Context);
+        var source = await journalRepo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+        var seeded = await stack.SeedAsync(NewRichTask());
+        stack.Context.JournalEntries.Single(e => e.Id == source.Id).Todos.Add(stack.Context.TaskItems.Single(t => t.Id == seeded.Id));
+        stack.Context.TaskItems.Single(t => t.Id == seeded.Id).CurrentJournalEntryId = source.Id;
+        await stack.Context.SaveChangesAsync();
+        stack.Context.ChangeTracker.Clear();
+
+        OkDto(await stack.Controller.Update(seeded.Id, new UpdateTaskItemDto { Title = "Original", Status = Status.Completed }));
+        stack.Context.ChangeTracker.Clear();
+        OkDto(await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Todo, TimezoneOffsetMinutes = 0 }));
+        stack.Context.ChangeTracker.Clear();
+
+        var target = await journalRepo.AddAsync(new JournalEntry { Title = "Tomorrow", Date = tomorrow });
+        var moved = await journalRepo.CarryForwardIncompleteTasksAsync(target.Id, tomorrow);
+
+        Assert.Equal([seeded.Id], moved);
+    }
+
+    [Fact]
     public async Task Put_ShouldKeepStoredStatus_WhenStatusOmitted()
     {
         using var stack = new RealStack();

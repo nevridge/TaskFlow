@@ -568,6 +568,19 @@ describe('TasksPage', () => {
     })
   })
 
+  describe('status cycle', () => {
+    it('cycling a Todo task sends status completed and never an isComplete field', async () => {
+      renderPage()
+      const row = rowFor('Parent task')
+      await userEvent.click(within(row).getByRole('button', { name: /Status: todo/i }))
+      expect(taskMutations.mutate).toHaveBeenCalledTimes(1)
+      const payload = taskMutations.mutate.mock.calls[0][0]
+      expect(payload.id).toBe(1)
+      expect(payload.data.status).toBe('completed')
+      expect(payload.data).not.toHaveProperty('isComplete')
+    })
+  })
+
   describe('create and edit forms', () => {
     it('create passes the chosen projectId to the create mutation', async () => {
       renderPage()

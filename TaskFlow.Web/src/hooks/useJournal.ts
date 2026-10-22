@@ -15,8 +15,8 @@ import {
   deleteJournalNote,
 } from '@/api/journal'
 import type { JournalEntryResponseDto, TaskItemResponseDto, JournalNoteResponseDto } from '@/api/journal'
-import type { CreateTaskItemDto, UpdateTaskItemDto } from '@/api/client/types.gen'
-import { postApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
+import type { CreateTaskItemDto } from '@/api/client/types.gen'
+import { postApiV1TaskItems, patchApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import { taskKeys } from '@/hooks/useTasks'
 import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
 import { usePrefs } from '@/context/usePrefs'
@@ -188,16 +188,14 @@ export function useToggleTodoMutation(entryId: number) {
   const qc = useQueryClient()
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title, done, parentTaskItemId, autoCompleteParentWhenChildrenDone: overrideAutoComplete }: { id: number; title: string; done: boolean; parentTaskItemId?: number | null; autoCompleteParentWhenChildrenDone?: boolean }) =>
-      putApiV1TaskItemsById({
+    mutationFn: ({ id, done, autoCompleteParentWhenChildrenDone: overrideAutoComplete }: { id: number; done: boolean; autoCompleteParentWhenChildrenDone?: boolean }) =>
+      patchApiV1TaskItemsById({
         path: { id },
         body: {
-          title,
           status: done ? 'completed' : 'todo',
-          parentTaskItemId,
           autoCompleteParentWhenChildrenDone: overrideAutoComplete ?? autoCompleteParentWhenChildrenDone,
           timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
-        } as UpdateTaskItemDto,
+        },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
@@ -208,17 +206,11 @@ export function useToggleTodoMutation(entryId: number) {
 
 export function useEditTodoMutation(entryId: number) {
   const qc = useQueryClient()
-  const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
-    mutationFn: ({ id, title, parentTaskItemId }: { id: number; title: string; parentTaskItemId?: number | null }) =>
-      putApiV1TaskItemsById({
+    mutationFn: ({ id, title }: { id: number; title: string }) =>
+      patchApiV1TaskItemsById({
         path: { id },
-        body: {
-          title,
-          parentTaskItemId,
-          autoCompleteParentWhenChildrenDone,
-          timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
-        } as UpdateTaskItemDto,
+        body: { title },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
@@ -268,7 +260,7 @@ export function useDeleteLogEntryMutation(entryId: number) {
 
 /** Count open todos in a journal entry's todos list. */
 export function openTodoCount(todos: TaskItemResponseDto[]): number {
-  return todos.filter(t => t.status !== 'Completed' && !t.isComplete).length
+  return todos.filter(t => t.status !== 'Completed').length
 }
 
 /** ISO date of yesterday relative to a given ISO date. */

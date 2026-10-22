@@ -12,7 +12,6 @@ const task: TaskItemResponseDto = {
   status: 'todo',
   priority: 'high',
   dueDate: '2026-05-01T00:00:00Z',
-  isComplete: false,
 }
 
 function renderCard(onEdit = vi.fn(), onDelete = vi.fn(), taskOverride: TaskItemResponseDto = task) {

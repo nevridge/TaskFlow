@@ -14,7 +14,6 @@ const baseTask: TaskProp = {
   status: 'todo',
   priority: 'high',
   dueDate: null,
-  isComplete: false,
 }
 
 function renderRow(

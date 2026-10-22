@@ -26,7 +26,6 @@ const project: ProjectResponseDto = {
 const task = (over: Partial<ProjectTaskDto>): ProjectTaskDto => ({
   id: 1,
   title: 'Task one',
-  isComplete: false,
   status: 'Todo',
   priority: 'High',
   projectId: 7,

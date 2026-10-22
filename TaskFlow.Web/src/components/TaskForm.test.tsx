@@ -20,7 +20,7 @@ const projects = [
 ]
 
 const existing = {
-  id: 7, title: 'Existing task', description: 'Some desc', status: 'Todo' as const, priority: 'Medium' as const, isComplete: false,
+  id: 7, title: 'Existing task', description: 'Some desc', status: 'Todo' as const, priority: 'Medium' as const,
 }
 
 function projectSelect() {
@@ -39,7 +39,7 @@ describe('TaskForm', () => {
 
   it('pre-fills fields when editing an existing task', () => {
     const task = {
-      id: 1, title: 'Existing task', description: 'Some desc', status: 'todo', priority: 'medium', isComplete: false,
+      id: 1, title: 'Existing task', description: 'Some desc', status: 'todo', priority: 'medium',
     }
     renderForm(task)
     expect(screen.getByDisplayValue('Existing task')).toBeInTheDocument()

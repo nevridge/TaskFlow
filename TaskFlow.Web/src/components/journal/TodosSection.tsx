@@ -95,8 +95,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     const arr = [...todos]
     if (sort === 'open first' || sort === 'done last') {
       arr.sort((a, b) => {
-        const aDone = a.status === 'Completed' || !!a.isComplete ? 1 : 0
-        const bDone = b.status === 'Completed' || !!b.isComplete ? 1 : 0
+        const aDone = a.status === 'Completed' ? 1 : 0
+        const bDone = b.status === 'Completed' ? 1 : 0
         return aDone - bDone
       })
     }
@@ -124,14 +124,12 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 
   function toggle(todo: TaskItemResponseDto) {
     setActionError(null)
-    const isDone = todo.status === 'Completed' || !!todo.isComplete
+    const isDone = todo.status === 'Completed'
     const isChild = todo.parentTaskItemId != null
     toggleTodo.mutate(
       {
         id: Number(todo.id),
-        title: todo.title,
         done: !isDone,
-        parentTaskItemId: todo.parentTaskItemId ?? null,
         // Subtask completion must never auto-complete the parent in the journal UI
         ...(isChild && { autoCompleteParentWhenChildrenDone: false }),
       },
@@ -143,19 +141,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     if (editingId == null) return
     const text = editingText.trim()
     if (text) {
-      // Search both top-level todos and their children for the task being edited
-      let current: TaskItemResponseDto | undefined = todos.find(t => Number(t.id) === editingId)
-      if (!current) {
-        for (const td of todos) {
-          current = td.children?.find(c => Number(c.id) === editingId)
-          if (current) break
-        }
-      }
-      editTodo.mutate({
-        id: editingId,
-        title: text,
-        parentTaskItemId: current?.parentTaskItemId ?? null,
-      })
+      editTodo.mutate({ id: editingId, title: text })
     }
     setEditingId(null)
     setEditingText('')
@@ -178,7 +164,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             <li className="j-empty">No TODOs yet — add one below.</li>
           )}
           {sorted.map(td => {
-            const isDone = td.status === 'Completed' || !!td.isComplete
+            const isDone = td.status === 'Completed'
             return (
               <li key={td.id} className={'todo' + (isDone ? ' is-done' : '')}>
                 <button
@@ -234,7 +220,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                 {td.children && td.children.length > 0 && (
                   <ul className="todo-child-list">
                     {td.children.map(child => {
-                      const childDone = child.status === 'Completed' || !!child.isComplete
+                      const childDone = child.status === 'Completed'
                       const childIsFuture =
                         !!child.currentJournalDate && child.currentJournalDate > isoDate
                       return (

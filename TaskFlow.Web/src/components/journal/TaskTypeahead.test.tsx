@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockTasks = [
-  { id: 1, title: 'Fix login bug', status: 'Todo', isComplete: false },
-  { id: 2, title: 'Write tests', status: 'Todo', isComplete: false },
-  { id: 3, title: 'Deploy to production', status: 'Completed', isComplete: true },
+  { id: 1, title: 'Fix login bug', status: 'Todo' },
+  { id: 2, title: 'Write tests', status: 'Todo' },
+  { id: 3, title: 'Deploy to production', status: 'Completed' },
 ]
 
 vi.mock('@/hooks/useTasks', () => ({

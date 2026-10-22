@@ -41,6 +41,7 @@ vi.mock('@/api/journal', () => ({
 vi.mock('@/api/client/sdk.gen', () => ({
   postApiV1TaskItems: vi.fn(),
   putApiV1TaskItemsById: vi.fn(),
+  patchApiV1TaskItemsById: vi.fn(),
 }))
 
 vi.mock('@/context/usePrefs', () => ({
@@ -493,14 +494,14 @@ describe('useCreateTodoMutation', () => {
 describe('useToggleTodoMutation', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('calls putApiV1TaskItemsById with done=true (status completed)', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+  it('calls patchApiV1TaskItemsById with done=true (status completed)', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
-    act(() => { result.current.mutate({ id: 1, title: 'Task A', done: true }) })
+    act(() => { result.current.mutate({ id: 1, done: true }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
+    expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { id: 1 },
         body: expect.objectContaining({ status: 'completed' }),
@@ -508,24 +509,31 @@ describe('useToggleTodoMutation', () => {
     )
   })
 
-  it('never sends projectId in the PUT body, so toggling cannot clear a task project', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+  it('sends a PATCH body with exactly status, autoCompleteParentWhenChildrenDone and timezoneOffsetMinutes', async () => {
+    const { usePrefs } = await import('@/context/usePrefs')
+    vi.mocked(usePrefs).mockReturnValue({ autoCompleteParentWhenChildrenDone: false } as never)
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
-    act(() => { result.current.mutate({ id: 1, title: 'Task A', done: true }) })
+    act(() => { result.current.mutate({ id: 1, done: true }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
+    const body = vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls[0][0]?.body as Record<string, unknown>
+    expect(Object.keys(body).sort()).toEqual(['autoCompleteParentWhenChildrenDone', 'status', 'timezoneOffsetMinutes'])
+    for (const key of ['title', 'parentTaskItemId', 'description', 'dueDate', 'isComplete', 'projectId']) {
+      expect(body).not.toHaveProperty(key)
+    }
+    expect(sdk.putApiV1TaskItemsById).not.toHaveBeenCalled()
   })
 
-  it('calls putApiV1TaskItemsById with done=false (status todo)', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
+  it('calls patchApiV1TaskItemsById with done=false (status todo)', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
-    act(() => { result.current.mutate({ id: 2, title: 'Task B', done: false }) })
+    act(() => { result.current.mutate({ id: 2, done: false }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
+    expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalledWith(
       expect.objectContaining({
         path: { id: 2 },
         body: expect.objectContaining({ status: 'todo' }),
@@ -536,13 +544,13 @@ describe('useToggleTodoMutation', () => {
   it('explicit autoCompleteParentWhenChildrenDone:false overrides pref=true in HTTP body', async () => {
     const { usePrefs } = await import('@/context/usePrefs')
     vi.mocked(usePrefs).mockReturnValue({ autoCompleteParentWhenChildrenDone: true } as never)
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
-    act(() => { result.current.mutate({ id: 3, title: 'Sub', done: true, autoCompleteParentWhenChildrenDone: false }) })
+    act(() => { result.current.mutate({ id: 3, done: true, autoCompleteParentWhenChildrenDone: false }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
+    expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.objectContaining({ autoCompleteParentWhenChildrenDone: false }),
       })
@@ -553,63 +561,48 @@ describe('useToggleTodoMutation', () => {
 describe('useEditTodoMutation', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('calls putApiV1TaskItemsById with updated title', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+  it('calls patchApiV1TaskItemsById with updated title', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
     act(() => { result.current.mutate({ id: 3, title: 'New title' }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(
+    expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalledWith(
       expect.objectContaining({ path: { id: 3 }, body: expect.objectContaining({ title: 'New title' }) })
     )
   })
 
-  it('never sends projectId in the PUT body, so editing a todo title cannot clear its project', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
+  it('sends a PATCH body of exactly { title }, so a rename cannot touch any other field', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
     act(() => { result.current.mutate({ id: 3, title: 'New title' }) })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body).not.toHaveProperty('projectId')
+    expect(vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls[0][0]?.body).toEqual({ title: 'New title' })
+    expect(sdk.putApiV1TaskItemsById).not.toHaveBeenCalled()
   })
 })
 
-describe('todo PUT mutations timezone offset', () => {
+describe('todo PATCH mutations timezone offset', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.restoreAllMocks())
 
   it('toggle sends the current timezoneOffsetMinutes on every call', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset')
     const { result } = renderHook(() => useToggleTodoMutation(10), { wrapper: makeWrapper() })
 
     spy.mockReturnValue(300)
-    await act(async () => { await result.current.mutateAsync({ id: 1, title: 'A', done: false }) })
+    await act(async () => { await result.current.mutateAsync({ id: 1, done: false }) })
     spy.mockReturnValue(480)
-    await act(async () => { await result.current.mutateAsync({ id: 1, title: 'A', done: false }) })
+    await act(async () => { await result.current.mutateAsync({ id: 1, done: false }) })
 
-    const calls = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls
+    const calls = vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls
     expect(calls[0][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -300 }))
     expect(calls[1][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -480 }))
-  })
-
-  it('edit sends the current timezoneOffsetMinutes on every call', async () => {
-    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 3 }, response: new Response() } as never)
-    vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
-    const spy = vi.spyOn(Date.prototype, 'getTimezoneOffset')
-    const { result } = renderHook(() => useEditTodoMutation(10), { wrapper: makeWrapper() })
-
-    spy.mockReturnValue(300)
-    await act(async () => { await result.current.mutateAsync({ id: 3, title: 'X' }) })
-    spy.mockReturnValue(-60)
-    await act(async () => { await result.current.mutateAsync({ id: 3, title: 'X' }) })
-
-    const calls = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls
-    expect(calls[0][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: -300 }))
-    expect(calls[1][0]?.body).toEqual(expect.objectContaining({ timezoneOffsetMinutes: 60 }))
   })
 })
 
@@ -703,27 +696,27 @@ describe('openTodoCount', () => {
     expect(openTodoCount([])).toBe(0)
   })
 
-  it('counts only non-Completed, non-isComplete items', () => {
+  it('counts only items whose status is not Completed', () => {
     const todos = [
-      { id: 1, title: 'A', status: 'Todo', isComplete: false },
-      { id: 2, title: 'B', status: 'Todo', isComplete: false },
-      { id: 3, title: 'C', status: 'Completed', isComplete: false },
+      { id: 1, title: 'A', status: 'Todo' },
+      { id: 2, title: 'B', status: 'Draft' },
+      { id: 3, title: 'C', status: 'Completed' },
     ]
     expect(openTodoCount(todos as never)).toBe(2)
   })
 
-  it('item with status=Todo but isComplete=true is still excluded', () => {
+  it('a Todo item is open and a Completed item is closed, decided by status alone', () => {
     const todos = [
-      { id: 1, title: 'A', status: 'Todo', isComplete: true },
-      { id: 2, title: 'B', status: 'Todo', isComplete: false },
+      { id: 1, title: 'A', status: 'Todo' },
+      { id: 2, title: 'B', status: 'Completed' },
     ]
     expect(openTodoCount(todos as never)).toBe(1)
   })
 
   it('PascalCase "Completed" is excluded; lowercase "completed" is not excluded', () => {
     const todos = [
-      { id: 1, title: 'A', status: 'Completed', isComplete: false },
-      { id: 2, title: 'B', status: 'completed', isComplete: false },
+      { id: 1, title: 'A', status: 'Completed' },
+      { id: 2, title: 'B', status: 'completed' },
     ]
     // 'Completed' excluded, 'completed' counted (open)
     expect(openTodoCount(todos as never)).toBe(1)

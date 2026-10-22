@@ -18,7 +18,6 @@ export type ProjectTaskDto = {
   id: number
   title: string
   description?: string | null
-  isComplete: boolean
   dueDate?: string | null
   status: 'Draft' | 'Todo' | 'Completed'
   priority: 'Low' | 'Medium' | 'High'

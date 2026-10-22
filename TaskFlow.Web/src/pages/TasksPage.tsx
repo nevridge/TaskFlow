@@ -212,7 +212,7 @@ export function TasksPage() {
       const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
       if (!parentId) return
       const prev = stats.get(parentId) ?? { done: 0, total: 0 }
-      const isDone = (task.status ?? '').toLowerCase() === 'completed' || !!task.isComplete
+      const isDone = (task.status ?? '').toLowerCase() === 'completed'
       stats.set(parentId, { total: prev.total + 1, done: prev.done + (isDone ? 1 : 0) })
     })
     return stats
@@ -327,7 +327,6 @@ export function TasksPage() {
           title: task.title,
           description: task.description,
           status: nextStatus as 'draft' | 'todo' | 'completed',
-          isComplete: nextStatus === 'completed',
           priority: task.priority as 'low' | 'medium' | 'high' | undefined,
           dueDate: task.dueDate,
           parentTaskItemId: task.parentTaskItemId,
@@ -608,7 +607,7 @@ function getErrorCode(error: unknown): string | null {
 function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {
   const assignedDate = task.currentJournalDate ?? null
   const status = (task.status ?? '').toLowerCase()
-  const isCompleted = status === 'completed' || !!task.isComplete
+  const isCompleted = status === 'completed'
   switch (viewFilter) {
     case 'activeToday': return assignedDate === todayISO() && !isCompleted
     case 'scheduledFuture': return assignedDate != null && assignedDate > todayISO()

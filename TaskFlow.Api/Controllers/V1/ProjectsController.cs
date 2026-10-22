@@ -58,7 +58,6 @@ public class ProjectsController(
             Id = t.Id,
             Title = t.Title,
             Description = t.Description,
-            IsComplete = t.IsComplete,
             DueDate = t.DueDate,
             Status = t.Status.ToString(),
             Priority = t.Priority.ToString(),
@@ -174,7 +173,7 @@ public class ProjectsController(
         IsArchived = project.IsArchived,
         CreatedAt = project.CreatedAt,
         UpdatedAt = project.UpdatedAt,
-        OpenTaskCount = project.Tasks.Count(t => !(t.IsComplete || t.Status == Status.Completed)),
-        CompletedTaskCount = project.Tasks.Count(t => t.IsComplete || t.Status == Status.Completed),
+        OpenTaskCount = project.Tasks.Count(t => t.Status != Status.Completed),
+        CompletedTaskCount = project.Tasks.Count(t => t.Status == Status.Completed),
     };
 }

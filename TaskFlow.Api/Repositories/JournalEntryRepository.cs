@@ -75,7 +75,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var sources = await _context.JournalEntries
             .Include(e => e.Todos)
             .Where(e => e.Date < userToday && e.Id != entryId
-                && e.Todos.Any(t => t.CurrentJournalEntryId == e.Id && t.Status != Status.Completed && !t.IsComplete))
+                && e.Todos.Any(t => t.CurrentJournalEntryId == e.Id && t.Status != Status.Completed))
             .OrderBy(e => e.Date)
             .ToListAsync();
 
@@ -83,7 +83,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         foreach (var source in sources)
         {
             var tasksToMove = source.Todos
-                .Where(t => t.CurrentJournalEntryId == source.Id && t.Status != Status.Completed && !t.IsComplete)
+                .Where(t => t.CurrentJournalEntryId == source.Id && t.Status != Status.Completed)
                 .OrderBy(t => t.Id)
                 .ToList();
 

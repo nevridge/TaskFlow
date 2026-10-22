@@ -58,7 +58,6 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         var originalDescription = persisted?.Description ?? entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));
         var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
         var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
-        var originalIsComplete = persisted?.IsComplete ?? entry.OriginalValues.GetValue<bool>(nameof(TaskItem.IsComplete));
         var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateTime?>(nameof(TaskItem.DueDate));
 
         if (!string.Equals(originalTitle, task.Title, StringComparison.Ordinal))
@@ -105,8 +104,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
             });
         }
 
-        var wasCompleted = IsCompleted(originalIsComplete, originalStatus);
-        var isCompletedNow = IsCompleted(task.IsComplete, task.Status);
+        var wasCompleted = IsCompleted(originalStatus);
+        var isCompletedNow = IsCompleted(task.Status);
         if (!wasCompleted && isCompletedNow)
         {
             _context.TaskItemEvents.Add(new TaskItemEvent
@@ -154,8 +153,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         await _context.SaveChangesAsync();
     }
 
-    private static bool IsCompleted(bool isComplete, Status status) =>
-        isComplete || status == Status.Completed;
+    private static bool IsCompleted(Status status) => status == Status.Completed;
 
     private static string FormatDueDate(DateTime? value) =>
         value?.ToString("yyyy-MM-dd") ?? "none";

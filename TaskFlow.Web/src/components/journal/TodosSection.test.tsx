@@ -39,7 +39,6 @@ const openTodo: TaskItemResponseDto = {
   id: 1,
   title: 'Write tests',
   status: 'Todo',
-  isComplete: false,
   priority: 'low',
   description: null,
   dueDate: null,
@@ -49,7 +48,6 @@ const doneTodo: TaskItemResponseDto = {
   id: 2,
   title: 'Fix bug',
   status: 'Completed',
-  isComplete: false,
   priority: 'low',
   description: null,
   dueDate: null,
@@ -94,7 +92,7 @@ describe('TodosSection', () => {
   })
 
   it('todo with lowercase status "completed" does NOT get is-done class', () => {
-    const lowercaseDone: TaskItemResponseDto = { ...openTodo, id: 3, title: 'lowercase', status: 'completed' as never, isComplete: false }
+    const lowercaseDone: TaskItemResponseDto = { ...openTodo, id: 3, title: 'lowercase', status: 'completed' as never }
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [lowercaseDone] }, isLoading: false } as never)
     renderSection()
     const li = screen.getByText('lowercase').closest('li')
@@ -105,10 +103,51 @@ describe('TodosSection', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
     renderSection()
     await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
-    expect(toggleTodoMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 1, title: 'Write tests', done: true }),
-      expect.any(Object)
-    )
+    expect(toggleTodoMutate).toHaveBeenCalledWith({ id: 1, done: true }, expect.any(Object))
+  })
+
+  it('toggling a completed todo sends done=false with only the id', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: /mark not done/i }))
+    expect(toggleTodoMutate).toHaveBeenCalledWith({ id: 2, done: false }, expect.any(Object))
+  })
+
+  it('renaming a completed todo sends only id and title (no status)', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+    renderSection()
+    await userEvent.dblClick(screen.getByText('Fix bug'))
+    const editInput = screen.getByDisplayValue('Fix bug')
+    await userEvent.clear(editInput)
+    await userEvent.type(editInput, 'Fix bug properly')
+    await userEvent.keyboard('{Enter}')
+    expect(editTodoMutate).toHaveBeenCalledTimes(1)
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 2, title: 'Fix bug properly' })
+    expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('status')
+  })
+
+  it('renaming a subtask sends only id and title (no parentTaskItemId)', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, children: [childTodo] }] }, isLoading: false } as never)
+    renderSection()
+    await userEvent.dblClick(screen.getByText('Sub A'))
+    const editInput = screen.getByDisplayValue('Sub A')
+    await userEvent.clear(editInput)
+    await userEvent.type(editInput, 'Sub B')
+    await userEvent.keyboard('{Enter}')
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub B' })
+    expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('parentTaskItemId')
+  })
+
+  it('renaming a subtask whose parent is not in the loaded list (shown top-level) sends no parentTaskItemId', async () => {
+    // The child is not nested under any loaded todo, so the old code could not look it up and sent parentTaskItemId: null
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [childTodo] }, isLoading: false } as never)
+    renderSection()
+    await userEvent.dblClick(screen.getByText('Sub A'))
+    const editInput = screen.getByDisplayValue('Sub A')
+    await userEvent.clear(editInput)
+    await userEvent.type(editInput, 'Sub C')
+    await userEvent.keyboard('{Enter}')
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub C' })
   })
 
   it('toggle rejected with TASK_REOPEN_PAST_DAY_NOT_ALLOWED shows the past-days message and task stays completed', async () => {
@@ -266,7 +305,6 @@ describe('TodosSection', () => {
     id: 99,
     title: 'Sub A',
     status: 'Todo',
-    isComplete: false,
     priority: 'low',
     description: null,
     dueDate: null,
@@ -338,7 +376,7 @@ describe('TodosSection', () => {
     // Click the child check button (second 'Mark done' button)
     await userEvent.click(checkButtons[1])
     expect(toggleTodoMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ autoCompleteParentWhenChildrenDone: false }),
+      { id: 99, done: true, autoCompleteParentWhenChildrenDone: false },
       expect.any(Object)
     )
   })

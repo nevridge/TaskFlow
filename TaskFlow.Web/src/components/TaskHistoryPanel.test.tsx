@@ -70,6 +70,17 @@ describe('TaskHistoryPanel', () => {
     expect(screen.getByText('Marked complete')).toBeInTheDocument()
   })
 
+  it('renders the long migration changeSummary for a Completed event, not the "Marked complete" fallback', () => {
+    const summary = 'Marked complete by a data migration that merged the separate completion flag into Status. Recorded when the migration ran, not when the task was completed.'
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType: 'Completed', changeSummary: summary })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText(summary)).toBeInTheDocument()
+    expect(screen.queryByText('Marked complete')).not.toBeInTheDocument()
+  })
+
   it('renders "Assigned to" for AssignedToJournalDay with toJournalDate', () => {
     vi.mocked(useTaskHistoryQuery).mockReturnValue({
       data: { data: [makeEvent({ eventType: 'AssignedToJournalDay', toJournalDate: '2026-05-28', changeSummary: null })] },

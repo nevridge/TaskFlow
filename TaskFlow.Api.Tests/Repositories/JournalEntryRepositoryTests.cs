@@ -223,7 +223,7 @@ public class JournalEntryRepositoryTests
         var repo = new JournalEntryRepository(context);
         var today = new DateOnly(2026, 10, 13);
         var (source, open) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
-        var done = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done", Status = Status.Completed, IsComplete = true });
+        var done = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done", Status = Status.Completed });
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
@@ -521,21 +521,21 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
-    public async Task CarryForwardIncompleteTasksAsync_ShouldRespectStatusAndIsCompleteIndependently()
+    public async Task CarryForwardIncompleteTasksAsync_TreatTaskAsIncompleteExactlyWhenStatusIsNotCompleted()
     {
         using var context = CreateInMemoryContext();
         var repo = new JournalEntryRepository(context);
         var today = new DateOnly(2026, 10, 13);
         var (source, openTask) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
-        var statusOnly = await LinkNewTaskAsync(context, source, new TaskItem { Title = "S", Status = Status.Completed, IsComplete = false });
-        var flagOnly = await LinkNewTaskAsync(context, source, new TaskItem { Title = "F", Status = Status.Todo, IsComplete = true });
+        var completed = await LinkNewTaskAsync(context, source, new TaskItem { Title = "C", Status = Status.Completed });
+        var draft = await LinkNewTaskAsync(context, source, new TaskItem { Title = "D", Status = Status.Draft });
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
         var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
-        Assert.Equal(new[] { openTask.Id }, moved);
-        Assert.Equal(source.Id, statusOnly.CurrentJournalEntryId);
-        Assert.Equal(source.Id, flagOnly.CurrentJournalEntryId);
+        Assert.Equal(new[] { openTask.Id, draft.Id }, moved);
+        Assert.Equal(source.Id, completed.CurrentJournalEntryId);
+        Assert.Equal(target.Id, draft.CurrentJournalEntryId);
     }
 
     [Fact]
@@ -606,7 +606,6 @@ public class JournalEntryRepositoryTests
         await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
 
         completedLater.Status = Status.Completed;
-        completedLater.IsComplete = true;
         await context.SaveChangesAsync();
         await repo.RemoveTodoAsync(target.Id, removedLater.Id);
 
@@ -624,9 +623,9 @@ public class JournalEntryRepositoryTests
         var repo = new JournalEntryRepository(context);
         var today = new DateOnly(2026, 10, 13);
         var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
-        var doneParent = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Parent", Status = Status.Completed, IsComplete = true });
+        var doneParent = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Parent", Status = Status.Completed });
         var openChild = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Open child", Status = Status.Todo, ParentTaskItemId = doneParent.Id });
-        var doneChild = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done child", Status = Status.Completed, IsComplete = true, ParentTaskItemId = doneParent.Id });
+        var doneChild = await LinkNewTaskAsync(context, source, new TaskItem { Title = "Done child", Status = Status.Completed, ParentTaskItemId = doneParent.Id });
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 
         await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
@@ -668,7 +667,6 @@ public class JournalEntryRepositoryTests
         var today = new DateOnly(2026, 10, 13);
         var (_, seeded) = await SeedLinkedTaskAsync(context, today.AddDays(-1));
         seeded.Status = Status.Completed;
-        seeded.IsComplete = true;
         await context.SaveChangesAsync();
         var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
 

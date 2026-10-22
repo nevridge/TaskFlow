@@ -22,7 +22,6 @@ public class TaskItemValidatorTests
         {
             Title = "Valid Task",
             Description = "Valid Description",
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -42,7 +41,6 @@ public class TaskItemValidatorTests
         {
             Title = "Valid Task",
             Description = null,
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -62,7 +60,6 @@ public class TaskItemValidatorTests
         {
             Title = "Completed Task",
             Description = "Completed",
-            IsComplete = true,
             Status = Status.Completed
         };
 
@@ -82,7 +79,6 @@ public class TaskItemValidatorTests
         {
             Title = string.Empty,
             Description = "Description",
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -104,7 +100,6 @@ public class TaskItemValidatorTests
         {
             Title = new string('a', 101), // 101 characters
             Description = "Description",
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -126,7 +121,6 @@ public class TaskItemValidatorTests
         {
             Title = new string('a', 100), // Exactly 100 characters
             Description = "Description",
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -146,7 +140,6 @@ public class TaskItemValidatorTests
         {
             Title = "A",
             Description = "Description",
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -166,7 +159,6 @@ public class TaskItemValidatorTests
         {
             Title = "Valid Task",
             Description = string.Empty,
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -186,7 +178,6 @@ public class TaskItemValidatorTests
         {
             Title = "Valid Task",
             Description = new string('a', 10000),
-            IsComplete = false,
             Status = Status.Todo
         };
 
@@ -206,7 +197,6 @@ public class TaskItemValidatorTests
         {
             Title = "Draft Task",
             Description = "Description",
-            IsComplete = false,
             Status = Status.Draft
         };
 
@@ -226,7 +216,6 @@ public class TaskItemValidatorTests
         {
             Title = "Completed Task",
             Description = "Description",
-            IsComplete = true,
             Status = Status.Completed
         };
 
@@ -246,7 +235,6 @@ public class TaskItemValidatorTests
         {
             Title = "Task",
             Description = "Description",
-            IsComplete = false,
             Status = (Status)999
         };
 

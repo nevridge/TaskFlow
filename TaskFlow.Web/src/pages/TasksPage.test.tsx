@@ -46,7 +46,6 @@ const changeAsync = vi.fn()
 const baseTask = {
   description: null,
   priority: 'Low',
-  isComplete: false,
   dueDate: null,
   parentTaskItemId: null,
   childTaskCount: 0,
@@ -87,7 +86,6 @@ const taskList = [
     id: 4,
     title: 'Beta finished',
     status: 'Completed',
-    isComplete: true,
     // The generated client types projectId as number | string | null
     projectId: '2',
     projectName: 'Beta',
@@ -383,7 +381,7 @@ describe('TasksPage', () => {
     const mixed = [
       { ...baseTask, id: 21, title: 'Draft one', status: 'Draft' },
       { ...baseTask, id: 22, title: 'Todo one', status: 'Todo' },
-      { ...baseTask, id: 23, title: 'Completed one', status: 'Completed', isComplete: true },
+      { ...baseTask, id: 23, title: 'Completed one', status: 'Completed' },
     ]
 
     function useData(data: unknown[]) {
@@ -548,7 +546,7 @@ describe('TasksPage', () => {
       expect(screen.getByText('Todo one')).toBeInTheDocument()
       expect(screen.getByText('2 tasks')).toBeInTheDocument()
 
-      useData(mixed.map(t => (t.id === 22 ? { ...t, status: 'Completed', isComplete: true } : t)))
+      useData(mixed.map(t => (t.id === 22 ? { ...t, status: 'Completed' } : t)))
       rerender(page())
 
       expect(screen.queryByText('Todo one')).not.toBeInTheDocument()
@@ -567,6 +565,19 @@ describe('TasksPage', () => {
       } finally {
         vi.unstubAllGlobals()
       }
+    })
+  })
+
+  describe('status cycle', () => {
+    it('cycling a Todo task sends status completed and never an isComplete field', async () => {
+      renderPage()
+      const row = rowFor('Parent task')
+      await userEvent.click(within(row).getByRole('button', { name: /Status: todo/i }))
+      expect(taskMutations.mutate).toHaveBeenCalledTimes(1)
+      const payload = taskMutations.mutate.mock.calls[0][0]
+      expect(payload.id).toBe(1)
+      expect(payload.data.status).toBe('completed')
+      expect(payload.data).not.toHaveProperty('isComplete')
     })
   })
 

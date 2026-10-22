@@ -36,7 +36,7 @@ public class ProjectsControllerV1Tests
             Tasks =
             [
                 new TaskItem { Id = 1, Title = "Open", Status = Status.Todo },
-                new TaskItem { Id = 2, Title = "Done flag", IsComplete = true },
+                new TaskItem { Id = 2, Title = "Draft", Status = Status.Draft },
                 new TaskItem { Id = 3, Title = "Done status", Status = Status.Completed },
             ]
         };
@@ -46,8 +46,8 @@ public class ProjectsControllerV1Tests
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsAssignableFrom<IEnumerable<ProjectResponseDto>>(ok.Value).Single();
-        Assert.Equal(1, dto.OpenTaskCount);
-        Assert.Equal(2, dto.CompletedTaskCount);
+        Assert.Equal(2, dto.OpenTaskCount);
+        Assert.Equal(1, dto.CompletedTaskCount);
     }
 
     [Fact]
@@ -97,6 +97,22 @@ public class ProjectsControllerV1Tests
         Assert.Equal("Alpha", dto.ProjectName);
         Assert.Equal("High", dto.Priority);
         Assert.Equal("Todo", dto.Status);
+    }
+
+    [Fact]
+    public async Task GetTasks_ShouldExposeCompletionOnlyThroughStatus()
+    {
+        var project = new Project { Id = 1, Name = "Alpha" };
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
+            [new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Status = Status.Completed }]);
+
+        var result = await _controller.GetTasks(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
+        Assert.Equal("Completed", dto.Status);
+        Assert.Null(typeof(TaskItemResponseDto).GetProperty("IsComplete"));
     }
 
     [Fact]

@@ -412,7 +412,7 @@ public class JournalEntriesControllerV1Tests
         {
             var entry = new JournalEntry { Title = "Old", Date = date, CreatedAt = DateTime.UtcNow };
             var open = new TaskItem { Title = "Open", Status = Status.Todo };
-            var done = new TaskItem { Title = "Done", Status = Status.Completed, IsComplete = true };
+            var done = new TaskItem { Title = "Done", Status = Status.Completed };
             Context.JournalEntries.Add(entry);
             Context.TaskItems.AddRange(open, done);
             await Context.SaveChangesAsync();

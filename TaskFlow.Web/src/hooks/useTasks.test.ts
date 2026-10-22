@@ -69,6 +69,30 @@ describe('useUpdateTaskMutation', () => {
   })
 })
 
+describe('task mutation bodies carry completion through status only', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('create body has status and no isComplete key', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockResolvedValue({ data: { id: 1 }, response: new Response() } as never)
+    const { result } = renderHook(() => useCreateTaskMutation(), { wrapper: makeWrapper() })
+    result.current.mutate({ title: 'T', status: 'completed' })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    const body = vi.mocked(sdk.postApiV1TaskItems).mock.calls[0][0]?.body as Record<string, unknown>
+    expect(body.status).toBe('completed')
+    expect(Object.keys(body)).not.toContain('isComplete')
+  })
+
+  it('update body has status and no isComplete key', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockResolvedValue({ data: { id: 2 }, response: new Response() } as never)
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper() })
+    result.current.mutate({ id: 2, data: { title: 'U', status: 'completed' } })
+    await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
+    const body = vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[0][0]?.body as Record<string, unknown>
+    expect(body.status).toBe('completed')
+    expect(Object.keys(body)).not.toContain('isComplete')
+  })
+})
+
 describe('useUpdateTaskMutation timezone offset', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.restoreAllMocks())

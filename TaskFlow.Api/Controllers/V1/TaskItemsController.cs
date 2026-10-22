@@ -143,7 +143,6 @@ public class TaskItemsController(
             Title = createDto.Title,
             Description = createDto.Description,
             Status = createDto.Status,
-            IsComplete = createDto.IsComplete,
             Priority = createDto.Priority,
             DueDate = createDto.DueDate,
             ParentTaskItemId = createDto.ParentTaskItemId,
@@ -171,7 +170,67 @@ public class TaskItemsController(
 
     // PUT: api/v1/TaskItems/5
     [HttpPut("{id}")]
-    public async Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto)
+    public Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto) =>
+        ApplyUpdateAsync(id, new TaskChanges
+        {
+            HasTitle = true,
+            Title = updateDto.Title,
+            HasDescription = true,
+            Description = updateDto.Description,
+            HasStatus = updateDto.Status.HasValue,
+            Status = updateDto.Status,
+            HasPriority = updateDto.Priority.HasValue,
+            Priority = updateDto.Priority,
+            HasDueDate = true,
+            DueDate = updateDto.DueDate,
+            HasParent = true,
+            ParentTaskItemId = updateDto.ParentTaskItemId,
+            AutoCompleteParentWhenChildrenDone = updateDto.AutoCompleteParentWhenChildrenDone,
+            TimezoneOffsetMinutes = updateDto.TimezoneOffsetMinutes
+        });
+
+    // PATCH: api/v1/TaskItems/5
+    // Partial update (JSON Merge Patch): absent fields are left unchanged.
+    [HttpPatch("{id}")]
+    public Task<ActionResult<TaskItemResponseDto>> Patch(int id, [FromBody] PatchTaskItemDto patchDto) =>
+        ApplyUpdateAsync(id, new TaskChanges
+        {
+            // A present null/empty title becomes "" so the validator returns 400.
+            HasTitle = patchDto.IsPresent(nameof(PatchTaskItemDto.Title)),
+            Title = patchDto.Title ?? string.Empty,
+            HasDescription = patchDto.IsPresent(nameof(PatchTaskItemDto.Description)),
+            Description = patchDto.Description,
+            HasStatus = patchDto.Status.HasValue,
+            Status = patchDto.Status,
+            HasPriority = patchDto.Priority.HasValue,
+            Priority = patchDto.Priority,
+            HasDueDate = patchDto.IsPresent(nameof(PatchTaskItemDto.DueDate)),
+            DueDate = patchDto.DueDate,
+            HasParent = patchDto.IsPresent(nameof(PatchTaskItemDto.ParentTaskItemId)),
+            ParentTaskItemId = patchDto.ParentTaskItemId,
+            AutoCompleteParentWhenChildrenDone = patchDto.AutoCompleteParentWhenChildrenDone,
+            TimezoneOffsetMinutes = patchDto.TimezoneOffsetMinutes
+        });
+
+    private sealed record TaskChanges
+    {
+        public bool HasTitle { get; init; }
+        public string Title { get; init; } = string.Empty;
+        public bool HasDescription { get; init; }
+        public string? Description { get; init; }
+        public bool HasStatus { get; init; }
+        public Status? Status { get; init; }
+        public bool HasPriority { get; init; }
+        public Priority? Priority { get; init; }
+        public bool HasDueDate { get; init; }
+        public DateTime? DueDate { get; init; }
+        public bool HasParent { get; init; }
+        public int? ParentTaskItemId { get; init; }
+        public bool AutoCompleteParentWhenChildrenDone { get; init; }
+        public int? TimezoneOffsetMinutes { get; init; }
+    }
+
+    private async Task<ActionResult<TaskItemResponseDto>> ApplyUpdateAsync(int id, TaskChanges changes)
     {
         var existing = await _repo.GetByIdAsync(id);
         if (existing is null)
@@ -179,26 +238,27 @@ public class TaskItemsController(
             return NotFound();
         }
 
-        if (updateDto.ParentTaskItemId.HasValue)
+        if (changes.HasParent && changes.ParentTaskItemId.HasValue)
         {
-            if (updateDto.ParentTaskItemId.Value == id)
+            var proposedParentId = changes.ParentTaskItemId.Value;
+            if (proposedParentId == id)
             {
                 return UnprocessableEntity(new
                 {
                     code = ParentSelfNotAllowedErrorCode,
                     message = "A task cannot be its own parent.",
-                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                    details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
             }
 
-            var parent = await _repo.GetByIdAsync(updateDto.ParentTaskItemId.Value);
+            var parent = await _repo.GetByIdAsync(proposedParentId);
             if (parent is null)
             {
                 return UnprocessableEntity(new
                 {
                     code = ParentTaskNotFoundErrorCode,
                     message = "The selected parent task was not found.",
-                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                    details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
             }
 
@@ -208,17 +268,17 @@ public class TaskItemsController(
                 {
                     code = ParentDepthNotAllowedErrorCode,
                     message = "Only one subtask level is supported.",
-                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                    details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
             }
 
-            if (await WouldCreateCycleAsync(id, updateDto.ParentTaskItemId.Value))
+            if (await WouldCreateCycleAsync(id, proposedParentId))
             {
                 return UnprocessableEntity(new
                 {
                     code = ParentCycleNotAllowedErrorCode,
                     message = "This parent assignment would create a cycle.",
-                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                    details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
             }
 
@@ -228,14 +288,14 @@ public class TaskItemsController(
                 {
                     code = ParentDepthNotAllowedErrorCode,
                     message = "Only one subtask level is supported.",
-                    details = new { parentTaskItemId = updateDto.ParentTaskItemId }
+                    details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
             }
         }
 
-        var wasCompleted = IsCompleted(existing.IsComplete, existing.Status);
-        var nextStatus = updateDto.Status ?? existing.Status;
-        var nowCompleted = IsCompleted(updateDto.IsComplete, nextStatus);
+        var wasCompleted = IsCompleted(existing.Status);
+        var nextStatus = changes.HasStatus && changes.Status.HasValue ? changes.Status.Value : existing.Status;
+        var nowCompleted = IsCompleted(nextStatus);
 
         if (!wasCompleted && nowCompleted && await HasIncompleteChildrenAsync(id))
         {
@@ -249,7 +309,7 @@ public class TaskItemsController(
         if (wasCompleted && !nowCompleted)
         {
             var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
-            var today = UserDateHelper.GetUserToday(DateTime.UtcNow, updateDto.TimezoneOffsetMinutes);
+            var today = UserDateHelper.GetUserToday(DateTime.UtcNow, changes.TimezoneOffsetMinutes);
             if (assignedDate.HasValue && assignedDate.Value < today)
             {
                 return UnprocessableEntity(new
@@ -262,13 +322,32 @@ public class TaskItemsController(
         }
 
         // Apply incoming changes
-        existing.Title = updateDto.Title;
-        existing.Description = updateDto.Description;
-        existing.IsComplete = updateDto.IsComplete;
-        existing.Status = updateDto.Status ?? existing.Status;
-        existing.Priority = updateDto.Priority ?? existing.Priority;
-        existing.DueDate = updateDto.DueDate;
-        existing.ParentTaskItemId = updateDto.ParentTaskItemId;
+        if (changes.HasTitle)
+        {
+            existing.Title = changes.Title;
+        }
+
+        if (changes.HasDescription)
+        {
+            existing.Description = changes.Description;
+        }
+
+        existing.Status = nextStatus;
+
+        if (changes.HasPriority && changes.Priority.HasValue)
+        {
+            existing.Priority = changes.Priority.Value;
+        }
+
+        if (changes.HasDueDate)
+        {
+            existing.DueDate = changes.DueDate;
+        }
+
+        if (changes.HasParent)
+        {
+            existing.ParentTaskItemId = changes.ParentTaskItemId;
+        }
 
         var validationResult = await _validator.ValidateAsync(existing);
         if (!validationResult.IsValid)
@@ -278,7 +357,7 @@ public class TaskItemsController(
 
         await _repo.UpdateAsync(existing);
 
-        if (updateDto.AutoCompleteParentWhenChildrenDone &&
+        if (changes.AutoCompleteParentWhenChildrenDone &&
             !wasCompleted &&
             nowCompleted &&
             existing.ParentTaskItemId.HasValue)
@@ -291,13 +370,12 @@ public class TaskItemsController(
         return Ok(responseDto); // Return 200 OK with the updated resource
     }
 
-    private static bool IsCompleted(bool isComplete, Status status) =>
-        isComplete || status == Status.Completed;
+    private static bool IsCompleted(Status status) => status == Status.Completed;
 
     private async Task<bool> HasIncompleteChildrenAsync(int taskId)
     {
         var allTasks = await _repo.GetAllAsync();
-        return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.IsComplete, t.Status));
+        return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.Status));
     }
 
     private async Task<bool> HasChildrenAsync(int taskId)
@@ -315,7 +393,7 @@ public class TaskItemsController(
     private async Task TryAutoCompleteParentAsync(int parentTaskId)
     {
         var parent = await _repo.GetByIdAsync(parentTaskId);
-        if (parent is null || IsCompleted(parent.IsComplete, parent.Status))
+        if (parent is null || IsCompleted(parent.Status))
         {
             return;
         }
@@ -328,14 +406,13 @@ public class TaskItemsController(
         }
 
         var hasIncompleteChildren = allTasks.Any(t =>
-            t.ParentTaskItemId == parentTaskId && !IsCompleted(t.IsComplete, t.Status));
+            t.ParentTaskItemId == parentTaskId && !IsCompleted(t.Status));
 
         if (hasIncompleteChildren)
         {
             return;
         }
 
-        parent.IsComplete = true;
         parent.Status = Status.Completed;
 
         var validationResult = await _validator.ValidateAsync(parent);
@@ -437,7 +514,6 @@ public class TaskItemsController(
             Id = item.Id,
             Title = item.Title,
             Description = item.Description,
-            IsComplete = item.IsComplete,
             DueDate = item.DueDate,
             Status = item.Status.ToString(),
             Priority = item.Priority.ToString(),

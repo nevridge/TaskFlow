@@ -40,8 +40,8 @@ public class TaskItemsControllerV1Tests
         var dueDate = new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc);
         var tasks = new List<TaskItem>
         {
-            new() { Id = 1, Title = "Task 1", Description = "Description 1", IsComplete = false, Status = Status.Todo, Priority = Priority.Low, DueDate = dueDate },
-            new() { Id = 2, Title = "Task 2", Description = "Description 2", IsComplete = true, Status = Status.Completed, Priority = Priority.High }
+            new() { Id = 1, Title = "Task 1", Description = "Description 1", Status = Status.Todo, Priority = Priority.Low, DueDate = dueDate },
+            new() { Id = 2, Title = "Task 2", Description = "Description 2", Status = Status.Completed, Priority = Priority.High }
         };
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
 
@@ -67,7 +67,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task 1",
             Description = "Description",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Medium,
             DueDate = dueDate
@@ -83,7 +82,6 @@ public class TaskItemsControllerV1Tests
         Assert.Equal(1, dto.Id);
         Assert.Equal("Task 1", dto.Title);
         Assert.Equal("Description", dto.Description);
-        Assert.False(dto.IsComplete);
         Assert.Equal("Todo", dto.Status);
         Assert.Equal("Medium", dto.Priority);
         Assert.Equal(dueDate, dto.DueDate);
@@ -113,7 +111,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "New Task",
             Description = "New Description",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.High,
             DueDate = dueDate
@@ -123,7 +120,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = createDto.Title,
             Description = createDto.Description,
-            IsComplete = createDto.IsComplete,
             Status = createDto.Status,
             Priority = createDto.Priority,
             DueDate = createDto.DueDate
@@ -149,7 +145,6 @@ public class TaskItemsControllerV1Tests
         Assert.Equal(1, responseDto.Id);
         Assert.Equal("New Task", responseDto.Title);
         Assert.Equal("New Description", responseDto.Description);
-        Assert.False(responseDto.IsComplete);
         Assert.Equal("Todo", responseDto.Status);
         Assert.Equal("High", responseDto.Priority);
         Assert.Equal(dueDate, responseDto.DueDate);
@@ -513,7 +508,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Updated Task",
             Description = "Updated Description",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Medium,
             DueDate = dueDate
@@ -523,7 +517,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Old Task",
             Description = "Old",
-            IsComplete = false,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -542,7 +535,6 @@ public class TaskItemsControllerV1Tests
         Assert.Equal(1, responseDto.Id);
         Assert.Equal("Updated Task", responseDto.Title);
         Assert.Equal("Updated Description", responseDto.Description);
-        Assert.True(responseDto.IsComplete);
         Assert.Equal("Completed", responseDto.Status);
         Assert.Equal("Medium", responseDto.Priority);
         Assert.Equal(dueDate, responseDto.DueDate);
@@ -553,7 +545,7 @@ public class TaskItemsControllerV1Tests
     public async Task Delete_ShouldReturnNoContent_WhenTaskExists()
     {
         // Arrange
-        var task = new TaskItem { Id = 1, Title = "Task 1", Description = "Description", IsComplete = false, Status = Status.Todo };
+        var task = new TaskItem { Id = 1, Title = "Task 1", Description = "Description", Status = Status.Todo };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
         _mockRepo.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
 
@@ -599,7 +591,7 @@ public class TaskItemsControllerV1Tests
     public async Task Create_ShouldReturnBadRequest_WhenValidationFails()
     {
         // Arrange
-        var createDto = new CreateTaskItemDto { Title = "", Description = "Description", IsComplete = false };
+        var createDto = new CreateTaskItemDto { Title = "", Description = "Description" };
         var validationFailures = new List<ValidationFailure>
         {
             new("Title", "Title is required.")
@@ -620,8 +612,8 @@ public class TaskItemsControllerV1Tests
     public async Task Create_ShouldHandleTaskWithNullDescription()
     {
         // Arrange
-        var createDto = new CreateTaskItemDto { Title = "Task", Description = null, IsComplete = false };
-        var createdTask = new TaskItem { Id = 1, Title = "Task", Description = null, IsComplete = false };
+        var createDto = new CreateTaskItemDto { Title = "Task", Description = null };
+        var createdTask = new TaskItem { Id = 1, Title = "Task", Description = null };
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
@@ -634,7 +626,6 @@ public class TaskItemsControllerV1Tests
         var dto = Assert.IsType<TaskItemResponseDto>(createdResult.Value);
         Assert.Equal("Task", dto.Title);
         Assert.Null(dto.Description);
-        Assert.False(dto.IsComplete);
         Assert.Equal("Draft", dto.Status);
     }
 
@@ -642,7 +633,7 @@ public class TaskItemsControllerV1Tests
     public async Task Update_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
-        var updateDto = new UpdateTaskItemDto { Title = "Updated Task", Description = "Updated Description", IsComplete = true };
+        var updateDto = new UpdateTaskItemDto { Title = "Updated Task", Description = "Updated Description", Status = Status.Completed };
         _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((TaskItem?)null);
 
         // Act
@@ -658,8 +649,8 @@ public class TaskItemsControllerV1Tests
     public async Task Update_ShouldReturnBadRequest_WhenValidationFails()
     {
         // Arrange
-        var updateDto = new UpdateTaskItemDto { Title = "", Description = "Description", IsComplete = true };
-        var existingTask = new TaskItem { Id = 1, Title = "Old Task", Description = "Old Description", IsComplete = false };
+        var updateDto = new UpdateTaskItemDto { Title = "", Description = "Description", Status = Status.Completed };
+        var existingTask = new TaskItem { Id = 1, Title = "Old Task", Description = "Old Description", Status = Status.Todo };
         var validationFailures = new List<ValidationFailure>
         {
             new("Title", "Title is required.")
@@ -685,7 +676,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Updated Task",
             Description = "Updated Description",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = null // omitted — should preserve existing priority
         };
@@ -694,7 +684,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Old Task",
             Description = "Old",
-            IsComplete = false,
             Status = Status.Completed,
             Priority = Priority.High
         };
@@ -721,7 +710,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -730,7 +718,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -756,7 +743,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -765,7 +751,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -794,7 +779,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             TimezoneOffsetMinutes = offset
@@ -804,7 +788,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -832,7 +815,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             TimezoneOffsetMinutes = offset
@@ -842,7 +824,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -873,7 +854,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             TimezoneOffsetMinutes = offset
@@ -883,7 +863,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -907,7 +886,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             TimezoneOffsetMinutes = null
@@ -917,7 +895,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -942,7 +919,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             TimezoneOffsetMinutes = null
@@ -952,7 +928,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low
         };
@@ -976,7 +951,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 1
@@ -987,7 +961,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1007,7 +980,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 12
@@ -1018,7 +990,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1039,7 +1010,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 12
@@ -1050,7 +1020,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Task",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1076,7 +1045,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Existing Parent",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 12
@@ -1087,7 +1055,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Existing Parent",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1096,7 +1063,6 @@ public class TaskItemsControllerV1Tests
         {
             Id = 12,
             Title = "New Parent",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1105,7 +1071,6 @@ public class TaskItemsControllerV1Tests
         {
             Id = 2,
             Title = "Child",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 1
@@ -1128,7 +1093,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Parent",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low,
             ParentTaskItemId = null
@@ -1139,7 +1103,6 @@ public class TaskItemsControllerV1Tests
             Id = 1,
             Title = "Parent",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1149,7 +1112,6 @@ public class TaskItemsControllerV1Tests
             Id = 2,
             Title = "Child",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             ParentTaskItemId = 1
         };
@@ -1170,7 +1132,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Root",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 3
@@ -1246,7 +1207,6 @@ public class TaskItemsControllerV1Tests
         {
             Title = "Child",
             Description = "Desc",
-            IsComplete = true,
             Status = Status.Completed,
             Priority = Priority.Low,
             ParentTaskItemId = 10,
@@ -1258,7 +1218,6 @@ public class TaskItemsControllerV1Tests
             Id = 2,
             Title = "Child",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low,
             ParentTaskItemId = 10
@@ -1268,7 +1227,6 @@ public class TaskItemsControllerV1Tests
             Id = 10,
             Title = "Parent",
             Description = "Desc",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };
@@ -1277,7 +1235,7 @@ public class TaskItemsControllerV1Tests
         _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parent);
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([
             parent,
-            new TaskItem { Id = 2, Title = "Child", IsComplete = true, Status = Status.Completed, ParentTaskItemId = 10 }
+            new TaskItem { Id = 2, Title = "Child", Status = Status.Completed, ParentTaskItemId = 10 }
         ]);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
@@ -1287,7 +1245,7 @@ public class TaskItemsControllerV1Tests
 
         Assert.IsType<OkObjectResult>(result.Result);
         _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 2)), Times.Once);
-        _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 10 && t.IsComplete && t.Status == Status.Completed)), Times.Once);
+        _mockRepo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Id == 10 && t.Status == Status.Completed)), Times.Once);
     }
 
     [Fact]
@@ -1361,7 +1319,6 @@ public class TaskItemsControllerV1Tests
         var updateDto = new UpdateTaskItemDto
         {
             Title = "Updated Parent",
-            IsComplete = false,
             Status = Status.Todo,
             Priority = Priority.Low
         };

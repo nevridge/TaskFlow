@@ -50,7 +50,6 @@ const task = {
   description: 'Users cannot log in',
   status: 'Todo',
   priority: 'Low',
-  isComplete: false,
   dueDate: null,
   parentTaskItemId: null,
   childTaskCount: 0,

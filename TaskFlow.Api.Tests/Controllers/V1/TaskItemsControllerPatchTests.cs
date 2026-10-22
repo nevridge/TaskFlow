@@ -548,9 +548,10 @@ public class TaskItemsControllerPatchTests
     [Theory]
     [InlineData(Status.Todo)]
     [InlineData(Status.Draft)]
-    public async Task Update_ShouldNotComplete_WhenStatusIsNotCompleted(Status status)
+    public async Task Update_ShouldReturnRequestedStatus(Status status)
     {
-        // A legacy client's isComplete:true is dropped at deserialization; Status alone decides.
+        // Status is the only completion input on UpdateTaskItemDto. The stale-isComplete
+        // behaviour is covered end to end in TaskItemsControllerLegacyIsCompleteTests.
         var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Draft };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
 
@@ -560,7 +561,7 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
-    public async Task Create_ShouldPersistStatusOnly()
+    public async Task Create_ShouldPersistRequestedStatus()
     {
         TaskItem? captured = null;
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>()))

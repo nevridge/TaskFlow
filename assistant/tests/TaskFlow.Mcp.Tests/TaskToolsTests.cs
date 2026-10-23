@@ -215,6 +215,22 @@ public class ListTasksTests
         text.Should().Contain("blocked");
     }
 
+    [Theory]
+    [InlineData("overdue")]
+    [InlineData("due_soon")]
+    [InlineData("unassigned")]
+    [InlineData("today")]
+    public async Task BlockedTask_NotMatchingViewRules_IsExcluded(string view)
+    {
+        var (tools, _) = Setup(
+            Fixtures.Task(1, "Match", due: "2026-10-01", projectId: null, plannedOn: "2026-10-09"),
+            Fixtures.Task(5, "Assigned no due", status: "Blocked", projectId: 7, blockedReason: "Waiting", blockedAt: "2026-10-05T10:00:00Z"));
+
+        var text = await tools.ListTasks(view: view);
+
+        text.Should().NotContain("#5 ");
+    }
+
     [Fact]
     public async Task DetailedBlockedTask_ShowsBlockedSince()
     {

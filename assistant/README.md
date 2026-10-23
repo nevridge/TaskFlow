@@ -68,13 +68,16 @@ Fourteen tools, deliberately consolidated around workflows rather than one per e
 | Area | Tools |
 |---|---|
 | Projects | `list_projects`, `save_project` (create / rename / archive), `project_status` |
-| Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, completed, all; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported), `update_task` (merge, complete/reopen, project move), `delete_task`, `add_task_note` |
+| Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, blocked, completed, all; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported), `update_task` (merge, complete/reopen, project move, block/unblock with `blockedReason`), `delete_task`, `add_task_note` |
 | Journal | `get_journal` (creates the day's entry if missing), `set_journal_todos`, `add_log_entry`, `update_journal` |
 | Review | `weekly_review` (read-only) |
 
 Behaviors worth knowing:
 
 - The TaskFlow task `PUT` is full-replace; `update_task` reads the task, merges your changes and sends the full body.
+- Statuses are Draft, Todo, Blocked and Completed. Only a Todo task can be blocked, and tasks cannot be created as Blocked. Blocked tasks still count as open and are shown as `blocked: <reason> (Nd)`; `project_status` and `weekly_review` list them in their own group.
+- `update_task` re-sends the task's status on every PUT, so a Blocked task stays Blocked. An omitted `blockedReason` keeps the stored reason; an empty string clears it (the task stays Blocked); `status=todo` unblocks.
+- Blocked support needs the TaskFlow API change [#311](https://github.com/nevridge/TaskFlow/issues/311) deployed. Plugin 0.2.0 ships prompts that rely on it, so do not publish or tag this release until #311 is live on your API. The server is published with `build.ps1` into `plugin/bin`, so the plugin version and the server ship together.
 - Your local UTC offset is sent with writes, because the API's "past day" rules depend on it.
 - API errors (`code` + `message`, validation lists) are returned to Claude as tool errors so it can recover. Server 5xx errors are summarized without leaking stack traces.
 - The API has no filtering or paging, so views, paging and aggregation happen in the server. Results are compact by default to stay under Claude Code's MCP output limits (warning at 10k tokens, cap 25k).

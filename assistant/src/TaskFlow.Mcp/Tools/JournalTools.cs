@@ -37,7 +37,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
             sb.AppendLine(todos.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({todos.Count}):");
             foreach (var task in todos)
             {
-                sb.AppendLine("  " + Formatting.Task(task, today, detailed));
+                sb.AppendLine("  " + Formatting.Task(task, today, detailed, time.GetUtcNow()));
             }
 
             var logs = entry.LogEntries.OrderBy(l => l.CreatedAt).ToList();
@@ -135,7 +135,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "add_log_entry")]
-    [Description("Adds a timestamped log line to a day's journal (what happened, progress, blockers), optionally linked to a task. Defaults to today and creates the day's entry if needed. Max 2000 characters.")]
+    [Description("Adds a timestamped log line to a day's journal (what happened, progress, blockers), optionally linked to a task. Defaults to today and creates the day's entry if needed. Max 2000 characters. To record that a task is waiting on someone, use update_task status=blocked instead.")]
     public Task<string> AddLogEntry(
         [Description("What to log (max 2000 characters).")] string content,
         [Description("Task id to link this log line to, if it is about a specific task.")] int? taskId = null,

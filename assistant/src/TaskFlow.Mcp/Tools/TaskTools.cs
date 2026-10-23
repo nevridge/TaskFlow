@@ -19,7 +19,7 @@ public sealed class NewTask
     [Description("low, medium or high. Default low.")]
     public string? Priority { get; set; }
 
-    [Description("draft, todo or completed. Default todo.")]
+    [Description("draft or todo (default todo). Tasks cannot be created as blocked: create the task, then call update_task with status=blocked.")]
     public string? Status { get; set; }
 
     [Description("Due date as yyyy-MM-dd, or today/tomorrow.")]
@@ -43,20 +43,22 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     private const int MaxPageSize = 100;
     private const int MaxBatch = 25;
     private const int HistoryPreview = 10;
+    private const int MaxBlockedReasonLength = 200;
 
-    private static readonly string[] Views = ["open", "all", "completed", "overdue", "due_soon", "stale", "unassigned", "today"];
+    private static readonly string[] Views = ["open", "all", "completed", "overdue", "due_soon", "stale", "unassigned", "today", "blocked"];
 
     internal static bool IsStale(TaskItemDto t) => t.MoveCount >= StaleMoves || t.DaysTagged >= StaleDays;
 
     [McpServerTool(Name = "list_tasks", ReadOnly = true)]
     [Description(
         "Lists tasks, most urgent first. Use 'view' to choose what you want: open (default), overdue, due_soon (open tasks overdue or due within dueWithinDays), "
-        + "stale (moved 3+ times or tagged 7+ days), unassigned (open tasks with no project), today (planned on today's journal), completed, all. "
+        + "stale (moved 3+ times or tagged 7+ days), unassigned (open tasks with no project), today (planned on today's journal), blocked (Blocked status only), completed, all. "
+        + "Blocked tasks still appear in the other open views and are flagged 'blocked: <reason> (Nd)', where (Nd) = days blocked, <1d if under a day. "
         + "Results are paged (default 25); follow the 'Next page' hint for more. Use responseFormat=detailed to include descriptions and journal info.")]
     public Task<string> ListTasks(
-        [Description("open, all, completed, overdue, due_soon, stale, unassigned or today. Default open.")] string view = "open",
+        [Description("open, all, completed, overdue, due_soon, stale, unassigned, today or blocked (Blocked status only). Blocked tasks still appear in the other open views and are flagged. Default open.")] string view = "open",
         [Description("Only tasks in this project (name or id).")] string? project = null,
-        [Description("Only this status: draft, todo or completed.")] string? status = null,
+        [Description("Only this status: draft, todo, blocked or completed.")] string? status = null,
         [Description("Only this priority: low, medium or high.")] string? priority = null,
         [Description("For view=due_soon: how many days ahead to include. Default 7.")] int dueWithinDays = 7,
         [Description("Page size, 1-100. Default 25.")] int limit = 25,
@@ -123,7 +125,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             sb.AppendLine($"{ordered.Count} task(s) match ({label}). Showing {skip + 1}-{skip + page.Count}.");
             foreach (var task in page)
             {
-                sb.AppendLine(Formatting.Task(task, today, detailed));
+                sb.AppendLine(Formatting.Task(task, today, detailed, time.GetUtcNow()));
             }
 
             if (skip + page.Count < ordered.Count)
@@ -135,7 +137,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "get_task", ReadOnly = true)]
-    [Description("Gets everything about one task: fields, project, notes and recent history (created, moved between days, completed...). Use before updating a task or when the user asks what happened with it.")]
+    [Description("Gets everything about one task: fields, project, notes and recent history (created, moved between days, blocked, completed...). For a Blocked task it shows the reason, (Nd) days blocked (<1d if under a day) and when it was blocked. Use before updating a task or when the user asks what happened with it.")]
     public Task<string> GetTask(
         [Description("Task id.")] int id,
         CancellationToken ct = default) =>
@@ -148,7 +150,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             await Task.WhenAll(taskTask, notesTask, historyTask);
 
             var sb = new StringBuilder();
-            sb.AppendLine(Formatting.Task(taskTask.Result, today, detailed: true));
+            sb.AppendLine(Formatting.Task(taskTask.Result, today, detailed: true, nowUtc: time.GetUtcNow()));
 
             var notes = notesTask.Result;
             if (notes.Count > 0)
@@ -166,7 +168,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 sb.AppendLine("Recent history (newest first):");
                 foreach (var e in history)
                 {
-                    sb.AppendLine($"  - {LocalDate(e.OccurredAtUtc)} {e.EventType}: {e.ChangeSummary}");
+                    sb.AppendLine($"  - {LocalDate(e.OccurredAtUtc)} {e.EventType}: {Formatting.CleanReason(e.ChangeSummary)}");
                 }
             }
 
@@ -176,7 +178,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "create_tasks")]
     [Description(
         "Creates one or more tasks (up to 25). Use for a single task or to turn notes into many tasks. Each task needs a title; priority defaults to low and status to todo. "
-        + "Tasks that fail (for example an unknown project) are reported individually and do not stop the others. Do not guess due dates or projects: leave them out unless the user said so.")]
+        + "Tasks that fail (for example an unknown project) are reported individually and do not stop the others. Do not guess due dates or projects: leave them out unless the user said so. "
+        + "Tasks cannot be created as blocked: create the task, then call update_task with status=blocked.")]
     public Task<string> CreateTasks(
         [Description("The tasks to create.")] IReadOnlyList<NewTask> tasks,
         CancellationToken ct = default) =>
@@ -208,6 +211,11 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         throw ToolGuard.Invalid("Title is required.");
                     }
 
+                    if (string.Equals(item.Status?.Trim(), "blocked", StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw ToolGuard.Invalid("Cannot create a task as blocked. Create it first, then call update_task with status=blocked and a blockedReason.");
+                    }
+
                     int? projectId = null;
                     if (!string.IsNullOrWhiteSpace(item.Project))
                     {
@@ -227,7 +235,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         offsetMinutes);
 
                     var task = await api.CreateTaskAsync(request, ct);
-                    created.Add("+ " + Formatting.Task(task, today));
+                    created.Add("+ " + Formatting.Task(task, today, nowUtc: time.GetUtcNow()));
                 }
                 catch (Exception ex) when (ex is McpException or TaskFlowApiException)
                 {
@@ -243,17 +251,19 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     [Description(
         "Updates a task. Only the fields you pass change; everything else is kept. Use complete=true to finish a task and complete=false to reopen it. "
         + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. "
-        + "dueDate accepts yyyy-MM-dd, today/tomorrow, or 'none' to clear. Completed tasks planned on a past day cannot be reopened (the API says so).")]
+        + "dueDate accepts yyyy-MM-dd, today/tomorrow, or 'none' to clear. Completed tasks planned on a past day cannot be reopened (the API says so). "
+        + "Only Todo tasks can be blocked (use status=blocked with an optional blockedReason). status=todo unblocks a Blocked task. Completing a Blocked task clears the block.")]
     public Task<string> UpdateTask(
         [Description("Task id.")] int id,
         [Description("New title (max 100 characters).")] string? title = null,
         [Description("New description. Pass an empty string to clear it.")] string? description = null,
-        [Description("draft, todo or completed.")] string? status = null,
+        [Description("draft, todo, blocked or completed.")] string? status = null,
         [Description("low, medium or high.")] string? priority = null,
         [Description("yyyy-MM-dd, today/tomorrow, or 'none' to clear the due date.")] string? dueDate = null,
         [Description("Project name or id to assign, or 'none' to remove the task from its project.")] string? project = null,
         [Description("Parent task id to make this a subtask; 0 removes the parent. Only one subtask level is supported.")] int? parentTaskId = null,
         [Description("true to mark complete, false to reopen.")] bool? complete = null,
+        [Description("Reason the task is blocked (max 200 characters). Only valid with status=blocked on a Todo task or a task that is already Blocked. Pass an empty string to clear the reason (the task stays Blocked). Omit to keep the stored reason.")] string? blockedReason = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -283,6 +293,27 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 isComplete = newStatus == "completed";
             }
 
+            var finalBlocked = newStatus == "blocked";
+            if (finalBlocked)
+            {
+                isComplete = false;
+            }
+
+            var trimmedReason = blockedReason?.Trim();
+            if (trimmedReason is { Length: > MaxBlockedReasonLength })
+            {
+                throw ToolGuard.Invalid($"blockedReason is {trimmedReason.Length} characters; the limit is {MaxBlockedReasonLength}.");
+            }
+
+            if (!string.IsNullOrEmpty(trimmedReason) && !finalBlocked)
+            {
+                throw ToolGuard.Invalid(
+                    $"blockedReason needs status=blocked. Task #{id} would end as {newStatus}; pass status=blocked with the reason (only Todo tasks can be blocked), or omit blockedReason.");
+            }
+
+            // Omitted keeps the stored reason (null on the PUT); "" clears it and the task stays Blocked.
+            var requestReason = trimmedReason is null || !finalBlocked ? null : trimmedReason;
+
             var newPriority = string.IsNullOrWhiteSpace(priority) ? existing.Priority.ToLowerInvariant() : InputParsing.NormalizePriority(priority);
             var newTitle = string.IsNullOrWhiteSpace(title) ? existing.Title : title.Trim();
             var newDescription = description is null ? existing.Description : (string.IsNullOrWhiteSpace(description) ? null : description);
@@ -299,7 +330,26 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
 
             AddChange(changes, "title", existing.Title != newTitle);
             AddChange(changes, "description", existing.Description != newDescription);
-            AddChange(changes, "status", !string.Equals(existing.Status, newStatus, StringComparison.OrdinalIgnoreCase) || existing.IsComplete != isComplete);
+            var blocking = !existing.IsBlocked && finalBlocked;
+            var unblocking = existing.IsBlocked && newStatus == "todo";
+            if (blocking)
+            {
+                changes.Add(string.IsNullOrEmpty(trimmedReason) ? "blocked" : $"blocked (reason: \"{Formatting.CleanReason(trimmedReason)}\")");
+            }
+            else if (unblocking)
+            {
+                changes.Add("unblocked");
+            }
+            else if (existing.IsBlocked && finalBlocked && trimmedReason is not null
+                && Formatting.CleanReason(existing.BlockedReason) != Formatting.CleanReason(trimmedReason))
+            {
+                changes.Add(trimmedReason.Length == 0 ? "blocked reason (cleared)" : "blocked reason");
+            }
+            else
+            {
+                AddChange(changes, "status", !finalBlocked && (!string.Equals(existing.Status, newStatus, StringComparison.OrdinalIgnoreCase) || existing.IsComplete != isComplete));
+            }
+
             AddChange(changes, "priority", !string.Equals(existing.Priority, newPriority, StringComparison.OrdinalIgnoreCase));
             AddChange(changes, "dueDate", existing.DueOn != (newDue is { } d ? DateOnly.FromDateTime(d) : null));
             AddChange(changes, "parent", existing.ParentTaskItemId != newParent);
@@ -313,7 +363,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 newDue,
                 newParent,
                 AutoCompleteParentWhenChildrenDone: false,
-                InputParsing.OffsetMinutes(time));
+                InputParsing.OffsetMinutes(time),
+                requestReason);
 
             var updated = await api.UpdateTaskAsync(id, request, ct);
 
@@ -341,7 +392,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             }
 
             var summary = changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", changes);
-            return $"Updated #{id}. {summary}.\n{Formatting.Task(updated, today, detailed: true)}";
+            return $"Updated #{id}. {summary}.\n{Formatting.Task(updated, today, detailed: true, nowUtc: time.GetUtcNow())}";
         });
 
     [McpServerTool(Name = "delete_task", Destructive = true)]
@@ -388,6 +439,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     private static bool MatchesView(TaskItemDto t, string view, DateOnly today, int dueWithinDays) => view switch
     {
         "all" => true,
+        "blocked" => t.IsBlocked,
         "completed" => t.IsDone,
         "open" => !t.IsDone,
         "overdue" => !t.IsDone && t.DueOn < today,

@@ -60,7 +60,7 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "project_status", ReadOnly = true)]
-    [Description("Summarizes one project's health: open/done counts, overdue tasks, tasks due within 7 days, stalled tasks (moved 3+ times or tagged 7+ days) and the most urgent open tasks. Use for status updates and project check-ins.")]
+    [Description("Summarizes one project's health: open/done counts, overdue tasks, tasks due within 7 days, stalled tasks (moved 3+ times or tagged 7+ days) and the most urgent open tasks. Blocked tasks are listed in their own section. Use for status updates and project check-ins.")]
     public Task<string> ProjectStatus(
         [Description("Project name or id.")] string project,
         CancellationToken ct = default) =>
@@ -70,9 +70,11 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
             var today = InputParsing.Today(time);
             var tasks = (await api.GetTasksAsync(ct)).Where(t => t.ProjectId == target.Id).ToList();
             var open = tasks.Where(t => !t.IsDone).ToList();
+            var blocked = Formatting.OrderByUrgency(open.Where(t => t.IsBlocked)).ToList();
+            var nowUtc = time.GetUtcNow();
 
             var sb = new StringBuilder();
-            sb.AppendLine($"Project {target.Name} (#{target.Id}){(target.IsArchived ? " [archived]" : string.Empty)}: {open.Count} open / {tasks.Count - open.Count} done");
+            sb.AppendLine($"Project {target.Name} (#{target.Id}){(target.IsArchived ? " [archived]" : string.Empty)}: {open.Count} open{Formatting.BlockedCountText(blocked.Count)} / {tasks.Count - open.Count} done");
 
             if (open.Count == 0)
             {
@@ -83,15 +85,16 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
             sb.AppendLine("Open by priority: " + string.Join(", ", new[] { "High", "Medium", "Low" }
                 .Select(p => $"{p} {open.Count(t => string.Equals(t.Priority, p, StringComparison.OrdinalIgnoreCase))}")));
 
-            AppendSection(sb, "Overdue", Formatting.OrderByDue(open.Where(t => t.DueOn < today)), today);
-            AppendSection(sb, $"Due in the next {DueSoonDays} days", Formatting.OrderByDue(open.Where(t => t.DueOn >= today && t.DueOn <= today.AddDays(DueSoonDays))), today);
-            AppendSection(sb, "Stalled (moved 3+ times or tagged 7+ days)", Formatting.OrderByUrgency(open.Where(TaskTools.IsStale)), today);
-            AppendSection(sb, "Most urgent open", Formatting.OrderByUrgency(open).Take(5), today);
+            AppendSection(sb, "Blocked", blocked, today, nowUtc);
+            AppendSection(sb, "Overdue", Formatting.OrderByDue(open.Where(t => t.DueOn < today)), today, nowUtc);
+            AppendSection(sb, $"Due in the next {DueSoonDays} days", Formatting.OrderByDue(open.Where(t => t.DueOn >= today && t.DueOn <= today.AddDays(DueSoonDays))), today, nowUtc);
+            AppendSection(sb, "Stalled (moved 3+ times or tagged 7+ days)", Formatting.OrderByUrgency(open.Where(t => !t.IsBlocked && TaskTools.IsStale(t))), today, nowUtc);
+            AppendSection(sb, "Most urgent open", Formatting.OrderByUrgency(open).Take(5), today, nowUtc);
 
             return sb.ToString().TrimEnd();
         });
 
-    private static void AppendSection(StringBuilder sb, string title, IEnumerable<TaskItemDto> items, DateOnly today)
+    private static void AppendSection(StringBuilder sb, string title, IEnumerable<TaskItemDto> items, DateOnly today, DateTimeOffset nowUtc)
     {
         var list = items.ToList();
         if (list.Count == 0)
@@ -102,7 +105,7 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
         sb.AppendLine($"{title} ({list.Count}):");
         foreach (var task in list.Take(SectionLimit))
         {
-            sb.AppendLine("  " + Formatting.Task(task, today));
+            sb.AppendLine("  " + Formatting.Task(task, today, nowUtc: nowUtc));
         }
 
         if (list.Count > SectionLimit)

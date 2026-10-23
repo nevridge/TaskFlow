@@ -52,6 +52,60 @@ public class ApiClientErrorTests
     }
 
     [Fact]
+    public async Task ProblemDetailsErrorsMap_KeepsRootCode()
+    {
+        var body = """{"title":"Validation","errors":{"blockedReason":["Too long."]},"code":"TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS"}""";
+        var handler = new StubHandler().Post("TaskItems", body, HttpStatusCode.UnprocessableEntity);
+
+        var act = () => Fixtures.Client(handler).CreateTaskAsync(new CreateTaskRequest("t", null, "todo", "low", null, null, null, null, 0), CancellationToken.None);
+
+        var ex = (await act.Should().ThrowAsync<TaskFlowApiException>()).Which;
+        ex.Code.Should().Be("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS");
+        ex.Message.Should().Be("Validation failed - blockedReason: Too long. [TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS]");
+    }
+
+    [Fact]
+    public void TaskItemDto_Deserializes_BlockedFields_WhenPresent()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            Fixtures.Task(1, status: "Blocked", blockedReason: "Waiting on vendor", blockedAt: "2026-10-05T10:00:00Z", previousStatus: "Todo"),
+            TaskFlowApiClient.Json);
+
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        task.IsBlocked.Should().BeTrue();
+        task.BlockedReason.Should().Be("Waiting on vendor");
+        task.BlockedAt.Should().Be(new DateTime(2026, 10, 5, 10, 0, 0, DateTimeKind.Utc));
+        task.BlockedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
+        task.PreviousStatus.Should().Be("Todo");
+    }
+
+    [Fact]
+    public void TaskItemDto_Deserializes_BlockedFieldsAsNull_WhenAbsent()
+    {
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
+            """{"id":1,"title":"t","isComplete":false,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            TaskFlowApiClient.Json)!;
+
+        task.BlockedReason.Should().BeNull();
+        task.BlockedAt.Should().BeNull();
+        task.PreviousStatus.Should().BeNull();
+        task.IsBlocked.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ProjectDto_Deserializes_BlockedCount_DefaultingToZero()
+    {
+        var with = System.Text.Json.JsonSerializer.Deserialize<ProjectDto>(
+            System.Text.Json.JsonSerializer.Serialize(Fixtures.Project(1, "A", open: 5, blockedCount: 2), TaskFlowApiClient.Json), TaskFlowApiClient.Json)!;
+        var without = System.Text.Json.JsonSerializer.Deserialize<ProjectDto>(
+            """{"id":1,"name":"A","isArchived":false,"createdAt":"2026-10-01T00:00:00Z","openTaskCount":1,"completedTaskCount":0}""", TaskFlowApiClient.Json)!;
+
+        with.BlockedCount.Should().Be(2);
+        without.BlockedCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task NotFound_HasFriendlyMessage_EvenWithProblemDetailsBody()
     {
         var api = Fixtures.Client(new StubHandler().On(HttpMethod.Get, "TaskItems/9", """{"title":"Not Found","status":404}""", HttpStatusCode.NotFound));
@@ -127,9 +181,13 @@ public class InputParsingTests
     public void Normalize_RejectsUnknownValues_ListingAllowed()
     {
         FluentActions.Invoking(() => InputParsing.NormalizePriority("urgent")).Should().Throw<McpException>().WithMessage("*low, medium, high*");
-        FluentActions.Invoking(() => InputParsing.NormalizeStatus("done")).Should().Throw<McpException>().WithMessage("*draft, todo, completed*");
+        FluentActions.Invoking(() => InputParsing.NormalizeStatus("done")).Should().Throw<McpException>().WithMessage("*Allowed values: draft, todo, blocked, completed.");
         InputParsing.NormalizePriority(" HIGH ").Should().Be("high");
     }
+
+    [Fact]
+    public void NormalizeStatus_AcceptsBlocked_CaseInsensitively() =>
+        InputParsing.NormalizeStatus(" BLOCKED ").Should().Be("blocked");
 
     [Fact]
     public void TimeHelpers_UseTheLocalTimeZone()
@@ -216,6 +274,31 @@ public class ToolGuardTests
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("already exists");
     }
 
+    [Theory]
+    [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "Make the task Todo first (status=todo), then block it.")]
+    [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "Reopen the task first (complete=false), then block it.")]
+    [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "omit blockedReason")]
+    public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
+    {
+        var api = Fixtures.Client(new StubHandler());
+
+        var act = () => ToolGuard.RunAsync(api, CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, code, $"Nope. [{code}]"));
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().StartWith($"Nope. [{code}]\n").And.Contain(expectedGuidance);
+        message.Split('\n').Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task UnknownUnprocessableCode_GetsNoGuidance()
+    {
+        var api = Fixtures.Client(new StubHandler());
+
+        var act = () => ToolGuard.RunAsync(api, CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, "OTHER", "Nope. [OTHER]"));
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("Nope. [OTHER]");
+    }
+
     [Fact]
     public async Task ConnectionFailures_ExplainHowToStartTheApi()
     {
@@ -294,6 +377,16 @@ public class ToolSurfaceTests
                 .Where(p => p.ParameterType != typeof(CancellationToken) && p.GetCustomAttribute<DescriptionAttribute>() is null)
                 .Select(p => $"{t.Attribute.Name}.{p.Name}"))
             .Should().BeEmpty();
+
+    [Fact]
+    public void UpdateTask_DocumentsBlockedReason_AndBlockedStatus()
+    {
+        var update = Tools().Single(t => t.Attribute.Name == "update_task").Method;
+
+        update.GetParameters().Should().Contain(p => p.Name == "blockedReason" && p.GetCustomAttribute<DescriptionAttribute>() != null);
+        update.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
+        Tools().Single(t => t.Attribute.Name == "list_tasks").Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
+    }
 
     [Fact]
     public void ReadOnlyAndDestructiveFlags_AreSetWhereExpected()

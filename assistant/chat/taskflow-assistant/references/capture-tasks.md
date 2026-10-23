@@ -9,5 +9,6 @@ Goal: turn the user's notes, meeting minutes or rough list into well-formed task
    - `priority` and `dueDate` only when the notes say so ("urgent", "by Friday"); otherwise leave them out. Convert relative dates to `yyyy-MM-dd`.
 3. Show the proposed tasks as a compact table (title, project, priority, due). Flag possible duplicates (`#id`), notes you left out because they were not actionable, and anything you were unsure about.
 4. Ask the user to confirm or edit. Ask about missing details only when they matter (for example an unknown project), and ask once, not per task.
-5. After confirmation, call `create_tasks` once with the full list. Report the created ids and any task that failed, with the reason.
+5. After confirmation, call `create_tasks` once with the full list. Report the created ids and any task that failed, with the reason. Tasks cannot be created as blocked: create items that are waiting on someone or something as Todo.
+   Then propose `update_task status=blocked` with `blockedReason` (the notes' words, max 200 characters) for each, and wait for a yes. Do not log it with `add_log_entry`. Only Todo tasks can be blocked. If the notes give no reason, ask; never invent one.
 6. Offer to plan any of them for today with `set_journal_todos`. Do not do it unprompted.

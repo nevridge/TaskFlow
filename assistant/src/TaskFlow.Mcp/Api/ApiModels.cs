@@ -19,8 +19,13 @@ public sealed record TaskItemDto(
     int ChildTaskCount,
     DateOnly? CurrentJournalDate,
     int MoveCount,
-    int DaysTagged)
+    int DaysTagged,
+    string? BlockedReason = null,
+    DateTime? BlockedAt = null,
+    string? PreviousStatus = null)
 {
+    public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
+
     public bool IsDone => IsComplete || string.Equals(Status, "Completed", StringComparison.OrdinalIgnoreCase);
 
     public DateOnly? DueOn => DueDate is { } due ? DateOnly.FromDateTime(due) : null;
@@ -34,7 +39,8 @@ public sealed record ProjectDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     int OpenTaskCount,
-    int CompletedTaskCount);
+    int CompletedTaskCount,
+    int BlockedCount = 0);
 
 public sealed record NoteDto(
     int Id,
@@ -91,4 +97,5 @@ public sealed record UpdateTaskRequest(
     DateTime? DueDate,
     int? ParentTaskItemId,
     bool AutoCompleteParentWhenChildrenDone,
-    int TimezoneOffsetMinutes);
+    int TimezoneOffsetMinutes,
+    string? BlockedReason = null);

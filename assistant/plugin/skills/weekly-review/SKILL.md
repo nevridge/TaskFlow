@@ -13,6 +13,7 @@ Review the user's work in TaskFlow and draft a status update. Optional arguments
 3. Draft the update in the user's voice with these sections, omitting empty ones:
    - **Done**: completed work grouped by project.
    - **In progress / next**: the most urgent open tasks per project.
+   - **Blocked**: currently Blocked tasks with their reasons and how long they have been blocked. Do not suggest them as work for today unless asked, and do not report what was blocked or unblocked during the period (the review does not show it). If the user says a task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters), wait for a yes, and do not log it with `add_log_entry`.
    - **At risk**: overdue and stalled tasks, each with a one-line suggestion (re-date, split, drop, escalate).
    - **Notes**: anything notable from the journal summaries and logs.
 4. Keep it to what the data shows. Do not invent accomplishments or reasons for delays; mark guesses as questions.

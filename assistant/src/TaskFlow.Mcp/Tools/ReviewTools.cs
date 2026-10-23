@@ -15,7 +15,7 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "weekly_review", ReadOnly = true)]
     [Description(
         "Read-only summary of a period (default: the last 7 days ending today) for status updates and weekly reviews: tasks completed and added (grouped by project), "
-        + "what is overdue or stalled right now, a per-project snapshot, and journal activity. Draft the write-up from this; it does not change anything.")]
+        + "what is overdue or stalled right now, a per-project snapshot, and journal activity. Lists currently Blocked tasks as a separate group. Draft the write-up from this; it does not change anything.")]
     public Task<string> WeeklyReview(
         [Description("First day, yyyy-MM-dd. Default: 6 days before 'to'.")] string? from = null,
         [Description("Last day, yyyy-MM-dd or today. Default today.")] string? to = null,
@@ -54,7 +54,11 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
 
             var open = tasks.Where(t => !t.IsDone).ToList();
             var overdue = Formatting.OrderByDue(open.Where(t => t.DueOn < today)).ToList();
-            var stalled = Formatting.OrderByUrgency(open.Where(TaskTools.IsStale)).ToList();
+            var stalled = Formatting.OrderByUrgency(open.Where(t => !t.IsBlocked && TaskTools.IsStale(t))).ToList();
+
+            // Built from the current task list, so the 300-history cap above does not affect this group.
+            var blocked = Formatting.OrderByUrgency(open.Where(t => t.IsBlocked)).ToList();
+            var nowUtc = time.GetUtcNow();
 
             var sb = new StringBuilder();
             sb.AppendLine($"Review {start:yyyy-MM-dd} to {end:yyyy-MM-dd}");
@@ -63,8 +67,9 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
             AppendGrouped(sb, "Added", added);
 
             sb.AppendLine($"Open now: {open.Count} (overdue {overdue.Count}, stalled {stalled.Count})");
-            AppendList(sb, "Overdue", overdue, today);
-            AppendList(sb, "Stalled (moved 3+ times or tagged 7+ days)", stalled, today);
+            AppendList(sb, "Blocked", blocked, today, nowUtc);
+            AppendList(sb, "Overdue", overdue, today, nowUtc);
+            AppendList(sb, "Stalled (moved 3+ times or tagged 7+ days)", stalled, today, nowUtc);
 
             var activeProjects = projects.Where(p => !p.IsArchived).ToList();
             if (activeProjects.Count > 0)
@@ -73,7 +78,7 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
                 foreach (var p in activeProjects)
                 {
                     var projectOverdue = overdue.Count(t => t.ProjectId == p.Id);
-                    sb.AppendLine($"  {p.Name}: {p.OpenTaskCount} open / {p.CompletedTaskCount} done{(projectOverdue > 0 ? $", {projectOverdue} overdue" : string.Empty)}");
+                    sb.AppendLine($"  {p.Name}: {p.OpenTaskCount} open{Formatting.BlockedCountText(p.BlockedCount)} / {p.CompletedTaskCount} done{(projectOverdue > 0 ? $", {projectOverdue} overdue" : string.Empty)}");
                 }
 
                 var unassigned = open.Count(t => t.ProjectId is null);
@@ -135,7 +140,7 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
         }
     }
 
-    private static void AppendList(StringBuilder sb, string title, List<TaskItemDto> items, DateOnly today)
+    private static void AppendList(StringBuilder sb, string title, List<TaskItemDto> items, DateOnly today, DateTimeOffset nowUtc)
     {
         if (items.Count == 0)
         {
@@ -145,7 +150,7 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
         sb.AppendLine($"{title}:");
         foreach (var task in items.Take(ListLimit))
         {
-            sb.AppendLine("  " + Formatting.Task(task, today));
+            sb.AppendLine("  " + Formatting.Task(task, today, nowUtc: nowUtc));
         }
 
         if (items.Count > ListLimit)

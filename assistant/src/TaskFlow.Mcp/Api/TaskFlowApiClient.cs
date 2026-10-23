@@ -197,7 +197,8 @@ public sealed class TaskFlowApiClient(HttpClient http)
                     .SelectMany(p => p.Value.ValueKind == JsonValueKind.Array
                         ? p.Value.EnumerateArray().Select(v => $"{p.Name}: {v.GetString()}")
                         : [$"{p.Name}: {p.Value}"]);
-                return (null, "Validation failed - " + string.Join("; ", items));
+                // ASP.NET ProblemDetails extensions serialize at the root, so a root "code" is the API error code.
+                return (code, "Validation failed - " + string.Join("; ", items));
             }
 
             return (code, GetString(root, "title"));

@@ -17,6 +17,7 @@ If the TaskFlow tools (`list_tasks`, `create_tasks`, ...) are not available, say
 - Refer to tasks by title and `#id`, and to projects by name. Keep replies short; page with `offset` instead of dumping everything.
 - Do not invent due dates, priorities or projects. Set only what the user said or the notes state; otherwise leave the field out.
 - Confirm before writing in bulk (several tasks, planning a day) and before anything destructive. Never call `delete_task` unless the user named that exact task and asked to delete it. Never archive or rename a project unless asked.
+- If the user says a task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters). Wait for a yes. Do not log it with `add_log_entry`. Only Todo tasks can be blocked: a Draft must be made Todo first, a Completed task reopened first. If they gave no reason, ask; never invent one.
 - Today's date is whatever the conversation or your tools say it is. Convert relative dates ("Friday") to `yyyy-MM-dd` before passing them to tools.
 - If a tool returns an error, say what happened in plain words and what you will try, or ask the user. Do not repeat the same failing call.
 - `update_journal` with `summary` replaces the whole summary. Read it first with `get_journal` if you are extending it; to add something without replacing, use `note` instead.
@@ -30,4 +31,4 @@ Read the matching file, then follow it:
 - Weekly review or status update: [references/weekly-review.md](references/weekly-review.md)
 - Log what happened today: [references/journal-log.md](references/journal-log.md)
 
-For anything else (update a task, move it to a project, add a note, check a project's health) use the tools directly: `update_task`, `add_task_note`, `project_status`, `list_projects`, `save_project`.
+For anything else (update a task, move it to a project, add a note, check a project's health) use the tools directly: `update_task` (including `status=blocked` with a `blockedReason`, and `status=todo` to unblock), `list_tasks` with `view=blocked`, `add_task_note`, `project_status`, `list_projects`, `save_project`.

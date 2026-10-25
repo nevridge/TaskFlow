@@ -21,17 +21,17 @@
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.1" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.1" />
-    <PackageReference Include="FluentValidation" Version="12.1.1" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
+    <PackageReference Include="FluentValidation" Version="12.2.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.20.1" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPlatformVersion)" />
     <!-- Pinned to 2.x on purpose (#279). 2.7.5 is the patched 2.x release for CVE-2026-49451 (GHSA-v5pm-xwqc-g5wc);
          do not downgrade. 3.x is blocked: the Microsoft.AspNetCore.OpenApi source generator fails with CS0200
          on IOpenApiMediaType.Example. Dependabot major bumps are ignored in .github/dependabot.yml. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.13.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <!-- Explicit Design reference: Tools 10.0.8 declares a dependency on Design 8.0.0, which breaks `dotnet ef`. -->
@@ -41,7 +41,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
-    <PackageReference Include="Scalar.AspNetCore" Version="2.14.14" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.18.3" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

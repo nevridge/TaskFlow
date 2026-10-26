@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { Nav } from '@/components/Nav'
 import { SettingsDrawer } from '@/components/SettingsDrawer'
@@ -28,6 +28,14 @@ export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const navigate = useNavigate()
+  const hamburgerRef = useRef<HTMLButtonElement>(null)
+
+  // Scroll lock while the drawer is open; cleanup also covers unmount while open.
+  useEffect(() => {
+    if (!drawerOpen) return
+    document.documentElement.classList.add('drawer-open')
+    return () => document.documentElement.classList.remove('drawer-open')
+  }, [drawerOpen])
 
   useGlobalKeyboardShortcuts(
     {
@@ -40,8 +48,12 @@ export function Layout() {
 
   return (
     <>
-      <Nav onMenuClick={() => setDrawerOpen(true)} />
-      <SettingsDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <Nav onMenuClick={() => setDrawerOpen(true)} hamburgerRef={hamburgerRef} />
+      <SettingsDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        returnFocusRef={hamburgerRef}
+      />
       <Outlet context={prefs satisfies AppContext} />
       {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
     </>

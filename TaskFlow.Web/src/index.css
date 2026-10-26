@@ -1,8 +1,25 @@
 @import "tailwindcss";
 
+/*
+ * Responsive conventions (shared by every page stylesheet)
+ *
+ *   narrow layout   @media (max-width: 820px)
+ *   phone           @media (max-width: 480px)
+ *   touch           @media (hover: none), (pointer: coarse)
+ *   desktop reveal  @media (hover: hover) and (pointer: fine)
+ *
+ * Rule: layout keys off width; interaction and sizing key off the touch query.
+ */
+
 /* ─── Global design tokens ─────────────────────────────────────────────────── */
 
 :root {
+  --tap-min: 44px;
+  --input-font-min: 16px;
+  --page-pad: 24px;
+  --switch-on: #34c759;
+  --switch-off: rgba(0,0,0,.15);
+  --switch-thumb: #fff;
   --bg: #f6f7f9;
   --paper: #ffffff;
   --paper-2: #fdfdfb;
@@ -30,7 +47,14 @@
   color-scheme: light;
 }
 
+@media (max-width: 480px) {
+  :root { --page-pad: 12px; }
+}
+
 html.is-dark {
+  --switch-on: #34c759;
+  --switch-off: rgba(255,255,255,.28);
+  --switch-thumb: #fff;
   --bg: #0b1220;
   --paper: #131b2c;
   --paper-2: #161f33;
@@ -440,10 +464,16 @@ html[data-theme="kanagawa"].is-dark {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 16px;
+  position: sticky;
+  top: 0;
+  /* Below page modals (40/41) and the typeahead (50); far below the drawer (200/201). */
+  z-index: 30;
+  padding: calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 8px calc(16px + env(safe-area-inset-left));
   border-bottom: 1px solid var(--line);
   background: var(--paper);
   box-shadow: var(--shadow-sm);
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .app-nav-link {
@@ -453,6 +483,8 @@ html[data-theme="kanagawa"].is-dark {
   font-weight: 500;
   color: var(--muted);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
   transition: background .12s, color .12s;
 }
 .app-nav-link:hover {
@@ -496,6 +528,29 @@ html[data-theme="kanagawa"].is-dark {
   transition: background .12s;
 }
 
+/* Phone: shrink link padding and gap before touching any height. */
+@media (max-width: 480px) {
+  .app-nav {
+    gap: 2px;
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
+  }
+  .app-nav-link { padding-left: 8px; padding-right: 8px; }
+  .app-nav-hamburger { margin-right: 0; }
+}
+
+/* ─── Tap targets ──────────────────────────────────────────────────────────── */
+
+.tap-target {
+  touch-action: manipulation;
+}
+@media (hover: none), (pointer: coarse) {
+  .tap-target {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+  }
+}
+
 /* ─── Settings drawer ──────────────────────────────────────────────────────── */
 
 .settings-backdrop {
@@ -506,6 +561,7 @@ html[data-theme="kanagawa"].is-dark {
   opacity: 0;
   pointer-events: none;
   transition: opacity .2s ease;
+  touch-action: none;
 }
 .settings-backdrop.is-open {
   opacity: 1;
@@ -516,8 +572,13 @@ html[data-theme="kanagawa"].is-dark {
   position: fixed;
   top: 0;
   left: 0;
-  bottom: 0;
-  width: 280px;
+  width: min(280px, 88vw);
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 201;
   background: var(--paper);
   box-shadow: var(--shadow-md);
@@ -529,6 +590,18 @@ html[data-theme="kanagawa"].is-dark {
 }
 .settings-drawer.is-open {
   transform: translateX(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer, .settings-backdrop { transition: none; }
+}
+
+/* Scroll lock while the drawer is open (toggled by Layout). The only global overflow rule. */
+html.drawer-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.drawer-open body {
+  overflow: hidden;
 }
 
 .settings-drawer-header {
@@ -598,7 +671,10 @@ html[data-theme="kanagawa"].is-dark {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-2);
-  white-space: nowrap;
+  white-space: normal;
+}
+.settings-row > :not(.settings-row-label) {
+  flex-shrink: 0;
 }
 
 .settings-seg {
@@ -633,7 +709,11 @@ html.is-dark .settings-seg-btn {
   cursor: pointer;
   padding: 0;
   flex-shrink: 0;
+  background: var(--switch-off);
   transition: background .15s;
+}
+.settings-toggle.is-on {
+  background: var(--switch-on);
 }
 .settings-toggle-thumb {
   position: absolute;
@@ -641,7 +721,7 @@ html.is-dark .settings-seg-btn {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--switch-thumb);
   box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
   transition: left .15s;
 }
@@ -654,6 +734,38 @@ html.is-dark .settings-seg-btn {
   background: var(--bg);
   color: var(--ink);
   cursor: pointer;
+}
+
+/* Touch sizing for the drawer (hit areas only; desktop sizes are untouched). */
+@media (hover: none), (pointer: coarse) {
+  .settings-row { min-height: var(--tap-min); }
+  /* Keep the 32x18 visual; extend the hit area to 44px tall with a transparent pseudo-element. */
+  .settings-toggle { touch-action: manipulation; }
+  .settings-toggle::before {
+    content: '';
+    position: absolute;
+    inset: -13px -6px;
+  }
+  .settings-seg { flex: 1; }
+  .settings-seg-btn { flex: 1; min-height: var(--tap-min); }
+  .settings-drawer-close { width: var(--tap-min); height: var(--tap-min); }
+  .settings-date-input { min-height: var(--tap-min); }
+  .settings-theme-swatch { min-height: var(--tap-min); }
+}
+
+/*
+ * Input font floor on touch: iOS Safari zooms the page when a focused field is under 16px.
+ * :is() takes the specificity of its most specific argument and each :not([type]) adds 0-1-0, so this is
+ * well above 0-2-1 (class + element + attribute) and beats .journal-page .task-typeahead-input (0-2-0), .todo-block-input,
+ * .settings-date-input and the 0-1-1 `font: inherit` resets, regardless of stylesheet order.
+ */
+@media (hover: none), (pointer: coarse) {
+  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]) {
+    font-size: max(var(--input-font-min), 1em);
+  }
+  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input:is([type="text"], [type="date"], [type="search"], [type="email"], [type="number"], [type="url"], [type="password"], [type="time"]), input:not([type]), select) {
+    min-height: var(--tap-min);
+  }
 }
 
 /* ─── Theme picker swatches ─────────────────────────────────────────────────── */
@@ -708,4 +820,9 @@ html.is-dark .settings-seg-btn {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Text that enters edit mode on tap: no double-tap-zoom delay. */
+.edit-trigger {
+  touch-action: manipulation;
 }

@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { Nav } from './Nav'
 
 function renderNav(initialPath: string) {
@@ -12,6 +13,51 @@ function renderNav(initialPath: string) {
 }
 
 describe('Nav', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('fires onMenuClick when the hamburger is clicked', async () => {
+    const onMenuClick = vi.fn()
+    render(
+      <MemoryRouter>
+        <Nav onMenuClick={onMenuClick} />
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /open settings/i }))
+    expect(onMenuClick).toHaveBeenCalledOnce()
+  })
+
+  it('exposes the hamburger through hamburgerRef and marks nav controls as tap targets', () => {
+    const ref = { current: null as HTMLButtonElement | null }
+    render(
+      <MemoryRouter>
+        <Nav onMenuClick={vi.fn()} hamburgerRef={ref} />
+      </MemoryRouter>,
+    )
+    const hamburger = screen.getByRole('button', { name: /open settings/i })
+    expect(ref.current).toBe(hamburger)
+    expect(hamburger).toHaveClass('tap-target')
+    for (const link of screen.getAllByRole('link')) expect(link).toHaveClass('tap-target')
+  })
+
+  it('navigates when a link is clicked', async () => {
+    render(
+      <MemoryRouter initialEntries={['/tasks']}>
+        <Nav onMenuClick={vi.fn()} />
+        <Routes>
+          <Route path="/projects" element={<div>Projects page</div>} />
+          <Route path="*" element={<div>Other page</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('link', { name: /^projects$/i }))
+    expect(screen.getByText('Projects page')).toBeInTheDocument()
+  })
+
+  it('has no keyboard-shortcuts button (the help modal stays ?-only)', () => {
+    renderNav('/')
+    expect(screen.queryByRole('button', { name: /shortcut|keyboard|help/i })).not.toBeInTheDocument()
+  })
+
   it('renders Journal and Tasks links', () => {
     renderNav('/')
     expect(screen.getByRole('link', { name: /journal/i })).toBeInTheDocument()

@@ -1,11 +1,14 @@
+import type { Ref } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { todayUrlDate } from '@/lib/journal-utils'
 
 interface NavProps {
   onMenuClick: () => void
+  /** Lets Layout return focus to the hamburger when the settings drawer closes. */
+  hamburgerRef?: Ref<HTMLButtonElement>
 }
 
-export function Nav({ onMenuClick }: NavProps) {
+export function Nav({ onMenuClick, hamburgerRef }: NavProps) {
   const { pathname } = useLocation()
   const isJournal = pathname.startsWith('/journal')
   const isTasks = pathname.startsWith('/tasks')
@@ -14,7 +17,8 @@ export function Nav({ onMenuClick }: NavProps) {
   return (
     <nav aria-label="Primary navigation" className="app-nav">
       <button
-        className="app-nav-hamburger"
+        ref={hamburgerRef}
+        className="app-nav-hamburger tap-target"
         onClick={onMenuClick}
         aria-label="Open settings"
         aria-haspopup="dialog"
@@ -25,19 +29,19 @@ export function Nav({ onMenuClick }: NavProps) {
       </button>
       <Link
         to={`/journal/${todayUrlDate()}`}
-        className={`app-nav-link${isJournal ? ' is-active' : ''}`}
+        className={`app-nav-link tap-target${isJournal ? ' is-active' : ''}`}
       >
         Journal
       </Link>
       <Link
         to="/tasks"
-        className={`app-nav-link${isTasks ? ' is-active' : ''}`}
+        className={`app-nav-link tap-target${isTasks ? ' is-active' : ''}`}
       >
         Tasks
       </Link>
       <Link
         to="/projects"
-        className={`app-nav-link${isProjects ? ' is-active' : ''}`}
+        className={`app-nav-link tap-target${isProjects ? ' is-active' : ''}`}
       >
         Projects
       </Link>

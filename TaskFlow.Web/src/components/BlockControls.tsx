@@ -1,3 +1,4 @@
+import { isCoarsePointer } from '@/lib/pointer'
 import { useRef, useState, type ComponentProps, type KeyboardEvent } from 'react'
 
 export const BLOCK_REASON_MAX_LENGTH = 200
@@ -86,12 +87,14 @@ export function BlockedReasonText({ reason, onEdit, ...rest }: BlockedReasonText
   return (
     <button
       {...rest}
+      className={`${rest.className ?? ''} edit-trigger`.trim()}
       type="button"
       title={empty ? undefined : reason}
       aria-label={empty ? 'Add blocked reason' : `Blocked reason: ${reason}. Edit`}
       onClick={e => {
-        // Enter/Space fire click with detail 0; a mouse needs a double-click, except on the "Add reason" prompt.
-        if (empty || e.detail === 0) onEdit()
+        // Enter/Space fire click with detail 0; touch edits on a single tap; a mouse needs a double-click,
+        // except on the "Add reason" prompt. onEdit must stay idempotent: a double-tap fires it twice.
+        if (empty || e.detail === 0 || isCoarsePointer()) onEdit()
       }}
       onDoubleClick={onEdit}
     >

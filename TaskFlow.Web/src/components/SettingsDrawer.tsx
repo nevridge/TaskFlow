@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { usePrefs } from '@/context/usePrefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 import { THEMES } from '@/lib/themes'
@@ -6,9 +7,11 @@ import { THEMES } from '@/lib/themes'
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
+  /** Focus target when the opener no longer exists (the hamburger). */
+  returnFocusRef?: RefObject<HTMLElement | null>
 }
 
-export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
+export function SettingsDrawer({ open, onClose, returnFocusRef }: SettingsDrawerProps) {
   const {
     isDark,
     theme,
@@ -33,6 +36,9 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
+
+  // Must precede the focus effect below so the opener is captured before the drawer takes focus.
+  useFocusTrap(drawerRef, open, { fallbackRef: returnFocusRef })
 
   useEffect(() => {
     if (open) drawerRef.current?.focus()
@@ -59,7 +65,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         <div className="settings-drawer-header">
           <span className="settings-drawer-title">Settings</span>
           <button
-            className="settings-drawer-close"
+            className="settings-drawer-close tap-target"
             onClick={onClose}
             aria-label="Close settings"
           >
@@ -99,8 +105,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <DrawerRow label="Weekdays only">
               <button
                 onClick={() => setWeekdaysOnly(!weekdaysOnly)}
-                className="settings-toggle"
-                style={{ background: weekdaysOnly ? '#34c759' : 'rgba(0,0,0,.15)' }}
+                className={`settings-toggle${weekdaysOnly ? ' is-on' : ''}`}
                 aria-label="Toggle weekdays-only counter"
                 role="switch"
                 aria-checked={weekdaysOnly}
@@ -116,8 +121,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <DrawerRow label="Auto-complete parent when all subtasks are done">
               <button
                 onClick={() => setAutoCompleteParentWhenChildrenDone(!autoCompleteParentWhenChildrenDone)}
-                className="settings-toggle"
-                style={{ background: autoCompleteParentWhenChildrenDone ? '#34c759' : 'rgba(0,0,0,.15)' }}
+                className={`settings-toggle${autoCompleteParentWhenChildrenDone ? ' is-on' : ''}`}
                 aria-label="Toggle parent auto-complete"
                 role="switch"
                 aria-checked={autoCompleteParentWhenChildrenDone}
@@ -133,8 +137,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <DrawerRow label="Dark mode">
               <button
                 onClick={() => setIsDark(!isDark)}
-                className="settings-toggle"
-                style={{ background: isDark ? '#34c759' : 'rgba(0,0,0,.15)' }}
+                className={`settings-toggle${isDark ? ' is-on' : ''}`}
                 aria-label="Toggle dark mode"
                 role="switch"
                 aria-checked={isDark}
@@ -195,7 +198,7 @@ function SegControl<T extends string>({
         <button
           key={o}
           onClick={() => onChange(o)}
-          className={`settings-seg-btn${o === value ? ' is-active' : ''}`}
+          className={`settings-seg-btn tap-target${o === value ? ' is-active' : ''}`}
         >
           {o}
         </button>

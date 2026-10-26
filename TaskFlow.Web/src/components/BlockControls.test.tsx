@@ -18,6 +18,7 @@ function Row({ reason, onEdit }: { reason: string; onEdit: () => void }) {
     <div>
       <a href="#x">link</a>
       <input type="checkbox" aria-label="done" />
+      <button type="button">sibling action</button>
       <BlockedReasonText reason={reason} onEdit={onEdit} />
     </div>
   )
@@ -99,6 +100,7 @@ describe('BlockedReasonText', () => {
     render(<Row reason="waiting" onEdit={onEdit} />)
     await userEvent.click(screen.getByRole('link', { name: 'link' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'done' }))
+    await userEvent.click(screen.getByRole('button', { name: 'sibling action' }))
     expect(onEdit).not.toHaveBeenCalled()
   })
 })

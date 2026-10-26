@@ -150,6 +150,10 @@ describe('settings drawer', () => {
       if (/\b(html|body|#root)\b/.test(selector)) expect(selector).toContain('.drawer-open')
     }
   })
+  it('keeps the drawer header and rows clear of the notch and status bar', () => {
+    expect(drawer).toMatch(/padding-top:\s*env\(safe-area-inset-top\)/)
+    expect(drawer).toMatch(/padding-left:\s*env\(safe-area-inset-left\)/)
+  })
   it('lets labels wrap and keeps controls from shrinking', () => {
     expect(body(css, '.settings-row-label')).toMatch(/white-space:\s*normal/)
     expect(css).toMatch(/\.settings-row > :not\(\.settings-row-label\)\s*\{\s*flex-shrink:\s*0/)
@@ -170,10 +174,49 @@ describe('input font floor', () => {
   const touch = media(css, TOUCH, css.indexOf('Input font floor'))
   const selectorMatch = /(:is\(\.journal-page[^{]*)\{\s*font-size:\s*max\(var\(--input-font-min\),\s*1em\)/.exec(touch)
 
-  // Specificity (classes/attrs/pseudo-classes) of the floor selector: :is() takes its most specific
-  // argument (a class), and every :not([type]) adds one more.
-  function floorSpecificity(sel: string): number {
-    return 1 + (sel.match(/:not\(/g) ?? []).length
+  type Spec = [number, number, number] // [ids, classes/attrs/pseudo-classes, elements]
+  const cmp = (a: Spec, b: Spec) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+
+  // Split on top-level commas only (ignores commas inside parentheses / brackets).
+  function splitTop(s: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let cur = ''
+    for (const ch of s) {
+      if (ch === '(' || ch === '[') depth++
+      if (ch === ')' || ch === ']') depth--
+      if (ch === ',' && depth === 0) { parts.push(cur); cur = '' } else cur += ch
+    }
+    return [...parts, cur]
+  }
+
+  // Minimal specificity calculator for the selectors in this file: classes, attributes, element names,
+  // and :is()/:not() (which take their most specific argument). No ids or pseudo-elements are needed.
+  function specificity(sel: string): Spec {
+    const total: Spec = [0, 0, 0]
+    let rest = sel.trim()
+    for (let m = /:(is|not)\(/.exec(rest); m; m = /:(is|not)\(/.exec(rest)) {
+      const start = m.index + m[0].length
+      const end = blockEndParen(rest, start)
+      const best = splitTop(rest.slice(start, end - 1)).map(specificity).sort(cmp).pop()!
+      total[0] += best[0]; total[1] += best[1]; total[2] += best[2]
+      rest = rest.slice(0, m.index) + ' ' + rest.slice(end)
+    }
+    total[1] += (rest.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) ?? []).length
+    const withoutSimple = rest.replace(/\.[\w-]+|\[[^\]]*\]|:{1,2}[\w-]+/g, ' ')
+    total[2] += (withoutSimple.match(/(^|[\s>+~])[a-zA-Z][\w-]*/g) ?? []).length
+    return total
+  }
+
+  function blockEndParen(s: string, start: number): number {
+    let depth = 1
+    let i = start
+    while (depth > 0 && i < s.length) {
+      if (s[i] === '(') depth++
+      else if (s[i] === ')') depth--
+      i++
+    }
+    return i
   }
 
   it('lives only inside the touch query with a max() floor and excludes non-text inputs', () => {
@@ -186,10 +229,24 @@ describe('input font floor', () => {
     expect(cssOutsideMedia).not.toContain('--input-font-min)')
   })
 
-  it('has specificity of at least 0-2-1 and beats each known offender', () => {
-    // Offenders: .journal-page .task-typeahead-input is 0-2-0; the font resets are 0-1-1; the rest are 0-1-0.
+  it('computes the floor selector specificity and beats each known offender', () => {
     expect(journalCss).toMatch(/\n\.journal-page \.task-typeahead-input \{/)
-    expect(floorSpecificity(selectorMatch![1])).toBeGreaterThan(2)
+    expect(journalCss).toMatch(/\n\.journal-page \.todo-block-input \{/)
+    const floor = specificity(selectorMatch![1])
+    // :is(.journal-page, ...) = 0-1-0, :is(input, textarea, select) = 0-0-1, 7 x :not([type="..."]) = 0-7-0.
+    expect(floor).toEqual([0, 8, 1])
+    const offenders: Record<string, Spec> = {
+      '.journal-page .task-typeahead-input': [0, 2, 0],
+      '.journal-page .todo-block-input': [0, 2, 0],
+      '.journal-page .todo-block-input:focus': [0, 3, 0],
+      '.settings-date-input': [0, 1, 0],
+      '.journal-page button': [0, 1, 1], // font: inherit resets
+      '.tasks-page select': [0, 1, 1],
+    }
+    for (const [sel, expected] of Object.entries(offenders)) {
+      expect(specificity(sel), sel).toEqual(expected)
+      expect(cmp(floor, specificity(sel)), `${sel} must lose to the floor`).toBeGreaterThan(0)
+    }
     expect(css + journalCss).not.toMatch(/(task-typeahead-input|todo-block-input|settings-date-input)[^}]*font-size:[^;]*!important/)
   })
 

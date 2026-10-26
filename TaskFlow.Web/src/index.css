@@ -577,6 +577,8 @@ html[data-theme="kanagawa"].is-dark {
   height: 100dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
   scroll-padding-bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 201;
@@ -756,7 +758,7 @@ html.is-dark .settings-seg-btn {
 /*
  * Input font floor on touch: iOS Safari zooms the page when a focused field is under 16px.
  * :is() takes the specificity of its most specific argument and each :not([type]) adds 0-1-0, so this is
- * well above 0-2-1 (class + element + attribute) and beats .journal-page .task-typeahead-input (0-2-0), .todo-block-input,
+ * 0-8-1 (asserted in index.css.test.ts) and beats .journal-page .task-typeahead-input (0-2-0), .todo-block-input,
  * .settings-date-input and the 0-1-1 `font: inherit` resets, regardless of stylesheet order.
  */
 @media (hover: none), (pointer: coarse) {

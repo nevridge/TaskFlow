@@ -1,8 +1,12 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TaskListRow } from './TaskListRow'
+
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>
+}
 
 type TaskProp = Parameters<typeof TaskListRow>[0]['task']
 type TaskHandler = Parameters<typeof TaskListRow>[0]['onEdit']
@@ -45,6 +49,10 @@ function renderRow(
 }
 
 describe('TaskListRow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   describe('task id', () => {
     it('shows #id with an accessible label before the title', () => {
       renderRow()
@@ -72,6 +80,57 @@ describe('TaskListRow', () => {
       renderRow({ ...baseTask, id: undefined })
       expect(screen.queryByRole('img')).toBeNull()
       expect(screen.queryByText(/#/)).toBeNull()
+    })
+
+    it('renders nothing and no error when the id is null', () => {
+      const { container } = renderRow({ ...baseTask, id: null as never })
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(container.querySelector('.t-task-id')).toBeNull()
+      expect(screen.queryByText(/#/)).toBeNull()
+      expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()
+    })
+
+    it('clicking the id does not navigate or fire row handlers', async () => {
+      const onEdit = vi.fn()
+      const onStatusCycle = vi.fn()
+      render(
+        <MemoryRouter initialEntries={['/tasks']}>
+          <LocationProbe />
+          <table>
+            <tbody>
+              <TaskListRow
+                task={baseTask}
+                onEdit={onEdit}
+                onHistory={vi.fn<TaskHandler>()}
+                onDelete={vi.fn<TaskHandler>()}
+                onStatusCycle={onStatusCycle}
+              />
+            </tbody>
+          </table>
+        </MemoryRouter>
+      )
+
+      await userEvent.click(screen.getByRole('img', { name: 'Task 42' }))
+
+      expect(screen.getByTestId('location')).toHaveTextContent('/tasks')
+      expect(screen.getByTestId('location')).not.toHaveTextContent('/tasks/42')
+      expect(onEdit).not.toHaveBeenCalled()
+      expect(onStatusCycle).not.toHaveBeenCalled()
+    })
+
+    it('is not focusable and does not change the row tab stops', () => {
+      const tabStops = (root: HTMLElement) =>
+        root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])').length
+
+      const withId = renderRow()
+      const badge = screen.getByRole('img', { name: 'Task 42' })
+      expect(badge).not.toHaveAttribute('tabindex')
+      expect(badge.matches('a, button, input, [tabindex]')).toBe(false)
+      const countWithId = tabStops(withId.container)
+      withId.unmount()
+
+      const withoutId = renderRow({ ...baseTask, id: undefined })
+      expect(tabStops(withoutId.container)).toBe(countWithId)
     })
 
     it.each([

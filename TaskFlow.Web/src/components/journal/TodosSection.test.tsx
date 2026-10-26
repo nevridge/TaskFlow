@@ -352,6 +352,42 @@ describe('TodosSection', () => {
       expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
     })
 
+    it('clicking the id does not toggle completion or enter edit mode', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+
+      await userEvent.click(screen.getByRole('img', { name: 'Task 1' }))
+
+      expect(toggleTodoMutate).not.toHaveBeenCalled()
+      expect(screen.queryByDisplayValue('Write tests')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument()
+    })
+
+    it('id is not focusable and does not add tab stops to the row', () => {
+      const tabStops = (root: HTMLElement) =>
+        root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])').length
+
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      const withId = renderSection()
+      const badge = screen.getByRole('img', { name: 'Task 1' })
+      expect(badge).not.toHaveAttribute('tabindex')
+      expect(badge.matches('a, button, input, [tabindex]')).toBe(false)
+      const countWithId = tabStops(withId.container)
+      withId.unmount()
+
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: undefined }] }, isLoading: false } as never)
+      const withoutId = renderSection()
+      expect(tabStops(withoutId.container)).toBe(countWithId)
+    })
+
+    it('renders no id and no error when id is null', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: null }] }, isLoading: false } as never)
+      renderSection()
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(screen.queryByText(/^#/)).toBeNull()
+      expect(screen.getByText('Write tests')).toBeInTheDocument()
+    })
+
     it('renders no id when missing', () => {
       vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: undefined }] }, isLoading: false } as never)
       renderSection()

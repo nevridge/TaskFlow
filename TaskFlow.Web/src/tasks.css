@@ -402,7 +402,8 @@ html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
   min-width: 0;
 }
 
-.t-title-line .t-task-link { min-width: 0; }
+.t-title-line .t-task-link { min-width: 0; overflow-wrap: anywhere; }
+.t-title-wrap > div { min-width: 0; }
 
 .t-task-id {
   flex: none;

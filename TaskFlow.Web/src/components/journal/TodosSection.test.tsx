@@ -336,6 +336,14 @@ describe('TodosSection', () => {
       expect(screen.getByText('Write tests')).not.toHaveTextContent('#')
     })
 
+    it('completed row id is outside .todo-text (so title strikethrough does not apply)', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+      renderSection()
+      const id = screen.getByRole('img', { name: 'Task 2' })
+      expect(id).toHaveTextContent('#2')
+      expect(id.closest('.todo-text')).toBeNull()
+    })
+
     it('keeps the id while editing and the input holds the title only', async () => {
       vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
       renderSection()

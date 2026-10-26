@@ -15,7 +15,7 @@ const baseTask: TaskProp = {
   id: 42,
   title: 'Fix login bug',
   description: 'Users cannot log in',
-  status: 'todo',
+  status: 'Todo',
   priority: 'high',
   dueDate: null,
 }
@@ -202,7 +202,7 @@ describe('TaskListRow', () => {
     const pastDate = '2020-01-01T00:00:00Z'
 
     it('marks past-due incomplete tasks as overdue', () => {
-      const task = { ...baseTask, dueDate: pastDate, status: 'todo' }
+      const task = { ...baseTask, dueDate: pastDate, status: 'Todo' }
       renderRow(task)
       expect(screen.getByText('!', { selector: '.t-overdue-icon' })).toBeInTheDocument()
     })
@@ -214,7 +214,7 @@ describe('TaskListRow', () => {
     })
 
     it('does not mark future tasks as overdue', () => {
-      const task = { ...baseTask, dueDate: '2099-12-31T00:00:00Z', status: 'todo' }
+      const task = { ...baseTask, dueDate: '2099-12-31T00:00:00Z', status: 'Todo' }
       renderRow(task)
       expect(screen.queryByText('!', { selector: '.t-overdue-icon' })).not.toBeInTheDocument()
     })

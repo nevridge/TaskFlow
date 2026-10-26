@@ -262,6 +262,10 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           {isBlocked && <BlockIcon size={isChild ? 9 : 11} />}
         </button>
 
+        {td.id !== undefined && td.id !== null && (
+          <span className="todo-id" aria-label={`Task ${td.id}`} role="img">#{td.id}</span>
+        )}
+
         {editingId === id ? (
           <input
             className="todo-edit"

@@ -241,6 +241,12 @@ describe('TasksPage', () => {
     expect(screen.getByText('Child task')).toBeInTheDocument()
   })
 
+  it('shows ids for parent and expanded child rows', () => {
+    renderPage()
+    expect(within(rowFor('Parent task')).getByRole('img', { name: 'Task 1' })).toHaveTextContent('#1')
+    expect(within(rowFor('Child task')).getByRole('img', { name: 'Task 2' })).toHaveTextContent('#2')
+  })
+
   describe('project badge', () => {
     it('shows the project name on rows that have one and nothing on rows without', () => {
       renderPage()

@@ -324,6 +324,42 @@ describe('TodosSection', () => {
     children: [childTodo],
   }
 
+  describe('task id', () => {
+    it('shows ids on top-level and nested subtask rows outside .todo-text', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+      renderSection()
+      const top = screen.getByRole('img', { name: 'Task 1' })
+      const sub = screen.getByRole('img', { name: 'Task 99' })
+      expect(top).toHaveTextContent('#1')
+      expect(sub).toHaveTextContent('#99')
+      expect(top.closest('.todo-text')).toBeNull()
+      expect(screen.getByText('Write tests')).not.toHaveTextContent('#')
+    })
+
+    it('keeps the id while editing and the input holds the title only', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+      await userEvent.dblClick(screen.getByText('Write tests'))
+      expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
+    })
+
+    it('toggle still works and the id is unchanged', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+      await userEvent.click(screen.getByRole('button', { name: 'Mark done' }))
+      expect(toggleTodoMutate).toHaveBeenCalled()
+      expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
+    })
+
+    it('renders no id when missing', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: undefined }] }, isLoading: false } as never)
+      renderSection()
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(screen.queryByText(/^#/)).toBeNull()
+    })
+  })
+
   it('renders subtask nested under parent when children array is populated', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
     renderSection()

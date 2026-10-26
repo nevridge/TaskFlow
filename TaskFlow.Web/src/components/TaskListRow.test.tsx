@@ -45,6 +45,45 @@ function renderRow(
 }
 
 describe('TaskListRow', () => {
+  describe('task id', () => {
+    it('shows #id with an accessible label before the title', () => {
+      renderRow()
+      const badge = screen.getByRole('img', { name: 'Task 42' })
+      expect(badge).toHaveTextContent('#42')
+      const link = screen.getByRole('link', { name: 'Fix login bug' })
+      expect(link).toHaveAttribute('href', '/tasks/42')
+      expect(badge.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(link.contains(badge)).toBe(false)
+      expect(screen.queryByText('42')).toBeNull()
+    })
+
+    it('shows the subtask own id, not the parent id', () => {
+      renderRow({ ...baseTask, id: 43, title: 'Child', parentTaskItemId: 42 })
+      expect(screen.getByText('#43')).toBeInTheDocument()
+      expect(screen.queryByText('#42')).toBeNull()
+    })
+
+    it.each(['Completed', 'Blocked'])('still shows the id on %s rows', status => {
+      renderRow({ ...baseTask, status })
+      expect(screen.getByRole('img', { name: 'Task 42' })).toBeInTheDocument()
+    })
+
+    it('renders nothing when the id is undefined', () => {
+      renderRow({ ...baseTask, id: undefined })
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(screen.queryByText(/#/)).toBeNull()
+    })
+
+    it.each([
+      ['7', '#7'],
+      [123456, '#123456'],
+      [0, '#0'],
+    ])('renders id %s as %s', (id, text) => {
+      renderRow({ ...baseTask, id })
+      expect(screen.getByText(text)).toBeInTheDocument()
+    })
+  })
+
   it('renders the task title as a link', () => {
     renderRow()
     expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()

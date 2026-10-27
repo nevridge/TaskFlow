@@ -215,6 +215,13 @@ describe('TodosSection blocked unblock badge and touch block editor', () => {
     document.body.innerHTML = ''
   })
 
+  it('a Blocked row has no Block button, so its row actions are History and Delete only', () => {
+    load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
+    renderSection()
+    const actions = document.querySelector('.todo-subline-actions') as HTMLElement
+    expect(within(actions).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['History', 'Delete'])
+  })
+
   it('the badge is named exactly "Unblock task"; the old name no longer matches', async () => {
     load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
     renderSection()

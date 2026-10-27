@@ -323,5 +323,20 @@ describe('JournalPage', () => {
         expect(screen.queryByText(/weekdays only — redirected to friday/i)).not.toBeInTheDocument()
       })
     })
+
+    it('renders the banner between the DateNav and the header', async () => {
+      render(
+        <MemoryRouter initialEntries={[{ pathname: '/journal/05-29-2026', state: { weekendRedirect: true } }]}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const banner = await screen.findByText(/weekdays only — redirected to friday/i)
+      const following = Node.DOCUMENT_POSITION_FOLLOWING
+      expect(screen.getByTestId('date-nav').compareDocumentPosition(banner) & following).toBeTruthy()
+      expect(banner.compareDocumentPosition(screen.getByTestId('journal-header')) & following).toBeTruthy()
+    })
   })
 })

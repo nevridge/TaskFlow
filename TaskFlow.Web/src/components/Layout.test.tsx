@@ -57,12 +57,34 @@ function renderLayout() {
 
 describe('Layout', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     capturedHandlers = null
     capturedDisabled = undefined
   })
 
   afterEach(() => {
     document.body.innerHTML = ''
+    document.documentElement.classList.remove('drawer-open', 'is-dark')
+    document.documentElement.removeAttribute('data-theme')
+    localStorage.clear()
+  })
+
+  it('toggles drawer-open on <html> with the drawer', async () => {
+    renderLayout()
+    const root = document.documentElement
+    expect(root).not.toHaveClass('drawer-open')
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }))
+    expect(root).toHaveClass('drawer-open')
+    await userEvent.click(screen.getByRole('button', { name: /close drawer/i }))
+    expect(root).not.toHaveClass('drawer-open')
+  })
+
+  it('removes drawer-open when unmounted while the drawer is open', async () => {
+    const { unmount } = renderLayout()
+    await userEvent.click(screen.getByRole('button', { name: /menu/i }))
+    expect(document.documentElement).toHaveClass('drawer-open')
+    unmount()
+    expect(document.documentElement).not.toHaveClass('drawer-open')
   })
 
   it('renders Nav, SettingsDrawer, and Outlet', () => {

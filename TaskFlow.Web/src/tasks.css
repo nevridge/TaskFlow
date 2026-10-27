@@ -395,6 +395,24 @@ html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
   gap: 6px;
 }
 
+.t-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.t-title-line .t-task-link { min-width: 0; overflow-wrap: anywhere; }
+.t-title-wrap > div { min-width: 0; }
+
+.t-task-id {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .t-depth-1 {
   padding-left: 18px;
 }

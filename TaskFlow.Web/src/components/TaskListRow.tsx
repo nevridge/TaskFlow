@@ -159,9 +159,14 @@ export function TaskListRow({
             <span className="t-tree-spacer" aria-hidden="true" />
           )}
           <div>
-            <Link ref={titleLinkRef} to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
-              {task.title}
-            </Link>
+            <div className="t-title-line">
+              {task.id !== undefined && task.id !== null && (
+                <span className="t-task-id" aria-label={`Task ${task.id}`} role="img">#{task.id}</span>
+              )}
+              <Link ref={titleLinkRef} to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
+                {task.title}
+              </Link>
+            </div>
             {childProgress && <div className="t-deferral-line">{childProgress}</div>}
             {blocked && !reasonEditing && (
               <BlockedReasonText

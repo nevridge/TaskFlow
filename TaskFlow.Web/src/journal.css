@@ -334,6 +334,15 @@
   cursor: text;
   line-height: 1.4;
 }
+.journal-page .todo-text { min-width: 0; overflow-wrap: anywhere; }
+.journal-page .todo-id {
+  flex: none;
+  white-space: nowrap;
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.journal-page .todo-child .todo-id { font-size: 0.7em; }
 .todo.is-done .todo-text {
   color: var(--muted-2);
   text-decoration: line-through;

@@ -324,6 +324,86 @@ describe('TodosSection', () => {
     children: [childTodo],
   }
 
+  describe('task id', () => {
+    it('shows ids on top-level and nested subtask rows outside .todo-text', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+      renderSection()
+      const top = screen.getByRole('img', { name: 'Task 1' })
+      const sub = screen.getByRole('img', { name: 'Task 99' })
+      expect(top).toHaveTextContent('#1')
+      expect(sub).toHaveTextContent('#99')
+      expect(top.closest('.todo-text')).toBeNull()
+      expect(screen.getByText('Write tests')).not.toHaveTextContent('#')
+    })
+
+    it('completed row id is outside .todo-text (so title strikethrough does not apply)', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+      renderSection()
+      const id = screen.getByRole('img', { name: 'Task 2' })
+      expect(id).toHaveTextContent('#2')
+      expect(id.closest('.todo-text')).toBeNull()
+    })
+
+    it('keeps the id while editing and the input holds the title only', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+      await userEvent.dblClick(screen.getByText('Write tests'))
+      expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
+      expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
+    })
+
+    it('toggle still works and the id is unchanged', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+      await userEvent.click(screen.getByRole('button', { name: 'Mark done' }))
+      expect(toggleTodoMutate).toHaveBeenCalled()
+      expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
+    })
+
+    it('clicking the id does not toggle completion or enter edit mode', async () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+
+      await userEvent.click(screen.getByRole('img', { name: 'Task 1' }))
+
+      expect(toggleTodoMutate).not.toHaveBeenCalled()
+      expect(screen.queryByDisplayValue('Write tests')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument()
+    })
+
+    it('id is not focusable and does not add tab stops to the row', () => {
+      const tabStops = (root: HTMLElement) =>
+        root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])').length
+
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      const withId = renderSection()
+      const badge = screen.getByRole('img', { name: 'Task 1' })
+      expect(badge).not.toHaveAttribute('tabindex')
+      expect(badge.matches('a, button, input, [tabindex]')).toBe(false)
+      const countWithId = tabStops(withId.container)
+      withId.unmount()
+
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: undefined }] }, isLoading: false } as never)
+      const withoutId = renderSection()
+      expect(tabStops(withoutId.container)).toBe(countWithId)
+    })
+
+    it('renders no id and no error when id is null', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: null }] }, isLoading: false } as never)
+      renderSection()
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(screen.queryByText(/^#/)).toBeNull()
+      expect(screen.getByText('Write tests')).toBeInTheDocument()
+    })
+
+    it('renders no id when missing', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, id: undefined }] }, isLoading: false } as never)
+      renderSection()
+      expect(screen.queryByRole('img')).toBeNull()
+      expect(screen.queryByText(/^#/)).toBeNull()
+    })
+  })
+
   it('renders subtask nested under parent when children array is populated', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
     renderSection()

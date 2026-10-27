@@ -130,6 +130,38 @@ describe('journal touch and responsive styles', () => {
     expect(rule('.journal')).toMatch(/overflow:\s*hidden/)
   })
 
+  it('keeps the single-column grid and cards from growing past the container at 820px', () => {
+    const narrow = mediaBlock('(max-width: 820px)')
+    expect(narrow).toMatch(/\.j-grid \{ grid-template-columns: minmax\(0, 1fr\); \}/)
+    expect(narrow).not.toMatch(/grid-template-columns:\s*1fr\s*;/)
+    expect(rule('.card')).toMatch(/min-width:\s*0/)
+    expect(rule('.j-grid')).toMatch(/grid-template-columns:\s*1fr 1fr/)
+  })
+
+  it('bounds the log entry cell and wraps unbroken log text on every device', () => {
+    expect(rule('.log-entry')).toMatch(/grid-template-columns:\s*64px minmax\(0, 1fr\) 22px/)
+    expect(rule('.log-text')).toMatch(/min-width:\s*0/)
+    expect(rule('.log-text')).toMatch(/overflow-wrap:\s*anywhere/)
+    const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
+    expect(t).not.toMatch(/(^|\n)\s*\.log-text\s*\{/)
+  })
+
+  it('lets the log add row and typeahead shrink instead of widening the layout', () => {
+    expect(rule('.log-add-inputs')).toMatch(/min-width:\s*0/)
+    expect(rule('.log-add-inputs .add-input')).toMatch(/width:\s*0/)
+    expect(rule('.log-add-inputs .add-input')).toMatch(/min-width:\s*0/)
+    expect(rule('.task-typeahead')).toMatch(/min-width:\s*0/)
+    expect(rule('.log-add-inputs .task-typeahead')).toMatch(/flex:\s*0 1 auto/)
+    expect(rule('.journal-page .task-typeahead-input')).toMatch(/max-width:\s*100%/)
+    expect(rule('.journal-page .task-typeahead-input')).toMatch(/width:\s*150px/)
+    expect(rule('.task-typeahead-dropdown')).toMatch(/min-width:\s*220px/)
+  })
+
+  it('keeps the shrink rules outside the touch query', () => {
+    const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
+    expect(t).not.toMatch(/\.j-grid|\.log-add-inputs|\.card \{[^}]*min-width/)
+  })
+
   it('tightens the phone layout at 480px', () => {
     const phone = mediaBlock('(max-width: 480px)')
     expect(phone).toMatch(/\.card \{ padding: 14px 12px; \}/)
@@ -146,6 +178,16 @@ describe('journal touch and responsive styles', () => {
     expect(phone).toMatch(/\.todo-subline \{\s*display:\s*flex;\s*flex:\s*0 0 100%/)
     expect(phone).toMatch(/\.todo-subline-actions \{[^}]*margin-left:\s*auto/)
     expect(journalCss).toMatch(/(^|\n)\.todo-subline,\s*\.todo-subline-meta,\s*\.todo-subline-actions \{ display: contents; \}/)
+  })
+
+  it('wraps the phone subline so actions drop below the badges instead of overlapping them', () => {
+    const phone = mediaBlock('(max-width: 480px)')
+    expect(phone).toMatch(/\.journal-page \.todo-subline \{[^}]*flex-wrap:\s*wrap/)
+    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*min-content/)
+    expect(phone).toMatch(/\.todo-subline-actions \{[^}]*margin-left:\s*auto/)
+    expect(phone).toMatch(/\.todo-subline-meta > \.todo-badges,\s*\.journal-page \.todo-subline-meta > \.todo-blocked-badge \{ max-width: 100%; \}/)
+    const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
+    expect(t).not.toMatch(/todo-subline \{|todo-subline-meta/)
   })
 
   it('wins the cascade for the subtask indent at 480px: higher specificity than the later base rule', () => {

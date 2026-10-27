@@ -220,6 +220,7 @@
 .card {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   padding: calc(20px * var(--den)) calc(24px * var(--den));
   min-height: calc(440px * var(--den));
 }
@@ -483,7 +484,7 @@
 }
 .log-entry {
   display: grid;
-  grid-template-columns: 64px 1fr 22px;
+  grid-template-columns: 64px minmax(0, 1fr) 22px;
   align-items: start;
   gap: 12px;
   padding: calc(8px * var(--den)) 4px;
@@ -500,6 +501,8 @@
   white-space: nowrap;
 }
 .log-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 14.5px;
   color: var(--ink);
   line-height: 1.45;
@@ -559,6 +562,7 @@
 .task-typeahead {
   position: relative;
   display: inline-block;
+  min-width: 0;
 }
 
 /* Must beat `.journal-page button` (0-1-1) so scoped as `.journal-page .task-typeahead-input` (0-2-0) */
@@ -571,6 +575,7 @@
   color: var(--ink-2);
   outline: none;
   width: 150px;
+  max-width: 100%;
   transition: border-color .12s, box-shadow .12s;
 }
 .journal-page .task-typeahead-input:focus {
@@ -643,8 +648,10 @@
 }
 .log-add-inputs .add-input {
   flex: 1;
+  width: 0; /* min-content contribution 0, so the row can shrink below the input's intrinsic width */
   min-width: 0;
 }
+.log-add-inputs .task-typeahead { flex: 0 1 auto; }
 
 /* ─── Add row (shared) ─────────────────────────────────────────────────────── */
 
@@ -760,7 +767,7 @@
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 820px) {
-  .j-grid { grid-template-columns: 1fr; }
+  .j-grid { grid-template-columns: minmax(0, 1fr); }
   .j-grid > .card + .card {
     border-left: 0;
     border-top: 1px solid var(--line);
@@ -807,6 +814,7 @@
     display: flex;
     flex: 0 0 100%;
     align-items: center;
+    flex-wrap: wrap; /* actions drop to their own right-aligned line when the badges cannot fit beside them */
     justify-content: space-between;
     gap: 8px;
     min-width: 0;
@@ -819,8 +827,11 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 8px;
-    min-width: 0;
+    min-width: min-content; /* never shrink under the badges; wrapping the actions is the fallback */
   }
+  /* Badges never exceed the meta box: they wrap onto their own line inside it if the box itself is narrower. */
+  .journal-page .todo-subline-meta > .todo-badges,
+  .journal-page .todo-subline-meta > .todo-blocked-badge { max-width: 100%; }
   .journal-page .todo-subline-actions {
     display: flex;
     flex: 0 0 auto;

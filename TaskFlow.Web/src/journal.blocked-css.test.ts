@@ -75,8 +75,20 @@ describe('journal touch and responsive styles', () => {
   it('gives the check an 18px visual with a 44px hit area that stays clear of the title', () => {
     const t = touch()
     expect(rule('.journal-page .todo-check')).toMatch(/width:\s*18px/)
-    expect(t).toMatch(/\.todo-check::before \{[^}]*inset:\s*-13px/)
-    expect(t).toMatch(/\.journal-page \.todo \{\s*column-gap:\s*14px/)
+    // Absolute insets are measured from the padding box, so the border width must be added to the inset.
+    const hitArea = (selector: string, size: number) => {
+      const inset = Number(new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}::before \\{[^}]*inset:\\s*(-[\\d.]+)px`).exec(t)?.[1])
+      const border = 1.5
+      return size - 2 * border + 2 * -inset
+    }
+    expect(hitArea('.journal-page .todo-check', 18)).toBeGreaterThanOrEqual(44)
+    expect(hitArea('.journal-page .todo-child .todo-check', 15)).toBeGreaterThanOrEqual(44)
+    // Overhang past the border box must stay inside the column gap (id / title is not covered).
+    expect((hitArea('.journal-page .todo-check', 18) - 18) / 2).toBeLessThanOrEqual(14)
+    expect((hitArea('.journal-page .todo-child .todo-check', 15) - 15) / 2).toBeLessThanOrEqual(15)
+    expect(t).toMatch(/\.journal-page \.todo \{ --todo-gap:\s*14px; \}/)
+    expect(t).toMatch(/\.journal-page \.todo-child \{ --todo-gap:\s*15px; \}/)
+    expect(rule('.todo')).toMatch(/gap:\s*12px var\(--todo-gap\)/)
   })
 
   it('makes the title a text-like button, a full-height tap zone on touch', () => {
@@ -124,7 +136,7 @@ describe('journal touch and responsive styles', () => {
     expect(phone).toMatch(/\.hdr \{ padding: 16px 14px; \}/)
     expect(phone).toMatch(/\.hdr-fulldate \{\s*font-size:\s*18px;\s*overflow-wrap:\s*anywhere/)
     expect(phone).toMatch(/\.hdr-num \{\s*flex:\s*1 1 0;\s*min-width:\s*0;\s*padding:\s*8px 12px/)
-    expect(phone).toMatch(/\.todo-child-list \{ padding-left: 16px; \}/)
+    expect(phone).toMatch(/\.journal-page \.todo-child-list \{ padding-left: 16px; \}/)
     expect(phone).toMatch(/\.todo-edit \{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/)
     expect(phone).toMatch(/\.todo-text \{ overflow-wrap: anywhere; \}/)
   })
@@ -136,10 +148,35 @@ describe('journal touch and responsive styles', () => {
     expect(journalCss).toMatch(/(^|\n)\.todo-subline,\s*\.todo-subline-meta,\s*\.todo-subline-actions \{ display: contents; \}/)
   })
 
+  it('wins the cascade for the subtask indent at 480px: higher specificity than the later base rule', () => {
+    const classCount = (sel: string) => (sel.match(/\.[\w-]+/g) ?? []).length
+    const phoneSel = '.journal-page .todo-child-list'
+    const baseSel = '.todo-child-list'
+    const phoneAt = journalCss.indexOf(`${phoneSel} { padding-left: 16px; }`)
+    const baseAt = journalCss.indexOf(`\n${baseSel} {`)
+    expect(phoneAt).toBeGreaterThan(-1)
+    expect(baseAt).toBeGreaterThan(-1)
+    // Either it comes later in the source at equal specificity, or it is strictly more specific.
+    const wins = classCount(phoneSel) > classCount(baseSel) || (classCount(phoneSel) === classCount(baseSel) && phoneAt > baseAt)
+    expect(wins).toBe(true)
+    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 30px/)
+  })
+
+  it('aligns phone line 2 with the title start using the same measures as line 1', () => {
+    const phone = mediaBlock('(max-width: 480px)')
+    expect(phone).toMatch(/\.journal-page \.todo-id \{\s*min-width:\s*var\(--todo-id-w\)/)
+    expect(phone).toMatch(/\.todo-subline \{[^}]*padding-left:\s*calc\(var\(--todo-check\) \+ var\(--todo-gap\) \+ var\(--todo-id-w\) \+ var\(--todo-gap\)\)/)
+    const todo = rule('.todo')
+    expect(todo).toMatch(/--todo-check:\s*18px/)
+    expect(todo).toMatch(/--todo-gap:\s*12px/)
+    expect(rule('.todo-child')).toMatch(/--todo-check:\s*15px/)
+    expect(todo).toMatch(/--todo-id-w:\s*36px/)
+  })
+
   it('keeps touch sizing out of the width-only blocks', () => {
     for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)']) {
       const block = mediaBlock(q)
-      expect(block).not.toMatch(/44px|var\(--tap-min\)|opacity:\s*1/)
+      expect(block).not.toMatch(/44px|var\(--tap-min\)|(?<![\w-])opacity:\s*1\s*;/)
     }
   })
 })

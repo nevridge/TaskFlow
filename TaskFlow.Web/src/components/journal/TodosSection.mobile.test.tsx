@@ -127,6 +127,35 @@ describe('TodosSection title tap-to-edit', () => {
     await waitFor(() => expect(titleButton()).toHaveFocus())
   })
 
+  it('Enter on a row that then re-sorts (non-manual sort) still ends with focus on that title', async () => {
+    setTouch(false)
+    const alpha = row({ id: 1, title: 'Alpha' })
+    const beta = row({ id: 2, title: 'Beta' })
+    load([alpha, beta])
+    const view = render(<TodosSection entryId={10} isoDate="2026-05-28" sort="open first" />)
+    await userEvent.dblClick(titleButton('Alpha'))
+    await userEvent.type(screen.getByDisplayValue('Alpha'), '{Enter}')
+    // The optimistic update lands after the Enter: Alpha becomes Completed and moves below Beta.
+    load([{ ...alpha, status: 'Completed' } as TaskItemResponseDto, beta])
+    view.rerender(<TodosSection entryId={10} isoDate="2026-05-28" sort="open first" />)
+    const titles = Array.from(document.querySelectorAll('[data-todo-title]')).map(el => el.textContent)
+    expect(titles).toEqual(['Beta', 'Alpha'])
+    await waitFor(() => expect(titleButton('Alpha')).toHaveFocus())
+  })
+
+  it('a newer title focus request wins over a pending check focus request on another row', async () => {
+    setTouch(false)
+    load([row({ id: 1, title: 'Alpha' }), row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
+    renderSection()
+    // Unblock requests focus on row 2's check; the later Enter on row 1 then requests focus on its title.
+    fireEvent.click(screen.getByRole('button', { name: 'Unblock task' }))
+    await userEvent.dblClick(titleButton('Alpha'))
+    await userEvent.type(screen.getByDisplayValue('Alpha'), '{Enter}')
+    await waitFor(() => expect(titleButton('Alpha')).toHaveFocus())
+    await new Promise(r => setTimeout(r, 150))
+    expect(titleButton('Alpha')).toHaveFocus()
+  })
+
   it('Escape then blur does not save, and focus returns to the title', async () => {
     setTouch(false)
     renderSection()

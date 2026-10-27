@@ -288,9 +288,11 @@ describe('shared sheet primitive', () => {
     expect(body(css, '.sheet .sheet-close')).toMatch(/background:\s*var\(--paper-2\)/)
   })
 
-  it('is centred with a dvh cap between 481px and 820px', () => {
+  it('stays centred and capped at the base 720px between 481px and 820px', () => {
     const mid = media(css, '(min-width: 481px) and (max-width: 820px)')
-    expect(mid).toMatch(/max-height:\s*calc\(100vh - 48px\);\s*max-height:\s*calc\(100dvh - 48px\)/)
+    expect(mid).toMatch(/width:\s*min\(720px,\s*calc\(100vw - 32px\)\)/)
+    expect(mid).not.toMatch(/width:\s*calc\(/)
+    expect(mid).not.toMatch(/max-height/)
   })
 
   it('is a full-screen sheet at 480px with safe-area padding', () => {

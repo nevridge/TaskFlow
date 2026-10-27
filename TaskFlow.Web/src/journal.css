@@ -302,7 +302,11 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  /* Row measures shared with the phone second line (see the 480px block): column gap, check width, id column. */
+  --todo-gap: 12px;
+  --todo-check: 18px;
+  --todo-id-w: 36px;
+  gap: 12px var(--todo-gap);
   padding: calc(8px * var(--den)) 4px;
   border-bottom: 1px dashed var(--line-soft);
   position: relative;
@@ -789,10 +793,16 @@
     min-width: 0;
     padding: 8px 12px;
   }
-  .todo-child-list { padding-left: 16px; }
+  /* .journal-page prefix (0-2-0) so this beats the base `.todo-child-list` padding declared later in the file. */
+  .journal-page .todo-child-list { padding-left: 16px; }
 
   /* Todo row on two lines. Line 1: check, id, title. Line 2 (indented to the title): badges left,
-     history / block / delete right, delete at the far edge. */
+     history / block / delete right, delete at the far edge. The id has a fixed column at this width so
+     the title always starts at check + gap + id column + gap; ids wider than the column (5+ chars) shift
+     the title right of line 2 by the overflow only. */
+  .journal-page .todo-id {
+    min-width: var(--todo-id-w);
+  }
   .journal-page .todo-subline {
     display: flex;
     flex: 0 0 100%;
@@ -800,7 +810,7 @@
     justify-content: space-between;
     gap: 8px;
     min-width: 0;
-    padding-left: 30px;
+    padding-left: calc(var(--todo-check) + var(--todo-gap) + var(--todo-id-w) + var(--todo-gap));
     box-sizing: border-box;
   }
   .journal-page .todo-subline-meta {
@@ -847,6 +857,7 @@
 }
 
 .todo-child {
+  --todo-check: 15px;
   border-bottom: 1px dashed var(--line-soft);
   font-size: 13.5px;
 }
@@ -1062,17 +1073,20 @@
   }
   .journal-page .todo-subline-actions { gap: 8px; }
   .journal-page .todo-x { margin-left: 8px; }
-  .journal-page .todo { column-gap: 14px; }
+  .journal-page .todo { --todo-gap: 14px; }
 
-  /* Check: 18px visual, 44x44 hit area. The 14px column gap keeps it clear of the title (13px overhang). */
+  /* Check: 44x44 hit area. Absolute insets are measured from the PADDING box, so the 1.5px border is added
+     to the inset: 18px box -> 15px padding box + 2 * 14.5px = 44px (15px child -> 12px + 2 * 16px = 44px).
+     The overhang past the border box is 13px (child 14.5px); the 14px (child 15px) column gap keeps it clear
+     of the id / title. */
   .journal-page .todo-check { position: relative; }
   .journal-page .todo-check::before {
     content: '';
     position: absolute;
-    inset: -13px;
+    inset: -14.5px;
   }
-  .journal-page .todo-child { column-gap: 15px; }
-  .journal-page .todo-child .todo-check::before { inset: -14.5px; }
+  .journal-page .todo-child { --todo-gap: 15px; }
+  .journal-page .todo-child .todo-check::before { inset: -16px; }
 
   /* Title: the whole line is the tap zone. */
   .journal-page .todo-text { min-height: var(--tap-min); display: flex; align-items: center; }
@@ -1088,7 +1102,8 @@
     -webkit-line-clamp: 3;
     line-clamp: 3;
     margin-top: 8px;
-    align-content: center;
+    /* -webkit-box ignores align-content; box-pack centres along the (vertical) box axis. */
+    -webkit-box-pack: center;
   }
 
   /* Date navigation: 44px hit areas, 8px apart, 16px date text (the index.css input floor wins). */

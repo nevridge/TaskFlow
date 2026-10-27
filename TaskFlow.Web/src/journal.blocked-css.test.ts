@@ -146,6 +146,13 @@ describe('journal touch and responsive styles', () => {
     expect(t).not.toMatch(/(^|\n)\s*\.log-text\s*\{/)
   })
 
+  it('wraps long task-history lines inside the sheet without editing tasks.css', () => {
+    expect(journalCss).toMatch(/\.sheet \.t-panel,\s*\.sheet \.t-history-list,\s*\.sheet \.t-history-item \{ min-width: 0; \}/)
+    expect(journalCss).toMatch(/\.sheet \.t-history-line \{ min-width: 0; overflow-wrap: anywhere; \}/)
+    const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
+    expect(t).not.toMatch(/t-history/)
+  })
+
   it('lets the log add row and typeahead shrink instead of widening the layout', () => {
     expect(rule('.log-add-inputs')).toMatch(/min-width:\s*0/)
     expect(rule('.log-add-inputs .add-input')).toMatch(/width:\s*0/)

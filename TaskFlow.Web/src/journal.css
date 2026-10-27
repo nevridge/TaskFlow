@@ -415,6 +415,13 @@
   color: var(--muted);
 }
 
+/* Task history inside the sheet: a long unbroken word (e.g. a blocked reason) must wrap instead of widening the sheet.
+   Scoped under .sheet (0-2-0) to beat the shared tasks.css .t-history-* rules without editing them. Width-only. */
+.sheet .t-panel,
+.sheet .t-history-list,
+.sheet .t-history-item { min-width: 0; }
+.sheet .t-history-line { min-width: 0; overflow-wrap: anywhere; }
+
 /* ─── Keyboard shortcuts modal ─────────────────────────────────────────────── */
 
 .kb-groups {

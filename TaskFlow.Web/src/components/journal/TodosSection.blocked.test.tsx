@@ -226,9 +226,9 @@ describe('TodosSection blocked tasks', () => {
     it('the badge is a real Unblock button that unblocks and returns focus to the checkbox', async () => {
       load([blockedRow])
       renderSection()
-      const badge = screen.getByRole('button', { name: 'Unblock' })
+      const badge = screen.getByRole('button', { name: 'Unblock task' })
       expect(badge).toHaveTextContent('Blocked')
-      expect(badge).toHaveAttribute('title', 'Unblock')
+      expect(badge).toHaveAttribute('title', 'Unblock task')
       await userEvent.click(badge)
       expect(unblockTodoMutate).toHaveBeenCalledTimes(1)
       expect(unblockTodoMutate).toHaveBeenCalledWith({ id: 2 }, expect.any(Object))
@@ -239,7 +239,7 @@ describe('TodosSection blocked tasks', () => {
       load([blockedRow])
       unblockTodoMutate.mockImplementation((_vars, opts: { onError: (e: unknown) => void }) => opts.onError({}))
       renderSection()
-      await userEvent.click(screen.getByRole('button', { name: 'Unblock' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Unblock task' }))
       expect(screen.getByRole('alert')).toHaveTextContent('Unable to save task changes')
     })
 
@@ -311,7 +311,7 @@ describe('TodosSection blocked tasks', () => {
       expect(blockTodoMutate).toHaveBeenCalledWith({ id: 7, reason: '' }, expect.any(Object))
       const blockedLi = screen.getByText('Blocked sub').closest('li') as HTMLElement
       expect(blockedLi.className).toContain('is-blocked')
-      await userEvent.click(within(blockedLi).getByRole('button', { name: 'Unblock' }))
+      await userEvent.click(within(blockedLi).getByRole('button', { name: 'Unblock task' }))
       expect(unblockTodoMutate).toHaveBeenCalledWith({ id: 8 }, expect.any(Object))
     })
   })

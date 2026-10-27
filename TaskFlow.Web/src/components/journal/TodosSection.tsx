@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { useTapToEdit } from '@/hooks/useTapToEdit'
 import type { TaskItemResponseDto } from '@/api/journal'
 import type { SortMode } from '@/lib/prefs'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
@@ -39,6 +41,21 @@ const DeleteSvg = () => (
   </svg>
 )
 
+/** Title as a text-like button: tap (touch), double-click (mouse) or Enter/Space (keyboard) starts editing. */
+function TodoTitle({ id, title, onEdit }: { id: number; title: string; onEdit: () => void }) {
+  const tap = useTapToEdit(onEdit)
+  return (
+    <button
+      type="button"
+      {...tap}
+      className={`todo-text ${tap.className}`}
+      data-todo-title={id}
+    >
+      {title}
+    </button>
+  )
+}
+
 interface Props {
   entryId: number
   isoDate: string
@@ -72,7 +89,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   const submittingBlockRef = useRef(false)
   const sectionRef = useRef<HTMLElement>(null)
   // Focus target applied after the next render, by todo id (the row may re-sort).
-  const pendingFocus = useRef<{ id: number; kind: 'check' | 'block' | 'reason' } | null>(null)
+  const pendingFocus = useRef<{ id: number; kind: 'check' | 'block' | 'reason' | 'title' } | null>(null)
 
   const [, setFocusTick] = useState(0)
 
@@ -84,7 +101,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     sectionRef.current?.querySelector<HTMLElement>(`[data-todo-${target.kind}="${target.id}"]`)?.focus()
   })
 
-  function requestFocus(id: number, kind: 'check' | 'block' | 'reason') {
+  function requestFocus(id: number, kind: 'check' | 'block' | 'reason' | 'title') {
     const request = { id, kind }
     pendingFocus.current = request
     setFocusTick(t => t + 1)
@@ -99,11 +116,17 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   const [actionError, setActionError] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
   const draftInputRef = useRef<HTMLInputElement>(null)
+  // Set once the title edit has been committed or cancelled, so a following blur does nothing.
+  const committedRef = useRef(false)
 
   useImperativeHandle(ref, () => ({
     focusDraftInput: () => draftInputRef.current?.focus(),
   }))
+
+  // Declared before the effect that moves focus into the sheet, so the opener is captured first.
+  useFocusTrap(modalRef, !!historyTask, { fallbackRef: sectionRef })
 
   useEffect(() => {
     if (!historyTask) return
@@ -229,14 +252,25 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     editReason.mutate({ id, reason }, { onError: err => setActionError(getTaskActionErrorMessage(err)) })
   }
 
-  function commitEdit() {
-    if (editingId == null) return
+  function startEdit(todo: TaskItemResponseDto) {
+    committedRef.current = false
+    setEditingId(Number(todo.id))
+    setEditingText(todo.title ?? '')
+  }
+
+  function finishEdit(via: 'enter' | 'escape' | 'blur') {
+    if (committedRef.current || editingId == null) return
+    committedRef.current = true
+    const id = editingId
     const text = editingText.trim()
-    if (text) {
-      editTodo.mutate({ id: editingId, title: text })
+    if (via !== 'escape' && text) {
+      editTodo.mutate({ id, title: text })
     }
     setEditingId(null)
     setEditingText('')
+    // Enter and Escape return focus to the title; a blur leaves focus where the user put it. Deferred so the
+    // still-pending keypress of this Enter cannot land on the freshly mounted title button and re-activate it.
+    if (via !== 'blur') window.setTimeout(() => requestFocus(id, 'title'), 0)
   }
 
   /** Controls shared by top-level todos and subtasks. */
@@ -246,10 +280,6 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     const isBlocked = td.status === 'Blocked'
     const canBlock = td.status === 'Todo'
     const childIsFuture = isChild && !!td.currentJournalDate && td.currentJournalDate > isoDate
-    const startEdit = () => {
-      setEditingId(id)
-      setEditingText(td.title ?? '')
-    }
     return (
       <>
         <button
@@ -271,78 +301,84 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             className="todo-edit"
             value={editingText}
             autoFocus
+            enterKeyHint="done"
             onChange={e => setEditingText(e.target.value)}
-            onBlur={commitEdit}
+            onBlur={() => finishEdit('blur')}
             onKeyDown={e => {
-              if (e.key === 'Enter') commitEdit()
-              if (e.key === 'Escape') { setEditingId(null); setEditingText('') }
+              if (e.key === 'Enter') finishEdit('enter')
+              if (e.key === 'Escape') finishEdit('escape')
             }}
           />
         ) : (
-          <span className="todo-text" onDoubleClick={startEdit}>
-            {td.title}
-          </span>
+          <TodoTitle id={id} title={td.title ?? ''} onEdit={() => startEdit(td)} />
         )}
 
-        {childIsFuture && td.currentJournalDate && (
-          <span className="todo-future-badge">{formatMonthDay(td.currentJournalDate)}</span>
-        )}
-
-        {!isChild && td.children && td.children.length > 0 && (
-          <span className="todo-subprogress">
-            {formatSubtaskProgress(
-              td.children.filter(c => c.status === 'Completed').length,
-              td.children.length,
-              td.children.filter(c => c.status === 'Blocked').length,
+        {/* Two lines on phones (badges left, actions right); display: contents on wider layouts. */}
+        <div className="todo-subline">
+          <div className="todo-subline-meta">
+            {childIsFuture && td.currentJournalDate && (
+              <span className="todo-future-badge">{formatMonthDay(td.currentJournalDate)}</span>
             )}
-          </span>
-        )}
 
-        <TodoBadges priority={td.priority} projectName={td.projectName} />
+            {!isChild && td.children && td.children.length > 0 && (
+              <span className="todo-subprogress">
+                {formatSubtaskProgress(
+                  td.children.filter(c => c.status === 'Completed').length,
+                  td.children.length,
+                  td.children.filter(c => c.status === 'Blocked').length,
+                )}
+              </span>
+            )}
 
-        {isBlocked && (
-          <button
-            type="button"
-            className="todo-blocked-badge"
-            aria-label="Unblock"
-            title="Unblock"
-            onClick={() => unblock(td)}
-          >
-            <BlockIcon size={11} />
-            <span className="todo-blocked-badge-text">Blocked</span>
-          </button>
-        )}
+            <TodoBadges priority={td.priority} projectName={td.projectName} />
 
-        <button
-          className="todo-history"
-          onClick={() => setHistoryTask(td)}
-          aria-label={isChild ? 'View history' : 'History'}
-        >
-          <HistorySvg />
-        </button>
+            {isBlocked && (
+              <button
+                type="button"
+                className="todo-blocked-badge"
+                aria-label="Unblock task"
+                title="Unblock task"
+                onClick={() => unblock(td)}
+              >
+                <BlockIcon size={11} />
+                <span className="todo-blocked-badge-text">Blocked</span>
+              </button>
+            )}
+          </div>
 
-        {canBlock && blockingId !== id && (
-          <button
-            type="button"
-            className="todo-block"
-            data-todo-block={id}
-            aria-label="Block"
-            title="Block"
-            onClick={() => openBlock(td)}
-          >
-            <BlockIcon />
-          </button>
-        )}
+          <div className="todo-subline-actions">
+            <button
+              className="todo-history"
+              onClick={() => setHistoryTask(td)}
+              aria-label={isChild ? 'View history' : 'History'}
+            >
+              <HistorySvg />
+            </button>
 
-        {!(isChild && childIsFuture) && (
-          <button
-            className="todo-x"
-            onClick={() => removeTodo.mutate(id)}
-            aria-label={isChild ? 'Remove from day' : 'Delete'}
-          >
-            <DeleteSvg />
-          </button>
-        )}
+            {canBlock && blockingId !== id && (
+              <button
+                type="button"
+                className="todo-block"
+                data-todo-block={id}
+                aria-label="Block"
+                title="Block"
+                onClick={() => openBlock(td)}
+              >
+                <BlockIcon />
+              </button>
+            )}
+
+            {!(isChild && childIsFuture) && (
+              <button
+                className="todo-x"
+                onClick={() => removeTodo.mutate(id)}
+                aria-label={isChild ? 'Remove from day' : 'Delete'}
+              >
+                <DeleteSvg />
+              </button>
+            )}
+          </div>
+        </div>
 
         {blockingId === id && (
           <BlockReasonInput
@@ -376,6 +412,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     <section
       className="card todos"
       ref={sectionRef}
+      tabIndex={-1}
       // New user input supersedes a pending focus request.
       onPointerDownCapture={() => { pendingFocus.current = null }}
       onKeyDownCapture={() => { pendingFocus.current = null }}
@@ -457,14 +494,14 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 
       {historyTask && (
         <>
-          <div className="j-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
-          <div className="j-modal" role="dialog" aria-modal="true" aria-labelledby="journal-task-history-title">
-            <div className="j-modal-header">
+          <div className="sheet-backdrop j-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+          <div ref={modalRef} className="sheet j-modal" role="dialog" aria-modal="true" aria-labelledby="journal-task-history-title">
+            <div className="sheet-header j-modal-header">
               <div>
                 <h3 id="journal-task-history-title" className="j-modal-title">Task history</h3>
                 <p className="j-modal-subtitle">{historyTask.title}</p>
               </div>
-              <button ref={historyCloseRef} className="j-modal-close" onClick={() => setHistoryTask(null)}>Close</button>
+              <button ref={historyCloseRef} type="button" className="sheet-close j-modal-close" onClick={() => setHistoryTask(null)}>Close</button>
             </div>
             <TaskHistoryPanel taskId={Number(historyTask.id)} />
           </div>

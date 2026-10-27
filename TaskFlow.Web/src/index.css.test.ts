@@ -261,6 +261,77 @@ describe('input font floor', () => {
   })
 })
 
+describe('shared sheet primitive', () => {
+  it('defines .sheet, .sheet-backdrop, .sheet-header and .sheet-close at column 0, not scoped to a page', () => {
+    for (const sel of ['.sheet', '.sheet-backdrop', '.sheet-header', '.sheet-close']) {
+      expect(() => body(css, sel)).not.toThrow()
+    }
+    expect(css).not.toMatch(/\.journal-page \.sheet/)
+    expect(journalCss).not.toMatch(/(^|\n)\.j-modal(-backdrop|-header|-close)? \{/)
+  })
+
+  it('is a column flex panel that scrolls itself, with a vh fallback before dvh', () => {
+    const sheet = body(css, '.sheet')
+    expect(sheet).toMatch(/display:\s*flex/)
+    expect(sheet).toMatch(/flex-direction:\s*column/)
+    expect(sheet).toMatch(/overflow-y:\s*auto/)
+    expect(sheet).toMatch(/overscroll-behavior:\s*contain/)
+    expect(sheet).toMatch(/max-height:\s*calc\(100vh - 48px\);\s*max-height:\s*calc\(100dvh - 48px\)/)
+  })
+
+  it('keeps the header sticky and opaque with the theme tokens', () => {
+    const header = body(css, '.sheet-header')
+    expect(header).toMatch(/position:\s*sticky/)
+    expect(header).toMatch(/top:\s*0/)
+    expect(header).toMatch(/background:\s*var\(--paper\)/)
+    expect(header).toMatch(/border-bottom:\s*1px solid var\(--line\)/)
+    expect(body(css, '.sheet .sheet-close')).toMatch(/background:\s*var\(--paper-2\)/)
+  })
+
+  it('stays centred and capped at the base 720px between 481px and 820px', () => {
+    const mid = media(css, '(min-width: 481px) and (max-width: 820px)')
+    expect(mid).toMatch(/width:\s*min\(720px,\s*calc\(100vw - 32px\)\)/)
+    expect(mid).not.toMatch(/width:\s*calc\(/)
+    expect(mid).not.toMatch(/max-height/)
+  })
+
+  it('is a full-screen sheet at 480px with safe-area padding', () => {
+    const phone = media(css, '(max-width: 480px)', css.indexOf('/* ─── Sheet'))
+    expect(phone).toMatch(/\.sheet \{[^}]*width:\s*100vw;[^}]*height:\s*100vh;\s*height:\s*100dvh;/)
+    expect(phone).toMatch(/border-radius:\s*0/)
+    expect(phone).toMatch(/overscroll-behavior:\s*contain/)
+    expect(phone).toMatch(/env\(safe-area-inset-bottom\)/)
+    expect(phone).toMatch(/env\(safe-area-inset-top\)/)
+    expect(phone).toMatch(/env\(safe-area-inset-left\)/)
+  })
+
+  it('gives Close a 44x44 hit area on touch, including .j-modal-close', () => {
+    const t = media(css, TOUCH, css.indexOf('/* ─── Sheet'))
+    expect(t).toMatch(/\.sheet-close,\s*\.j-modal-close \{[^}]*min-width:\s*var\(--tap-min\);[^}]*min-height:\s*var\(--tap-min\)/)
+  })
+
+  it('leaves the 0-8-1 input font floor untouched and uses no !important in the sheet or editor styles', () => {
+    expect(css).toContain(':is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input, textarea, select)')
+    const added = css.slice(css.indexOf('/* ─── Sheet'))
+    expect(added).not.toMatch(/!important/)
+  })
+})
+
+describe('block-reason editor styles', () => {
+  it('is invisible to layout on desktop and a full-width flex row on touch', () => {
+    expect(body(css, '.block-editor')).toMatch(/display:\s*contents/)
+    const t = media(css, TOUCH, css.indexOf('/* ─── Block-reason editor'))
+    expect(t).toMatch(/\.block-editor \{[^}]*display:\s*flex;[^}]*flex:\s*0 0 100%/)
+  })
+
+  it('makes Save and Cancel at least 44px tall with an 8px gap, scoped to beat the journal button reset', () => {
+    const t = media(css, TOUCH, css.indexOf('/* ─── Block-reason editor'))
+    expect(t).toMatch(/\.block-editor \.block-editor-cancel,\s*\.block-editor \.block-editor-save \{[^}]*min-height:\s*var\(--tap-min\)/)
+    expect(t).toMatch(/\.block-editor-actions \{[^}]*gap:\s*8px/)
+    expect(t).toMatch(/\.block-editor \{[^}]*gap:\s*8px/)
+  })
+})
+
 describe('index.html viewport', () => {
   it('uses viewport-fit=cover and does not block zoom', () => {
     const meta = /<meta name="viewport"[^>]*>/.exec(html)![0]

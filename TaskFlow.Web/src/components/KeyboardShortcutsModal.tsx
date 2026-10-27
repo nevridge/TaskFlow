@@ -68,16 +68,16 @@ export function KeyboardShortcutsModal({ onClose }: Props) {
 
   return (
     <>
-      <div className="j-modal-backdrop" onClick={onClose} aria-hidden="true" />
+      <div className="sheet-backdrop j-modal-backdrop" onClick={onClose} aria-hidden="true" />
       <div
-        className="j-modal"
+        className="sheet j-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="kb-modal-title"
       >
-        <div className="j-modal-header">
+        <div className="sheet-header j-modal-header">
           <h3 id="kb-modal-title" className="j-modal-title">Keyboard shortcuts</h3>
-          <button ref={closeRef} className="j-modal-close" onClick={onClose}>
+          <button ref={closeRef} type="button" className="sheet-close j-modal-close" onClick={onClose}>
             Close
           </button>
         </div>

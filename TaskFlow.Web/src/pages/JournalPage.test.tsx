@@ -132,6 +132,15 @@ describe('JournalPage', () => {
     expect(screen.getByTestId('notes-section')).toBeInTheDocument()
   })
 
+  it('keeps the section order: DateNav, header, TODOs, Daily Log, Notes', () => {
+    renderPage()
+    const order = ['date-nav', 'journal-header', 'todos-section', 'log-section', 'notes-section']
+      .map(id => screen.getByTestId(id))
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+  })
+
   it('hides sections when no entry and not loading', () => {
     vi.mocked(useEnsureJournalEntry).mockReturnValue({ entry: undefined, isLoading: false, error: null } as never)
     renderPage()
@@ -313,6 +322,21 @@ describe('JournalPage', () => {
       await vi.waitFor(() => {
         expect(screen.queryByText(/weekdays only — redirected to friday/i)).not.toBeInTheDocument()
       })
+    })
+
+    it('renders the banner between the DateNav and the header', async () => {
+      render(
+        <MemoryRouter initialEntries={[{ pathname: '/journal/05-29-2026', state: { weekendRedirect: true } }]}>
+          <Routes>
+            <Route path="/journal/:date" element={<JournalPage />} />
+          </Routes>
+        </MemoryRouter>,
+      )
+
+      const banner = await screen.findByText(/weekdays only — redirected to friday/i)
+      const following = Node.DOCUMENT_POSITION_FOLLOWING
+      expect(screen.getByTestId('date-nav').compareDocumentPosition(banner) & following).toBeTruthy()
+      expect(banner.compareDocumentPosition(screen.getByTestId('journal-header')) & following).toBeTruthy()
     })
   })
 })

@@ -512,7 +512,7 @@ describe('TodosSection', () => {
   }
 
   function rowBadges(title: string) {
-    return screen.getByText(title).parentElement!.querySelector(':scope > .todo-badges')
+    return screen.getByText(title).parentElement!.querySelector('.todo-badges')
   }
 
   it.each([

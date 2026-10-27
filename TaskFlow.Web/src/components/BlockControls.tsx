@@ -31,45 +31,72 @@ interface BlockReasonInputProps {
 }
 
 /**
- * Inline reason entry. Enter saves (an empty reason is valid), Esc cancels, and blur
- * (Tab away or click elsewhere) cancels without saving.
+ * Inline reason entry. Enter saves (an empty reason is valid) and Esc cancels on every device.
+ * Desktop: blur (Tab away or click elsewhere) cancels without saving, unless focus moved to something
+ * inside the editor. Touch: blur never cancels (dismissing the soft keyboard must not lose the draft), so
+ * explicit Cancel and Save buttons are shown instead.
  */
 export function BlockReasonInput({ className, initialValue = '', onSubmit, onCancel }: BlockReasonInputProps) {
   const [value, setValue] = useState(initialValue)
-  // Set once Enter or Esc has been handled so the blur caused by unmounting is ignored.
+  // Set once Enter, Esc, Save or Cancel has been handled so a later blur (e.g. from unmounting) is ignored.
   const closedRef = useRef(false)
+  const wrapperRef = useRef<HTMLSpanElement>(null)
+  // Decided when the editor renders; blur re-checks at event time.
+  const [touch] = useState(() => isCoarsePointer())
+
+  function submit() {
+    if (closedRef.current) return
+    closedRef.current = true
+    onSubmit(value.trim())
+  }
+
+  function cancel(via: 'escape' | 'blur') {
+    closedRef.current = true
+    onCancel(value, via)
+  }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     // Keep typed characters (e.g. "g") away from the global keyboard shortcuts.
     e.stopPropagation()
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (closedRef.current) return
-      closedRef.current = true
-      onSubmit(value.trim())
+      submit()
     } else if (e.key === 'Escape') {
-      closedRef.current = true
-      onCancel(value, 'escape')
+      cancel('escape')
     }
   }
 
   return (
-    <input
-      className={className}
-      type="text"
-      aria-label="Blocked reason, optional"
-      placeholder="Why is it blocked? (optional)"
-      maxLength={BLOCK_REASON_MAX_LENGTH}
-      value={value}
-      autoFocus
-      onChange={e => setValue(e.target.value)}
-      onKeyDown={handleKeyDown}
-      onBlur={() => {
-        if (closedRef.current) return
-        closedRef.current = true
-        onCancel(value, 'blur')
-      }}
-    />
+    <span className="block-editor" ref={wrapperRef}>
+      <input
+        className={className}
+        type="text"
+        aria-label="Blocked reason, optional"
+        placeholder="Why is it blocked? (optional)"
+        maxLength={BLOCK_REASON_MAX_LENGTH}
+        value={value}
+        autoFocus
+        enterKeyHint="done"
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={e => {
+          if (closedRef.current || touch || isCoarsePointer()) return
+          const next = e.relatedTarget
+          if (next instanceof Node && wrapperRef.current?.contains(next)) return
+          cancel('blur')
+        }}
+      />
+      {touch && (
+        <span className="block-editor-actions">
+          <button type="button" className="block-editor-cancel" onClick={() => { if (!closedRef.current) cancel('escape') }}>
+            Cancel
+          </button>
+          <button type="button" className="block-editor-save" onClick={submit}>
+            Save
+          </button>
+        </span>
+      )}
+    </span>
   )
 }
 

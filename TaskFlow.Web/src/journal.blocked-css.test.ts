@@ -16,6 +16,134 @@ ${selector} {`)
   return journalCss.slice(bodyStart, journalCss.indexOf('}', bodyStart))
 }
 
+/** Contents of the first `@media <query> {` at or after `from`, balanced on braces. */
+function mediaBlock(query: string, from = 0): string {
+  const at = journalCss.indexOf(`@media ${query} {`, from)
+  if (at === -1) throw new Error(`No @media ${query}`)
+  const start = journalCss.indexOf('{', at) + 1
+  let depth = 1
+  let i = start
+  while (depth > 0 && i < journalCss.length) {
+    if (journalCss[i] === '{') depth++
+    else if (journalCss[i] === '}') depth--
+    i++
+  }
+  return journalCss.slice(start, i - 1)
+}
+
+const TOUCH = '(hover: none), (pointer: coarse)'
+const DESKTOP = '(hover: hover) and (pointer: fine)'
+
+describe('journal touch and responsive styles', () => {
+  const touch = () => mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
+
+  it('reveals row actions on hover only under (hover: hover) and (pointer: fine)', () => {
+    const desktop = mediaBlock(DESKTOP)
+    expect(desktop).toMatch(/\.journal-page \.todo:hover \.todo-x/)
+    expect(desktop).toMatch(/\.journal-page \.todo:hover \.todo-history/)
+    expect(desktop).toMatch(/\.journal-page \.todo:hover \.todo-block/)
+    expect(desktop).toMatch(/\.journal-page \.log-entry:hover \.todo-x/)
+    expect(journalCss).not.toMatch(/(^|\n)\.todo:hover/)
+  })
+
+  it('reveals actions on :focus-within for .todo and .log-entry outside the hover query', () => {
+    expect(journalCss).toMatch(/\.journal-page \.todo:focus-within \.todo-x/)
+    expect(journalCss).toMatch(/\.journal-page \.log-entry:focus-within \.todo-x/)
+  })
+
+  it('declares the touch block last, after the desktop block, with the hybrid-device comment', () => {
+    const touchAt = journalCss.lastIndexOf(`@media ${TOUCH} {`)
+    expect(touchAt).toBeGreaterThan(journalCss.indexOf(`@media ${DESKTOP} {`))
+    expect(journalCss.indexOf('/* Touch. Declared LAST')).toBeLessThan(touchAt)
+    expect(journalCss).toMatch(/touchscreen laptop/)
+    expect(journalCss.slice(touchAt).match(/@media/g)).toHaveLength(1)
+  })
+
+  it('makes todo-x, todo-history and todo-block always visible at 44x44 with gaps of at least 8px', () => {
+    const t = touch()
+    expect(t).toMatch(/\.journal-page \.todo-x,\s*\.journal-page \.todo-history,\s*\.journal-page \.todo-block \{[^}]*opacity:\s*1;[^}]*width:\s*44px;[^}]*height:\s*44px/)
+    expect(t).toMatch(/\.todo-subline-actions \{\s*gap:\s*8px/)
+    expect(t).toMatch(/\.journal-page \.todo-x \{\s*margin-left:\s*8px/)
+  })
+
+  it('scopes every journal button rule as .journal-page .classname', () => {
+    for (const cls of ['todo-x', 'todo-history', 'todo-block', 'todo-text', 'todo-blocked-badge', 'todo-check']) {
+      expect(journalCss).not.toMatch(new RegExp(`(^|\\n)\\.${cls}\\s*[{,]`))
+    }
+  })
+
+  it('gives the check an 18px visual with a 44px hit area that stays clear of the title', () => {
+    const t = touch()
+    expect(rule('.journal-page .todo-check')).toMatch(/width:\s*18px/)
+    expect(t).toMatch(/\.todo-check::before \{[^}]*inset:\s*-13px/)
+    expect(t).toMatch(/\.journal-page \.todo \{\s*column-gap:\s*14px/)
+  })
+
+  it('makes the title a text-like button, a full-height tap zone on touch', () => {
+    const text = rule('.journal-page .todo-text')
+    expect(text).toMatch(/background:\s*none/)
+    expect(text).toMatch(/border:\s*0/)
+    expect(text).toMatch(/text-align:\s*left/)
+    expect(text).toMatch(/cursor:\s*text/)
+    expect(journalCss).toMatch(/\.journal-page \.todo-text:focus-visible/)
+    expect(touch()).toMatch(/\.todo-text \{[^}]*min-height:\s*var\(--tap-min\)/)
+  })
+
+  it('wraps the blocked reason on touch (3-line clamp) with a 44px hit area; the badge is 44px too', () => {
+    const t = touch()
+    expect(t).toMatch(/\.todo-block-reason \{[^}]*min-height:\s*var\(--tap-min\)/)
+    expect(t).toMatch(/white-space:\s*normal/)
+    expect(t).toMatch(/overflow-wrap:\s*anywhere/)
+    expect(t).toMatch(/-webkit-line-clamp:\s*3/)
+    expect(t).toMatch(/\.todo-blocked-badge \{[^}]*min-height:\s*var\(--tap-min\)/)
+  })
+
+  it('sizes DateNav to 44px on touch with 8px spacing and a 16px date', () => {
+    const t = touch()
+    expect(t).toMatch(/\.datenav \{\s*gap:\s*8px/)
+    expect(t).toMatch(/\.journal-page \.dn-btn,\s*\.journal-page \.dn-today \{[^}]*min-width:\s*var\(--tap-min\);[^}]*min-height:\s*var\(--tap-min\)/)
+    expect(t).toMatch(/\.journal-page \.dn-date \{[^}]*min-height:\s*var\(--tap-min\);[^}]*font-size:\s*16px/)
+  })
+
+  it('wraps DateNav at 360px', () => {
+    expect(mediaBlock('(max-width: 360px)')).toMatch(/\.datenav \{[^}]*width:\s*100%;[^}]*flex-wrap:\s*wrap;[^}]*justify-content:\s*center/)
+  })
+
+  it('collapses the frame at 820px: card min-height 0, page padding-inline and 80px bottom', () => {
+    const narrow = mediaBlock('(max-width: 820px)')
+    expect(narrow).toMatch(/\.card \{ min-height: 0; \}/)
+    expect(narrow).toMatch(/padding-inline:\s*var\(--page-pad\)/)
+    expect(narrow).toMatch(/padding-bottom:\s*80px/)
+    expect(rule('.card')).toMatch(/min-height:\s*calc\(440px \* var\(--den\)\)/)
+    expect(rule('.journal')).toMatch(/overflow:\s*hidden/)
+  })
+
+  it('tightens the phone layout at 480px', () => {
+    const phone = mediaBlock('(max-width: 480px)')
+    expect(phone).toMatch(/\.card \{ padding: 14px 12px; \}/)
+    expect(phone).toMatch(/\.hdr \{ padding: 16px 14px; \}/)
+    expect(phone).toMatch(/\.hdr-fulldate \{\s*font-size:\s*18px;\s*overflow-wrap:\s*anywhere/)
+    expect(phone).toMatch(/\.hdr-num \{\s*flex:\s*1 1 0;\s*min-width:\s*0;\s*padding:\s*8px 12px/)
+    expect(phone).toMatch(/\.todo-child-list \{ padding-left: 16px; \}/)
+    expect(phone).toMatch(/\.todo-edit \{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/)
+    expect(phone).toMatch(/\.todo-text \{ overflow-wrap: anywhere; \}/)
+  })
+
+  it('puts the todo row on two lines at 480px: badges left, actions right, delete last', () => {
+    const phone = mediaBlock('(max-width: 480px)')
+    expect(phone).toMatch(/\.todo-subline \{\s*display:\s*flex;\s*flex:\s*0 0 100%/)
+    expect(phone).toMatch(/\.todo-subline-actions \{[^}]*margin-left:\s*auto/)
+    expect(journalCss).toMatch(/(^|\n)\.todo-subline,\s*\.todo-subline-meta,\s*\.todo-subline-actions \{ display: contents; \}/)
+  })
+
+  it('keeps touch sizing out of the width-only blocks', () => {
+    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)']) {
+      const block = mediaBlock(q)
+      expect(block).not.toMatch(/44px|var\(--tap-min\)|opacity:\s*1/)
+    }
+  })
+})
+
 describe('journal blocked styles', () => {
   it('scopes the blocked button/badge classes as .journal-page .classname (0-2-0)', () => {
     expect(() => rule('.journal-page .todo-block')).not.toThrow()
@@ -57,13 +185,17 @@ describe('journal blocked styles', () => {
     expect(reason).toMatch(/color:\s*var\(--muted\)/)
   })
 
-  it('on narrow layouts keeps the Block button visible and puts the reason input on its own full-width line', () => {
-    const media = /@media \(hover: none\), \(max-width: 820px\) \{([\s\S]*?)\n\}/.exec(
-      journalCss.slice(journalCss.indexOf('/* Touch and narrow layouts')),
-    )
-    expect(media).not.toBeNull()
-    expect(media![1]).toMatch(/\.todo-block \{[^}]*opacity:\s*1/)
+  it('on narrow layouts only moves the reason input and text to the full row width (no touch sizing)', () => {
+    const narrow = mediaBlock('(max-width: 820px)', journalCss.indexOf('/* Narrow layouts (width only'))
+    expect(narrow).toMatch(/\.todo-block-input \{[^}]*margin-left:\s*0/)
+    expect(narrow).toMatch(/\.todo-block-reason \{[^}]*padding-left:\s*0/)
+    expect(narrow).not.toMatch(/width:\s*(32|44)px|opacity/)
     expect(rule('.journal-page .todo-block-input')).toMatch(/flex:\s*0 0 100%/)
+  })
+
+  it('no longer uses the old (hover: none), (max-width: 820px) query', () => {
+    expect(journalCss).not.toContain('(hover: none), (max-width: 820px)')
+    expect(journalCss).toContain('@media (hover: none), (pointer: coarse) {')
   })
 
   it('defines the danger tokens it depends on in light and dark themes, and uses no --danger variable or inline colours', () => {

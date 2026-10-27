@@ -828,3 +828,149 @@ html.is-dark .settings-seg-btn {
 .edit-trigger {
   touch-action: manipulation;
 }
+
+/* ─── Sheet (shared dialog primitive) ──────────────────────────────────────────
+   Centred panel on desktop, full-screen sheet on phones. The panel scrolls (not the page) and its header
+   sticks to the top. Not scoped to a page so Journal and Tasks can both use it. The panel has no padding of
+   its own (the header and body carry it) so the sticky header sits flush with the top edge. */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, .28);
+  backdrop-filter: blur(2px);
+  z-index: 40;
+}
+
+.sheet {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  z-index: 41;
+}
+.sheet > :not(.sheet-header) { margin-inline: 26px; }
+.sheet > :last-child { margin-bottom: 22px; }
+
+.sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 22px 26px 12px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--ink);
+}
+/* 0-2-0: beats the `.journal-page button` reset (0-1-1) for border and background. */
+.sheet .sheet-close {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+}
+.sheet .sheet-close:hover { background: var(--hover-soft); }
+
+@media (min-width: 481px) and (max-width: 820px) {
+  .sheet {
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
+  }
+}
+
+@media (max-width: 480px) {
+  .sheet {
+    top: 0;
+    left: 0;
+    transform: none;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    overscroll-behavior: contain;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet-header {
+    padding: calc(14px + env(safe-area-inset-top)) 16px 12px;
+  }
+  .sheet > :not(.sheet-header) { margin-inline: 16px; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .sheet-close,
+  .j-modal-close {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+  }
+}
+
+/* ─── Block-reason editor (shared by Journal and Tasks) ───────────────────────
+   Desktop: the wrapper is invisible to layout and only exists for the focus-inside check.
+   Touch: input on its own line, Cancel then Save (thumb side) on a row below, each 44px tall, 8px apart. */
+
+.block-editor { display: contents; }
+
+@media (hover: none), (pointer: coarse) {
+  .block-editor {
+    display: flex;
+    flex: 0 0 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .block-editor > input { flex: 1 1 100%; }
+  .block-editor-actions {
+    display: flex;
+    flex: 0 0 100%;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  /* 0-2-0 beats the `.journal-page button` reset (0-1-1). */
+  .block-editor .block-editor-cancel,
+  .block-editor .block-editor-save {
+    min-height: var(--tap-min);
+    min-width: var(--tap-min);
+    padding: 0 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 14px;
+    touch-action: manipulation;
+  }
+  .block-editor .block-editor-save {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+}

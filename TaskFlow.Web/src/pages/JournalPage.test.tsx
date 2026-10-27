@@ -132,6 +132,15 @@ describe('JournalPage', () => {
     expect(screen.getByTestId('notes-section')).toBeInTheDocument()
   })
 
+  it('keeps the section order: DateNav, header, TODOs, Daily Log, Notes', () => {
+    renderPage()
+    const order = ['date-nav', 'journal-header', 'todos-section', 'log-section', 'notes-section']
+      .map(id => screen.getByTestId(id))
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+  })
+
   it('hides sections when no entry and not loading', () => {
     vi.mocked(useEnsureJournalEntry).mockReturnValue({ entry: undefined, isLoading: false, error: null } as never)
     renderPage()

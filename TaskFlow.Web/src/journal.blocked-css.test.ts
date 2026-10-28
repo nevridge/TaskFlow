@@ -195,7 +195,8 @@ describe('journal touch and responsive styles', () => {
   it('wraps the phone subline so actions drop below the badges instead of overlapping them', () => {
     const phone = mediaBlock('(max-width: 480px)')
     expect(phone).toMatch(/\.journal-page \.todo-subline \{[^}]*flex-wrap:\s*wrap/)
-    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*min-content/)
+    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;/)
+    expect(phone).not.toMatch(/\.todo-subline-meta \{[^}]*min-width:\s*min-content/)
     expect(phone).not.toMatch(/\.todo-subline-actions \{[^}]*margin-left/)
     expect(phone).toMatch(/\.todo-subline-meta > \.todo-badges,\s*\.journal-page \.todo-subline-meta > \.todo-blocked-badge \{ max-width: 100%; \}/)
     const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))

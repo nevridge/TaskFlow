@@ -850,7 +850,10 @@
     align-items: center;
     justify-content: flex-end;
     gap: 6px 8px;
-    min-width: min-content; /* never shrink under the badges; wrapping the actions is the fallback */
+    /* min-width 0 (not min-content): the project pill's min-content is its full text width, which would pin the
+       meta box wider than the row. The box wraps its actions to their own line first (flex-basis is max-content),
+       then shrinks to the row, so the pill ellipsizes and the Blocked pill wraps instead of overflowing. */
+    min-width: 0;
   }
   /* Badges never exceed the meta box: they wrap onto their own line inside it if the box itself is narrower. */
   .journal-page .todo-subline-meta > .todo-badges,

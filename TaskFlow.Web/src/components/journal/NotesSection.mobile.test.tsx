@@ -280,6 +280,48 @@ describe('NotesSection on touch', () => {
     })
   })
 
+  it('reads the pointer mode once per mount: a later change leaves the rendered DOM alone', () => {
+    vi.mocked(useCreateJournalNoteMutation).mockReturnValue({ mutate: createNoteMutate, isPending: true } as never)
+    const { rerender } = renderSection()
+    expect(addBox()).toBeEnabled()
+    expect(addBox()).toHaveAttribute('placeholder', 'Add a note')
+    setTouch(false)
+    rerender(<NotesSection entryId={10} />)
+    expect(addBox()).toBeEnabled()
+    expect(addBox()).toHaveAttribute('placeholder', 'Add a note')
+  })
+
+  describe('focus return expiry', () => {
+    afterEach(() => vi.useRealTimers())
+
+    function cancelEditing() {
+      loadNotes([note1])
+      const utils = renderSection()
+      fireEvent.click(noteTrigger())
+      act(() => { fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit note' }), { key: 'Escape' }) })
+      return utils
+    }
+
+    it('returns focus to the note on re-render while the 100ms window is open', () => {
+      vi.useFakeTimers()
+      const { rerender } = cancelEditing()
+      const text = noteTrigger()
+      expect(document.activeElement).toBe(text)
+      act(() => { vi.advanceTimersByTime(99); text.blur() })
+      rerender(<NotesSection entryId={10} />)
+      expect(document.activeElement).toBe(text)
+    })
+
+    it('does not pull focus back once the 100ms have elapsed', () => {
+      vi.useFakeTimers()
+      const { rerender } = cancelEditing()
+      const text = noteTrigger()
+      act(() => { vi.advanceTimersByTime(100); text.blur() })
+      rerender(<NotesSection entryId={10} />)
+      expect(document.activeElement).not.toBe(text)
+    })
+  })
+
   it('wraps the row as a note entry', () => {
     loadNotes([note1])
     renderSection()

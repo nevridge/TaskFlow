@@ -205,6 +205,24 @@ describe('journal touch and responsive styles', () => {
     expect(t).toMatch(/\.journal-page \.todo-subline-actions \{ gap: 8px; \}/)
   })
 
+  it('keeps the shrink chain that stops a long project pill overflowing at 375px', () => {
+    const badges = rule('.journal-page .todo-badges')
+    expect(badges).toMatch(/min-width:\s*0/)
+    expect(badges).toMatch(/flex:\s*0 1 auto/)
+    expect(badges).toMatch(/max-width:\s*100%/)
+    const pill = rule('.journal-page .todo-badges .t-badge-project')
+    expect(pill).toMatch(/flex:\s*0 1 auto/)
+    expect(pill).toMatch(/min-width:\s*0/)
+    expect(pill).toMatch(/max-width:\s*min\(16rem,\s*100%\)/)
+    // The ellipsis itself lives in tasks.css, not journal.css.
+    const tasksCss = read('./tasks.css')
+    const base = /(^|\n)\.t-badge-project \{([^}]*)\}/.exec(tasksCss)?.[2] ?? ''
+    expect(base).toMatch(/overflow:\s*hidden/)
+    expect(base).toMatch(/text-overflow:\s*ellipsis/)
+    expect(base).toMatch(/white-space:\s*nowrap/)
+    expect(mediaBlock('(max-width: 480px)')).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex-wrap:\s*wrap/)
+  })
+
   it('wins the cascade for the subtask indent at 480px: higher specificity than the later base rule', () => {
     const classCount = (sel: string) => (sel.match(/\.[\w-]+/g) ?? []).length
     const phoneSel = '.journal-page .todo-child-list'

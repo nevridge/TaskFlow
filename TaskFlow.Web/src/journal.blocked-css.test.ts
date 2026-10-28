@@ -177,7 +177,10 @@ describe('journal touch and responsive styles', () => {
     expect(phone).toMatch(/\.hdr-num \{\s*flex:\s*1 1 0;\s*min-width:\s*0;\s*padding:\s*8px 12px/)
     expect(phone).toMatch(/\.journal-page \.todo-child-list \{ padding-left: 16px; \}/)
     expect(phone).toMatch(/\.todo-edit \{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/)
-    expect(phone).toMatch(/\.todo-text \{ overflow-wrap: anywhere; \}/)
+    expect(phone).not.toMatch(/\.todo-text \{/)
+    const title = rule('.journal-page .todo-text')
+    expect(title).toMatch(/overflow-wrap:\s*break-word/)
+    expect(title).not.toMatch(/anywhere/)
   })
 
   it('puts the todo row on two lines at 480px: badges left, actions right, delete last', () => {
@@ -208,13 +211,16 @@ describe('journal touch and responsive styles', () => {
     // Either it comes later in the source at equal specificity, or it is strictly more specific.
     const wins = classCount(phoneSel) > classCount(baseSel) || (classCount(phoneSel) === classCount(baseSel) && phoneAt > baseAt)
     expect(wins).toBe(true)
-    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 30px/)
+    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 20px/)
   })
 
   it('aligns phone line 2 with the title start using the same measures as line 1', () => {
     const phone = mediaBlock('(max-width: 480px)')
-    expect(phone).toMatch(/\.journal-page \.todo-id \{\s*min-width:\s*var\(--todo-id-w\)/)
-    expect(phone).toMatch(/\.todo-subline \{[^}]*padding-left:\s*calc\(var\(--todo-check\) \+ var\(--todo-gap\) \+ var\(--todo-id-w\) \+ var\(--todo-gap\)\)/)
+    expect(rule('.journal-page .todo-id')).toMatch(/min-width:\s*var\(--todo-id-w\)/)
+    expect(phone).toMatch(/\.todo-subline \{[^}]*padding-left:\s*var\(--todo-title-x\)/)
+    const titleX = /--todo-title-x:\s*calc\(var\(--todo-check\) \+ var\(--todo-gap\) \+ var\(--todo-id-w\) \+ var\(--todo-gap\)\)/
+    expect(rule('.todo')).toMatch(titleX)
+    expect(rule('.todo-child')).toMatch(titleX)
     const todo = rule('.todo')
     expect(todo).toMatch(/--todo-check:\s*18px/)
     expect(todo).toMatch(/--todo-gap:\s*12px/)
@@ -223,7 +229,7 @@ describe('journal touch and responsive styles', () => {
   })
 
   it('keeps touch sizing out of the width-only blocks', () => {
-    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)']) {
+    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)', '(min-width: 481px)']) {
       const block = mediaBlock(q)
       expect(block).not.toMatch(/44px|var\(--tap-min\)|(?<![\w-])opacity:\s*1\s*;/)
     }
@@ -248,7 +254,7 @@ describe('journal blocked styles', () => {
 
   it('draws the badge with a dashed border and a color-mix background from the danger tokens', () => {
     const badge = rule('.journal-page .todo-blocked-badge')
-    expect(badge).toMatch(/border:\s*1px dashed var\(--danger-ink\)/)
+    expect(badge).toMatch(/border:\s*1px dashed color-mix\([^)]*var\(--danger-ink\)/)
     expect(badge).toMatch(/color-mix\([^)]*var\(--danger-bg\)/)
   })
 
@@ -259,9 +265,9 @@ describe('journal blocked styles', () => {
     expect(journalCss).not.toMatch(/(^|\n)\.task-typeahead-blocked\s*[{,]/)
   })
 
-  it('gives blocked rows a 3px left accent and reserves its width on every row', () => {
-    expect(rule('.journal-page .todo')).toMatch(/border-left:\s*3px solid transparent/)
-    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*var\(--danger-ink\)/)
+  it('gives blocked rows a 2px left accent and reserves its width on every row', () => {
+    expect(rule('.journal-page .todo')).toMatch(/border-left:\s*2px solid transparent/)
+    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*color-mix\([^)]*var\(--danger-ink\)/)
   })
 
   it('renders the reason as a muted single line with an ellipsis', () => {
@@ -271,12 +277,40 @@ describe('journal blocked styles', () => {
     expect(reason).toMatch(/color:\s*var\(--muted\)/)
   })
 
-  it('on narrow layouts only moves the reason input and text to the full row width (no touch sizing)', () => {
-    const narrow = mediaBlock('(max-width: 820px)', journalCss.indexOf('/* Narrow layouts (width only'))
-    expect(narrow).toMatch(/\.todo-block-input \{[^}]*margin-left:\s*0/)
-    expect(narrow).toMatch(/\.todo-block-reason \{[^}]*padding-left:\s*0/)
-    expect(narrow).not.toMatch(/width:\s*(32|44)px|opacity/)
-    expect(rule('.journal-page .todo-block-input')).toMatch(/flex:\s*0 0 100%/)
+  it('aligns the reason and its editor with the title edge instead of a hard-coded offset', () => {
+    expect(rule('.journal-page .todo-block-reason')).toMatch(/padding:\s*0 0 0 var\(--todo-title-x\)/)
+    const input = rule('.journal-page .todo-block-input')
+    expect(input).toMatch(/margin-left:\s*var\(--todo-title-x\)/)
+    expect(input).toMatch(/max-width:\s*calc\(100% - var\(--todo-title-x\)\)/)
+    expect(input).toMatch(/flex:\s*0 0 100%/)
+    expect(journalCss.slice(journalCss.indexOf('/* ─── Blocked tasks'))).not.toMatch(/30px/)
+  })
+
+  it('uses a thinner, softer rail that is shared by adjacent blocked rows, and none on subtasks', () => {
+    const base = rule('.journal-page .todo')
+    expect(base).toMatch(/border-left:\s*2px solid transparent/)
+    expect(base).not.toMatch(/margin/)
+    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*color-mix\([^)]*var\(--danger-ink\)/)
+    expect(rule('.journal-page .todo-child')).toMatch(/border-left:\s*0/)
+    const childAt = journalCss.indexOf('\n.journal-page .todo-child {')
+    const todoAt = journalCss.indexOf('\n.journal-page .todo {')
+    expect(childAt).toBeGreaterThan(todoAt)
+  })
+
+  it('puts the metadata on its own line beneath the title above 480px, hiding it when empty', () => {
+    const wide = mediaBlock('(min-width: 481px)')
+    const meta = /\.journal-page \.todo-subline-meta \{([^}]*)\}/.exec(wide)?.[1] ?? ''
+    expect(meta).toMatch(/flex:\s*0 0 100%/)
+    expect(meta).toMatch(/padding-left:\s*var\(--todo-title-x\)/)
+    expect(meta).toMatch(/box-sizing:\s*border-box/)
+    expect(wide).toMatch(/\.journal-page \.todo-subline-meta:empty \{\s*display:\s*none/)
+    expect(mediaBlock('(max-width: 480px)')).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*order:\s*-1/)
+  })
+
+  it('scopes every selector in the new width-only block under .journal-page', () => {
+    const wide = mediaBlock('(min-width: 481px)')
+    const selectors = wide.split('{').slice(0, -1).map(chunk => chunk.split('}').pop()!.trim())
+    for (const sel of selectors) expect(sel.startsWith('.journal-page')).toBe(true)
   })
 
   it('no longer uses the old (hover: none), (max-width: 820px) query', () => {

@@ -231,6 +231,37 @@ describe('TodosSection title tap-to-edit', () => {
       'Delete',
     ])
   })
+
+  it('places the actions before the metadata inside .todo-subline', () => {
+    renderSection()
+    const subline = document.querySelector('.todo-subline')!
+    const actions = subline.querySelector('.todo-subline-actions')!
+    const meta = subline.querySelector('.todo-subline-meta')!
+    expect(actions.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Block' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+  })
+
+  it('renders the Blocked pill and reason of a Blocked subtask inside its own li.todo-child', () => {
+    load([
+      row({
+        id: 1,
+        title: 'Parent',
+        status: 'Blocked',
+        blockedReason: 'parent reason',
+        children: [row({ id: 2, title: 'Child', status: 'Blocked', blockedReason: 'child reason', parentTaskItemId: 1 })],
+      } as Partial<TaskItemResponseDto>),
+    ])
+    renderSection()
+    const child = document.querySelector('li.todo-child') as HTMLElement
+    expect(child).not.toBeNull()
+    expect(child.querySelector('.todo-blocked-badge')).not.toBeNull()
+    expect(within(child).getByText('Blocked')).toBeInTheDocument()
+    const reason = child.querySelector('.todo-block-reason')
+    expect(reason).not.toBeNull()
+    expect(reason).toHaveTextContent('child reason')
+  })
 })
 
 describe('TodosSection blocked unblock badge and touch block editor', () => {

@@ -177,24 +177,50 @@ describe('journal touch and responsive styles', () => {
     expect(phone).toMatch(/\.hdr-num \{\s*flex:\s*1 1 0;\s*min-width:\s*0;\s*padding:\s*8px 12px/)
     expect(phone).toMatch(/\.journal-page \.todo-child-list \{ padding-left: 16px; \}/)
     expect(phone).toMatch(/\.todo-edit \{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/)
-    expect(phone).toMatch(/\.todo-text \{ overflow-wrap: anywhere; \}/)
+    expect(phone).not.toMatch(/\.todo-text \{/)
+    const title = rule('.journal-page .todo-text')
+    expect(title).toMatch(/overflow-wrap:\s*break-word/)
+    expect(title).not.toMatch(/anywhere/)
   })
 
-  it('puts the todo row on two lines at 480px: badges left, actions right, delete last', () => {
+  it('puts the todo row on two lines at 480px: actions left, badges right, in DOM order', () => {
     const phone = mediaBlock('(max-width: 480px)')
     expect(phone).toMatch(/\.todo-subline \{\s*display:\s*flex;\s*flex:\s*0 0 100%/)
-    expect(phone).toMatch(/\.todo-subline-actions \{[^}]*margin-left:\s*auto/)
+    const actions = /\.journal-page \.todo-subline-actions \{([^}]*)\}/.exec(phone)?.[1] ?? ''
+    expect(actions).toMatch(/display:\s*flex/)
+    expect(actions).not.toMatch(/margin-left/)
     expect(journalCss).toMatch(/(^|\n)\.todo-subline,\s*\.todo-subline-meta,\s*\.todo-subline-actions \{ display: contents; \}/)
   })
 
   it('wraps the phone subline so actions drop below the badges instead of overlapping them', () => {
     const phone = mediaBlock('(max-width: 480px)')
     expect(phone).toMatch(/\.journal-page \.todo-subline \{[^}]*flex-wrap:\s*wrap/)
-    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*min-content/)
-    expect(phone).toMatch(/\.todo-subline-actions \{[^}]*margin-left:\s*auto/)
+    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex:\s*1 1 auto;[^}]*min-width:\s*0;/)
+    expect(phone).not.toMatch(/\.todo-subline-meta \{[^}]*min-width:\s*min-content/)
+    expect(phone).not.toMatch(/\.todo-subline-actions \{[^}]*margin-left/)
     expect(phone).toMatch(/\.todo-subline-meta > \.todo-badges,\s*\.journal-page \.todo-subline-meta > \.todo-blocked-badge \{ max-width: 100%; \}/)
     const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
     expect(t).not.toMatch(/todo-subline \{|todo-subline-meta/)
+    // The only subline rule allowed in the touch block is the pre-existing action gap.
+    expect(t).toMatch(/\.journal-page \.todo-subline-actions \{ gap: 8px; \}/)
+  })
+
+  it('keeps the shrink chain that stops a long project pill overflowing at 375px', () => {
+    const badges = rule('.journal-page .todo-badges')
+    expect(badges).toMatch(/min-width:\s*0/)
+    expect(badges).toMatch(/flex:\s*0 1 auto/)
+    expect(badges).toMatch(/max-width:\s*100%/)
+    const pill = rule('.journal-page .todo-badges .t-badge-project')
+    expect(pill).toMatch(/flex:\s*0 1 auto/)
+    expect(pill).toMatch(/min-width:\s*0/)
+    expect(pill).toMatch(/max-width:\s*min\(16rem,\s*100%\)/)
+    // The ellipsis itself lives in tasks.css, not journal.css.
+    const tasksCss = read('./tasks.css')
+    const base = /(^|\n)\.t-badge-project \{([^}]*)\}/.exec(tasksCss)?.[2] ?? ''
+    expect(base).toMatch(/overflow:\s*hidden/)
+    expect(base).toMatch(/text-overflow:\s*ellipsis/)
+    expect(base).toMatch(/white-space:\s*nowrap/)
+    expect(mediaBlock('(max-width: 480px)')).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex-wrap:\s*wrap/)
   })
 
   it('wins the cascade for the subtask indent at 480px: higher specificity than the later base rule', () => {
@@ -208,13 +234,16 @@ describe('journal touch and responsive styles', () => {
     // Either it comes later in the source at equal specificity, or it is strictly more specific.
     const wins = classCount(phoneSel) > classCount(baseSel) || (classCount(phoneSel) === classCount(baseSel) && phoneAt > baseAt)
     expect(wins).toBe(true)
-    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 30px/)
+    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 20px/)
   })
 
   it('aligns phone line 2 with the title start using the same measures as line 1', () => {
     const phone = mediaBlock('(max-width: 480px)')
-    expect(phone).toMatch(/\.journal-page \.todo-id \{\s*min-width:\s*var\(--todo-id-w\)/)
-    expect(phone).toMatch(/\.todo-subline \{[^}]*padding-left:\s*calc\(var\(--todo-check\) \+ var\(--todo-gap\) \+ var\(--todo-id-w\) \+ var\(--todo-gap\)\)/)
+    expect(rule('.journal-page .todo-id')).toMatch(/min-width:\s*var\(--todo-id-w\)/)
+    expect(phone).toMatch(/\.todo-subline \{[^}]*padding-left:\s*var\(--todo-title-x\)/)
+    const titleX = /--todo-title-x:\s*calc\(var\(--todo-check\) \+ var\(--todo-gap\) \+ var\(--todo-id-w\) \+ var\(--todo-gap\)\)/
+    expect(rule('.todo')).toMatch(titleX)
+    expect(rule('.todo-child')).toMatch(titleX)
     const todo = rule('.todo')
     expect(todo).toMatch(/--todo-check:\s*18px/)
     expect(todo).toMatch(/--todo-gap:\s*12px/)
@@ -223,7 +252,7 @@ describe('journal touch and responsive styles', () => {
   })
 
   it('keeps touch sizing out of the width-only blocks', () => {
-    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)']) {
+    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)', '(width > 480px)']) {
       const block = mediaBlock(q)
       expect(block).not.toMatch(/44px|var\(--tap-min\)|(?<![\w-])opacity:\s*1\s*;/)
     }
@@ -248,8 +277,9 @@ describe('journal blocked styles', () => {
 
   it('draws the badge with a dashed border and a color-mix background from the danger tokens', () => {
     const badge = rule('.journal-page .todo-blocked-badge')
-    expect(badge).toMatch(/border:\s*1px dashed var\(--danger-ink\)/)
-    expect(badge).toMatch(/color-mix\([^)]*var\(--danger-bg\)/)
+    expect(badge).toMatch(/border:\s*1px dashed color-mix\(in oklab, var\(--danger-ink\) 55%, transparent\)/)
+    expect(badge).toMatch(/background:\s*color-mix\(in oklab, var\(--danger-bg\) 40%, transparent\)/)
+    expect(badge).toMatch(/(^|[\s;])color:\s*var\(--danger-ink\)/)
   })
 
   it('styles the typeahead Blocked marker at 0-2-0 with a dashed danger-ink border', () => {
@@ -259,9 +289,9 @@ describe('journal blocked styles', () => {
     expect(journalCss).not.toMatch(/(^|\n)\.task-typeahead-blocked\s*[{,]/)
   })
 
-  it('gives blocked rows a 3px left accent and reserves its width on every row', () => {
-    expect(rule('.journal-page .todo')).toMatch(/border-left:\s*3px solid transparent/)
-    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*var\(--danger-ink\)/)
+  it('gives blocked rows a 2px left accent and reserves its width on every row', () => {
+    expect(rule('.journal-page .todo')).toMatch(/border-left:\s*2px solid transparent/)
+    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*color-mix\([^)]*var\(--danger-ink\)/)
   })
 
   it('renders the reason as a muted single line with an ellipsis', () => {
@@ -271,12 +301,42 @@ describe('journal blocked styles', () => {
     expect(reason).toMatch(/color:\s*var\(--muted\)/)
   })
 
-  it('on narrow layouts only moves the reason input and text to the full row width (no touch sizing)', () => {
-    const narrow = mediaBlock('(max-width: 820px)', journalCss.indexOf('/* Narrow layouts (width only'))
-    expect(narrow).toMatch(/\.todo-block-input \{[^}]*margin-left:\s*0/)
-    expect(narrow).toMatch(/\.todo-block-reason \{[^}]*padding-left:\s*0/)
-    expect(narrow).not.toMatch(/width:\s*(32|44)px|opacity/)
-    expect(rule('.journal-page .todo-block-input')).toMatch(/flex:\s*0 0 100%/)
+  it('aligns the reason and its editor with the title edge instead of a hard-coded offset', () => {
+    expect(rule('.journal-page .todo-block-reason')).toMatch(/padding:\s*0 0 0 var\(--todo-title-x\)/)
+    const input = rule('.journal-page .todo-block-input')
+    expect(input).toMatch(/margin-left:\s*var\(--todo-title-x\)/)
+    expect(input).toMatch(/max-width:\s*calc\(100% - var\(--todo-title-x\)\)/)
+    expect(input).toMatch(/flex:\s*0 0 100%/)
+    expect(journalCss.slice(journalCss.indexOf('/* ─── Blocked tasks'))).not.toMatch(/30px/)
+  })
+
+  it('uses a thinner, softer rail that is shared by adjacent blocked rows, and none on subtasks', () => {
+    const base = rule('.journal-page .todo')
+    expect(base).toMatch(/border-left:\s*2px solid transparent/)
+    expect(base).not.toMatch(/margin/)
+    expect(rule('.journal-page .todo.is-blocked')).toMatch(/border-left-color:\s*color-mix\(in oklab, var\(--danger-ink\) 45%, transparent\)/)
+    expect(rule('.journal-page .todo-child')).toMatch(/border-left:\s*0/)
+    const childAt = journalCss.indexOf('\n.journal-page .todo-child {')
+    const todoAt = journalCss.indexOf('\n.journal-page .todo {')
+    expect(childAt).toBeGreaterThan(todoAt)
+  })
+
+  it('puts the metadata on its own line beneath the title above 480px', () => {
+    const wide = mediaBlock('(width > 480px)')
+    const meta = /\.journal-page \.todo-subline-meta \{([^}]*)\}/.exec(wide)?.[1] ?? ''
+    expect(meta).toMatch(/flex:\s*0 0 100%/)
+    expect(meta).toMatch(/padding-left:\s*var\(--todo-title-x\)/)
+    expect(meta).toMatch(/box-sizing:\s*border-box/)
+    expect(wide).not.toMatch(/:empty/)
+    const phone = mediaBlock('(max-width: 480px)')
+    expect(phone).not.toMatch(/order:\s*-1/)
+    expect(phone).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*justify-content:\s*flex-end/)
+  })
+
+  it('scopes every selector in the new width-only block under .journal-page', () => {
+    const wide = mediaBlock('(width > 480px)')
+    const selectors = wide.split('{').slice(0, -1).map(chunk => chunk.split('}').pop()!.trim())
+    for (const sel of selectors) expect(sel.startsWith('.journal-page')).toBe(true)
   })
 
   it('no longer uses the old (hover: none), (max-width: 820px) query', () => {

@@ -313,39 +313,11 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           <TodoTitle id={id} title={td.title ?? ''} onEdit={() => startEdit(td)} />
         )}
 
-        {/* Two lines on phones (badges left, actions right); display: contents on wider layouts. */}
+        {/* Two lines on phones (actions left, badges right). Above 480px .todo-subline and .todo-subline-actions are
+            display: contents, while .todo-subline-meta is a display: flex full-width line beneath the title. */}
         <div className="todo-subline">
-          <div className="todo-subline-meta">
-            {childIsFuture && td.currentJournalDate && (
-              <span className="todo-future-badge">{formatMonthDay(td.currentJournalDate)}</span>
-            )}
-
-            {!isChild && td.children && td.children.length > 0 && (
-              <span className="todo-subprogress">
-                {formatSubtaskProgress(
-                  td.children.filter(c => c.status === 'Completed').length,
-                  td.children.length,
-                  td.children.filter(c => c.status === 'Blocked').length,
-                )}
-              </span>
-            )}
-
-            <TodoBadges priority={td.priority} projectName={td.projectName} />
-
-            {isBlocked && (
-              <button
-                type="button"
-                className="todo-blocked-badge"
-                aria-label="Unblock task"
-                title="Unblock task"
-                onClick={() => unblock(td)}
-              >
-                <BlockIcon size={11} />
-                <span className="todo-blocked-badge-text">Blocked</span>
-              </button>
-            )}
-          </div>
-
+          {/* Actions come first in the DOM so that, above 480px, they stay on the title line while the
+              metadata wraps beneath it. DOM order is the visual and Tab order at every width. */}
           <div className="todo-subline-actions">
             <button
               className="todo-history"
@@ -375,6 +347,37 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                 aria-label={isChild ? 'Remove from day' : 'Delete'}
               >
                 <DeleteSvg />
+              </button>
+            )}
+          </div>
+
+          <div className="todo-subline-meta">
+            {childIsFuture && td.currentJournalDate && (
+              <span className="todo-future-badge">{formatMonthDay(td.currentJournalDate)}</span>
+            )}
+
+            {!isChild && td.children && td.children.length > 0 && (
+              <span className="todo-subprogress">
+                {formatSubtaskProgress(
+                  td.children.filter(c => c.status === 'Completed').length,
+                  td.children.length,
+                  td.children.filter(c => c.status === 'Blocked').length,
+                )}
+              </span>
+            )}
+
+            <TodoBadges priority={td.priority} projectName={td.projectName} />
+
+            {isBlocked && (
+              <button
+                type="button"
+                className="todo-blocked-badge"
+                aria-label="Unblock task"
+                title="Unblock task"
+                onClick={() => unblock(td)}
+              >
+                <BlockIcon size={11} />
+                <span className="todo-blocked-badge-text">Blocked</span>
               </button>
             )}
           </div>

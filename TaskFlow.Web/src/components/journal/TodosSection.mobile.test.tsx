@@ -231,6 +231,37 @@ describe('TodosSection title tap-to-edit', () => {
       'Delete',
     ])
   })
+
+  it('places the actions before the metadata inside .todo-subline', () => {
+    renderSection()
+    const subline = document.querySelector('.todo-subline')!
+    const actions = subline.querySelector('.todo-subline-actions')!
+    const meta = subline.querySelector('.todo-subline-meta')!
+    expect(actions.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Block' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+  })
+
+  it('renders the Blocked pill and reason of a Blocked subtask inside its own li.todo-child', () => {
+    load([
+      row({
+        id: 1,
+        title: 'Parent',
+        status: 'Blocked',
+        blockedReason: 'parent reason',
+        children: [row({ id: 2, title: 'Child', status: 'Blocked', blockedReason: 'child reason', parentTaskItemId: 1 })],
+      } as Partial<TaskItemResponseDto>),
+    ])
+    renderSection()
+    const child = document.querySelector('li.todo-child') as HTMLElement
+    expect(child).not.toBeNull()
+    expect(child.querySelector('.todo-blocked-badge')).not.toBeNull()
+    expect(within(child).getByText('Blocked')).toBeInTheDocument()
+    const reason = child.querySelector('.todo-block-reason')
+    expect(reason).not.toBeNull()
+    expect(reason).toHaveTextContent('child reason')
+  })
 })
 
 describe('TodosSection blocked unblock badge and touch block editor', () => {
@@ -249,6 +280,21 @@ describe('TodosSection blocked unblock badge and touch block editor', () => {
     renderSection()
     const actions = document.querySelector('.todo-subline-actions') as HTMLElement
     expect(within(actions).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['History', 'Delete'])
+  })
+
+  it('Tab order on a Blocked row follows the DOM: History, Delete, then the Unblock task badge', async () => {
+    load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
+    renderSection()
+    const user = userEvent.setup()
+    const focusOrder: (string | null)[] = []
+    for (let i = 0; i < 20 && focusOrder.length < 3; i++) {
+      await user.tab()
+      const el = document.activeElement as HTMLElement
+      const name = el.getAttribute('aria-label')
+      if (name === 'History' || name === 'Delete' || name === 'Unblock task') focusOrder.push(name)
+    }
+    expect(focusOrder).toEqual(['History', 'Delete', 'Unblock task'])
+    expect(screen.getByRole('button', { name: 'Unblock task' })).toHaveFocus()
   })
 
   it('the badge is named exactly "Unblock task"; the old name no longer matches', async () => {

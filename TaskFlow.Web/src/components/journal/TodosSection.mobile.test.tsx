@@ -282,6 +282,21 @@ describe('TodosSection blocked unblock badge and touch block editor', () => {
     expect(within(actions).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['History', 'Delete'])
   })
 
+  it('Tab order on a Blocked row follows the DOM: History, Delete, then the Unblock task badge', async () => {
+    load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
+    renderSection()
+    const user = userEvent.setup()
+    const focusOrder: (string | null)[] = []
+    for (let i = 0; i < 20 && focusOrder.length < 3; i++) {
+      await user.tab()
+      const el = document.activeElement as HTMLElement
+      const name = el.getAttribute('aria-label')
+      if (name === 'History' || name === 'Delete' || name === 'Unblock task') focusOrder.push(name)
+    }
+    expect(focusOrder).toEqual(['History', 'Delete', 'Unblock task'])
+    expect(screen.getByRole('button', { name: 'Unblock task' })).toHaveFocus()
+  })
+
   it('the badge is named exactly "Unblock task"; the old name no longer matches', async () => {
     load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
     renderSection()

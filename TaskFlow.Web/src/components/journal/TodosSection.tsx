@@ -313,10 +313,11 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           <TodoTitle id={id} title={td.title ?? ''} onEdit={() => startEdit(td)} />
         )}
 
-        {/* Two lines on phones (badges left, actions right); display: contents on wider layouts. */}
+        {/* Two lines on phones (actions left, badges right). Above 480px .todo-subline and .todo-subline-actions are
+            display: contents, while .todo-subline-meta is a display: flex full-width line beneath the title. */}
         <div className="todo-subline">
           {/* Actions come first in the DOM so that, above 480px, they stay on the title line while the
-              metadata wraps beneath it. Phones reorder the meta back to the left with CSS `order`. */}
+              metadata wraps beneath it. DOM order is the visual and Tab order at every width. */}
           <div className="todo-subline-actions">
             <button
               className="todo-history"

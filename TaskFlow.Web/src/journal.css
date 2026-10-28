@@ -508,8 +508,11 @@
   flex: 1;
 }
 .log-entry {
+  /* Column widths are variables so the phone and touch blocks can change one track without restating the grid. */
+  --log-time-w: 64px;
+  --log-del-w: 22px;
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) 22px;
+  grid-template-columns: var(--log-time-w) minmax(0, 1fr) var(--log-del-w);
   align-items: start;
   gap: 12px;
   padding: calc(8px * var(--den)) 4px;
@@ -531,6 +534,25 @@
   font-size: 14.5px;
   color: var(--ink);
   line-height: 1.45;
+  cursor: text;
+}
+/* Inline editor for the log text, in place of .log-text (same look as .todo-edit). */
+.journal-page .log-edit {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  border-bottom: 1.5px solid var(--accent);
+  background: transparent;
+  outline: none;
+  padding: 2px 0;
+  font-size: 14.5px;
+  overflow-wrap: anywhere;
+}
+.journal-page .note-text:focus-visible,
+.journal-page .log-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* ─── Log entry body (text + task row stacked) ─────────────────────────────── */
@@ -627,6 +649,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md, 0 4px 16px rgba(0,0,0,.12));
+  touch-action: pan-y;
 }
 
 .task-typeahead-option {
@@ -665,18 +688,33 @@
 
 /* Log add row with typeahead alongside the text input */
 .log-add-inputs {
-  flex: 1;
+  flex: 0 1 auto;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+  position: relative; /* anchors the phone-width dropdown to the add row */
 }
-.log-add-inputs .add-input {
+.log-add-row .add-input {
   flex: 1;
   width: 0; /* min-content contribution 0, so the row can shrink below the input's intrinsic width */
   min-width: 0;
 }
 .log-add-inputs .task-typeahead { flex: 0 1 auto; }
+
+/* The Add button exists for touch (Enter submits on desktop); the touch block shows it. */
+.journal-page .log-add-btn {
+  display: none;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+}
+.journal-page .log-add-btn:disabled {
+  opacity: .5;
+  cursor: default;
+}
 
 /* ─── Add row (shared) ─────────────────────────────────────────────────────── */
 
@@ -745,6 +783,35 @@
 .journal-page ul.note-list { list-style: disc; }
 .journal-page ol.note-list { list-style: decimal; }
 .journal-page .note-text > * + * { margin-top: 4px; }
+/* Touch-only Save/Cancel row under a note textarea (rendered only on touch; sized in the touch block). */
+.journal-page .note-actions {
+  display: flex;
+  flex: 0 0 100%;
+  justify-content: flex-end;
+  gap: 16px;
+}
+/* Inside the add form the actions take their own line (under the textarea, still within :focus-within). */
+.notes-section .add-row { flex-wrap: wrap; }
+.notes-section .add-row .note-add-input { min-width: 0; }
+.journal-page .note-action-cancel,
+.journal-page .note-action-save {
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+}
+.journal-page .note-action-save {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.journal-page .note-action-save:disabled {
+  opacity: .5;
+  cursor: default;
+}
+.journal-page .note-edit-wrap { min-width: 0; }
 .journal-page .note-edit {
   flex: 1;
   border: 0;
@@ -870,6 +937,71 @@
     width: 100%;
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  /* Log row on two lines. Line 1: time, text, delete. Line 2: task chip and relink typeahead, under the text.
+     .log-body stops generating a box so its children place directly on the entry grid. */
+  .journal-page .log-entry {
+    --log-time-w: auto;
+    column-gap: 8px;
+    row-gap: 4px;
+  }
+  .journal-page .log-body { display: contents; }
+  .journal-page .log-time { grid-area: 1 / 1; }
+  .journal-page .log-text,
+  .journal-page .log-edit { grid-area: 1 / 2; }
+  .journal-page .log-entry > .todo-x { grid-area: 1 / 3; }
+  .journal-page .log-task-row { grid-area: 2 / 2 / 3 / -1; }
+  /* The chip shrinks to the row and ellipsizes (replaces the fixed 200px / 220px caps). */
+  .journal-page .log-task-chip,
+  .journal-page .log-task-deleted-badge {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The typeahead shares line 2 with a short chip and wraps below a long one. */
+  .journal-page .log-task-row .task-typeahead {
+    flex: 1 1 8rem;
+    min-width: 8rem;
+  }
+
+  /* Note row: time and delete on line 1, the note full width on line 2. Independent of --log-time-w. */
+  .journal-page .log-entry.note-entry { grid-template-columns: minmax(0, 1fr) var(--log-del-w); }
+  .journal-page .log-entry.note-entry > .todo-x { grid-area: 1 / 2; }
+  .journal-page .log-entry.note-entry > .note-text,
+  .journal-page .log-entry.note-entry > .note-edit-wrap { grid-area: 2 / 1 / 3 / -1; }
+  .journal-page .note-add-input,
+  .journal-page .note-edit { scroll-margin-bottom: 96px; }
+
+  /* Log add row: text input beside the plus on line 1, typeahead and Add on line 2. */
+  .log-add-row { flex-wrap: wrap; }
+  .log-add-inputs { flex: 0 0 100%; }
+  .log-add-inputs .task-typeahead {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  /* Typeahead fills its slot. The dropdown anchors to the nearest positioned ancestor (the log row or the add
+     inputs) instead of the narrow wrapper, so it spans the row and stays inside the card. */
+  .task-typeahead {
+    position: static;
+    width: 100%;
+  }
+  .journal-page .task-typeahead-input { width: 100%; }
+  .task-typeahead-dropdown {
+    left: 0;
+    right: 0;
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    max-height: min(220px, 40dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 }
 
@@ -1152,5 +1284,38 @@
   }
 
   /* Note and log delete buttons share .todo-x: give their grid column the 44px they need. */
-  .journal-page .log-entry { grid-template-columns: 64px minmax(0, 1fr) var(--tap-min); }
+  .journal-page .log-entry { --log-del-w: var(--tap-min); }
+
+  /* Note and log text: the whole block is the tap zone (no display:flex, it holds paragraphs and lists). */
+  .journal-page .note-text,
+  .journal-page .log-text {
+    min-height: var(--tap-min);
+    align-content: center;
+  }
+
+  /* Note Save / Cancel: 44px hit areas, 16px apart (the base .note-actions gap). */
+  .journal-page .note-actions button {
+    min-width: var(--tap-min);
+    min-height: var(--tap-min);
+    touch-action: manipulation;
+  }
+
+  /* Log Add button, visible only here. */
+  .journal-page .log-add-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--tap-min);
+    padding: 0 16px;
+    touch-action: manipulation;
+  }
+
+  /* Typeahead options: 44px rows whose text wraps. */
+  .journal-page .task-typeahead-option {
+    display: flex;
+    align-items: center;
+    min-height: var(--tap-min);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
 }

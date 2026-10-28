@@ -1,6 +1,8 @@
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 import { useAddLogEntryMutation, useDeleteLogEntryMutation, useUpdateLogEntryMutation } from '@/hooks/useJournal'
+import { useTapToEditBlock } from '@/hooks/useTapToEditBlock'
+import { isCoarsePointer } from '@/lib/pointer'
 import { formatTime } from '@/lib/journal-utils'
 import { TaskTypeahead } from './TaskTypeahead'
 
@@ -13,14 +15,60 @@ export interface DailyLogSectionHandle {
   focusDraftInput: () => void
 }
 
+// Matches the backend cap on log content; used for both create and edit.
+const MAX_LOG_LENGTH = 2000
+
+/** Log text as a text-like button: tap (touch), double-click (mouse) or Enter/Space (keyboard) starts editing. */
+function LogText({ id, content, onEdit }: { id: number; content: string; onEdit: () => void }) {
+  const tap = useTapToEditBlock(onEdit)
+  return (
+    <div {...tap} className={`log-text ${tap.className}`} data-log-id={id}>
+      {content}
+    </div>
+  )
+}
+
 export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function DailyLogSection({ entryId, logEntries }, ref) {
   const addLog = useAddLogEntryMutation(entryId)
   const deleteLog = useDeleteLogEntryMutation(entryId)
   const updateLog = useUpdateLogEntryMutation(entryId)
 
+  // Decided once per mount because it changes whether the field is disabled while saving (disabling would
+  // blur it and close the soft keyboard). The edit trigger decides per event instead, so a hybrid device can
+  // differ between the two. That is accepted, not a bug.
+  const [touch] = useState(() => isCoarsePointer())
+
   const [draft, setDraft] = useState('')
   const [draftTaskItemId, setDraftTaskItemId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingText, setEditingText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+  // Latest props for event handlers: a relink and a text edit are both full-row PUTs, so each must send the
+  // other field's current value, not one captured when the row rendered.
+  const logEntriesRef = useRef(logEntries)
+  useEffect(() => {
+    logEntriesRef.current = logEntries
+  })
+  // Set once the text edit has been committed or cancelled, so a following blur does nothing.
+  const committedRef = useRef(false)
+  // Log entry whose text should regain focus after the next render; expires after 100ms.
+  const pendingFocus = useRef<number | null>(null)
+  const [, setFocusTick] = useState(0)
+
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (id == null) return
+    sectionRef.current?.querySelector<HTMLElement>(`[data-log-id="${id}"]`)?.focus()
+  })
+
+  function requestFocus(id: number) {
+    pendingFocus.current = id
+    setFocusTick(t => t + 1)
+    window.setTimeout(() => {
+      if (pendingFocus.current === id) pendingFocus.current = null
+    }, 100)
+  }
 
   useImperativeHandle(ref, () => ({
     focusDraftInput: () => inputRef.current?.focus(),
@@ -42,12 +90,39 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     setDraft('')
   }
 
-  function handleTaskLink(logEntry: JournalLogEntryResponseDto, taskItemId: number | null) {
-    updateLog.mutate({ id: logEntry.id, content: logEntry.content, taskItemId })
+  function handleTaskLink(logId: number, taskItemId: number | null) {
+    const live = logEntriesRef.current.find(l => l.id === logId)
+    if (!live) return
+    updateLog.mutate({ id: logId, content: live.content, taskItemId })
+  }
+
+  function startEdit(en: JournalLogEntryResponseDto) {
+    committedRef.current = false
+    setEditingId(en.id)
+    setEditingText(en.content)
+  }
+
+  function commitEdit(logId: number, via: 'blur' | 'key') {
+    if (committedRef.current) return
+    committedRef.current = true
+    const text = editingText.trim()
+    const live = logEntriesRef.current.find(l => l.id === logId)
+    setEditingId(null)
+    if (via !== 'blur') requestFocus(logId)
+    // Empty or unchanged: keep the original. taskItemId is required by the API, so always send null, never undefined.
+    if (!live || !text || text === live.content) return
+    updateLog.mutate({ id: logId, content: text, taskItemId: live.taskItemId ?? null })
+  }
+
+  function cancelEdit(logId: number) {
+    if (committedRef.current) return
+    committedRef.current = true
+    setEditingId(null)
+    requestFocus(logId)
   }
 
   return (
-    <section className="card log">
+    <section className="card log" ref={sectionRef}>
       <div className="card-hdr">
         <h2 className="card-title">Daily Log</h2>
         <div className="card-meta">
@@ -65,7 +140,32 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
           <li key={en.id} className="log-entry">
             <div className="log-time">{formatTime(en.createdAt)}</div>
             <div className="log-body">
-              <div className="log-text">{en.content}</div>
+              {editingId === en.id ? (
+                <input
+                  type="text"
+                  className="log-edit"
+                  aria-label="Edit log entry"
+                  maxLength={MAX_LOG_LENGTH}
+                  enterKeyHint="done"
+                  value={editingText}
+                  autoFocus
+                  onFocus={e => {
+                    const end = e.currentTarget.value.length
+                    e.currentTarget.setSelectionRange(end, end)
+                  }}
+                  onChange={e => setEditingText(e.target.value)}
+                  onBlur={() => commitEdit(en.id, 'blur')}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      commitEdit(en.id, 'key')
+                    }
+                    if (e.key === 'Escape') cancelEdit(en.id)
+                  }}
+                />
+              ) : (
+                <LogText id={en.id} content={en.content} onEdit={() => startEdit(en)} />
+              )}
               <div className="log-task-row">
                 {en.linkedTaskDeleted ? (
                   <span className="log-task-deleted-badge">
@@ -76,7 +176,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
                 ) : null}
                 <TaskTypeahead
                   value={en.taskItemId ?? null}
-                  onChange={taskItemId => handleTaskLink(en, taskItemId)}
+                  onChange={taskItemId => handleTaskLink(en.id, taskItemId)}
                 />
               </div>
             </div>
@@ -95,24 +195,35 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
 
       <form className="add-row log-add-row" onSubmit={addEntry}>
         <span className="add-plus">›</span>
+        <input
+          ref={inputRef}
+          className="add-input"
+          maxLength={MAX_LOG_LENGTH}
+          enterKeyHint="enter"
+          placeholder="What did you just work on? Press Enter to log"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          // Disabling would blur the field and close the soft keyboard mid-capture, so touch never does.
+          disabled={!touch && addLog.isPending}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+          }}
+        />
         <div className="log-add-inputs">
-          <input
-            ref={inputRef}
-            className="add-input"
-            placeholder="What did you just work on? Press Enter to log"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            disabled={addLog.isPending}
-            onKeyDown={e => {
-              if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
-            }}
-          />
           <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} onEscape={() => inputRef.current?.focus()} />
+          {/* The submit button also lets Enter in the text input submit the form even though the TaskTypeahead
+              adds a second <input> (the HTML implicit-submission rule needs a submit button then). CSS hides it
+              on desktop and shows it on touch. */}
+          <button
+            type="submit"
+            className="log-add-btn"
+            disabled={!draft.trim()}
+            onPointerDown={e => e.preventDefault()}
+            onMouseDown={e => e.preventDefault()}
+          >
+            Add
+          </button>
         </div>
-        {/* Hidden submit button so Enter in the log text input submits the form
-            even though the TaskTypeahead adds a second <input> to the form.
-            Without this, the HTML implicit-submission rule blocks Enter. */}
-        <button type="submit" style={{ display: 'none' }} aria-hidden="true" tabIndex={-1} />
       </form>
     </section>
   )

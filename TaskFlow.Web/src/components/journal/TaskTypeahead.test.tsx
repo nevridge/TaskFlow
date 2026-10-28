@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockTasks: Array<{ id: number; title: string; status: string }> = [
@@ -183,6 +183,109 @@ describe('TaskTypeahead', () => {
       // Now type to filter — activeIndex should reset
       await userEvent.type(input, 'test')
       expect(screen.getByText('None')).not.toHaveClass('active')
+    })
+  })
+
+  describe('touch and focus handling', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    })
+
+    it('prevents the default of mousedown on the listbox so the input keeps focus', async () => {
+      renderTypeahead(null)
+      await userEvent.click(screen.getByRole('combobox'))
+      expect(fireEvent.mouseDown(screen.getByRole('listbox'))).toBe(false)
+    })
+
+    it('selects an option clicked after the input blurs, within the 150ms close delay', () => {
+      vi.useFakeTimers()
+      const { onChange } = renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      fireEvent.focus(input)
+      fireEvent.blur(input)
+      act(() => { vi.advanceTimersByTime(100) })
+      fireEvent.click(screen.getByText('Write tests'))
+      expect(onChange).toHaveBeenCalledTimes(1)
+      expect(onChange).toHaveBeenCalledWith(2)
+    })
+
+    it('closes 150ms after blur', () => {
+      vi.useFakeTimers()
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      fireEvent.focus(input)
+      fireEvent.blur(input)
+      act(() => { vi.advanceTimersByTime(149) })
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    it('refocusing before the delay keeps the list open', () => {
+      vi.useFakeTimers()
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      fireEvent.focus(input)
+      fireEvent.blur(input)
+      act(() => { vi.advanceTimersByTime(100) })
+      fireEvent.focus(input)
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+    })
+
+    it('clears the pending close timer on unmount', () => {
+      vi.useFakeTimers()
+      const { unmount } = renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      fireEvent.focus(input)
+      fireEvent.blur(input)
+      expect(vi.getTimerCount()).toBe(1)
+      unmount()
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('reopens on click after a selection leaves the input focused', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.click(screen.getByText('Write tests'))
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(input)
+      await userEvent.click(input)
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+    })
+
+    it('wires combobox ARIA: aria-controls, aria-activedescendant, autocomplete off', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      expect(input).toHaveAttribute('autocomplete', 'off')
+      await userEvent.click(input)
+      expect(input).toHaveAttribute('aria-controls', screen.getByRole('listbox').id)
+      expect(input).not.toHaveAttribute('aria-activedescendant')
+      await userEvent.keyboard('{ArrowDown}{ArrowDown}')
+      const activeId = input.getAttribute('aria-activedescendant')
+      expect(activeId).toBeTruthy()
+      expect(document.getElementById(activeId as string)).toHaveTextContent('Fix login bug')
+    })
+
+    it('scrolls the dropdown and the active option into view', async () => {
+      const scroll = vi.fn()
+      Element.prototype.scrollIntoView = scroll
+      renderTypeahead(null)
+      await userEvent.click(screen.getByRole('combobox'))
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+      scroll.mockClear()
+      await userEvent.keyboard('{ArrowDown}')
+      expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+    })
+
+    it('does not give the empty-state row an option role', async () => {
+      renderTypeahead(null)
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      await userEvent.type(input, 'zzznomatch')
+      expect(screen.getAllByRole('option')).toHaveLength(1)
     })
   })
 

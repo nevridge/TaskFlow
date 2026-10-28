@@ -10,7 +10,7 @@ vi.mock('./client/client.gen', () => ({
 }))
 
 import { client } from './client/client.gen'
-import { carryForwardJournalEntry, createJournalEntry } from './journal'
+import { carryForwardJournalEntry, createJournalEntry, updateLogEntry } from './journal'
 
 describe('journal api carry-forward (mocked client)', () => {
   beforeEach(() => vi.clearAllMocks())
@@ -43,5 +43,28 @@ describe('journal api carry-forward (mocked client)', () => {
         body: { title: 't', date: '2026-06-10', timezoneOffsetMinutes: -300 },
       }),
     )
+  })
+})
+
+describe('journal api updateLogEntry (mocked client)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('PUTs the content and a null taskItemId to the log entry endpoint', () => {
+    updateLogEntry(10, 5, 'edited text', null)
+
+    expect(client.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: '/api/v1/JournalEntries/{entryId}/logs/{id}',
+        path: { entryId: 10, id: 5 },
+        body: { content: 'edited text', taskItemId: null },
+      }),
+    )
+  })
+
+  it('PUTs a linked taskItemId', () => {
+    updateLogEntry(10, 5, 'edited text', 42)
+
+    const arg = vi.mocked(client.put).mock.calls[0][0] as { body: { taskItemId?: number | null } }
+    expect(arg.body.taskItemId).toBe(42)
   })
 })

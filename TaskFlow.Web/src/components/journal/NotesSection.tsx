@@ -1,4 +1,4 @@
-import { useState, useRef, useLayoutEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react'
 import type { RefObject } from 'react'
 import type { JournalNoteResponseDto } from '@/api/journal'
 import {
@@ -7,6 +7,8 @@ import {
   useUpdateJournalNoteMutation,
   useDeleteJournalNoteMutation,
 } from '@/hooks/useJournal'
+import { useTapToEditBlock } from '@/hooks/useTapToEditBlock'
+import { isCoarsePointer } from '@/lib/pointer'
 import { formatTime } from '@/lib/journal-utils'
 import { NoteContent } from './NoteContent'
 
@@ -30,19 +32,83 @@ function useAutoGrow(ref: RefObject<HTMLTextAreaElement | null>, value: string, 
   }, [ref, value, active])
 }
 
+/** Note body as a text-like button: tap (touch), double-click (mouse) or Enter/Space (keyboard) starts editing. */
+function NoteText({ note, onEdit }: { note: JournalNoteResponseDto; onEdit: () => void }) {
+  const tap = useTapToEditBlock(onEdit)
+  return (
+    <div {...tap} className={`note-text ${tap.className}`} data-note-id={note.id}>
+      <NoteContent text={note.content} />
+    </div>
+  )
+}
+
+// Keeps the soft keyboard up while a Save/Cancel button is pressed: a button that takes focus blurs the textarea.
+const keepFocus = {
+  onPointerDown: (e: React.PointerEvent) => e.preventDefault(),
+  onMouseDown: (e: React.MouseEvent) => e.preventDefault(),
+}
+
+interface NoteActionsProps {
+  saveDisabled: boolean
+  onCancel: () => void
+  onSave: () => void
+}
+
+/** Touch-only Save/Cancel row, Cancel first so Save sits at the right edge. */
+function NoteActions({ saveDisabled, onCancel, onSave }: NoteActionsProps) {
+  const ref = useRef<HTMLDivElement>(null)
+  // Bring the buttons above the soft keyboard when the row appears (not sticky: it stays in the flow).
+  useLayoutEffect(() => {
+    ref.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [])
+  return (
+    <div className="note-actions" ref={ref}>
+      <button type="button" className="note-action-cancel" {...keepFocus} onClick={onCancel}>
+        Cancel
+      </button>
+      <button type="button" className="note-action-save" {...keepFocus} onClick={onSave} disabled={saveDisabled}>
+        Save
+      </button>
+    </div>
+  )
+}
+
 export const NotesSection = forwardRef<NotesSectionHandle, Props>(function NotesSection({ entryId }, ref) {
   const { data: notes = [] } = useJournalNotes(entryId)
   const createNote = useCreateJournalNoteMutation(entryId)
   const updateNote = useUpdateJournalNoteMutation(entryId)
   const deleteNote = useDeleteJournalNoteMutation(entryId)
 
+  // Decided once per mount because it changes the rendered DOM (buttons, placeholder, Enter). The edit trigger
+  // decides per event instead, so a hybrid device can differ between the two. That is accepted, not a bug.
+  const [touch] = useState(() => isCoarsePointer())
+
   const [draft, setDraft] = useState('')
+  const [draftFocused, setDraftFocused] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const editRef = useRef<HTMLTextAreaElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
   // Guards against double-handling an edit session (e.g. Enter then blur, Escape then blur)
   const committedRef = useRef(false)
+  // Note whose text should regain focus after the next render; expires after 100ms.
+  const pendingFocus = useRef<number | null>(null)
+  const [, setFocusTick] = useState(0)
+
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (id == null) return
+    sectionRef.current?.querySelector<HTMLElement>(`[data-note-id="${id}"]`)?.focus()
+  })
+
+  function requestFocus(id: number) {
+    pendingFocus.current = id
+    setFocusTick(t => t + 1)
+    window.setTimeout(() => {
+      if (pendingFocus.current === id) pendingFocus.current = null
+    }, 100)
+  }
 
   useAutoGrow(inputRef, draft)
   useAutoGrow(editRef, editingText, editingId !== null)
@@ -67,13 +133,18 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
     setDraft('')
   }
 
+  function cancelDraft() {
+    setDraft('')
+    inputRef.current?.blur()
+  }
+
   function startEdit(note: JournalNoteResponseDto) {
     committedRef.current = false
     setEditingId(note.id)
     setEditingText(note.content)
   }
 
-  function commitEdit(noteId: number, original: string) {
+  function commitEdit(noteId: number, original: string, via: 'blur' | 'key' | 'button' = 'key') {
     if (committedRef.current) return
     committedRef.current = true
     const text = editingText.trim()
@@ -81,49 +152,63 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
       updateNote.mutate({ id: noteId, content: text })
     }
     setEditingId(null)
+    if (via !== 'blur') requestFocus(noteId)
   }
 
-  function cancelEdit() {
+  function cancelEdit(noteId: number) {
     if (committedRef.current) return
     committedRef.current = true
     setEditingId(null)
+    requestFocus(noteId)
   }
 
+  const showDraftActions = touch && (draft.trim() !== '' || draftFocused)
+
   return (
-    <section className="card notes-section">
+    <section className="card notes-section" ref={sectionRef}>
       <ol className="log-list">
         {notes.length === 0 && (
           <li className="j-empty">No notes yet — capture anything below.</li>
         )}
         {notes.map(note => (
-          <li key={note.id} className="log-entry">
+          <li key={note.id} className="log-entry note-entry">
             <div className="log-time">{formatTime(note.createdAt)}</div>
             {editingId === note.id ? (
-              <textarea
-                ref={editRef}
-                className="note-edit"
-                rows={1}
-                maxLength={MAX_NOTE_LENGTH}
-                value={editingText}
-                autoFocus
-                onFocus={e => {
-                  const end = e.currentTarget.value.length
-                  e.currentTarget.setSelectionRange(end, end)
-                }}
-                onChange={e => setEditingText(e.target.value)}
-                onBlur={() => commitEdit(note.id, note.content)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                    e.preventDefault()
-                    commitEdit(note.id, note.content)
-                  }
-                  if (e.key === 'Escape') cancelEdit()
-                }}
-              />
-            ) : (
-              <div className="note-text" onDoubleClick={() => startEdit(note)}>
-                <NoteContent text={note.content} />
+              <div className="note-edit-wrap">
+                <textarea
+                  ref={editRef}
+                  className="note-edit"
+                  aria-label="Edit note"
+                  rows={1}
+                  maxLength={MAX_NOTE_LENGTH}
+                  value={editingText}
+                  autoFocus
+                  onFocus={e => {
+                    const end = e.currentTarget.value.length
+                    e.currentTarget.setSelectionRange(end, end)
+                  }}
+                  onChange={e => setEditingText(e.target.value)}
+                  onBlur={() => commitEdit(note.id, note.content, 'blur')}
+                  onKeyDown={e => {
+                    // On touch Enter is a newline; Ctrl/Cmd+Enter (hardware keyboard) saves.
+                    const save = touch ? e.ctrlKey || e.metaKey : !e.shiftKey
+                    if (e.key === 'Enter' && save && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      commitEdit(note.id, note.content)
+                    }
+                    if (e.key === 'Escape') cancelEdit(note.id)
+                  }}
+                />
+                {touch && (
+                  <NoteActions
+                    saveDisabled={!editingText.trim()}
+                    onCancel={() => cancelEdit(note.id)}
+                    onSave={() => commitEdit(note.id, note.content, 'button')}
+                  />
+                )}
               </div>
+            ) : (
+              <NoteText note={note} onEdit={() => startEdit(note)} />
             )}
             <button
               className="todo-x"
@@ -145,18 +230,27 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
           className="add-input note-add-input"
           rows={1}
           maxLength={MAX_NOTE_LENGTH}
-          placeholder="Add a note… Enter to save, Shift+Enter for new line"
+          placeholder={touch ? 'Add a note' : 'Add a note… Enter to save, Shift+Enter for new line'}
+          enterKeyHint={touch ? 'enter' : undefined}
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          disabled={createNote.isPending}
+          // Disabling would blur the field and close the soft keyboard mid-capture, so touch never does.
+          disabled={!touch && createNote.isPending}
+          onFocus={() => setDraftFocused(true)}
+          // The draft survives blur on touch (switching apps); saving is explicit.
+          onBlur={() => setDraftFocused(false)}
           onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            const save = touch ? e.ctrlKey || e.metaKey : !e.shiftKey
+            if (e.key === 'Enter' && save && !e.nativeEvent.isComposing) {
               e.preventDefault()
               submitDraft()
             }
-            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+            if (e.key === 'Escape') cancelDraft()
           }}
         />
+        {showDraftActions && (
+          <NoteActions saveDisabled={!draft.trim()} onCancel={cancelDraft} onSave={submitDraft} />
+        )}
       </form>
     </section>
   )

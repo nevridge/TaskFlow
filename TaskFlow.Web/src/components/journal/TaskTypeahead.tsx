@@ -3,6 +3,7 @@ import { useTasksQuery } from '@/hooks/useTasks'
 import type { TaskItemViewModel } from '@/hooks/useTasks'
 import { BlockIcon } from '@/components/BlockControls'
 import { isBlocked } from '@/lib/task-status'
+import { isCoarsePointer } from '@/lib/pointer'
 
 interface Props {
   value: number | null
@@ -37,9 +38,10 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
 
   useEffect(() => () => window.clearTimeout(blurTimer.current), [])
 
-  // Keep the dropdown clear of the soft keyboard when it opens, and the highlighted option inside the list.
+  // Keep the dropdown clear of the soft keyboard when it opens (touch only: on desktop it could scroll the page
+  // in a narrow window), and the highlighted option inside the list.
   useEffect(() => {
-    if (open) listRef.current?.scrollIntoView?.({ block: 'nearest' })
+    if (open && isCoarsePointer()) listRef.current?.scrollIntoView?.({ block: 'nearest' })
   }, [open])
   useEffect(() => {
     if (open && activeIndex >= 0) listRef.current?.querySelector('.active')?.scrollIntoView?.({ block: 'nearest' })

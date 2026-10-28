@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { JournalNoteResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -222,8 +222,12 @@ describe('NotesSection on touch', () => {
     it('Save then blur gives exactly one update and returns focus to the note', async () => {
       const edit = await startEditing()
       await userEvent.type(edit, '!')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      fireEvent.blur(edit)
+      const save = screen.getByRole('button', { name: 'Save' })
+      // Blur lands on the still-mounted textarea before React re-renders, as a browser does.
+      act(() => {
+        fireEvent.click(save)
+        fireEvent.blur(edit)
+      })
       expect(updateNoteMutate).toHaveBeenCalledTimes(1)
       expect(document.activeElement).toBe(noteTrigger())
     })
@@ -231,8 +235,11 @@ describe('NotesSection on touch', () => {
     it('Cancel then blur saves nothing and Cancel wins', async () => {
       const edit = await startEditing()
       await userEvent.type(edit, '!')
-      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      fireEvent.blur(edit)
+      const cancel = screen.getByRole('button', { name: 'Cancel' })
+      act(() => {
+        fireEvent.click(cancel)
+        fireEvent.blur(edit)
+      })
       expect(updateNoteMutate).not.toHaveBeenCalled()
       expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
     })
@@ -259,8 +266,10 @@ describe('NotesSection on touch', () => {
     it('Escape cancels and returns focus to the note', async () => {
       const edit = await startEditing()
       await userEvent.type(edit, '!')
-      await userEvent.keyboard('{Escape}')
-      fireEvent.blur(edit)
+      act(() => {
+        fireEvent.keyDown(edit, { key: 'Escape' })
+        fireEvent.blur(edit)
+      })
       expect(updateNoteMutate).not.toHaveBeenCalled()
       expect(document.activeElement).toBe(noteTrigger())
     })

@@ -324,6 +324,9 @@ function applyOptimisticLogUpdate(
   return snapshot
 }
 
+// Orders log updates so a failed one can tell whether a later one is still in flight.
+let logUpdateSeq = 0
+
 export function useUpdateLogEntryMutation(entryId: number) {
   const qc = useQueryClient()
   const mutationKey = journalKeys.logUpdate(entryId)
@@ -332,10 +335,20 @@ export function useUpdateLogEntryMutation(entryId: number) {
     mutationFn: ({ id, content, taskItemId }: { id: number; content: string; taskItemId?: number | null }) =>
       updateLogEntry(entryId, id, content, taskItemId),
     onMutate: async ({ id, content, taskItemId }) => {
+      const seq = ++logUpdateSeq
       await qc.cancelQueries({ queryKey: journalKeys.all })
-      return applyOptimisticLogUpdate(qc, entryId, id, content, taskItemId ?? null)
+      return { seq, snapshot: applyOptimisticLogUpdate(qc, entryId, id, content, taskItemId ?? null) }
     },
-    onError: (_err, _vars, snapshot) => snapshot?.forEach(([key, data]) => qc.setQueryData(key, data)),
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return
+      // A later update still in flight has patched on top of this one: restoring this snapshot would clobber that
+      // patch. Leave the cache to its settle invalidation instead.
+      const laterPending = qc
+        .getMutationCache()
+        .findAll({ mutationKey, status: 'pending' })
+        .some(m => ((m.state.context as { seq?: number } | undefined)?.seq ?? 0) > ctx.seq)
+      if (!laterPending) ctx.snapshot.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
     // While another update is in flight, skip the refetch: it would overwrite that update's optimistic patch.
     // This mutation is still counted as mutating inside onSettled, so 1 means it is the last one.
     onSettled: () => {

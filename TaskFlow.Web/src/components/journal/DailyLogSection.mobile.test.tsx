@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -94,5 +94,44 @@ describe('DailyLogSection on touch', () => {
     expect(addInput()).toBeEnabled()
     await userEvent.click(addInput())
     expect(document.activeElement).toBe(addInput())
+  })
+
+  it('reads the pointer mode once per mount: a later change leaves the rendered DOM alone', () => {
+    vi.mocked(useAddLogEntryMutation).mockReturnValue({ mutate: addLogMutate, isPending: true } as never)
+    const { rerender } = render(<DailyLogSection entryId={10} logEntries={[]} />)
+    expect(addInput()).toBeEnabled()
+    setTouch(false)
+    rerender(<DailyLogSection entryId={10} logEntries={[]} />)
+    expect(addInput()).toBeEnabled()
+  })
+
+  describe('focus return expiry', () => {
+    afterEach(() => vi.useRealTimers())
+
+    function cancelEditing(logEntries: JournalLogEntryResponseDto[]) {
+      const utils = render(<DailyLogSection entryId={10} logEntries={logEntries} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Fixed the bug' }))
+      act(() => { fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit log entry' }), { key: 'Escape' }) })
+      return utils
+    }
+
+    it('returns focus to the text on re-render while the 100ms window is open', () => {
+      vi.useFakeTimers()
+      const { rerender } = cancelEditing([entry])
+      const text = screen.getByRole('button', { name: 'Fixed the bug' })
+      expect(document.activeElement).toBe(text)
+      act(() => { vi.advanceTimersByTime(99); text.blur() })
+      rerender(<DailyLogSection entryId={10} logEntries={[{ ...entry }]} />)
+      expect(document.activeElement).toBe(text)
+    })
+
+    it('does not pull focus back once the 100ms have elapsed', () => {
+      vi.useFakeTimers()
+      const { rerender } = cancelEditing([entry])
+      const text = screen.getByRole('button', { name: 'Fixed the bug' })
+      act(() => { vi.advanceTimersByTime(100); text.blur() })
+      rerender(<DailyLogSection entryId={10} logEntries={[{ ...entry }]} />)
+      expect(document.activeElement).not.toBe(text)
+    })
   })
 })

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { DailyLogSectionHandle } from './DailyLogSection'
@@ -204,8 +204,12 @@ describe('DailyLogSection', () => {
 
     it('Enter then blur does not commit twice', async () => {
       const edit = await startEditing()
-      await userEvent.type(edit, '!{Enter}')
-      fireEvent.blur(edit)
+      await userEvent.type(edit, '!')
+      // Blur lands on the still-mounted input before React re-renders, as a browser does.
+      act(() => {
+        fireEvent.keyDown(edit, { key: 'Enter' })
+        fireEvent.blur(edit)
+      })
       expect(updateLogMutate).toHaveBeenCalledTimes(1)
     })
 
@@ -219,8 +223,10 @@ describe('DailyLogSection', () => {
     it('Escape then blur saves nothing and restores the text', async () => {
       const edit = await startEditing()
       await userEvent.type(edit, '!')
-      await userEvent.keyboard('{Escape}')
-      fireEvent.blur(edit)
+      act(() => {
+        fireEvent.keyDown(edit, { key: 'Escape' })
+        fireEvent.blur(edit)
+      })
       expect(updateLogMutate).not.toHaveBeenCalled()
       expect(trigger()).toBeInTheDocument()
       expect(document.activeElement).toBe(trigger())

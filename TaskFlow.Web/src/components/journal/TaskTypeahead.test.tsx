@@ -15,6 +15,7 @@ vi.mock('@/hooks/useTasks', () => ({
 }))
 
 import { TaskTypeahead } from './TaskTypeahead'
+import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 function renderTypeahead(value: number | null, onChange = vi.fn()) {
   return { onChange, ...render(<TaskTypeahead value={value} onChange={onChange} />) }
@@ -190,6 +191,8 @@ describe('TaskTypeahead', () => {
     afterEach(() => {
       vi.useRealTimers()
       Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+      Reflect.deleteProperty(window, 'matchMedia')
+      __resetCoarsePointerCache()
     })
 
     it('prevents the default of mousedown on the listbox so the input keeps focus', async () => {
@@ -269,7 +272,17 @@ describe('TaskTypeahead', () => {
       expect(document.getElementById(activeId as string)).toHaveTextContent('Fix login bug')
     })
 
-    it('scrolls the dropdown and the active option into view', async () => {
+    function stubTouch(touch: boolean) {
+      Object.defineProperty(window, 'matchMedia', {
+        value: vi.fn().mockReturnValue({ matches: touch }),
+        configurable: true,
+        writable: true,
+      })
+      __resetCoarsePointerCache()
+    }
+
+    it('on touch scrolls the dropdown into view when it opens, and the active option', async () => {
+      stubTouch(true)
       const scroll = vi.fn()
       Element.prototype.scrollIntoView = scroll
       renderTypeahead(null)
@@ -278,6 +291,16 @@ describe('TaskTypeahead', () => {
       scroll.mockClear()
       await userEvent.keyboard('{ArrowDown}')
       expect(scroll).toHaveBeenCalledWith({ block: 'nearest' })
+    })
+
+    it('on desktop does not scroll the dropdown into view on open', async () => {
+      stubTouch(false)
+      const scroll = vi.fn()
+      Element.prototype.scrollIntoView = scroll
+      renderTypeahead(null)
+      await userEvent.click(screen.getByRole('combobox'))
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expect(scroll).not.toHaveBeenCalled()
     })
 
     it('does not give the empty-state row an option role', async () => {

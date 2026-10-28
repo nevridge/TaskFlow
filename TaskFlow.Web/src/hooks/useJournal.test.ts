@@ -811,6 +811,33 @@ describe('useUpdateLogEntryMutation', () => {
       first.resolve({ data: {} })
       await waitFor(() => expect(result.current.a.isSuccess).toBe(true))
     })
+
+    it('a failed first update does not clobber the second update that is still pending', async () => {
+      const { queryClient, wrapper, invalidateSpy } = setup()
+      const first = deferred()
+      const second = deferred()
+      vi.mocked(journalApi.updateLogEntry)
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(
+        () => ({ a: useUpdateLogEntryMutation(10), b: useUpdateLogEntryMutation(10) }),
+        { wrapper },
+      )
+      act(() => { result.current.a.mutate({ id: 5, content: 'first', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('first'))
+      act(() => { result.current.b.mutate({ id: 5, content: 'second', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('second'))
+
+      first.reject(new Error('boom'))
+      await waitFor(() => expect(result.current.a.isError).toBe(true))
+      expect(cachedLog(queryClient, 5).content).toBe('second')
+      expect(invalidateSpy).not.toHaveBeenCalled()
+
+      second.resolve({ data: {} })
+      await waitFor(() => expect(result.current.b.isSuccess).toBe(true))
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
+    })
   })
 })
 

@@ -174,16 +174,21 @@ describe('NotesSection', () => {
   it('Enter then blur calls mutate exactly once', async () => {
     const editInput = await startEditing()
     await userEvent.type(editInput, '!')
-    await userEvent.keyboard('{Enter}')
-    fireEvent.blur(editInput)
+    // Blur lands on the still-mounted textarea before React re-renders, as a browser does.
+    act(() => {
+      fireEvent.keyDown(editInput, { key: 'Enter' })
+      fireEvent.blur(editInput)
+    })
     expect(updateNoteMutate).toHaveBeenCalledTimes(1)
   })
 
   it('Escape then blur does not mutate', async () => {
     const editInput = await startEditing()
     await userEvent.type(editInput, '!')
-    await userEvent.keyboard('{Escape}')
-    fireEvent.blur(editInput)
+    act(() => {
+      fireEvent.keyDown(editInput, { key: 'Escape' })
+      fireEvent.blur(editInput)
+    })
     expect(updateNoteMutate).not.toHaveBeenCalled()
   })
 

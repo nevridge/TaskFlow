@@ -403,7 +403,7 @@
 
 /* Above the phone breakpoint the metadata (subtask summary, priority, project, Blocked pill) wraps onto its own
    line beneath the title, indented to the title's left edge. Width only: no touch sizing here. */
-@media (min-width: 481px) {
+@media (width > 480px) {
   .journal-page .todo-subline-meta {
     display: flex;
     flex: 0 0 100%;

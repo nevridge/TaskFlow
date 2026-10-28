@@ -233,7 +233,7 @@ describe('journal touch and responsive styles', () => {
   })
 
   it('keeps touch sizing out of the width-only blocks', () => {
-    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)', '(min-width: 481px)']) {
+    for (const q of ['(max-width: 820px)', '(max-width: 480px)', '(max-width: 360px)', '(width > 480px)']) {
       const block = mediaBlock(q)
       expect(block).not.toMatch(/44px|var\(--tap-min\)|(?<![\w-])opacity:\s*1\s*;/)
     }
@@ -303,7 +303,7 @@ describe('journal blocked styles', () => {
   })
 
   it('puts the metadata on its own line beneath the title above 480px', () => {
-    const wide = mediaBlock('(min-width: 481px)')
+    const wide = mediaBlock('(width > 480px)')
     const meta = /\.journal-page \.todo-subline-meta \{([^}]*)\}/.exec(wide)?.[1] ?? ''
     expect(meta).toMatch(/flex:\s*0 0 100%/)
     expect(meta).toMatch(/padding-left:\s*var\(--todo-title-x\)/)
@@ -315,7 +315,7 @@ describe('journal blocked styles', () => {
   })
 
   it('scopes every selector in the new width-only block under .journal-page', () => {
-    const wide = mediaBlock('(min-width: 481px)')
+    const wide = mediaBlock('(width > 480px)')
     const selectors = wide.split('{').slice(0, -1).map(chunk => chunk.split('}').pop()!.trim())
     for (const sel of selectors) expect(sel.startsWith('.journal-page')).toBe(true)
   })

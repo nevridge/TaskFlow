@@ -141,6 +141,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       const pending = [...entriesRef.current.values()].filter(e => e.phase === 'pending')
       pending.slice(0, Math.max(0, pending.length - MAX_VISIBLE_PENDING)).forEach(e => {
         e.wasHidden = true
+        // A hidden toast's DOM node unmounts, so no leave/blur/up will ever clear its pause reasons.
+        if (e.paused.size > 0) {
+          e.paused.clear()
+          startTimer(e, Math.max(e.remainingMs, MIN_RESUME_MS))
+        }
       })
       bump()
     },
@@ -277,8 +282,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             className={'toast' + (entry.wasHidden ? '' : ' toast-enter')}
             role="status"
             onPointerEnter={() => pause(entry.id, 'hover')}
-            onPointerLeave={() => resume(entry.id, 'hover')}
-            onPointerDown={() => pause(entry.id, 'press')}
+            onPointerLeave={() => {
+              resume(entry.id, 'hover')
+              // A press dragged out of the toast never delivers its pointerup here.
+              resume(entry.id, 'press')
+            }}
+            onPointerDown={() => {
+              pause(entry.id, 'press')
+              // Release anywhere ends the press, even if the pointer left the toast.
+              const release = () => {
+                resume(entry.id, 'press')
+                document.removeEventListener('pointerup', release)
+                document.removeEventListener('pointercancel', release)
+              }
+              document.addEventListener('pointerup', release)
+              document.addEventListener('pointercancel', release)
+            }}
             onPointerUp={() => resume(entry.id, 'press')}
             onPointerCancel={() => resume(entry.id, 'press')}
             onFocus={() => pause(entry.id, 'focus')}

@@ -115,7 +115,10 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
       errorMessage: "Couldn't delete. Restored.",
       commit: () => deleteLogEntry(entryId, en.id),
       invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.all }),
-      restoreFocus: () => section?.querySelector<HTMLElement>(`[data-log-x="${en.id}"]`)?.focus(),
+      restoreFocus: () => {
+        if (section?.dataset.entryId !== String(entryId)) return
+        section.querySelector<HTMLElement>(`[data-log-x="${en.id}"]`)?.focus()
+      },
     })
   }
 
@@ -145,7 +148,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   }
 
   return (
-    <section className="card log" ref={sectionRef}>
+    <section className="card log" ref={sectionRef} data-entry-id={entryId}>
       <div className="card-hdr">
         <h2 className="card-title">Daily Log</h2>
         <div className="card-meta">

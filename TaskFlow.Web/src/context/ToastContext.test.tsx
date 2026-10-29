@@ -276,6 +276,58 @@ describe('ToastProvider', () => {
       expect(pd.commit).toHaveBeenCalledTimes(1)
     })
 
+    it('resumes when a press is dragged out of the toast and released elsewhere', () => {
+      renderProvider()
+      const pd = makeDelete('a')
+      act(() => api.schedule(pd))
+      const toast = screen.getByRole('status')
+      advance(1000)
+      fireEvent.pointerDown(toast)
+      fireEvent.pointerLeave(toast)
+      advance(4999)
+      expect(pd.commit).not.toHaveBeenCalled()
+      advance(1)
+      expect(pd.commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('resumes on a document-level pointerup when the release never reaches the toast', () => {
+      renderProvider()
+      const pd = makeDelete('a')
+      act(() => api.schedule(pd))
+      fireEvent.pointerDown(screen.getByRole('status'))
+      advance(30000)
+      expect(pd.commit).not.toHaveBeenCalled()
+      fireEvent.pointerUp(document.body)
+      advance(6000)
+      expect(pd.commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('resumes on pointercancel', () => {
+      renderProvider()
+      const pd = makeDelete('a')
+      act(() => api.schedule(pd))
+      fireEvent.pointerDown(screen.getByRole('status'))
+      advance(30000)
+      expect(pd.commit).not.toHaveBeenCalled()
+      fireEvent.pointerCancel(document.body)
+      advance(6000)
+      expect(pd.commit).toHaveBeenCalledTimes(1)
+    })
+
+    it('still commits a hovered toast that is later pushed out of the newest three', () => {
+      renderProvider()
+      const all = ['a', 'b', 'c', 'd'].map(id => makeDelete(id))
+      act(() => api.schedule(all[0]))
+      act(() => api.schedule(all[1]))
+      act(() => api.schedule(all[2]))
+      advance(1000)
+      fireEvent.pointerEnter(screen.getByText('Deleted a').closest('.toast') as HTMLElement)
+      act(() => api.schedule(all[3]))
+      expect(screen.queryByText('Deleted a')).not.toBeInTheDocument()
+      advance(6000)
+      expect(all[0].commit).toHaveBeenCalledTimes(1)
+    })
+
     it('does not pause the hidden older toasts', () => {
       renderProvider()
       const all = ['a', 'b', 'c', 'd'].map(id => makeDelete(id))

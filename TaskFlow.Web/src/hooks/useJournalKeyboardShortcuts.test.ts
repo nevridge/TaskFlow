@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { createElement } from 'react'
+import { renderHook, act, screen } from '@testing-library/react'
+import { ToastProvider } from '@/context/ToastContext'
+import { useToast } from '@/context/useToast'
 import { useJournalKeyboardShortcuts } from './useJournalKeyboardShortcuts'
 import type { JournalShortcutHandlers } from './useJournalKeyboardShortcuts'
 
@@ -145,4 +148,57 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
   })
 
+  describe('with an undo toast pending', () => {
+    function setup() {
+      const view = renderHook(
+        () => {
+          useJournalKeyboardShortcuts(handlers)
+          return useToast()
+        },
+        { wrapper: ({ children }) => createElement(ToastProvider, null, children) },
+      )
+      act(() =>
+        view.result.current.schedule({
+          id: 'a',
+          keys: ['a'],
+          message: 'Deleted a',
+          errorMessage: 'failed',
+          commit: () => Promise.resolve({}),
+        }),
+      )
+      return view
+    }
+
+    it('still fires t, l, n, j, [ and ]', () => {
+      setup()
+      expect(screen.getByRole('status')).toBeInTheDocument()
+      fireKey('t')
+      fireKey('l')
+      fireKey('n')
+      fireKey('j')
+      fireKey('[')
+      fireKey(']')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+      expect(handlers.onNewLog).toHaveBeenCalledOnce()
+      expect(handlers.onNewNote).toHaveBeenCalledOnce()
+      expect(handlers.onJumpToToday).toHaveBeenCalledOnce()
+      expect(handlers.onPrevDay).toHaveBeenCalledOnce()
+      expect(handlers.onNextDay).toHaveBeenCalledOnce()
+    })
+
+    it('u undoes the toast without triggering any journal shortcut', () => {
+      setup()
+      act(() => fireKey('u'))
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
+      expect(handlers.onNewTodo).not.toHaveBeenCalled()
+      expect(handlers.onNewLog).not.toHaveBeenCalled()
+      expect(handlers.onNewNote).not.toHaveBeenCalled()
+      expect(handlers.onJumpToToday).not.toHaveBeenCalled()
+      expect(handlers.onPrevDay).not.toHaveBeenCalled()
+      expect(handlers.onNextDay).not.toHaveBeenCalled()
+      // Shortcuts keep working afterwards.
+      fireKey('t')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+    })
+  })
 })

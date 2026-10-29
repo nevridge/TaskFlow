@@ -157,7 +157,10 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
       errorMessage: "Couldn't delete. Restored.",
       commit: () => deleteJournalNote(entryId, note.id),
       invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.notes(entryId) }),
-      restoreFocus: () => section?.querySelector<HTMLElement>(`[data-note-x="${note.id}"]`)?.focus(),
+      restoreFocus: () => {
+        if (section?.dataset.entryId !== String(entryId)) return
+        section.querySelector<HTMLElement>(`[data-note-x="${note.id}"]`)?.focus()
+      },
     })
   }
 
@@ -188,7 +191,7 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   const showDraftActions = touch && (draft.trim() !== '' || draftFocused)
 
   return (
-    <section className="card notes-section" ref={sectionRef}>
+    <section className="card notes-section" ref={sectionRef} data-entry-id={entryId}>
       <ol className="log-list">
         {notes.length === 0 && (
           <li className="j-empty">No notes yet — capture anything below.</li>

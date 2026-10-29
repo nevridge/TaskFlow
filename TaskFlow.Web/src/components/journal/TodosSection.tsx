@@ -312,7 +312,11 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
       errorMessage: "Couldn't remove from day. Restored.",
       commit: () => removeJournalTodo(entryId, id),
       invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.todos(entryId) }),
-      restoreFocus: () => section?.querySelector<HTMLElement>(`[data-todo-x="${id}"]`)?.focus(),
+      restoreFocus: () => {
+        // Skip when the section now shows another day: task ids can repeat across entries.
+        if (section?.dataset.entryId !== String(entryId)) return
+        section.querySelector<HTMLElement>(`[data-todo-x="${id}"]`)?.focus()
+      },
     })
   }
 
@@ -460,6 +464,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     <section
       className="card todos"
       ref={sectionRef}
+      data-entry-id={entryId}
       tabIndex={-1}
       // New user input supersedes a pending focus request.
       onPointerDownCapture={() => { pendingFocus.current = null }}

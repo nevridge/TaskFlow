@@ -120,10 +120,9 @@ export function TasksPage() {
   const titleRef = useRef<HTMLInputElement | null>(null)
   const newTaskBtnRef = useRef<HTMLButtonElement | null>(null)
   const [panelFocusTick, setPanelFocusTick] = useState(0)
-  // Seeded once from the initial filters; never re-derived, so changing or clearing a filter inside the panel keeps it open.
-  const [filtersOpen, setFiltersOpen] = useState(
-    () => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0,
-  )
+  // Seed: open on first render only when the initial (default) filters already differ from "no filters".
+  // Never re-derived afterwards, so changing or clearing a filter inside the panel keeps it open/closed as the user left it.
+  const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0)
   const knownParentIdsRef = useRef<Set<number>>(new Set())
 
   // Debounce search input
@@ -505,7 +504,7 @@ export function TasksPage() {
   if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Failed to load tasks.</p></div></div>
 
   return (
-    <div className="tasks-page">
+    <div className="tasks-page t-list-page">
       <div className="t-shell">
         <div className="t-page-hdr">
           <h1 className="t-page-title">Tasks</h1>

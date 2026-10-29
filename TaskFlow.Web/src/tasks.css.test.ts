@@ -69,6 +69,11 @@ describe('tasks.css MOBILE (#317) scoping contract (AC37)', () => {
   it('does not change the shared base rules the journal depends on', () => {
     const baseRule = (selector: string) => body(base, selector).replace(/\s+/g, ' ').trim()
     expect(baseRule('.t-card-actions')).toBe('display: flex; gap: 4px; flex-shrink: 0;')
+    for (const sel of ['.t-btn', '.t-input', '.t-panel']) {
+      // Bare base rule exists outside the MOBILE section and is never re-declared inside it (only as `.tasks-page ...`).
+      expect(base, sel).toMatch(new RegExp(`\\n${sel.replace('.', '\\.')}[ ,{]`))
+      expect(allSelectors(section).some(s => s === sel), sel).toBe(false)
+    }
     expect(base).toContain('.t-badge-project {')
     expect(allSelectors(section).some(s => s === '.t-badge-project')).toBe(false)
   })
@@ -98,7 +103,9 @@ describe('stacked rows (AC1, 5, 6, 9, 12)', () => {
 
   it('keeps the table at 481-820px and scrolls inside .t-list-wrap (AC12)', () => {
     expect(tablet).toMatch(/\.tasks-page \.t-list-wrap \{[^}]*overflow-x: auto/)
-    expect(tablet).toMatch(/\.tasks-page \{[^}]*overflow-x: clip/)
+    // Anchored on the list-only class so TaskDetailPage (#320) is not affected.
+    expect(tablet).toMatch(/\.tasks-page\.t-list-page \{[^}]*overflow-x: clip/)
+    expect(allSelectors(tablet)).not.toContain('.tasks-page')
     expect(tablet).not.toMatch(/display: block/)
   })
 
@@ -117,7 +124,10 @@ describe('touch targets (AC2, 8, 16, 22, 25, 26, 29)', () => {
   it('makes row actions 44x44 with 8px gaps and 16px before Delete (AC8)', () => {
     expect(touch).toMatch(/\.t-list-cell--actions \.t-btn-icon \{[^}]*width: 44px;[^}]*height: 44px/)
     expect(touch).toMatch(/\.t-list-cell--actions \.t-card-actions \{ gap: 8px; \}/)
-    expect(touch).toMatch(/\.t-action-delete \{ margin-left: 16px; \}/)
+    // Delete sits at the far edge; its neighbour adds 8px on top of the 8px gap => >=16px between them.
+    expect(touch).toMatch(/\.t-action-delete \{ margin-left: auto; \}/)
+    expect(touch).toMatch(/\.t-btn-icon:has\(\+ \.t-action-delete\) \{ margin-right: 8px; \}/)
+    expect(width).toMatch(/\.t-action-delete \{ margin-left: auto; \}/)
   })
 
   it('sizes the status control and unblock button to 44px', () => {
@@ -141,6 +151,13 @@ describe('touch targets (AC2, 8, 16, 22, 25, 26, 29)', () => {
     expect(touch).toMatch(/\.t-search-clear \{[^}]*min-width: 44px;[^}]*min-height: 44px/)
     // The 16px floor comes from index.css (touch inputs); the search base font stays untouched here.
     expect(base).toMatch(/\.t-search-input \{[^}]*font-size: 13px/)
+  })
+
+  it('reserves the clear-button width as search input padding on touch, and keeps the count beside the toggle', () => {
+    expect(touch).toMatch(/\.t-search-input \{ padding-right: 44px; \}/)
+    expect(width).not.toMatch(/\.t-search-input \{[^}]*padding-right/)
+    expect(width).toMatch(/\.t-filter-count \{[^}]*flex: 0 1 auto/)
+    expect(width).not.toMatch(/\.t-filter-count \{[^}]*flex: 1 1 100%/)
   })
 
   it('wraps chips with 8px gaps, 12px side padding, 44px tall on touch (AC26)', () => {

@@ -994,11 +994,11 @@ html.is-dark .t-input option { background: var(--paper); }
 .tasks-page .t-edit-panel { scroll-margin-top: calc(64px + env(safe-area-inset-top)); }
 
 .tasks-page .t-history-subtitle { overflow-wrap: anywhere; }
-.tasks-page .sheet-close { font-size: 13px; }
 
 /* 481-820px: keep the table; overflow scrolls inside the list container, never the page. */
 @media (max-width: 820px) {
-  .tasks-page { min-width: 0; overflow-x: clip; }
+  /* List page only: .t-list-page is set by TasksPage, so TaskDetailPage (#320) is unaffected. */
+  .tasks-page.t-list-page { min-width: 0; overflow-x: clip; }
   .tasks-page .t-list-wrap { overflow-x: auto; max-width: 100%; }
 }
 
@@ -1083,7 +1083,7 @@ html.is-dark .t-input option { background: var(--paper); }
   /* Filter bar: search on its own line, wrapping chips, Filters toggle and Sort by control. */
   .tasks-page .t-filter-row { gap: 8px; }
   .tasks-page .t-search-wrap { display: flex; flex: 1 1 100%; min-width: 0; }
-  .tasks-page .t-search-input { width: 100%; min-width: 0; padding-right: 36px; }
+  .tasks-page .t-search-input { width: 100%; min-width: 0; }
   .tasks-page .t-chip-group {
     flex: 1 1 100%;
     gap: 8px;
@@ -1121,7 +1121,12 @@ html.is-dark .t-input option { background: var(--paper); }
   .tasks-page .t-filter-fields .t-status-group { flex-wrap: wrap; }
   .tasks-page .t-filter-fields .t-filter-field { flex: 1 1 100%; flex-wrap: wrap; }
   .tasks-page .t-filter-fields .t-filter-field .t-select { max-width: 100%; flex: 1 1 auto; }
-  .tasks-page .t-filter-count { margin-left: 0; flex: 1 1 100%; }
+  /* Count sits beside the Filters toggle (same order, DOM order breaks the tie); it wraps below only if too narrow. */
+  .tasks-page .t-filter-toggle,
+  .tasks-page .t-filter-count { order: 1; }
+  .tasks-page .t-filter-count { margin-left: auto; flex: 0 1 auto; }
+  .tasks-page .t-sort-control { order: 2; }
+  .tasks-page .t-filter-fields { order: 3; }
 
   /* Block-reason editor row and form panel. */
   .tasks-page .t-list-row--block-editor { width: 100%; box-sizing: border-box; }
@@ -1137,7 +1142,10 @@ html.is-dark .t-input option { background: var(--paper); }
     height: 44px;
     touch-action: manipulation;
   }
-  .tasks-page .t-action-delete { margin-left: 16px; }
+  /* Delete stays at the far edge (margin-left:auto from the width block); its neighbour adds 8px on top of the
+     8px gap so there are always at least 16px between them. */
+  .tasks-page .t-action-delete { margin-left: auto; }
+  .tasks-page .t-list-cell--actions .t-btn-icon:has(+ .t-action-delete) { margin-right: 8px; }
   .tasks-page .t-list-cell--actions .t-btn-icon svg { width: 18px; height: 18px; }
 
   /* Tree toggle: 18px visual, 44px hit area. */
@@ -1169,6 +1177,7 @@ html.is-dark .t-input option { background: var(--paper); }
 
   /* Filter bar. */
   .tasks-page .t-search-input { min-height: 44px; }
+  .tasks-page .t-search-input { padding-right: 44px; }
   .tasks-page .t-search-clear {
     min-width: 44px;
     min-height: 44px;

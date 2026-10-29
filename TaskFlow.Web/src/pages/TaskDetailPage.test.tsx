@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -43,6 +43,7 @@ import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskDetailPage } from './TaskDetailPage'
+import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 const task = {
   id: 1,
@@ -240,7 +241,7 @@ describe('TaskDetailPage', () => {
     vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteMutate, isPending: false } as never)
     confirmSpy.mockReturnValue(true)
     renderPage()
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
     expect(deleteMutate).toHaveBeenCalledWith(1, expect.any(Object))
   })
 
@@ -249,7 +250,7 @@ describe('TaskDetailPage', () => {
     vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteMutate, isPending: false } as never)
     confirmSpy.mockReturnValue(false)
     renderPage()
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
     expect(deleteMutate).not.toHaveBeenCalled()
   })
 
@@ -526,5 +527,148 @@ describe('TaskDetailPage', () => {
       await userEvent.selectOptions(select, 'Alpha')
       expect(select).not.toHaveAttribute('aria-invalid')
     })
+  })
+})
+
+describe('TaskDetailPage on mobile (#320)', () => {
+  const note = { id: 7, content: 'A note', taskItemId: 1 }
+
+  function setTouch(coarse: boolean) {
+    Object.defineProperty(window, 'matchMedia', {
+      value: vi.fn((query: string) => ({ matches: coarse && query.includes('pointer: coarse') })),
+      configurable: true,
+      writable: true,
+    })
+    __resetCoarsePointerCache()
+  }
+
+  const projectName = (container: HTMLElement) => container.querySelector('.t-detail-project-name')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    updateAsync.mockReset().mockResolvedValue({})
+    changeAsync.mockReset().mockResolvedValue(undefined)
+    changeMutate.mockReset()
+    vi.mocked(usePrefs).mockReturnValue(makePrefs())
+    vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: projects }, isSuccess: true } as never)
+    mockChange()
+    mockTask({ projectId: 1, projectName: 'Alpha' })
+    vi.mocked(useTasksQuery).mockReturnValue({ data: { data: [task] }, isLoading: false } as never)
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
+    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
+    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useDeleteNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setTouch(true)
+  })
+
+  afterEach(() => {
+    confirmSpy.mockRestore()
+    Reflect.deleteProperty(window, 'matchMedia')
+    __resetCoarsePointerCache()
+  })
+
+  it('scopes the page under the tasks-page root', () => {
+    const { container } = renderPage()
+    expect(container.firstElementChild).toHaveClass('tasks-page')
+  })
+
+  it('shows blocked reason and project name as visible text, not only in title attributes', () => {
+    mockTask({ projectId: 1, projectName: 'Alpha', status: 'Blocked', blockedReason: 'Waiting on legal sign-off' })
+    const { container } = renderPage()
+    expect(screen.getByText('Waiting on legal sign-off')).toBeVisible()
+    expect(projectName(container)).toHaveTextContent('Alpha')
+    expect(projectName(container)).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByRole('option', { name: 'Alpha' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
+  })
+
+  it('shows a very long unbroken blocked reason as visible text in the meta', () => {
+    const reason = 'https://example.com/' + 'a'.repeat(200)
+    mockTask({ projectId: 1, projectName: 'Alpha', status: 'Blocked', blockedReason: reason })
+    renderPage()
+    expect(screen.getByText(reason)).toBeVisible()
+  })
+
+  it('renders no project-name span for "No project"', () => {
+    mockTask({ projectId: null, projectName: null })
+    const { container } = renderPage()
+    expect(projectName(container)).toBeNull()
+  })
+
+  it('still saves a quick project change on touch', async () => {
+    renderPage()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    expect(changeMutate).toHaveBeenCalledWith({ taskId: 1, fromProjectId: 1, toProjectId: 2 }, expect.any(Object))
+  })
+
+  it('tracks the select value in the visible project name after a quick change', async () => {
+    const { container } = renderPage()
+    expect(projectName(container)).toHaveTextContent('Alpha')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    expect(projectName(container)).toHaveTextContent('Beta')
+  })
+
+  it('keeps the visible project name on the new project after the quick change succeeds', async () => {
+    const { container } = renderPage()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    const options = changeMutate.mock.calls[0][1] as { onSuccess?: () => void }
+    act(() => options.onSuccess?.())
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Beta')
+    expect(projectName(container)).toHaveTextContent('Beta')
+  })
+
+  it('reverts the visible project name with the select to the server value when the quick change fails', async () => {
+    const { container } = renderPage()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    const options = changeMutate.mock.calls[0][1] as { onError: (err: unknown) => void }
+    act(() => options.onError(new Error('boom')))
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
+    expect(projectName(container)).toHaveTextContent('Alpha')
+  })
+
+  it('replaces the panel inline with the TaskForm when Edit is clicked on touch', async () => {
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/title/i)).toHaveValue('Fix login bug')
+    expect(screen.queryByRole('heading', { name: 'Fix login bug' })).not.toBeInTheDocument()
+  })
+
+  it('keeps Edit before Delete task in DOM order', () => {
+    renderPage()
+    const edit = screen.getByRole('button', { name: 'Edit' })
+    const del = screen.getByRole('button', { name: 'Delete task' })
+    expect(edit.compareDocumentPosition(del) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('still confirms before deleting a task or a note', async () => {
+    const deleteTaskMutate = vi.fn()
+    const deleteNoteMutate = vi.fn()
+    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteTaskMutate, isPending: false } as never)
+    vi.mocked(useDeleteNoteMutation).mockReturnValue({ mutate: deleteNoteMutate, isPending: false } as never)
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note] }, isLoading: false } as never)
+    renderPage()
+    // With a note present, "Delete" is only the note's button and "Delete task" is only the task's.
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    expect(confirmSpy).toHaveBeenCalledWith('Delete this note?')
+    expect(deleteNoteMutate).toHaveBeenCalledWith(7)
+    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
+    expect(confirmSpy).toHaveBeenCalledWith('Delete "Fix login bug"?')
+    expect(deleteTaskMutate).toHaveBeenCalledWith(1, expect.any(Object))
+  })
+
+  it('renders the same structure with a fine pointer (desktop)', () => {
+    setTouch(false)
+    const { container } = renderPage()
+    expect(container.firstElementChild).toHaveClass('tasks-page')
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete task' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
+    expect(projectName(container)).toHaveTextContent('Alpha')
   })
 })

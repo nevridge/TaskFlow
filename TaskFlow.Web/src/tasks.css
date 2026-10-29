@@ -1198,3 +1198,57 @@ html.is-dark .t-input option { background: var(--paper); }
     min-width: var(--tap-min);
   }
 }
+
+/* ==== MOBILE (#320) ==== */
+/* Task forms, task detail page and notes. Every selector starts with .tasks-page (0-2-0+ so buttons beat the
+   0-1-1 reset). Layout is keyed to width; 44px sizing and touch gaps live in the touch query. */
+
+.tasks-page .t-detail-project-name { display: none; }
+
+@media (max-width: 480px) {
+  /* TaskForm / NoteForm: one column; flex 0 0 auto keeps rows from collapsing (base children are flex: 1). */
+  .tasks-page .t-form-row { flex-direction: column; gap: 16px; }
+  .tasks-page .t-form-row > * { flex: 0 0 auto; min-width: 0; }
+  .tasks-page .t-form-actions { flex-wrap: wrap; justify-content: stretch; gap: 8px; }
+  .tasks-page .t-form-actions > * { flex: 1 1 120px; min-width: 0; }
+
+  /* Detail title row: title on its own line, actions on the next with Delete at the far edge. */
+  .tasks-page .t-card-row { flex-wrap: wrap; }
+  .tasks-page .t-detail-title { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
+  .tasks-page .t-card-row .t-card-actions { flex: 1 1 100%; flex-wrap: wrap; gap: 8px; }
+  .tasks-page .t-card-row .t-btn-danger { margin-left: auto; }
+
+  /* Meta: one column; the project name becomes visible text under the select. */
+  .tasks-page .t-detail-meta { flex-direction: column; gap: 8px; }
+  .tasks-page .t-detail-meta > * { min-width: 0; overflow-wrap: anywhere; }
+  .tasks-page .t-detail-project label { display: block; margin-bottom: 4px; }
+  .tasks-page .t-detail-project .t-select { width: 100%; box-sizing: border-box; }
+  .tasks-page .t-detail-project-name { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+  /* Section headers (Add Note goes full width). */
+  .tasks-page .t-section-hdr { flex-wrap: wrap; gap: 8px; }
+  .tasks-page .t-section-hdr .t-btn-primary { flex: 1 1 100%; }
+
+  /* Notes and history rows wrap long unbroken strings. */
+  .tasks-page .t-note-card,
+  .tasks-page .t-note-content { overflow-wrap: anywhere; }
+  .tasks-page .t-note-footer { flex-wrap: wrap; gap: 8px; }
+  .tasks-page .t-history-item,
+  .tasks-page .t-history-line,
+  .tasks-page .t-history-time { min-width: 0; overflow-wrap: anywhere; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .tasks-page .t-form-row .t-input { min-height: 44px; }
+  .tasks-page .t-form-actions .t-btn,
+  .tasks-page .t-form-actions .t-btn-primary { min-height: 44px; }
+  .tasks-page .t-card-row .t-card-actions { gap: 8px; }
+  .tasks-page .t-card-row .t-btn,
+  .tasks-page .t-card-row .t-btn-danger { min-height: 44px; min-width: 44px; }
+  .tasks-page .t-detail-project .t-select { min-height: 44px; }
+  .tasks-page .t-section-hdr .t-btn-primary { min-height: 44px; }
+  .tasks-page .t-note-actions { gap: 8px; }
+  .tasks-page .t-note-actions .t-btn,
+  .tasks-page .t-note-actions .t-btn-danger { min-height: 44px; min-width: 44px; }
+  .tasks-page .t-back-link { min-height: 44px; }
+}

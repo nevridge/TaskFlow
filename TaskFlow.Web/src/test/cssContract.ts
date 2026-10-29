@@ -15,7 +15,11 @@ export function blockEnd(source: string, start: number): number {
   return i
 }
 
-/** Contents of the first `@media <query> { ... }` block at or after `from`, balanced on braces. */
+/**
+ * Contents of the first `@media <query> { ... }` block at or after `from`, balanced on braces.
+ * First match only (and it also matches inside comments): slice the source with sectionBetween/sectionFrom first
+ * when a file holds several sections that each declare the same query.
+ */
 export function media(source: string, query: string, from = 0): string {
   const at = source.indexOf(`@media ${query} {`, from)
   if (at === -1) throw new Error(`No @media ${query}`)
@@ -69,6 +73,16 @@ export function allSelectors(source: string): string[] {
     i++
   }
   return selectors
+}
+
+/** Text from `startMarker` up to `endMarker` (or EOF when omitted); throws when either marker is missing. */
+export function sectionBetween(source: string, startMarker: string, endMarker?: string): string {
+  const from = source.indexOf(startMarker)
+  if (from === -1) throw new Error(`Marker ${startMarker} not found`)
+  if (endMarker === undefined) return source.slice(from)
+  const to = source.indexOf(endMarker, from + startMarker.length)
+  if (to === -1) throw new Error(`Marker ${endMarker} not found`)
+  return source.slice(from, to)
 }
 
 /** Everything from `marker` to the end of the file, or throws when the marker is missing. */

@@ -53,6 +53,13 @@ describe('TaskForm', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'New task' }))
   })
 
+  it('keeps Cancel before Save in DOM order (mobile wrap must not reorder)', () => {
+    renderForm()
+    const cancel = screen.getByRole('button', { name: /cancel/i })
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(cancel.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('calls onCancel when cancel button is clicked', async () => {
     const onCancel = vi.fn()
     renderForm(undefined, vi.fn(), onCancel)

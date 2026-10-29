@@ -10,7 +10,45 @@ vi.mock('./client/client.gen', () => ({
 }))
 
 import { client } from './client/client.gen'
-import { carryForwardJournalEntry, createJournalEntry, updateLogEntry } from './journal'
+import {
+  carryForwardJournalEntry,
+  createJournalEntry,
+  updateLogEntry,
+  removeJournalTodo,
+  deleteLogEntry,
+  deleteJournalNote,
+} from './journal'
+
+describe('journal api deletes reject on HTTP errors (mocked client)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('removeJournalTodo passes throwOnError: true', () => {
+    removeJournalTodo(10, 55)
+    expect(client.delete).toHaveBeenCalledWith({
+      url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}',
+      path: { entryId: 10, taskItemId: 55 },
+      throwOnError: true,
+    })
+  })
+
+  it('deleteLogEntry passes throwOnError: true', () => {
+    deleteLogEntry(10, 99)
+    expect(client.delete).toHaveBeenCalledWith({
+      url: '/api/v1/JournalEntries/{entryId}/logs/{id}',
+      path: { entryId: 10, id: 99 },
+      throwOnError: true,
+    })
+  })
+
+  it('deleteJournalNote passes throwOnError: true', () => {
+    deleteJournalNote(10, 7)
+    expect(client.delete).toHaveBeenCalledWith({
+      url: '/api/v1/JournalEntries/{entryId}/notes/{id}',
+      path: { entryId: 10, id: 7 },
+      throwOnError: true,
+    })
+  })
+})
 
 describe('journal api carry-forward (mocked client)', () => {
   beforeEach(() => vi.clearAllMocks())

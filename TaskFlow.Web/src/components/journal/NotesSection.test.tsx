@@ -16,7 +16,7 @@ vi.mock('@/hooks/useJournal', () => ({
   useDeleteJournalNoteMutation: vi.fn(() => ({ mutate: deleteNoteMutate, isPending: false })),
 }))
 
-import { useJournalNotes } from '@/hooks/useJournal'
+import { useJournalNotes, useCreateJournalNoteMutation } from '@/hooks/useJournal'
 import { NotesSection } from './NotesSection'
 
 const note1: JournalNoteResponseDto = {
@@ -174,16 +174,21 @@ describe('NotesSection', () => {
   it('Enter then blur calls mutate exactly once', async () => {
     const editInput = await startEditing()
     await userEvent.type(editInput, '!')
-    await userEvent.keyboard('{Enter}')
-    fireEvent.blur(editInput)
+    // Blur lands on the still-mounted textarea before React re-renders, as a browser does.
+    act(() => {
+      fireEvent.keyDown(editInput, { key: 'Enter' })
+      fireEvent.blur(editInput)
+    })
     expect(updateNoteMutate).toHaveBeenCalledTimes(1)
   })
 
   it('Escape then blur does not mutate', async () => {
     const editInput = await startEditing()
     await userEvent.type(editInput, '!')
-    await userEvent.keyboard('{Escape}')
-    fireEvent.blur(editInput)
+    act(() => {
+      fireEvent.keyDown(editInput, { key: 'Escape' })
+      fireEvent.blur(editInput)
+    })
     expect(updateNoteMutate).not.toHaveBeenCalled()
   })
 
@@ -199,6 +204,55 @@ describe('NotesSection', () => {
     await userEvent.clear(editInput)
     await userEvent.keyboard('{Enter}')
     expect(updateNoteMutate).not.toHaveBeenCalled()
+  })
+
+  describe('desktop', () => {
+    it('keeps the key-hint placeholder, the 2000 limit and shows no Save/Cancel buttons', async () => {
+      renderSection()
+      const input = screen.getByPlaceholderText(/enter to save, shift\+enter for new line/i)
+      expect(input).toHaveAttribute('maxlength', '2000')
+      await userEvent.type(input, 'draft')
+      expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+    })
+
+    it('a single click does not edit but a double-click does', async () => {
+      vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+      renderSection()
+      const trigger = screen.getByRole('button', { name: 'Remember to update docs' })
+      await userEvent.click(trigger)
+      expect(screen.queryByRole('textbox', { name: 'Edit note' })).not.toBeInTheDocument()
+      await userEvent.dblClick(trigger)
+      expect(screen.getByRole('textbox', { name: 'Edit note' })).toBeInTheDocument()
+    })
+
+    it.each(['{Enter}', ' '])('keyboard %j on the focused note text starts editing', async key => {
+      vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+      renderSection()
+      screen.getByRole('button', { name: 'Remember to update docs' }).focus()
+      await userEvent.keyboard(key)
+      expect(screen.getByRole('textbox', { name: 'Edit note' })).toHaveValue('Remember to update docs')
+    })
+
+    it('returns focus to the note text after Enter saves the edit', async () => {
+      const editInput = await startEditing()
+      await userEvent.type(editInput, '!')
+      await userEvent.keyboard('{Enter}')
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remember to update docs' }))
+    })
+
+    it('does not move focus when blur ends the edit', async () => {
+      const editInput = await startEditing()
+      await userEvent.type(editInput, '!')
+      await userEvent.tab()
+      expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Remember to update docs' }))
+    })
+
+    it('disables the add textarea while a note is saving', () => {
+      vi.mocked(useCreateJournalNoteMutation).mockReturnValueOnce({ mutate: createNoteMutate, isPending: true } as never)
+      renderSection()
+      expect(screen.getByPlaceholderText(/add a note/i)).toBeDisabled()
+    })
   })
 
   it('focusNewNote() via ref focuses the new note textarea', () => {

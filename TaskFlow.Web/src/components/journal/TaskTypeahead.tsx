@@ -1,8 +1,9 @@
-import { useState, useRef, useMemo } from 'react'
+import { useState, useRef, useMemo, useEffect, useId } from 'react'
 import { useTasksQuery } from '@/hooks/useTasks'
 import type { TaskItemViewModel } from '@/hooks/useTasks'
 import { BlockIcon } from '@/components/BlockControls'
 import { isBlocked } from '@/lib/task-status'
+import { isCoarsePointer } from '@/lib/pointer'
 
 interface Props {
   value: number | null
@@ -21,6 +22,10 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const blurTimer = useRef<number | undefined>(undefined)
+  const listboxId = useId()
+  const optionId = (i: number) => `${listboxId}-opt-${i}`
 
   const selectedTitle = value == null ? '' : (tasks.find(t => Number(t.id) === value)?.title ?? '')
   const displayValue = open ? inputValue : selectedTitle
@@ -30,6 +35,17 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
         .filter(t => t.title.toLowerCase().includes(inputValue.toLowerCase()))
         .slice(0, 10)
     : tasks.slice(0, 10)
+
+  useEffect(() => () => window.clearTimeout(blurTimer.current), [])
+
+  // Keep the dropdown clear of the soft keyboard when it opens (touch only: on desktop it could scroll the page
+  // in a narrow window), and the highlighted option inside the list.
+  useEffect(() => {
+    if (open && isCoarsePointer()) listRef.current?.scrollIntoView?.({ block: 'nearest' })
+  }, [open])
+  useEffect(() => {
+    if (open && activeIndex >= 0) listRef.current?.querySelector('.active')?.scrollIntoView?.({ block: 'nearest' })
+  }, [open, activeIndex])
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     setInputValue(e.target.value)
@@ -45,12 +61,21 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   }
 
   function handleFocus() {
+    window.clearTimeout(blurTimer.current)
+    setInputValue(selectedTitle)
+    setOpen(true)
+  }
+
+  // After a selection the input keeps focus, so tapping it again fires no focus event: reopen on click.
+  function handleClick() {
+    if (open) return
     setInputValue(selectedTitle)
     setOpen(true)
   }
 
   function handleBlur() {
-    setTimeout(() => {
+    window.clearTimeout(blurTimer.current)
+    blurTimer.current = window.setTimeout(() => {
       setOpen(false)
       setActiveIndex(-1)
       setInputValue('')
@@ -100,16 +125,32 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
         value={displayValue}
         onChange={handleInputChange}
         onFocus={handleFocus}
+        onClick={handleClick}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         aria-label="Link to task"
         aria-expanded={open}
         aria-autocomplete="list"
+        aria-controls={listboxId}
+        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+        autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
         role="combobox"
       />
       {open && (
-        <ul className="task-typeahead-dropdown" role="listbox">
+        // Keeping the mousedown default away keeps focus in the input, so its blur (which closes the list)
+        // cannot fire before the option's click selects.
+        <ul
+          ref={listRef}
+          id={listboxId}
+          className="task-typeahead-dropdown"
+          role="listbox"
+          onMouseDown={e => e.preventDefault()}
+        >
           <li
+            id={optionId(0)}
             className={`task-typeahead-option task-typeahead-none${activeIndex === 0 ? ' active' : ''}`}
             role="option"
             aria-selected={value == null}
@@ -120,6 +161,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
           {filtered.map((task, i) => (
             <li
               key={task.id}
+              id={optionId(i + 1)}
               className={`task-typeahead-option${activeIndex === i + 1 ? ' active' : ''}`}
               role="option"
               aria-selected={Number(task.id) === value}
@@ -134,7 +176,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
             </li>
           ))}
           {filtered.length === 0 && (
-            <li className="task-typeahead-empty" role="option" aria-selected={false}>
+            <li className="task-typeahead-empty" role="presentation">
               No matching tasks
             </li>
           )}

@@ -202,6 +202,29 @@ describe('JournalPage', () => {
     expect(document.activeElement).toBe(todosDraft)
   })
 
+  it('remounts the log and notes sections when the entry changes so drafts do not leak across days', () => {
+    const { rerender } = renderPage()
+    const logDraft = screen.getByTestId('log-draft') as HTMLInputElement
+    logDraft.value = 'half typed log'
+    expect(logDraft.value).toBe('half typed log')
+
+    vi.mocked(useEnsureJournalEntry).mockReturnValue({
+      entry: { ...baseEntry, id: 2 },
+      isLoading: false,
+      error: null,
+    } as never)
+    rerender(
+      <MemoryRouter initialEntries={['/journal/05-28-2026']}>
+        <Routes>
+          <Route path="/journal/:date" element={<JournalPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByTestId('log-draft')).not.toBe(logDraft)
+    expect((screen.getByTestId('log-draft') as HTMLInputElement).value).toBe('')
+  })
+
   it('redirects Saturday to preceding Friday when weekdaysOnly=true', () => {
     mockOutletContext.weekdaysOnly = true
     // 2026-05-30 is a Saturday; preceding Friday is 2026-05-29

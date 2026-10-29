@@ -676,6 +676,169 @@ describe('useUpdateLogEntryMutation', () => {
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
     expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
   })
+
+  describe('optimistic cache patch', () => {
+    const logs = [
+      { id: 5, content: 'original', journalEntryId: 10, createdAt: '', linkedTaskDeleted: true, taskItemId: 3, linkedTaskTitle: 'Old task' },
+      { id: 6, content: 'untouched', journalEntryId: 10, createdAt: '', linkedTaskDeleted: false },
+    ]
+    const entries = [
+      { id: 10, title: 't', date: '2026-05-28', createdAt: '', todoTaskItemIds: [], logEntries: logs, movedCount: 0, movedTaskItemIds: [] },
+      { id: 11, title: 'other', date: '2026-05-27', createdAt: '', todoTaskItemIds: [], logEntries: [{ ...logs[0] }], movedCount: 0, movedTaskItemIds: [] },
+    ]
+
+    function setup() {
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      queryClient.setQueryData(journalKeys.all, { data: entries })
+      // A sibling query under the same prefix with a different shape must not be touched.
+      queryClient.setQueryData(journalKeys.notes(10), { data: [{ id: 10, content: 'note' }] })
+      const wrapper = ({ children }: { children: React.ReactNode }) =>
+        createElement(QueryClientProvider, { client: queryClient }, children)
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+      return { queryClient, wrapper, invalidateSpy }
+    }
+
+    const cachedLog = (qc: QueryClient, logId: number, entryId = 10) =>
+      (qc.getQueryData(journalKeys.all) as { data: typeof entries }).data
+        .find(e => e.id === entryId)!.logEntries.find(l => l.id === logId)!
+
+    function deferred() {
+      let resolve!: (v: unknown) => void
+      let reject!: (e: unknown) => void
+      const promise = new Promise((res, rej) => { resolve = res; reject = rej })
+      return { promise, resolve, reject }
+    }
+
+    it('patches the content and taskItemId in the cache before the request settles', async () => {
+      const { queryClient, wrapper } = setup()
+      const d = deferred()
+      vi.mocked(journalApi.updateLogEntry).mockReturnValue(d.promise as never)
+      const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
+      act(() => { result.current.mutate({ id: 5, content: 'edited', taskItemId: 8 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('edited'))
+      const log = cachedLog(queryClient, 5)
+      expect(log.taskItemId).toBe(8)
+      // A relink clears the deleted flag and leaves the chip text to the refetch.
+      expect(log.linkedTaskDeleted).toBe(false)
+      expect(log.linkedTaskTitle).toBe('Old task')
+      expect(cachedLog(queryClient, 6).content).toBe('untouched')
+      expect(cachedLog(queryClient, 5, 11).content).toBe('original')
+      expect(queryClient.getQueryData(journalKeys.notes(10))).toEqual({ data: [{ id: 10, content: 'note' }] })
+      d.resolve({ data: log })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    })
+
+    it('clears the chip title when relinked to None', async () => {
+      const { queryClient, wrapper } = setup()
+      const d = deferred()
+      vi.mocked(journalApi.updateLogEntry).mockReturnValue(d.promise as never)
+      const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
+      act(() => { result.current.mutate({ id: 5, content: 'original', taskItemId: null }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).taskItemId).toBeNull())
+      expect(cachedLog(queryClient, 5).linkedTaskTitle).toBeNull()
+      d.resolve({ data: {} })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    })
+
+    it('rolls back on error', async () => {
+      const { queryClient, wrapper } = setup()
+      vi.mocked(journalApi.updateLogEntry).mockRejectedValue(new Error('boom'))
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
+      act(() => { result.current.mutate({ id: 5, content: 'edited', taskItemId: 8 }) })
+      await waitFor(() => expect(result.current.isError).toBe(true))
+      expect(cachedLog(queryClient, 5).content).toBe('original')
+      expect(cachedLog(queryClient, 5).taskItemId).toBe(3)
+    })
+
+    it('invalidates journalKeys.all on settle', async () => {
+      const { wrapper, invalidateSpy } = setup()
+      vi.mocked(journalApi.updateLogEntry).mockResolvedValue({ data: {} } as never)
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
+      act(() => { result.current.mutate({ id: 5, content: 'edited', taskItemId: null }) })
+      await waitFor(() => expect(result.current.isSuccess).toBe(true))
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
+    })
+
+    it('does not invalidate while a second update is in flight, and keeps its optimistic value', async () => {
+      const { queryClient, wrapper, invalidateSpy } = setup()
+      const first = deferred()
+      const second = deferred()
+      vi.mocked(journalApi.updateLogEntry)
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(
+        () => ({ a: useUpdateLogEntryMutation(10), b: useUpdateLogEntryMutation(10) }),
+        { wrapper },
+      )
+      act(() => { result.current.a.mutate({ id: 5, content: 'first', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('first'))
+      act(() => { result.current.b.mutate({ id: 5, content: 'second', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('second'))
+
+      first.resolve({ data: {} })
+      await waitFor(() => expect(result.current.a.isSuccess).toBe(true))
+      expect(invalidateSpy).not.toHaveBeenCalled()
+      expect(cachedLog(queryClient, 5).content).toBe('second')
+
+      second.resolve({ data: {} })
+      await waitFor(() => expect(result.current.b.isSuccess).toBe(true))
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
+    })
+
+    it('a failed second update rolls back to the first update value, not the original', async () => {
+      const { queryClient, wrapper } = setup()
+      const first = deferred()
+      const second = deferred()
+      vi.mocked(journalApi.updateLogEntry)
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(
+        () => ({ a: useUpdateLogEntryMutation(10), b: useUpdateLogEntryMutation(10) }),
+        { wrapper },
+      )
+      act(() => { result.current.a.mutate({ id: 5, content: 'first', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('first'))
+      act(() => { result.current.b.mutate({ id: 5, content: 'second', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('second'))
+
+      second.reject(new Error('boom'))
+      await waitFor(() => expect(result.current.b.isError).toBe(true))
+      expect(cachedLog(queryClient, 5).content).toBe('first')
+      first.resolve({ data: {} })
+      await waitFor(() => expect(result.current.a.isSuccess).toBe(true))
+    })
+
+    it('a failed first update does not clobber the second update that is still pending', async () => {
+      const { queryClient, wrapper, invalidateSpy } = setup()
+      const first = deferred()
+      const second = deferred()
+      vi.mocked(journalApi.updateLogEntry)
+        .mockReturnValueOnce(first.promise as never)
+        .mockReturnValueOnce(second.promise as never)
+      vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: entries, response: new Response() } as never)
+      const { result } = renderHook(
+        () => ({ a: useUpdateLogEntryMutation(10), b: useUpdateLogEntryMutation(10) }),
+        { wrapper },
+      )
+      act(() => { result.current.a.mutate({ id: 5, content: 'first', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('first'))
+      act(() => { result.current.b.mutate({ id: 5, content: 'second', taskItemId: 3 }) })
+      await waitFor(() => expect(cachedLog(queryClient, 5).content).toBe('second'))
+
+      first.reject(new Error('boom'))
+      await waitFor(() => expect(result.current.a.isError).toBe(true))
+      expect(cachedLog(queryClient, 5).content).toBe('second')
+      expect(invalidateSpy).not.toHaveBeenCalled()
+
+      second.resolve({ data: {} })
+      await waitFor(() => expect(result.current.b.isSuccess).toBe(true))
+      expect(invalidateSpy).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['journal'] }))
+    })
+  })
 })
 
 describe('useDeleteLogEntryMutation', () => {

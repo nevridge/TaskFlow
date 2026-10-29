@@ -102,6 +102,7 @@ export function JournalPage() {
                 />
                 <DailyLogSection
                   ref={logSectionRef}
+                  key={entry.id}
                   entryId={entry.id}
                   logEntries={entry.logEntries}
                 />

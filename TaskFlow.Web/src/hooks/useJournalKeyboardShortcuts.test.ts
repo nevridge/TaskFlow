@@ -88,6 +88,23 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onJumpToToday).not.toHaveBeenCalled()
   })
 
+  it('still fires l and n when a role=button edit trigger or a Save button is focused', () => {
+    const trigger = document.createElement('div')
+    trigger.setAttribute('role', 'button')
+    trigger.tabIndex = 0
+    const save = document.createElement('button')
+    document.body.append(trigger, save)
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+
+    trigger.focus()
+    fireKey('l')
+    save.focus()
+    fireKey('n')
+
+    expect(handlers.onNewLog).toHaveBeenCalledOnce()
+    expect(handlers.onNewNote).toHaveBeenCalledOnce()
+  })
+
   it('does not fire shortcuts when a textarea is focused', () => {
     const ta = document.createElement('textarea')
     document.body.appendChild(ta)

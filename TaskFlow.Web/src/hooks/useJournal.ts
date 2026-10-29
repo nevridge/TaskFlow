@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import {
   getJournalEntries,
   createJournalEntry,
@@ -14,7 +15,12 @@ import {
   updateJournalNote,
   deleteJournalNote,
 } from '@/api/journal'
-import type { JournalEntryResponseDto, TaskItemResponseDto, JournalNoteResponseDto } from '@/api/journal'
+import type {
+  JournalEntryResponseDto,
+  JournalLogEntryResponseDto,
+  TaskItemResponseDto,
+  JournalNoteResponseDto,
+} from '@/api/journal'
 import type { CreateTaskItemDto } from '@/api/client/types.gen'
 import { postApiV1TaskItems, patchApiV1TaskItemsById } from '@/api/client/sdk.gen'
 import {
@@ -33,6 +39,7 @@ export const journalKeys = {
   all: ['journal'] as const,
   todos: (entryId: number) => ['journal', entryId, 'todos'] as const,
   notes: (entryId: number) => ['journal', entryId, 'notes'] as const,
+  logUpdate: (entryId: number) => ['journal', entryId, 'log-update'] as const,
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -273,13 +280,80 @@ export function useAddLogEntryMutation(entryId: number) {
   })
 }
 
+type JournalEntriesCache = { data?: JournalEntryResponseDto[] } | undefined
+type LogCacheSnapshot = [QueryKey, JournalEntriesCache][]
+
+function holdsEntry(cache: unknown, entryId: number): boolean {
+  const list = (cache as JournalEntriesCache)?.data
+  return Array.isArray(list) && list.some(e => e.id === entryId && Array.isArray(e.logEntries))
+}
+
+/** Patches one log entry inside the cached entries list (the `['journal']` query). */
+function applyOptimisticLogUpdate(
+  qc: QueryClient,
+  entryId: number,
+  logId: number,
+  content: string,
+  taskItemId: number | null,
+): LogCacheSnapshot {
+  const snapshot = qc
+    .getQueriesData<JournalEntriesCache>({ queryKey: journalKeys.all })
+    .filter(([, data]) => holdsEntry(data, entryId))
+  const patch = (log: JournalLogEntryResponseDto): JournalLogEntryResponseDto => {
+    const relinked = (log.taskItemId ?? null) !== taskItemId
+    // A relink leaves the chip text to the refetch, except None, which has no chip at all.
+    return {
+      ...log,
+      content,
+      taskItemId,
+      ...(relinked ? { linkedTaskDeleted: false, ...(taskItemId === null ? { linkedTaskTitle: null } : {}) } : {}),
+    }
+  }
+  snapshot.forEach(([key]) => {
+    qc.setQueryData<JournalEntriesCache>(key, old =>
+      old?.data
+        ? {
+            ...old,
+            data: old.data.map(e =>
+              e.id === entryId ? { ...e, logEntries: e.logEntries.map(l => (l.id === logId ? patch(l) : l)) } : e,
+            ),
+          }
+        : old,
+    )
+  })
+  return snapshot
+}
+
+// Orders log updates so a failed one can tell whether a later one is still in flight.
+let logUpdateSeq = 0
+
 export function useUpdateLogEntryMutation(entryId: number) {
   const qc = useQueryClient()
+  const mutationKey = journalKeys.logUpdate(entryId)
   return useMutation({
+    mutationKey,
     mutationFn: ({ id, content, taskItemId }: { id: number; content: string; taskItemId?: number | null }) =>
       updateLogEntry(entryId, id, content, taskItemId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
-    onError: () => qc.invalidateQueries({ queryKey: journalKeys.all }),
+    onMutate: async ({ id, content, taskItemId }) => {
+      const seq = ++logUpdateSeq
+      await qc.cancelQueries({ queryKey: journalKeys.all })
+      return { seq, snapshot: applyOptimisticLogUpdate(qc, entryId, id, content, taskItemId ?? null) }
+    },
+    onError: (_err, _vars, ctx) => {
+      if (!ctx) return
+      // A later update still in flight has patched on top of this one: restoring this snapshot would clobber that
+      // patch. Leave the cache to its settle invalidation instead.
+      const laterPending = qc
+        .getMutationCache()
+        .findAll({ mutationKey, status: 'pending' })
+        .some(m => ((m.state.context as { seq?: number } | undefined)?.seq ?? 0) > ctx.seq)
+      if (!laterPending) ctx.snapshot.forEach(([key, data]) => qc.setQueryData(key, data))
+    },
+    // While another update is in flight, skip the refetch: it would overwrite that update's optimistic patch.
+    // This mutation is still counted as mutating inside onSettled, so 1 means it is the last one.
+    onSettled: () => {
+      if (qc.isMutating({ mutationKey }) <= 1) return qc.invalidateQueries({ queryKey: journalKeys.all })
+    },
   })
 }
 

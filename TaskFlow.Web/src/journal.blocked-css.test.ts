@@ -139,7 +139,11 @@ describe('journal touch and responsive styles', () => {
   })
 
   it('bounds the log entry cell and wraps unbroken log text on every device', () => {
-    expect(rule('.log-entry')).toMatch(/grid-template-columns:\s*64px minmax\(0, 1fr\) 22px/)
+    // The tracks are variables so the phone and touch blocks change one value instead of restating the grid.
+    const entry = rule('.log-entry')
+    expect(entry).toMatch(/--log-time-w:\s*64px/)
+    expect(entry).toMatch(/--log-del-w:\s*22px/)
+    expect(entry).toMatch(/grid-template-columns:\s*var\(--log-time-w\) minmax\(0, 1fr\) var\(--log-del-w\)/)
     expect(rule('.log-text')).toMatch(/min-width:\s*0/)
     expect(rule('.log-text')).toMatch(/overflow-wrap:\s*anywhere/)
     const t = mediaBlock(TOUCH, journalCss.indexOf('/* Touch. Declared LAST'))
@@ -155,8 +159,9 @@ describe('journal touch and responsive styles', () => {
 
   it('lets the log add row and typeahead shrink instead of widening the layout', () => {
     expect(rule('.log-add-inputs')).toMatch(/min-width:\s*0/)
-    expect(rule('.log-add-inputs .add-input')).toMatch(/width:\s*0/)
-    expect(rule('.log-add-inputs .add-input')).toMatch(/min-width:\s*0/)
+    // The text input moved out of .log-add-inputs (it now sits beside the plus, the group holds typeahead + Add).
+    expect(rule('.log-add-row .add-input')).toMatch(/width:\s*0/)
+    expect(rule('.log-add-row .add-input')).toMatch(/min-width:\s*0/)
     expect(rule('.task-typeahead')).toMatch(/min-width:\s*0/)
     expect(rule('.log-add-inputs .task-typeahead')).toMatch(/flex:\s*0 1 auto/)
     expect(rule('.journal-page .task-typeahead-input')).toMatch(/max-width:\s*100%/)

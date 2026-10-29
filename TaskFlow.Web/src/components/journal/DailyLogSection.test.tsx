@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { DailyLogSectionHandle } from './DailyLogSection'
@@ -20,6 +20,7 @@ vi.mock('./TaskTypeahead', () => ({
   )),
 }))
 
+import { useAddLogEntryMutation } from '@/hooks/useJournal'
 import { DailyLogSection } from './DailyLogSection'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 
@@ -148,5 +149,171 @@ describe('DailyLogSection', () => {
     const typeaheads = screen.getAllByTestId('task-typeahead')
     await userEvent.click(typeaheads[0])
     expect(updateLogMutate).toHaveBeenCalledWith({ id: baseEntry.id, content: baseEntry.content, taskItemId: 99 })
+  })
+
+  // ─── Text editing ────────────────────────────────────────────────────────────
+
+  describe('log text editing', () => {
+    const linked: JournalLogEntryResponseDto = { ...baseEntry, taskItemId: 7, linkedTaskTitle: 'Build the feature' }
+    const trigger = (name = 'Fixed the bug') => screen.getByRole('button', { name })
+    const editBox = () => screen.getByRole('textbox', { name: 'Edit log entry' })
+
+    async function startEditing(entry = linked) {
+      renderSection([entry])
+      await userEvent.dblClick(trigger(entry.content))
+      return editBox()
+    }
+
+    it('a single click does not edit on desktop, a double-click does, in place of the text', async () => {
+      renderSection([baseEntry])
+      await userEvent.click(trigger())
+      expect(screen.queryByRole('textbox', { name: 'Edit log entry' })).not.toBeInTheDocument()
+      await userEvent.dblClick(trigger())
+      expect(editBox()).toHaveValue('Fixed the bug')
+      expect(editBox().closest('.log-body')).not.toBeNull()
+      expect(screen.queryByRole('button', { name: 'Fixed the bug' })).not.toBeInTheDocument()
+    })
+
+    it.each(['{Enter}', ' '])('keyboard %j on the focused text starts editing', async key => {
+      renderSection([baseEntry])
+      trigger().focus()
+      await userEvent.keyboard(key)
+      expect(editBox()).toHaveValue('Fixed the bug')
+    })
+
+    it('the edit input has the same max length as the add input', async () => {
+      const edit = await startEditing()
+      expect(edit).toHaveAttribute('maxlength', '2000')
+      expect(screen.getByPlaceholderText(/what did you just work on/i)).toHaveAttribute('maxlength', '2000')
+    })
+
+    it('Enter commits once with the existing taskItemId and returns focus to the text', async () => {
+      const edit = await startEditing()
+      await userEvent.clear(edit)
+      await userEvent.type(edit, '  Fixed the other bug  {Enter}')
+      expect(updateLogMutate).toHaveBeenCalledTimes(1)
+      expect(updateLogMutate).toHaveBeenCalledWith({ id: 1, content: 'Fixed the other bug', taskItemId: 7 })
+      expect(document.activeElement).toBe(trigger())
+    })
+
+    it('sends taskItemId null, never undefined, for an unlinked entry', async () => {
+      const edit = await startEditing(baseEntry)
+      await userEvent.type(edit, '!{Enter}')
+      expect(updateLogMutate).toHaveBeenCalledWith({ id: 1, content: 'Fixed the bug!', taskItemId: null })
+    })
+
+    it('Enter then blur does not commit twice', async () => {
+      const edit = await startEditing()
+      await userEvent.type(edit, '!')
+      // Blur lands on the still-mounted input before React re-renders, as a browser does.
+      act(() => {
+        fireEvent.keyDown(edit, { key: 'Enter' })
+        fireEvent.blur(edit)
+      })
+      expect(updateLogMutate).toHaveBeenCalledTimes(1)
+    })
+
+    it('blur commits', async () => {
+      const edit = await startEditing()
+      await userEvent.type(edit, '!')
+      fireEvent.blur(edit)
+      expect(updateLogMutate).toHaveBeenCalledWith({ id: 1, content: 'Fixed the bug!', taskItemId: 7 })
+    })
+
+    it('Escape then blur saves nothing and restores the text', async () => {
+      const edit = await startEditing()
+      await userEvent.type(edit, '!')
+      act(() => {
+        fireEvent.keyDown(edit, { key: 'Escape' })
+        fireEvent.blur(edit)
+      })
+      expect(updateLogMutate).not.toHaveBeenCalled()
+      expect(trigger()).toBeInTheDocument()
+      expect(document.activeElement).toBe(trigger())
+    })
+
+    it('empty text saves nothing and restores the original', async () => {
+      const edit = await startEditing()
+      await userEvent.clear(edit)
+      await userEvent.keyboard('{Enter}')
+      expect(updateLogMutate).not.toHaveBeenCalled()
+      expect(trigger()).toHaveTextContent('Fixed the bug')
+    })
+
+    it('unchanged text saves nothing', async () => {
+      await startEditing()
+      await userEvent.keyboard('{Enter}')
+      expect(updateLogMutate).not.toHaveBeenCalled()
+    })
+
+    it('tapping delete does not enter edit mode', async () => {
+      renderSection([linked])
+      await userEvent.click(screen.getByRole('button', { name: /delete entry/i }))
+      expect(screen.queryByRole('textbox', { name: 'Edit log entry' })).not.toBeInTheDocument()
+    })
+
+    it('tapping the chip or typeahead does not enter edit mode', async () => {
+      renderSection([linked])
+      await userEvent.dblClick(screen.getByText('Build the feature'))
+      await userEvent.click(screen.getAllByTestId('task-typeahead')[0])
+      expect(screen.queryByRole('textbox', { name: 'Edit log entry' })).not.toBeInTheDocument()
+    })
+
+    it('relinking while editing: blur commits the text, then the relink sends the committed content', async () => {
+      const { rerender } = renderSection([linked])
+      await userEvent.dblClick(trigger())
+      await userEvent.type(editBox(), '!')
+      // Focusing the typeahead blurs the edit input first, which commits the text.
+      fireEvent.blur(editBox())
+      expect(updateLogMutate).toHaveBeenCalledTimes(1)
+      expect(updateLogMutate).toHaveBeenNthCalledWith(1, { id: 1, content: 'Fixed the bug!', taskItemId: 7 })
+      // The optimistic cache update flows back as new props; the relink reads the latest entry, not a captured one.
+      rerender(<DailyLogSection entryId={10} logEntries={[{ ...linked, content: 'Fixed the bug!' }]} />)
+      await userEvent.click(screen.getAllByTestId('task-typeahead')[0])
+      expect(updateLogMutate).toHaveBeenNthCalledWith(2, { id: 1, content: 'Fixed the bug!', taskItemId: 99 })
+    })
+
+    it('commits the text with the latest cached taskItemId, not the one from when editing began', async () => {
+      const { rerender } = renderSection([linked])
+      await userEvent.dblClick(trigger())
+      await userEvent.type(editBox(), '!')
+      rerender(<DailyLogSection entryId={10} logEntries={[{ ...linked, taskItemId: 55 }]} />)
+      await userEvent.keyboard('{Enter}')
+      expect(updateLogMutate).toHaveBeenCalledWith({ id: 1, content: 'Fixed the bug!', taskItemId: 55 })
+    })
+
+    it('keeps the typeahead mounted when the text swaps to the editor', async () => {
+      renderSection([linked])
+      const before = screen.getAllByTestId('task-typeahead')[0]
+      await userEvent.dblClick(trigger())
+      expect(screen.getAllByTestId('task-typeahead')[0]).toBe(before)
+    })
+  })
+
+  describe('add row', () => {
+    it('renders an Add submit button that is disabled until there is text and submits', async () => {
+      renderSection([])
+      const add = screen.getByRole('button', { name: 'Add' })
+      expect(add).toHaveAttribute('type', 'submit')
+      expect(add).toBeDisabled()
+      await userEvent.type(screen.getByRole('textbox'), 'did a thing')
+      expect(add).toBeEnabled()
+      await userEvent.click(add)
+      expect(addLogMutate).toHaveBeenCalledWith(expect.objectContaining({ content: 'did a thing' }), expect.any(Object))
+    })
+
+    it('disables the add input while saving on desktop', () => {
+      vi.mocked(useAddLogEntryMutation).mockReturnValueOnce({ mutate: addLogMutate, isPending: true } as never)
+      renderSection([])
+      expect(screen.getByRole('textbox')).toBeDisabled()
+    })
+
+    it('prevents default on pointerdown and mousedown of Add so the input keeps focus', async () => {
+      renderSection([])
+      await userEvent.type(screen.getByRole('textbox'), 'text')
+      const add = screen.getByRole('button', { name: 'Add' })
+      expect(fireEvent.pointerDown(add)).toBe(false)
+      expect(fireEvent.mouseDown(add)).toBe(false)
+    })
   })
 })

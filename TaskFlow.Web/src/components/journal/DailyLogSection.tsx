@@ -81,13 +81,13 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     addLog.mutate(
       { content: text, taskItemId: draftTaskItemId },
       {
-        onSuccess: () => {
-          inputRef.current?.focus()
-          setDraftTaskItemId(null)
-        },
+        onSuccess: () => inputRef.current?.focus(),
       },
     )
+    // Reset the link with the text: on touch the field stays enabled while saving, so a quick second entry
+    // must not inherit this one's task.
     setDraft('')
+    setDraftTaskItemId(null)
   }
 
   function handleTaskLink(logId: number, taskItemId: number | null) {

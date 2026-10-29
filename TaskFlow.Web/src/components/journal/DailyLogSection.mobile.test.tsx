@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { screen, fireEvent, act } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -8,6 +9,11 @@ const addLogMutate = vi.fn()
 const updateLogMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useAddLogEntryMutation: vi.fn(() => ({ mutate: addLogMutate, isPending: false })),
   useDeleteLogEntryMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUpdateLogEntryMutation: vi.fn(() => ({ mutate: updateLogMutate, isPending: false })),

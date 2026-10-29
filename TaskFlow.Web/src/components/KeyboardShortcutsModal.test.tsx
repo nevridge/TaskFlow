@@ -102,3 +102,14 @@ describe('KeyboardShortcutsModal', () => {
     expect(document.activeElement).toBe(trigger)
   })
 })
+
+describe('KeyboardShortcutsModal undo rows', () => {
+  it('lists Ctrl/⌘+Z and u as Undo delete in the Journal — Actions group', () => {
+    renderModal()
+    const group = screen.getByText('Journal — Actions').closest('.kb-group') as HTMLElement
+    const rows = Array.from(group.querySelectorAll('.kb-row')).filter(r => r.textContent?.includes('Undo delete'))
+    expect(rows).toHaveLength(2)
+    const keys = rows.map(r => r.querySelector('kbd')?.textContent)
+    expect(keys).toEqual(['Ctrl/⌘+Z', 'u'])
+  })
+})

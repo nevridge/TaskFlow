@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { NotesSectionHandle } from './NotesSection'
@@ -7,16 +8,25 @@ import type { JournalNoteResponseDto } from '@/api/journal'
 
 const createNoteMutate = vi.fn()
 const updateNoteMutate = vi.fn()
-const deleteNoteMutate = vi.fn()
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  deleteJournalNote: vi.fn(() => Promise.resolve({})),
+}))
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalNotes: vi.fn(() => ({ data: [], isLoading: false })),
   useCreateJournalNoteMutation: vi.fn(() => ({ mutate: createNoteMutate, isPending: false })),
   useUpdateJournalNoteMutation: vi.fn(() => ({ mutate: updateNoteMutate, isPending: false })),
-  useDeleteJournalNoteMutation: vi.fn(() => ({ mutate: deleteNoteMutate, isPending: false })),
 }))
 
 import { useJournalNotes, useCreateJournalNoteMutation } from '@/hooks/useJournal'
+import { deleteJournalNote } from '@/api/journal'
 import { NotesSection } from './NotesSection'
 
 const note1: JournalNoteResponseDto = {
@@ -42,7 +52,6 @@ describe('NotesSection', () => {
     vi.clearAllMocks()
     createNoteMutate.mockReset()
     updateNoteMutate.mockReset()
-    deleteNoteMutate.mockReset()
     vi.mocked(useJournalNotes).mockReturnValue({ data: [], isLoading: false } as never)
   })
 
@@ -109,11 +118,37 @@ describe('NotesSection', () => {
     expect(input).toHaveValue('')
   })
 
-  it('clicking delete button calls deleteNote.mutate with note id', async () => {
-    vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
-    renderSection()
-    await userEvent.click(screen.getByRole('button', { name: /delete note/i }))
-    expect(deleteNoteMutate).toHaveBeenCalledWith(1)
+  it('clicking delete hides the note at once and calls deleteJournalNote after the undo window', () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+      renderSection()
+      fireEvent.click(screen.getByRole('button', { name: /delete note/i }))
+      expect(screen.queryByRole('button', { name: /delete note/i })).not.toBeInTheDocument()
+      expect(deleteJournalNote).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(6000) })
+      expect(deleteJournalNote).toHaveBeenCalledTimes(1)
+      expect(deleteJournalNote).toHaveBeenCalledWith(10, 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Undo restores the note and focuses its delete button', () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(useJournalNotes).mockReturnValue({ data: [note1], isLoading: false } as never)
+      renderSection()
+      fireEvent.click(screen.getByRole('button', { name: /delete note/i }))
+      expect(screen.getByPlaceholderText(/add a note/i)).toHaveFocus()
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      act(() => { vi.advanceTimersByTime(50) })
+      expect(screen.getByRole('button', { name: /delete note/i })).toHaveFocus()
+      act(() => { vi.advanceTimersByTime(10000) })
+      expect(deleteJournalNote).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('renders stored bullet lines as list items', () => {

@@ -1,17 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { screen, fireEvent, act } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import { createRef } from 'react'
 import type { DailyLogSectionHandle } from './DailyLogSection'
 
 const addLogMutate = vi.fn()
-const deleteLogMutate = vi.fn()
 const updateLogMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useAddLogEntryMutation: vi.fn(() => ({ mutate: addLogMutate, isPending: false })),
-  useDeleteLogEntryMutation: vi.fn(() => ({ mutate: deleteLogMutate, isPending: false })),
   useUpdateLogEntryMutation: vi.fn(() => ({ mutate: updateLogMutate, isPending: false })),
+}))
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  deleteLogEntry: vi.fn(() => Promise.resolve({})),
 }))
 
 vi.mock('./TaskTypeahead', () => ({
@@ -21,6 +30,7 @@ vi.mock('./TaskTypeahead', () => ({
 }))
 
 import { useAddLogEntryMutation } from '@/hooks/useJournal'
+import { deleteLogEntry } from '@/api/journal'
 import { DailyLogSection } from './DailyLogSection'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 
@@ -47,7 +57,6 @@ function renderSection(logEntries: JournalLogEntryResponseDto[] = [], ref?: Reac
 describe('DailyLogSection', () => {
   beforeEach(() => {
     addLogMutate.mockReset()
-    deleteLogMutate.mockReset()
     updateLogMutate.mockReset()
   })
 
@@ -92,10 +101,44 @@ describe('DailyLogSection', () => {
     expect(input).toHaveValue('')
   })
 
-  it('clicking delete button calls deleteLog.mutate with entry id', async () => {
-    renderSection([baseEntry])
-    await userEvent.click(screen.getByRole('button', { name: /delete entry/i }))
-    expect(deleteLogMutate).toHaveBeenCalledWith(1)
+  it('clicking delete hides the entry at once and calls deleteLogEntry after the undo window', () => {
+    vi.useFakeTimers()
+    try {
+      renderSection([baseEntry])
+      fireEvent.click(screen.getByRole('button', { name: /delete entry/i }))
+      expect(screen.queryByRole('button', { name: /delete entry/i })).not.toBeInTheDocument()
+      expect(screen.getByText('0 entries')).toBeInTheDocument()
+      expect(deleteLogEntry).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(6000) })
+      expect(deleteLogEntry).toHaveBeenCalledTimes(1)
+      expect(deleteLogEntry).toHaveBeenCalledWith(10, 1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Undo restores the entry and never calls the API', () => {
+    vi.useFakeTimers()
+    try {
+      renderSection([baseEntry])
+      fireEvent.click(screen.getByRole('button', { name: /delete entry/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+      expect(screen.getByRole('button', { name: /delete entry/i })).toBeInTheDocument()
+      act(() => { vi.advanceTimersByTime(10000) })
+      expect(deleteLogEntry).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('moves focus to the next entry delete button, or the add input when none is left', () => {
+    const second = { ...baseEntry, id: 2, content: 'Second' }
+    renderSection([baseEntry, second])
+    const [first, last] = screen.getAllByRole('button', { name: /delete entry/i })
+    fireEvent.click(first)
+    expect(last).toHaveFocus()
+    fireEvent.click(last)
+    expect(screen.getByRole('textbox')).toHaveFocus()
   })
 
   it('focusDraftInput() via ref focuses the input', () => {

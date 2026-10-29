@@ -5,6 +5,7 @@ import { SettingsDrawer } from '@/components/SettingsDrawer'
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal'
 import { useGlobalKeyboardShortcuts } from '@/hooks/useGlobalKeyboardShortcuts'
 import { usePrefs } from '@/context/usePrefs'
+import { ToastProvider } from '@/context/ToastContext'
 import { todayUrlDate } from '@/lib/journal-utils'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
 
@@ -47,7 +48,7 @@ export function Layout() {
   )
 
   return (
-    <>
+    <ToastProvider>
       <Nav onMenuClick={() => setDrawerOpen(true)} hamburgerRef={hamburgerRef} />
       <SettingsDrawer
         open={drawerOpen}
@@ -56,6 +57,6 @@ export function Layout() {
       />
       <Outlet context={prefs satisfies AppContext} />
       {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
-    </>
+    </ToastProvider>
   )
 }

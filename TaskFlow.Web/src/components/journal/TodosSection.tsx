@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { useTapToEdit } from '@/hooks/useTapToEdit'
+import { removeJournalTodo } from '@/api/journal'
 import type { TaskItemResponseDto } from '@/api/journal'
 import type { SortMode } from '@/lib/prefs'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
@@ -11,13 +13,14 @@ import {
   useCreateTodoMutation,
   useToggleTodoMutation,
   useEditTodoMutation,
-  useRemoveTodoMutation,
   useBlockTodoMutation,
   useUnblockTodoMutation,
   useEditBlockedReasonTodoMutation,
   openTodoCount,
   blockedTodoCount,
+  journalKeys,
 } from '@/hooks/useJournal'
+import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
 import { todayISO, formatMonthDay } from '@/lib/journal-utils'
 
@@ -34,6 +37,14 @@ const HistorySvg = () => (
     <path d="M3 4v7h7"/>
   </svg>
 )
+
+const MAX_TOAST_TITLE = 30
+
+function truncateTitle(title: string): string {
+  return title.length > MAX_TOAST_TITLE ? `${title.slice(0, MAX_TOAST_TITLE)}…` : title
+}
+
+const todoKey = (entryId: number, id: number | string | undefined) => `todo:${entryId}:${id}`
 
 const DeleteSvg = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
@@ -68,15 +79,23 @@ export interface TodosSectionHandle {
 
 export const TodosSection = forwardRef<TodosSectionHandle, Props>(function TodosSection({ entryId, isoDate, sort }, ref) {
   const { data: todosData, isLoading } = useJournalTodos(entryId)
-  const todos = useMemo<TaskItemResponseDto[]>(
-    () => (todosData?.data as TaskItemResponseDto[] | undefined) ?? [],
-    [todosData],
-  )
+  const queryClient = useQueryClient()
+  const { requestDelete, isHidden } = useUndoableDelete()
+  // Deletes waiting out the undo window are filtered here (never written to the cache), before sort and counts.
+  const todos = useMemo<TaskItemResponseDto[]>(() => {
+    const all = (todosData?.data as TaskItemResponseDto[] | undefined) ?? []
+    return all
+      .filter(t => !isHidden(todoKey(entryId, t.id)))
+      .map(t =>
+        t.children?.some(c => isHidden(todoKey(entryId, c.id)))
+          ? { ...t, children: t.children.filter(c => !isHidden(todoKey(entryId, c.id))) }
+          : t,
+      )
+  }, [todosData, isHidden, entryId])
 
   const createTodo = useCreateTodoMutation(entryId, isoDate)
   const toggleTodo = useToggleTodoMutation(entryId)
   const editTodo = useEditTodoMutation(entryId)
-  const removeTodo = useRemoveTodoMutation(entryId)
   const blockTodo = useBlockTodoMutation(entryId)
   const unblockTodo = useUnblockTodoMutation(entryId)
   const editReason = useEditBlockedReasonTodoMutation(entryId)
@@ -273,8 +292,32 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     if (via !== 'blur') window.setTimeout(() => requestFocus(id, 'title'), 0)
   }
 
+  /** Hides the row at once and removes it from the day after the undo window. */
+  function removeFromDay(td: TaskItemResponseDto, isChild: boolean, siblings: TaskItemResponseDto[]) {
+    const id = Number(td.id)
+    setActionError(null)
+    // Pick the focus target first: the next sibling's delete button, else the add input.
+    const next = siblings[siblings.findIndex(s => s.id === td.id) + 1]
+    const nextButton = next
+      ? sectionRef.current?.querySelector<HTMLElement>(`[data-todo-x="${next.id}"]`)
+      : null
+    ;(nextButton ?? draftInputRef.current)?.focus()
+    const section = sectionRef.current
+    requestDelete({
+      key: todoKey(entryId, id),
+      hideKeys: (td.children ?? []).map(c => todoKey(entryId, c.id)),
+      message: isChild
+        ? 'Removed from this day'
+        : `Removed from this day: "${truncateTitle(td.title ?? '')}"`,
+      errorMessage: "Couldn't remove from day. Restored.",
+      commit: () => removeJournalTodo(entryId, id),
+      invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.todos(entryId) }),
+      restoreFocus: () => section?.querySelector<HTMLElement>(`[data-todo-x="${id}"]`)?.focus(),
+    })
+  }
+
   /** Controls shared by top-level todos and subtasks. */
-  function renderRow(td: TaskItemResponseDto, isChild: boolean) {
+  function renderRow(td: TaskItemResponseDto, isChild: boolean, siblings: TaskItemResponseDto[]) {
     const id = Number(td.id)
     const isDone = td.status === 'Completed'
     const isBlocked = td.status === 'Blocked'
@@ -343,8 +386,10 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             {!(isChild && childIsFuture) && (
               <button
                 className="todo-x"
-                onClick={() => removeTodo.mutate(id)}
-                aria-label={isChild ? 'Remove from day' : 'Delete'}
+                data-todo-x={id}
+                onClick={() => removeFromDay(td, isChild, siblings)}
+                aria-label={isChild ? 'Remove from day' : `Remove from day: ${td.title ?? ''}`}
+                title={isChild ? undefined : `Remove from day: ${td.title ?? ''}`}
               >
                 <DeleteSvg />
               </button>
@@ -443,7 +488,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             const isBlocked = td.status === 'Blocked'
             return (
               <li key={td.id} className={'todo' + (isDone ? ' is-done' : '') + (isBlocked ? ' is-blocked' : '')}>
-                {renderRow(td, false)}
+                {renderRow(td, false, sorted)}
 
                 {td.children && td.children.length > 0 && (
                   <ul className="todo-child-list">
@@ -462,7 +507,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                             (childIsFuture ? ' is-future' : '')
                           }
                         >
-                          {renderRow(child, true)}
+                          {renderRow(child, true, td.children ?? [])}
                         </li>
                       )
                     })}

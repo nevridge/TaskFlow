@@ -1,6 +1,7 @@
 import React, { createRef } from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { screen, act, fireEvent, within } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { TodosSectionHandle } from './TodosSection'
 import type { TaskItemResponseDto } from '@/api/journal'
@@ -8,22 +9,30 @@ import type { TaskItemResponseDto } from '@/api/journal'
 const createTodoMutate = vi.fn()
 const toggleTodoMutate = vi.fn()
 const editTodoMutate = vi.fn()
-const removeTodoMutate = vi.fn()
 const blockTodoMutate = vi.fn()
 const unblockTodoMutate = vi.fn()
 const editReasonMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalTodos: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
   useCreateTodoMutation: vi.fn(() => ({ mutate: createTodoMutate, isPending: false })),
   useToggleTodoMutation: vi.fn(() => ({ mutate: toggleTodoMutate, isPending: false })),
   useEditTodoMutation: vi.fn(() => ({ mutate: editTodoMutate, isPending: false })),
-  useRemoveTodoMutation: vi.fn(() => ({ mutate: removeTodoMutate, isPending: false })),
   useBlockTodoMutation: vi.fn(() => ({ mutate: blockTodoMutate, isPending: false })),
   useUnblockTodoMutation: vi.fn(() => ({ mutate: unblockTodoMutate, isPending: false })),
   useEditBlockedReasonTodoMutation: vi.fn(() => ({ mutate: editReasonMutate, isPending: false })),
   openTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status !== 'Completed').length),
   blockedTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status === 'Blocked').length),
+}))
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  removeJournalTodo: vi.fn(() => Promise.resolve({})),
 }))
 
 vi.mock('@/components/TaskHistoryPanel', () => ({
@@ -39,6 +48,7 @@ vi.mock('@/lib/journal-utils', async (importOriginal) => {
 })
 
 import { useJournalTodos } from '@/hooks/useJournal'
+import { removeJournalTodo } from '@/api/journal'
 import { todayISO } from '@/lib/journal-utils'
 import { TodosSection } from './TodosSection'
 
@@ -185,11 +195,20 @@ describe('TodosSection', () => {
     expect(screen.queryByText('Unable to save task changes. Please try again.')).not.toBeInTheDocument()
   })
 
-  it('delete button calls removeTodo.mutate with id', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
-    expect(removeTodoMutate).toHaveBeenCalledWith(1)
+  it('delete button hides the row at once and calls removeJournalTodo after the undo window', () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
+      renderSection()
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from day: Write tests' }))
+      expect(screen.queryByText('Write tests')).not.toBeInTheDocument()
+      expect(removeJournalTodo).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(6000) })
+      expect(removeJournalTodo).toHaveBeenCalledTimes(1)
+      expect(removeJournalTodo).toHaveBeenCalledWith(10, 1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('add form submission calls createTodo.mutate and clears input', async () => {
@@ -468,12 +487,18 @@ describe('TodosSection', () => {
     )
   })
 
-  it('delete on subtask calls removeTodo.mutate with child id', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
-    renderSection()
-    const removeButtons = screen.getAllByRole('button', { name: /remove from day/i })
-    await userEvent.click(removeButtons[0])
-    expect(removeTodoMutate).toHaveBeenCalledWith(99)
+  it('delete on subtask calls removeJournalTodo with the child id after the undo window', () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+      renderSection()
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from day' }))
+      expect(within(screen.getByRole('region', { name: 'Notifications' })).getByRole('status')).toHaveTextContent('Removed from this day')
+      act(() => { vi.advanceTimersByTime(6000) })
+      expect(removeJournalTodo).toHaveBeenCalledWith(10, 99)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('future-scheduled subtask does not show remove button', () => {
@@ -485,7 +510,7 @@ describe('TodosSection', () => {
     renderSection({ isoDate: '2026-06-02' })
     // The child row is present but no "Remove from day" button should appear for it
     expect(screen.getByText('Sub A')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /remove from day/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove from day' })).not.toBeInTheDocument()
   })
 
   it('child task does not appear at top level when nested under parent', () => {
@@ -624,8 +649,8 @@ describe('TodosSection', () => {
     expect(toggleTodoMutate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), expect.any(Object))
     await userEvent.click(screen.getByRole('button', { name: 'History' }))
     expect(screen.getByTestId('history-panel')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(removeTodoMutate).toHaveBeenCalledWith(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Remove from day: Write tests' }))
+    expect(screen.queryByRole('button', { name: 'Remove from day: Write tests' })).not.toBeInTheDocument()
   })
 
   it('sort order is unchanged by priority', () => {

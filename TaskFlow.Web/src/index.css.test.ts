@@ -339,3 +339,81 @@ describe('index.html viewport', () => {
     expect(meta).not.toMatch(/maximum-scale|user-scalable/)
   })
 })
+
+describe('toast region', () => {
+  const sheetAt = css.indexOf('/* ─── Sheet')
+  const toastsAt = css.indexOf('/* ─── Toasts')
+
+  it('is fixed at the bottom with the safe-area inset and the keyboard offset', () => {
+    const region = body(css, '.toast-region')
+    expect(region).toMatch(/position:\s*fixed/)
+    expect(region).toMatch(/bottom:\s*calc\(8px \+ env\(safe-area-inset-bottom\) \+ var\(--toast-kb-offset, 0px\)\)/)
+    expect(region).toMatch(/left:\s*calc\(8px \+ env\(safe-area-inset-left\)\)/)
+    expect(region).toMatch(/right:\s*calc\(8px \+ env\(safe-area-inset-right\)\)/)
+  })
+
+  it('sits at z-index 150: above the sticky nav, below the settings backdrop and drawer', () => {
+    const z = Number(/z-index:\s*(\d+)/.exec(body(css, '.toast-region'))![1])
+    expect(z).toBe(150)
+    expect(z).toBeGreaterThan(Number(/z-index:\s*(\d+)/.exec(body(css, '.app-nav'))![1]))
+    expect(z).toBeLessThan(Number(/z-index:\s*(\d+)/.exec(body(css, '.settings-backdrop'))![1]))
+    expect(z).toBeLessThan(Number(/z-index:\s*(\d+)/.exec(body(css, '.settings-drawer'))![1]))
+  })
+
+  it('lets pointer events through the region but not the toasts', () => {
+    expect(body(css, '.toast-region')).toMatch(/pointer-events:\s*none/)
+    expect(body(css, '.toast')).toMatch(/pointer-events:\s*auto/)
+  })
+
+  it('is full width minus the 8px margins by default (touch and 480px and below) and bottom-left on desktop', () => {
+    const region = body(css, '.toast-region')
+    expect(region).not.toMatch(/max-width/)
+    const desktop = media(css, '(min-width: 481px) and (hover: hover) and (pointer: fine)', toastsAt)
+    expect(desktop).toMatch(/\.toast-region \{[^}]*right:\s*auto;[^}]*max-width:\s*360px/)
+  })
+
+  it('uses theme tokens for light and dark, and the danger tokens for errors', () => {
+    expect(body(css, '.toast')).toMatch(/background:\s*var\(--paper\)/)
+    expect(body(css, '.toast')).toMatch(/color:\s*var\(--ink\)/)
+    expect(body(css, '.toast')).toMatch(/border:\s*1px solid var\(--line\)/)
+    expect(body(css, '.toast')).toMatch(/box-shadow:\s*var\(--shadow-md\)/)
+    expect(body(css, '.toast-error')).toMatch(/var\(--danger-bg\)/)
+    expect(body(css, '.toast-error')).toMatch(/var\(--danger-ink\)/)
+  })
+
+  it('keeps each toast to one line and never shrinks the Undo button', () => {
+    const msg = body(css, '.toast-msg')
+    expect(msg).toMatch(/min-width:\s*0/)
+    expect(msg).toMatch(/overflow:\s*hidden/)
+    expect(msg).toMatch(/text-overflow:\s*ellipsis/)
+    expect(msg).toMatch(/white-space:\s*nowrap/)
+    expect(body(css, '.toast-btn')).toMatch(/flex:\s*none/)
+  })
+
+  it('gives the toast button its own border, background, colour, font, cursor and focus ring', () => {
+    const btn = body(css, '.toast-btn')
+    expect(btn).toMatch(/border:/)
+    expect(btn).toMatch(/background:/)
+    expect(btn).toMatch(/color:\s*inherit/)
+    expect(btn).toMatch(/font:\s*inherit/)
+    expect(btn).toMatch(/cursor:\s*pointer/)
+    expect(css).toMatch(/\n\.toast-btn:focus-visible \{[^}]*outline:/)
+  })
+
+  it('animates entry in about 150ms and turns animation and transitions off for reduced motion', () => {
+    expect(body(css, '.toast-enter')).toMatch(/animation:\s*toast-in 150ms/)
+    expect(css).toMatch(/@keyframes toast-in/)
+    const reduced = media(css, '(prefers-reduced-motion: reduce)', toastsAt)
+    expect(reduced).toMatch(/\.toast[^{]*\{[^}]*animation:\s*none/)
+    expect(reduced).toMatch(/transition:\s*none/)
+  })
+
+  it('keeps all toast rules before the Sheet marker, outside .journal-page, with no !important', () => {
+    expect(toastsAt).toBeGreaterThan(-1)
+    expect(toastsAt).toBeLessThan(sheetAt)
+    expect(css.slice(sheetAt)).not.toMatch(/\.toast/)
+    expect(css.slice(toastsAt, sheetAt)).not.toMatch(/!important/)
+    expect(css.slice(toastsAt, sheetAt)).not.toMatch(/\.journal-page/)
+    expect(journalCss).not.toMatch(/\.toast/)
+  })
+})

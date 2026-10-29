@@ -15,6 +15,8 @@ import { useProjectsQuery } from '@/hooks/useProjects'
 import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
 import { normalizeProjectId, PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
 import { usePrefs } from '@/context/usePrefs'
+import { useCollapsedGroups } from '@/hooks/useCollapsedGroups'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { TaskListRow } from '@/components/TaskListRow'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
@@ -49,6 +51,17 @@ type PriorityGroup = {
   label: string
   cssModifier: string
   tasks: Array<{ task: TaskListModel; depth: number }>
+}
+
+/** Filter dimensions that differ from the defaults; shown as "Filters (n)" on phones. View chips and search do not count. */
+function countActiveFilters(status: Set<StatusValue>, project: ProjectFilter): number {
+  const statusDiffers =
+    status.size !== DEFAULT_STATUS_FILTER.length || DEFAULT_STATUS_FILTER.some(s => !status.has(s))
+  return (statusDiffers ? 1 : 0) + (project !== 'all' ? 1 : 0)
+}
+
+function isNarrowViewport(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 820px)').matches
 }
 
 const COLUMNS: Array<{ key: TaskSortKey; label: string }> = [
@@ -97,10 +110,19 @@ export function TasksPage() {
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState('')
   const [expandedParentIds, setExpandedParentIds] = useState<Set<number>>(new Set())
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const { collapsed: collapsedGroups, toggle: toggleGroup } = useCollapsedGroups()
   const [addingChildForTaskId, setAddingChildForTaskId] = useState<number | null>(null)
   const [childDraftTitle, setChildDraftTitle] = useState('')
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
+  const historyModalRef = useRef<HTMLDivElement | null>(null)
+  const listWrapRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const titleRef = useRef<HTMLInputElement | null>(null)
+  const newTaskBtnRef = useRef<HTMLButtonElement | null>(null)
+  const [panelFocusTick, setPanelFocusTick] = useState(0)
+  // Seed: open on first render only when the initial (default) filters already differ from "no filters".
+  // Never re-derived afterwards, so changing or clearing a filter inside the panel keeps it open/closed as the user left it.
+  const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0)
   const knownParentIdsRef = useRef<Set<number>>(new Set())
 
   // Debounce search input
@@ -108,6 +130,10 @@ export function TasksPage() {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 200)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  // Declared before the focus effect below so the opener is captured before focus moves into the sheet.
+  // fallbackRef: iOS Safari does not focus a tapped button, so the opener may be body.
+  useFocusTrap(historyModalRef, historyTask !== null, { fallbackRef: listWrapRef })
 
   useEffect(() => {
     if (!historyTask) return
@@ -124,10 +150,62 @@ export function TasksPage() {
     }
   }, [historyTask])
 
+  // Edit / New on a phone or tablet: bring the top panel into view and focus its title.
+  // Runs after the panel has mounted (effect), and only when a click requested it.
+  useEffect(() => {
+    if (panelFocusTick === 0) return
+    panelRef.current?.scrollIntoView({ block: 'start' })
+    titleRef.current?.focus({ preventScroll: true })
+  }, [panelFocusTick])
+
+  // Panel closed (Save / Cancel): return focus to the control that opened it. Looked up at focus time
+  // because rows remount when a task changes priority group; if the row is gone, skip silently.
+  const panelKind = editingSnapshot ? `edit:${Number(editingSnapshot.id)}` : showCreate ? 'new' : null
+  const prevPanelKindRef = useRef<string | null>(null)
+  // Edit button id still waiting for focus: a save that changes priority closes the panel first and the
+  // refetch then remounts the row, discarding the button focused at close time. Re-applied after list changes.
+  const pendingFocusIdRef = useRef<string | null>(null)
   const tasks: TaskListModel[] = useMemo(
     () => (data?.data as TaskListModel[] | undefined) ?? [],
     [data],
   )
+  useEffect(() => {
+    const prev = prevPanelKindRef.current
+    prevPanelKindRef.current = panelKind
+    if (panelKind !== null) {
+      pendingFocusIdRef.current = null
+      return
+    }
+    if (prev === null) return
+    if (prev === 'new') newTaskBtnRef.current?.focus()
+    else {
+      const id = prev.slice(5)
+      pendingFocusIdRef.current = id
+      document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
+    }
+  }, [panelKind])
+
+  useEffect(() => {
+    const id = pendingFocusIdRef.current
+    if (id === null) return
+    const active = document.activeElement
+    if (active && active !== document.body && active.isConnected) {
+      // Focus is intact (or the user moved it elsewhere): nothing to restore.
+      return
+    }
+    document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
+  }, [tasks])
+
+  // Any user interaction ends the pending restore so a later refetch never steals focus.
+  useEffect(() => {
+    const clear = () => { pendingFocusIdRef.current = null }
+    window.addEventListener('pointerdown', clear)
+    window.addEventListener('keydown', clear)
+    return () => {
+      window.removeEventListener('pointerdown', clear)
+      window.removeEventListener('keydown', clear)
+    }
+  }, [])
 
   const editingTask: TaskListModel | null = editingSnapshot
     ? (tasks.find(t => Number(t.id) === Number(editingSnapshot.id)) ?? editingSnapshot)
@@ -166,6 +244,26 @@ export function TasksPage() {
       setTaskSortKey(key)
       setTaskSortDir('asc')
     }
+  }
+
+  function handleSortKeyChange(key: TaskSortKey) {
+    if (key === taskSortKey) return
+    setTaskSortKey(key)
+    setTaskSortDir('asc')
+  }
+
+  function requestPanelFocus() {
+    if (isNarrowViewport()) setPanelFocusTick(t => t + 1)
+  }
+
+  function openEdit(task: TaskListModel) {
+    setEditingTask(task)
+    requestPanelFocus()
+  }
+
+  function openCreate() {
+    setShowCreate(true)
+    requestPanelFocus()
   }
 
   function sortIcon(key: TaskSortKey): string {
@@ -408,15 +506,6 @@ export function TasksPage() {
     })
   }
 
-  function toggleGroup(groupKey: string) {
-    setCollapsedGroups(prev => {
-      const next = new Set(prev)
-      if (next.has(groupKey)) next.delete(groupKey)
-      else next.add(groupKey)
-      return next
-    })
-  }
-
   function beginAddChild(task: TaskListModel) {
     setMutationError(null)
     setAddingChildForTaskId(Number(task.id))
@@ -440,21 +529,22 @@ export function TasksPage() {
 
   const formError = mutationError ?? saveWithProject.error
   const blockedTotal = tasks.filter(t => isBlocked(t.status)).length
+  const activeFilterCount = countActiveFilters(statusFilter, projectFilter)
   const totalFiltered = priorityGroups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks...</p></div></div>
   if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Failed to load tasks.</p></div></div>
 
   return (
-    <div className="tasks-page">
+    <div className="tasks-page t-list-page">
       <div className="t-shell">
         <div className="t-page-hdr">
           <h1 className="t-page-title">Tasks</h1>
-          <button className="t-btn-primary" onClick={() => setShowCreate(true)}>New Task</button>
+          <button ref={newTaskBtnRef} className="t-btn-primary" onClick={openCreate}>New Task</button>
         </div>
 
         {(showCreate || editingTask) && (
-          <div className="t-panel">
+          <div ref={panelRef} className="t-panel t-edit-panel">
             <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
             {formError && <p className="t-inline-error" role="alert">{formError}</p>}
             <TaskForm
@@ -468,20 +558,21 @@ export function TasksPage() {
               isSaving={saveWithProject.isSaving || createMutation.isPending}
               onSubmit={editingTask ? handleUpdate : handleCreate}
               onCancel={() => { setShowCreate(false); setEditingTask(null); clearFormErrors() }}
+              titleInputRef={titleRef}
             />
           </div>
         )}
 
         {historyTask && (
           <>
-            <div className="t-modal-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
-            <div className="t-modal" role="dialog" aria-modal="true" aria-labelledby="task-history-title">
-              <div className="t-modal-header">
+            <div className="sheet-backdrop" onClick={() => setHistoryTask(null)} aria-hidden="true" />
+            <div ref={historyModalRef} className="sheet tasks-history-sheet" role="dialog" aria-modal="true" aria-labelledby="task-history-title">
+              <div className="sheet-header">
                 <div>
                   <h2 id="task-history-title" className="t-panel-title t-panel-title--tight">Task history</h2>
-                  <div className="t-modal-subtitle">{historyTask.title}</div>
+                  <div className="t-history-subtitle">{historyTask.title}</div>
                 </div>
-                <button ref={historyCloseRef} className="t-btn" onClick={() => setHistoryTask(null)}>Close</button>
+                <button ref={historyCloseRef} type="button" className="sheet-close" onClick={() => setHistoryTask(null)}>Close</button>
               </div>
               <TaskHistoryPanel taskId={Number(historyTask.id)} />
             </div>
@@ -507,6 +598,38 @@ export function TasksPage() {
             <button type="button" className={`t-chip${viewFilter === 'scheduledFuture' ? ' is-active' : ''}`} onClick={() => setViewFilter('scheduledFuture')}>Scheduled future</button>
             <button type="button" className={`t-chip${viewFilter === 'completedHistory' ? ' is-active' : ''}`} onClick={() => setViewFilter('completedHistory')}>Completed history</button>
           </div>
+          <button
+            type="button"
+            className="t-filter-toggle"
+            aria-expanded={filtersOpen}
+            aria-controls="t-filter-fields"
+            onClick={() => setFiltersOpen(open => !open)}
+          >
+            {activeFilterCount > 0 ? `Filters (${activeFilterCount})` : 'Filters'}
+            <span className="t-filter-chevron" aria-hidden="true">{'▾'}</span>
+          </button>
+          {/* Sort control: shown only on phones, where the column headers are visually hidden. */}
+          <div className="t-sort-control">
+            <label htmlFor="task-sort-key" className="t-filter-label">Sort by</label>
+            <select
+              id="task-sort-key"
+              className="t-select"
+              value={taskSortKey}
+              onChange={e => handleSortKeyChange(e.target.value as TaskSortKey)}
+            >
+              {COLUMNS.map(col => <option key={col.key} value={col.key}>{col.label}</option>)}
+            </select>
+            {/* The label names what a tap will do: ascending now => "Sort descending". */}
+            <button
+              type="button"
+              className="t-btn-icon t-sort-dir"
+              aria-label={taskSortDir === 'asc' ? 'Sort descending' : 'Sort ascending'}
+              onClick={() => setTaskSortDir(taskSortDir === 'asc' ? 'desc' : 'asc')}
+            >
+              <span aria-hidden="true">{taskSortDir === 'asc' ? '↑' : '↓'}</span>
+            </button>
+          </div>
+          <div id="t-filter-fields" className="t-filter-fields" data-collapsed={!filtersOpen}>
           <div className="t-filter-field t-status-group" role="group" aria-labelledby="status-filter-label">
             <span id="status-filter-label" className="t-filter-label">Status</span>
             {STATUS_OPTIONS.map(o => (
@@ -535,6 +658,7 @@ export function TasksPage() {
               ))}
             </select>
           </span>
+          </div>
           <span className="t-filter-count">{totalFiltered} task{totalFiltered !== 1 ? 's' : ''}</span>
         </div>
 
@@ -546,13 +670,14 @@ export function TasksPage() {
         {totalFiltered === 0 ? (
           <p className="t-empty">No tasks match your filters.</p>
         ) : (
-          <div className="t-list-wrap">
-            <table className="t-list-table">
-              <thead>
-                <tr className="t-list-head-row">
+          <div ref={listWrapRef} tabIndex={-1} className="t-list-wrap">
+            <table role="table" className="t-list-table">
+              <thead role="rowgroup">
+                <tr role="row" className="t-list-head-row">
                   {COLUMNS.map(col => (
                     <th
                       key={col.key}
+                      role="columnheader"
                       className={`t-list-th${col.key === taskSortKey ? ' t-col-sort--active' : ''}`}
                       aria-sort={col.key === taskSortKey ? (taskSortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
                     >
@@ -561,19 +686,19 @@ export function TasksPage() {
                       </button>
                     </th>
                   ))}
-                  <th className="t-list-th t-list-th--actions" aria-label="Actions"></th>
+                  <th role="columnheader" className="t-list-th t-list-th--actions" aria-label="Actions"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup">
                 {priorityGroups.map(group => {
                   const isCollapsed = collapsedGroups.has(group.key)
                   return (
                     <Fragment key={group.key}>
-                      <tr className={`t-group-header t-group-header--${group.cssModifier}`}>
-                        <td colSpan={5}>
-                          <button type="button" className="t-group-toggle" onClick={() => toggleGroup(group.key)}>
-                            <span className={`t-group-chevron${isCollapsed ? ' t-group-chevron--collapsed' : ''}`}>{'▾'}</span>
-                            {group.label}
+                      <tr role="row" className={`t-group-header t-group-header--${group.cssModifier}`}>
+                        <td role="cell" colSpan={5}>
+                          <button type="button" className="t-group-toggle" aria-expanded={!isCollapsed} onClick={() => toggleGroup(group.key)}>
+                            <span aria-hidden="true" className={`t-group-chevron${isCollapsed ? ' t-group-chevron--collapsed' : ''}`}>{'▾'}</span>
+                            {group.label}{' '}
                             <span className="t-group-count">{'·'} {group.tasks.length} task{group.tasks.length !== 1 ? 's' : ''}</span>
                           </button>
                         </td>
@@ -598,7 +723,7 @@ export function TasksPage() {
                               onToggleChildren={hasChildren ? toggleChildren : undefined}
                               onAddChild={beginAddChild}
                               isAddingChild={addingChildForTaskId === taskId}
-                              onEdit={setEditingTask}
+                              onEdit={openEdit}
                               onHistory={setHistoryTask}
                               onDelete={handleDelete}
                               onStatusCycle={handleStatusCycle}
@@ -607,8 +732,8 @@ export function TasksPage() {
                               onEditBlockedReason={handleEditBlockedReason}
                             />
                             {addingChildForTaskId === taskId && (
-                              <tr key={`add-child-${taskId}`} className="t-list-row t-list-row--child-editor">
-                                <td className="t-list-cell" colSpan={5}>
+                              <tr key={`add-child-${taskId}`} role="row" className="t-list-row t-list-row--child-editor">
+                                <td role="cell" className="t-list-cell" colSpan={5}>
                                   <div className="t-subtask-editor">
                                     <span className="t-subtask-label">New subtask</span>
                                     <input

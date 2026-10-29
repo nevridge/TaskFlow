@@ -134,6 +134,10 @@ export function TaskDetailPage() {
 
   const status = String(task.status ?? 'draft').toLowerCase()
   const priority = String(task.priority ?? 'low').toLowerCase()
+  const projectOptions = buildProjectOptions(task, projects)
+  const selectValue = quickProjectValue ?? (serverProjectId !== null ? String(serverProjectId) : '')
+  // Visible copy of the selected project name (a select cannot wrap long names); empty for "No project".
+  const selectedProjectLabel = projectOptions.find(o => o.value === selectValue)?.label
 
   return (
     <div className="tasks-page">
@@ -162,7 +166,7 @@ export function TaskDetailPage() {
                 <h1 className="t-detail-title">{task.title}</h1>
                 <div className="t-card-actions">
                   <button ref={editButtonRef} className="t-btn" onClick={() => setEditingTask(true)}>Edit</button>
-                  <button className="t-btn-danger" onClick={handleDeleteTask}>Delete</button>
+                  <button className="t-btn-danger" aria-label="Delete task" onClick={handleDeleteTask}>Delete</button>
                 </div>
               </div>
               {task.description && <p className="t-detail-desc">{task.description}</p>}
@@ -178,17 +182,20 @@ export function TaskDetailPage() {
                     id="task-project"
                     ref={projectSelectRef}
                     className="t-select"
-                    value={quickProjectValue ?? (serverProjectId !== null ? String(serverProjectId) : '')}
+                    value={selectValue}
                     disabled={changeProject.isPending}
                     aria-busy={changeProject.isPending || undefined}
                     aria-invalid={quickProjectError ? 'true' : undefined}
                     onChange={e => handleQuickProjectChange(e.target.value)}
                   >
                     <option value="">No project</option>
-                    {buildProjectOptions(task, projects).map(opt => (
+                    {projectOptions.map(opt => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
+                  {selectedProjectLabel && (
+                    <span className="t-detail-project-name" aria-hidden="true">{selectedProjectLabel}</span>
+                  )}
                   {quickProjectError && <p className="t-inline-error" role="alert">{quickProjectError}</p>}
                 </div>
                 <span>Parent: <strong>{task.parentTaskItemId ? `#${task.parentTaskItemId}` : 'None'}</strong></span>

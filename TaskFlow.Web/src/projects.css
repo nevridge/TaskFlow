@@ -2,7 +2,7 @@
 
 .projects-page {
   min-height: 100vh;
-  padding: 28px 24px 80px;
+  padding: 28px var(--page-pad) 80px;
   background:
     radial-gradient(900px 380px at 88% -120px, color-mix(in oklab, var(--accent) 4%, transparent), transparent 60%),
     var(--bg);
@@ -276,4 +276,40 @@
 .projects-page .p-badge--block {
   display: table;
   margin: 4px 0 0;
+}
+
+/* ==== MOBILE (#320) ==== */
+/* Projects pages. Selectors are .projects-page .p-* (0-2-0) so they beat the 0-1-1 reset. Layout is keyed to
+   width; 44px sizing and touch gaps live in the touch query. */
+
+@media (max-width: 480px) {
+  .projects-page .p-panel { padding: 14px 12px; }
+
+  .projects-page .p-toolbar { flex-wrap: wrap; gap: 8px; }
+  .projects-page .p-toolbar > .p-toggle:only-child { flex: 1 1 100%; }
+
+  /* Row: name + badge, then counts/description, then actions on their own right-aligned line. */
+  .projects-page .p-row { flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .projects-page .p-row-main { flex: 1 1 100%; }
+  .projects-page .p-row-actions { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .projects-page .p-badge { white-space: nowrap; }
+  .projects-page .p-task-meta { min-width: 0; overflow-wrap: anywhere; }
+
+  .projects-page .p-form-actions { flex-wrap: wrap; gap: 8px; }
+  .projects-page .p-form-actions > * { flex: 1 1 120px; min-width: 0; }
+
+  .projects-page .p-detail-head { flex-wrap: wrap; gap: 8px; }
+  .projects-page .p-detail-head .p-row-main { flex: 1 1 160px; min-width: 0; }
+  .projects-page .p-detail-head .p-title { min-width: 0; overflow-wrap: anywhere; }
+  .projects-page .p-detail-head > .p-btn { flex-shrink: 0; }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .projects-page .p-btn { min-height: 44px; }
+  .projects-page .p-row-actions { gap: 8px; }
+  .projects-page .p-row-name { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; min-width: 0; }
+  .projects-page .p-toggle { min-height: 44px; }
+  .projects-page .p-toggle input[type="checkbox"] { width: 20px; height: 20px; }
+  .projects-page .p-form .p-input { min-height: 44px; }
+  .projects-page .p-back { display: inline-flex; align-items: center; min-height: 44px; }
 }

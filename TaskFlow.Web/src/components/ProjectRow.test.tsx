@@ -98,6 +98,28 @@ describe('ProjectRow', () => {
     expect(screen.getByRole('button', { name: 'Archive Alpha' })).toBeDisabled()
   })
 
+  it('always shows the counts and only shows a description when present', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <ul>
+          <ProjectRow project={{ ...project, description: null }} onSave={vi.fn()} onToggleArchive={vi.fn()} />
+        </ul>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('2 open · 5 completed')).toBeInTheDocument()
+    expect(document.querySelector('.p-desc')).toBeNull()
+    unmount()
+    setup()
+    expect(document.querySelector('.p-desc')).toHaveTextContent('About alpha')
+  })
+
+  it('keeps the Edit and Archive labels with Archive after Edit in DOM order', () => {
+    setup()
+    const edit = screen.getByRole('button', { name: 'Edit Alpha' })
+    const archive = screen.getByRole('button', { name: 'Archive Alpha' })
+    expect(edit.compareDocumentPosition(archive) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('adds "(M blocked)" to the open count only when M > 0', () => {
     setup({ ...project, openTaskCount: 7, completedTaskCount: 5, blockedCount: 2 })
     expect(screen.getByText('7 open (2 blocked) · 5 completed')).toBeInTheDocument()

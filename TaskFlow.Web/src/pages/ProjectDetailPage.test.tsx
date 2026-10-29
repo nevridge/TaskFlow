@@ -226,6 +226,14 @@ describe('ProjectDetailPage', () => {
       expect(screen.getByText('Blocked: Waiting on Sam')).toBeInTheDocument()
     })
 
+    it('shows a very long unbroken blocked reason as visible text', () => {
+      const reason = 'https://example.com/' + 'a'.repeat(200)
+      mockTasks({ data: { data: [task({ id: 4, title: 'Long one', status: 'Blocked', blockedReason: reason })] } })
+      renderAt('/projects/7')
+      expect(screen.getByText(`Blocked: ${reason}`)).toBeVisible()
+      expect(screen.getByRole('link', { name: 'Long one' })).toHaveAttribute('href', '/tasks/4')
+    })
+
     it('renders an unknown status as its raw value, never as Draft', () => {
       mockTasks({ data: { data: [task({ status: 'Archived' })] } })
       renderAt('/projects/7')

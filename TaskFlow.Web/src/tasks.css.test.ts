@@ -1,23 +1,32 @@
 /// <reference types="node" />
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { TOUCH, allSelectors, body, media, sectionFrom, stripMedia } from '@/test/cssContract'
+import { TOUCH, allSelectors, body, media, sectionBetween, sectionFrom, stripMedia } from '@/test/cssContract'
 
 const path = (name: string) => fileURLToPath(new URL(name, import.meta.url))
 const css = readFileSync(path('./tasks.css'), 'utf-8')
+const projectsCss = readFileSync(path('./projects.css'), 'utf-8')
 
 const MARKER = '/* ==== MOBILE (#317) ==== */'
+const MARKER_320 = '/* ==== MOBILE (#320) ==== */'
 const WIDTH = '(max-width: 480px)'
-const section = sectionFrom(css, MARKER)
+// The #317 section ends where the #320 section starts, so media() never sees #320's blocks.
+const section = sectionBetween(css, MARKER, MARKER_320)
+const section320 = sectionFrom(css, MARKER_320)
 const base = css.slice(0, css.indexOf(MARKER))
 const width = media(section, WIDTH)
 const touch = media(section, TOUCH)
 const tablet = media(section, '(max-width: 820px)')
 
-// #320 appends its own marked section to projects.css; tolerate the file not existing yet.
-const projectsPath = path('./projects.css')
-const projectsCss = existsSync(projectsPath) ? readFileSync(projectsPath, 'utf-8') : null
+const width320 = media(section320, WIDTH)
+const touch320 = media(section320, TOUCH)
+const base320 = stripMedia(section320)
+
+const projSection = sectionFrom(projectsCss, MARKER_320)
+const projBase = projectsCss.slice(0, projectsCss.indexOf(MARKER_320))
+const projWidth = media(projSection, WIDTH)
+const projTouch = media(projSection, TOUCH)
 
 const ALLOWED_ROOTS = ['.tasks-page', '.projects-page']
 const FORBIDDEN_BARE = ['.t-badge', '.t-btn', '.t-input', '.t-card-actions']
@@ -53,14 +62,8 @@ describe('tasks.css MOBILE (#317) scoping contract (AC37)', () => {
     }
   })
 
-  it('applies the same contract to the marked section of projects.css when present', () => {
-    const marker = '/* ==== MOBILE (#320) ==== */'
-    if (!projectsCss || !projectsCss.includes(marker)) return
-    expectScoped(sectionFrom(projectsCss, marker))
-  })
-
   it('keeps width-only blocks free of 44px and --tap-min (sizing lives in the touch query)', () => {
-    for (const block of [width, tablet]) {
+    for (const block of [width, tablet, width320, projWidth]) {
       expect(block).not.toMatch(/44px/)
       expect(block).not.toMatch(/--tap-min/)
     }
@@ -70,12 +73,202 @@ describe('tasks.css MOBILE (#317) scoping contract (AC37)', () => {
     const baseRule = (selector: string) => body(base, selector).replace(/\s+/g, ' ').trim()
     expect(baseRule('.t-card-actions')).toBe('display: flex; gap: 4px; flex-shrink: 0;')
     for (const sel of ['.t-btn', '.t-input', '.t-panel']) {
-      // Bare base rule exists outside the MOBILE section and is never re-declared inside it (only as `.tasks-page ...`).
+      // Bare base rule exists outside the MOBILE sections and is never re-declared inside them (only as `.tasks-page ...`).
       expect(base, sel).toMatch(new RegExp(`\\n${sel.replace('.', '\\.')}[ ,{]`))
-      expect(allSelectors(section).some(s => s === sel), sel).toBe(false)
+      for (const s of [section, section320]) {
+        expect(allSelectors(s).some(x => x === sel), sel).toBe(false)
+      }
     }
     expect(base).toContain('.t-badge-project {')
-    expect(allSelectors(section).some(s => s === '.t-badge-project')).toBe(false)
+    for (const s of [section, section320]) {
+      expect(allSelectors(s).some(x => x === '.t-badge-project')).toBe(false)
+    }
+  })
+})
+
+describe('MOBILE (#320) scoping contract', () => {
+  it('places the #320 marker after the #317 marker, once, as the last marker in each file', () => {
+    expect(css.indexOf(MARKER_320)).toBeGreaterThan(css.indexOf(MARKER))
+    expect(css.split(MARKER_320)).toHaveLength(2)
+    expect(projectsCss.split(MARKER_320)).toHaveLength(2)
+  })
+
+  it('roots every tasks.css selector in the #320 section at .tasks-page', () => {
+    const selectors = allSelectors(section320)
+    expect(selectors.length).toBeGreaterThan(20)
+    expectScoped(section320)
+    for (const selector of selectors) {
+      expect(selector.startsWith('.tasks-page '), selector).toBe(true)
+      for (const bare of FORBIDDEN_BARE) expect(selector.startsWith(bare), selector).toBe(false)
+    }
+  })
+
+  it('roots every projects.css selector in the #320 section at .projects-page .p-* (0-2-0)', () => {
+    const selectors = allSelectors(projSection)
+    expect(selectors.length).toBeGreaterThan(15)
+    for (const selector of selectors) {
+      expect(selector.startsWith('.projects-page .p-'), selector).toBe(true)
+    }
+    expectScoped(projSection)
+  })
+
+  it('has separate width and touch blocks in projects.css and nothing else but those blocks', () => {
+    expect(projWidth.length).toBeGreaterThan(0)
+    expect(projTouch.length).toBeGreaterThan(0)
+    expect(projWidth).not.toMatch(/--tap-min/)
+    const outside = stripMedia(projSection).replace(/\/\*[\s\S]*?\*\//g, '').trim()
+    expect(outside).toBe('')
+    expect(projSection).not.toMatch(/@keyframes|@supports/)
+    expect(section320).not.toMatch(/@keyframes|@supports/)
+  })
+
+  it('keeps comments free of a literal media rule opener', () => {
+    for (const source of [section320, projSection]) {
+      const comments = source.match(/\/\*[\s\S]*?\*\//g) ?? []
+      for (const c of comments) expect(c).not.toMatch(/@media[^*]*\{/)
+    }
+  })
+
+  it('keeps touch blocks free of font-size and colour (the index.css floor supplies 16px)', () => {
+    for (const block of [touch320, projTouch]) {
+      expect(block).not.toMatch(/font-size/)
+      expect(block).not.toMatch(/(^|[;{\s])color:/)
+    }
+  })
+
+  it('pins the padding tokens (#317 panel, --page-pad users)', () => {
+    expect(width).toMatch(/\.tasks-page \.t-panel \{ padding: 14px 12px; \}/)
+    expect(width).toMatch(/\.t-list-row > \.t-list-cell[^{]*\{[^}]*min-width: 0/)
+    expect(base).toMatch(/\.tasks-page \{[^}]*--page-pad/)
+    expect(projBase).toMatch(/\.projects-page \{[^}]*padding: 28px var\(--page-pad\) 80px/)
+    expect(projWidth).toMatch(/\.projects-page \.p-panel \{ padding: 14px 12px; \}/)
+  })
+
+  it('still lists .tasks-page and .projects-page in the index.css touch input floor', () => {
+    const indexCss = readFileSync(path('./index.css'), 'utf-8')
+    expect(indexCss).toMatch(/:is\([^)]*\.tasks-page[^)]*\.projects-page/)
+  })
+})
+
+describe('TaskForm on mobile (#320)', () => {
+  it('stacks Status and Priority in one column without collapsing the rows', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-form-row \{[^}]*flex-direction: column/)
+    expect(width320).toMatch(/\.tasks-page \.t-form-row > \* \{[^}]*flex: 0 0 auto/)
+  })
+
+  it('sizes the form inputs 44px on touch without a font-size', () => {
+    expect(touch320).toMatch(/\.tasks-page \.t-form-row \.t-input \{ min-height: 44px; \}/)
+  })
+
+  it('wraps Save and Cancel with an 8px gap, flex 1 1 120px children and 44px touch buttons', () => {
+    const actions = /\.tasks-page \.t-form-actions \{([^}]*)\}/.exec(width320)?.[1] ?? ''
+    expect(actions).toMatch(/flex-wrap: wrap/)
+    expect(actions).toMatch(/gap: 8px/)
+    expect(width320).toMatch(/\.tasks-page \.t-form-actions > \* \{[^}]*flex: 1 1 120px/)
+    expect(touch320).toMatch(/\.tasks-page \.t-form-actions \.t-btn,\s*\.tasks-page \.t-form-actions \.t-btn-primary \{ min-height: 44px; \}/)
+  })
+
+  it('relies on the #317 subtask editor cell rule (min-width 0), adding no new subtask CSS', () => {
+    expect(width).toMatch(/\.t-list-row > \.t-list-cell[^{]*\{[^}]*min-width: 0/)
+    expect(section320).not.toMatch(/subtask/)
+  })
+})
+
+describe('TaskDetailPage on mobile (#320)', () => {
+  it('wraps the title row and lets the title shrink and break', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-card-row \{ flex-wrap: wrap; \}/)
+    const title = /\.tasks-page \.t-detail-title \{([^}]*)\}/.exec(width320)?.[1] ?? ''
+    expect(title).toMatch(/min-width: 0/)
+    expect(title).toMatch(/overflow-wrap: anywhere/)
+  })
+
+  it('puts Edit and Delete on their own row, Delete at the far right, 44px on touch', () => {
+    const actions = /\.tasks-page \.t-card-row \.t-card-actions \{([^}]*)\}/.exec(width320)?.[1] ?? ''
+    expect(actions).toMatch(/flex: 1 1 100%/)
+    expect(actions).toMatch(/gap: 8px/)
+    expect(width320).toMatch(/\.tasks-page \.t-card-row \.t-btn-danger \{ margin-left: auto; \}/)
+    expect(touch320).toMatch(/\.tasks-page \.t-card-row \.t-card-actions \{ gap: 8px; \}/)
+    expect(touch320).toMatch(/\.tasks-page \.t-card-row \.t-btn-danger \{ min-height: 44px; min-width: 44px; \}/)
+  })
+
+  it('makes the meta one column whose children break long strings', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-detail-meta \{[^}]*flex-direction: column/)
+    expect(width320).toMatch(/\.tasks-page \.t-detail-meta > \* \{[^}]*overflow-wrap: anywhere/)
+  })
+
+  it('makes the project quick-select full width and 44px on touch', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-detail-project \.t-select \{[^}]*width: 100%/)
+    expect(touch320).toMatch(/\.tasks-page \.t-detail-project \.t-select \{ min-height: 44px; \}/)
+  })
+
+  it('shows the visible project name only in the width block, after the base display none', () => {
+    expect(base320).toMatch(/\.tasks-page \.t-detail-project-name \{ display: none; \}/)
+    expect(width320).toMatch(/\.tasks-page \.t-detail-project-name \{[^}]*display: block/)
+    expect(touch320).not.toMatch(/t-detail-project-name/)
+    expect(section320.indexOf('display: none;')).toBeLessThan(section320.indexOf('@media'))
+  })
+
+  it('makes Add Note full width and 44px on touch', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-section-hdr \.t-btn-primary \{ flex: 1 1 100%; \}/)
+    expect(touch320).toMatch(/\.tasks-page \.t-section-hdr \.t-btn-primary \{ min-height: 44px; \}/)
+  })
+
+  it('wraps notes and history rows', () => {
+    expect(width320).toMatch(/\.tasks-page \.t-note-content \{ overflow-wrap: anywhere; \}/)
+    expect(width320).toMatch(/\.tasks-page \.t-note-footer \{[^}]*flex-wrap: wrap/)
+    expect(width320).toMatch(/\.tasks-page \.t-history-item,\s*\.tasks-page \.t-history-line,\s*\.tasks-page \.t-history-time \{[^}]*min-width: 0;[^}]*overflow-wrap: anywhere/)
+  })
+
+  it('gives the back link and note actions 44px hit areas on touch', () => {
+    expect(touch320).toMatch(/\.tasks-page \.t-back-link \{ min-height: 44px; \}/)
+    expect(touch320).toMatch(/\.tasks-page \.t-note-actions \{ gap: 8px; \}/)
+    expect(touch320).toMatch(/\.tasks-page \.t-note-actions \.t-btn,\s*\.tasks-page \.t-note-actions \.t-btn-danger \{ min-height: 44px; min-width: 44px; \}/)
+  })
+})
+
+describe('Projects pages on mobile (#320)', () => {
+  it('lays a project row out in three lines with right-aligned actions', () => {
+    expect(projWidth).toMatch(/\.projects-page \.p-row \{[^}]*flex-wrap: wrap[^}]*gap: 8px[^}]*padding: 12px/)
+    expect(projWidth).toMatch(/\.projects-page \.p-row-main \{ flex: 1 1 100%; \}/)
+    const actions = /\.projects-page \.p-row-actions \{([^}]*)\}/.exec(projWidth)?.[1] ?? ''
+    expect(actions).toMatch(/flex: 1 1 100%/)
+    expect(actions).toMatch(/justify-content: flex-end/)
+    expect(projTouch).toMatch(/\.projects-page \.p-row-actions \{ gap: 8px; \}/)
+    expect(projWidth).toMatch(/\.projects-page \.p-badge \{ white-space: nowrap; \}/)
+  })
+
+  it('keeps the detail head wrapping with a shrinkable title and a fixed Edit button', () => {
+    expect(projWidth).toMatch(/\.projects-page \.p-detail-head \{[^}]*flex-wrap: wrap/)
+    expect(projWidth).toMatch(/\.projects-page \.p-detail-head \.p-row-main \{[^}]*flex: 1 1 160px[^}]*min-width: 0/)
+    expect(projWidth).toMatch(/\.projects-page \.p-detail-head \.p-title \{[^}]*overflow-wrap: anywhere/)
+    expect(projWidth).toMatch(/\.projects-page \.p-detail-head > \.p-btn \{ flex-shrink: 0; \}/)
+  })
+
+  it('wraps the toolbar and sizes the toggle to 44px on touch', () => {
+    expect(projWidth).toMatch(/\.projects-page \.p-toolbar \{[^}]*flex-wrap: wrap[^}]*gap: 8px/)
+    expect(projTouch).toMatch(/\.projects-page \.p-toggle \{ min-height: 44px; \}/)
+    expect(projTouch).toMatch(/\.p-toggle input\[type="checkbox"\] \{ width: 20px; height: 20px; \}/)
+  })
+
+  it('wraps form actions and sizes inputs and buttons on touch', () => {
+    expect(projWidth).toMatch(/\.projects-page \.p-form-actions \{[^}]*flex-wrap: wrap/)
+    expect(projWidth).toMatch(/\.projects-page \.p-form-actions > \* \{[^}]*flex: 1 1 120px/)
+    expect(projTouch).toMatch(/\.projects-page \.p-btn \{ min-height: 44px; \}/)
+    expect(projTouch).toMatch(/\.projects-page \.p-form \.p-input \{ min-height: 44px; \}/)
+    expect(projBase).toMatch(/\.projects-page \.p-form \{[^}]*flex-direction: column/)
+  })
+
+  it('makes the row name and back link real 44px boxes and wraps task meta', () => {
+    expect(projTouch).toMatch(/\.projects-page \.p-row-name \{[^}]*display: inline-flex[^}]*min-height: 44px/)
+    expect(projTouch).toMatch(/\.projects-page \.p-back \{[^}]*display: inline-flex[^}]*min-height: 44px/)
+    expect(projWidth).toMatch(/\.projects-page \.p-task-meta \{[^}]*overflow-wrap: anywhere/)
+  })
+
+  it('keeps the mobile section after the base rules it overrides', () => {
+    for (const sel of ['.p-row', '.p-row-actions', '.p-detail-head', '.p-badge']) {
+      expect(projBase, sel).toContain(`.projects-page ${sel} {`)
+    }
+    expect(projectsCss.trimEnd().endsWith('}')).toBe(true)
   })
 })
 

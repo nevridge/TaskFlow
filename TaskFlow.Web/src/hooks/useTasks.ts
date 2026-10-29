@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import {
   getApiV1TaskItems,
@@ -10,6 +11,8 @@ import {
 import type { CreateTaskItemDto, TaskItemResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { getTaskHistory } from '@/api/tasks'
 import { projectKeys } from '@/hooks/projectKeys'
+import { journalKeys } from '@/hooks/journalKeys'
+import { filterPending, pendingKey, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
 import { getTimezoneOffsetMinutes } from '@/lib/journal-utils'
 import {
   mapCachedTask,
@@ -48,18 +51,79 @@ export const taskKeys = {
   history: (id: number) => ['tasks', id, 'history'] as const,
 }
 
+interface PendingTaskLike {
+  id?: number | string | null
+  parentTaskItemId?: number | string | null
+  childTaskCount?: number | string
+}
+
+/** Pending task deletes grouped by their parent id (used to lower the parent's child count). */
+function pendingChildCounts(list: readonly PendingTaskLike[], pendingKeys: ReadonlySet<string>) {
+  const counts = new Map<number, number>()
+  list.forEach(t => {
+    if (t.id == null || t.parentTaskItemId == null) return
+    if (!pendingKeys.has(pendingKey('task', t.id))) return
+    const parentId = Number(t.parentTaskItemId)
+    counts.set(parentId, (counts.get(parentId) ?? 0) + 1)
+  })
+  return counts
+}
+
+function withChildCount<T extends PendingTaskLike>(task: T, hidden: number): T {
+  if (hidden <= 0) return task
+  return { ...task, childTaskCount: Math.max(0, Number(task.childTaskCount ?? 0) - hidden) }
+}
+
+/**
+ * Applied on read (never written to the cache): drops tasks whose delete is inside the undo window and lowers
+ * each parent's `childTaskCount` by its pending children. Returns the input untouched when nothing is pending.
+ */
+export function hidePendingTasks<T extends PendingTaskLike>(list: readonly T[], pendingKeys: ReadonlySet<string>): T[] {
+  if (pendingKeys.size === 0) return list as T[]
+  const hiddenByParent = pendingChildCounts(list, pendingKeys)
+  return filterPending('task', list, pendingKeys).map(t =>
+    withChildCount(t, t.id == null ? 0 : (hiddenByParent.get(Number(t.id)) ?? 0)),
+  )
+}
+
 export function useTasksQuery() {
+  const { pendingKeys } = usePendingDeleteIds()
+  const select = useCallback(
+    (res: Awaited<ReturnType<typeof getApiV1TaskItems>>) => {
+      const list = res.data as TaskItemViewModel[] | undefined
+      if (!list || pendingKeys.size === 0) return res
+      return { ...res, data: hidePendingTasks(list, pendingKeys) } as typeof res
+    },
+    [pendingKeys],
+  )
   return useQuery({
     queryKey: taskKeys.all,
     queryFn: () => getApiV1TaskItems(),
+    select,
   })
 }
 
 export function useTaskQuery(id: number) {
+  const qc = useQueryClient()
+  const { pendingKeys } = usePendingDeleteIds()
+  const select = useCallback(
+    (res: Awaited<ReturnType<typeof getTaskV1>>) => {
+      if (pendingKeys.size === 0) return res
+      // A pending id behaves as not found until Undo lifts the filter (the cached data is kept).
+      if (pendingKeys.has(pendingKey('task', id))) return { ...res, data: undefined } as typeof res
+      const task = res.data as TaskItemViewModel | undefined
+      if (!task) return res
+      const cachedList = qc.getQueryData<{ data?: TaskItemViewModel[] }>(taskKeys.all)?.data ?? []
+      const hidden = pendingChildCounts(cachedList, pendingKeys).get(id) ?? 0
+      return hidden > 0 ? ({ ...res, data: withChildCount(task, hidden) } as typeof res) : res
+    },
+    [pendingKeys, id, qc],
+  )
   return useQuery({
     queryKey: taskKeys.detail(id),
     queryFn: () => getTaskV1({ path: { id } }),
     enabled: Number.isFinite(id),
+    select,
   })
 }
 
@@ -125,15 +189,25 @@ export function useUpdateTaskMutation() {
   })
 }
 
+/**
+ * Cache cleanup after a task delete committed (or turned out to be already gone). The detail entry is removed
+ * FIRST so the refetch of ['tasks'] cannot revive it; the returned promise resolves once the refetches settle.
+ */
+export function invalidateAfterTaskDelete(qc: QueryClient, id: number): Promise<unknown> {
+  qc.removeQueries({ queryKey: taskKeys.detail(id) })
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: taskKeys.all }),
+    qc.invalidateQueries({ queryKey: projectKeys.all }),
+    qc.invalidateQueries({ queryKey: journalKeys.all }),
+  ])
+}
+
 export function useDeleteTaskMutation() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => deleteApiV1TaskItemsById({ path: { id } }),
-    onSuccess: (_result, id) => {
-      qc.invalidateQueries({ queryKey: taskKeys.all })
-      qc.invalidateQueries({ queryKey: projectKeys.all })
-      qc.removeQueries({ queryKey: taskKeys.detail(id) })
-    },
+    // The flag is passed per call (the client only rejects on HTTP errors when it is set).
+    mutationFn: (id: number) => deleteApiV1TaskItemsById({ path: { id }, throwOnError: true }),
+    onSuccess: (_result, id) => invalidateAfterTaskDelete(qc, id),
   })
 }
 

@@ -85,6 +85,11 @@ export function TaskListRow({
   const reasonBtnRef = useRef<HTMLButtonElement>(null)
   const blocked = isBlockedStatus(task.status)
   const blockable = canBlock(task.status) && !!onBlock
+  // childTaskCount already excludes subtasks whose delete is pending.
+  const childCount = Number(task.childTaskCount ?? 0)
+  const deleteBlocked = childCount > 0
+  const deleteHint = `Delete subtasks first (${childCount})`
+  const deleteHintId = `del-hint-${task.id}`
 
   const status = (task.status ?? 'draft').toLowerCase()
   const priority = (task.priority ?? 'low').toLowerCase()
@@ -255,9 +260,23 @@ export function TaskListRow({
           <button className="t-btn-icon" aria-label="Edit" title="Edit" data-task-edit-id={task.id} onClick={() => onEdit(task)}>
             <PencilIcon />
           </button>
-          <button className="t-btn-icon t-btn-icon--danger t-action-delete" aria-label="Delete" title="Delete" onClick={() => onDelete(task)}>
+          {/* aria-disabled (never `disabled`) keeps the button focusable so its reason can be read. The `!`
+              variants beat the unlayered tasks.css cursor and hover rules, which Tailwind's layer cannot. */}
+          <button
+            className="t-btn-icon t-btn-icon--danger t-action-delete aria-disabled:opacity-50 aria-disabled:cursor-not-allowed! aria-disabled:hover:bg-transparent! aria-disabled:hover:text-(--muted)! aria-disabled:hover:border-(--line)!"
+            aria-label={`Delete task: ${task.title}`}
+            title={deleteBlocked ? deleteHint : 'Delete'}
+            data-task-delete-id={task.id}
+            aria-disabled={deleteBlocked ? 'true' : undefined}
+            aria-describedby={deleteBlocked ? deleteHintId : undefined}
+            onClick={() => {
+              if (deleteBlocked) return
+              onDelete(task)
+            }}
+          >
             <XIcon />
           </button>
+          {deleteBlocked && <span id={deleteHintId} className="sr-only">{deleteHint}</span>}
         </div>
       </td>
     </tr>

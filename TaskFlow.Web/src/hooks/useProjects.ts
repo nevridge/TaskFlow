@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getProjects,
@@ -9,9 +10,10 @@ import {
   assignTaskToProject,
   unassignTaskFromProject,
 } from '@/api/projects'
-import type { CreateProjectDto, UpdateProjectDto } from '@/api/projects'
+import type { CreateProjectDto, ProjectTaskDto, UpdateProjectDto } from '@/api/projects'
 import { taskKeys } from '@/hooks/useTasks'
 import { projectKeys } from '@/hooks/projectKeys'
+import { filterPending, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
 
 // Re-exported so existing imports from '@/hooks/useProjects' keep working.
 export { projectKeys }
@@ -46,12 +48,23 @@ export function useProjectQuery(id: number) {
   })
 }
 
+/** Tasks inside the undo window of a Tasks-page delete are hidden (project counts stay server values). */
 export function useProjectTasksQuery(id: number) {
+  const { pendingKeys } = usePendingDeleteIds()
+  const select = useCallback(
+    (res: Awaited<ReturnType<typeof getProjectTasks>>) => {
+      const list = res.data as ProjectTaskDto[] | undefined
+      if (!list || pendingKeys.size === 0) return res
+      return { ...res, data: filterPending('task', list, pendingKeys) } as typeof res
+    },
+    [pendingKeys],
+  )
   return useQuery({
     queryKey: projectKeys.tasks(id),
     queryFn: () => getProjectTasks(id),
     enabled: isValidProjectId(id),
     retry: false,
+    select,
   })
 }
 

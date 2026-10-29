@@ -98,6 +98,7 @@ Two execution tools are available on this Windows machine:
 - Log entries are separate `JournalLogEntry` records embedded in the entry response
 - Notes are separate `JournalNote` records (add and edit via textarea: Enter saves, Shift+Enter inserts a newline, double-click to edit), shown with a small formatter (`src/lib/notes-format.ts`) that renders `-`/`*` bullet lists and `1.` numbered lists as React elements.
 - Date utilities (ISO ↔ URL format, day/week counters) live in `src/lib/journal-utils.ts`
+- Tasks-page deletes are undoable (Undo toast, no confirm): pending keys are `task:<id>` (10s) and `tasknote:<id>` (6s), distinct from the journal's `note:`/`log:`/`todo:` keys. Read hooks (`useTasksQuery`, `useTaskQuery`, `useNotesQuery`, `useProjectTasksQuery`, `useJournalTodos`) filter pending ids through `select`
 - Journal-specific styles are in `src/journal.css`, scoped under `.journal-page`
 - User preferences (header style, sort, dark mode, project start date) persist to `localStorage` under key `taskflow_journal_prefs_v1`
 

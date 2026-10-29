@@ -9,7 +9,6 @@ vi.mock('@/hooks/useTasks', () => ({
   useTasksQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),
   useUpdateTaskMutation: vi.fn(),
-  useDeleteTaskMutation: vi.fn(),
   useBlockTaskMutation: vi.fn(),
   useUnblockTaskMutation: vi.fn(),
   useEditBlockedReasonMutation: vi.fn(),
@@ -37,7 +36,6 @@ import {
   useTasksQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
-  useDeleteTaskMutation,
   useBlockTaskMutation,
   useUnblockTaskMutation,
   useEditBlockedReasonMutation,
@@ -184,7 +182,6 @@ describe('TasksPage', () => {
     changeAsync.mockReset().mockResolvedValue(undefined)
     vi.mocked(useCreateTaskMutation).mockReturnValue(taskMutations as never)
     vi.mocked(useUpdateTaskMutation).mockReturnValue(taskMutations as never)
-    vi.mocked(useDeleteTaskMutation).mockReturnValue(taskMutations as never)
     blockAsync.mockReset().mockResolvedValue({})
     unblockMutate.mockReset()
     editReasonAsync.mockReset().mockResolvedValue({})

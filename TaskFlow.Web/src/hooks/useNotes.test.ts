@@ -70,4 +70,15 @@ describe('useDeleteNoteMutation', () => {
       expect.objectContaining({ path: { taskId: 3, id: 7 } })
     )
   })
+
+  it('passes throwOnError per call so a non-2xx rejects the mutation', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsByTaskIdNotesById).mockResolvedValue({ response: new Response() } as never)
+    const { result } = renderHook(() => useDeleteNoteMutation(3), { wrapper: makeWrapper() })
+    result.current.mutate(7)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(sdk.deleteApiV1TaskItemsByTaskIdNotesById).toHaveBeenCalledWith({
+      path: { taskId: 3, id: 7 },
+      throwOnError: true,
+    })
+  })
 })

@@ -2,14 +2,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import type { PrefsContextValue } from '@/context/PrefsContextDef'
 
 vi.mock('@/hooks/useTasks', () => ({
   useTaskQuery: vi.fn(),
   useTasksQuery: vi.fn(),
   useUpdateTaskMutation: vi.fn(),
-  useDeleteTaskMutation: vi.fn(),
   useTaskHistoryQuery: vi.fn(),
   taskKeys: {
     all: ['tasks'],
@@ -27,7 +26,11 @@ vi.mock('@/hooks/useNotes', () => ({
   useNotesQuery: vi.fn(),
   useCreateNoteMutation: vi.fn(),
   useUpdateNoteMutation: vi.fn(),
-  useDeleteNoteMutation: vi.fn(),
+}))
+
+vi.mock('@/hooks/useDeleteTaskUndoable', () => ({
+  useDeleteTaskUndoable: vi.fn(),
+  useDeleteNoteUndoable: vi.fn(),
 }))
 
 vi.mock('@/context/usePrefs', () => ({
@@ -38,9 +41,10 @@ vi.mock('@/components/TaskHistoryPanel', () => ({
   TaskHistoryPanel: () => <div data-testid="history-panel" />,
 }))
 
-import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useDeleteTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
+import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
+import { useDeleteTaskUndoable, useDeleteNoteUndoable } from '@/hooks/useDeleteTaskUndoable'
 import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
-import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
+import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation } from '@/hooks/useNotes'
 import { usePrefs } from '@/context/usePrefs'
 import { TaskDetailPage } from './TaskDetailPage'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -91,12 +95,22 @@ function makePrefs(overrides?: Partial<PrefsContextValue>): PrefsContextValue {
 
 let queryClient: QueryClient
 
+const deleteTask = vi.fn()
+const deleteNote = vi.fn()
+
+/** Stands in for the /tasks route: shows where the delete navigated to and with which state. */
+function TasksProbe() {
+  const location = useLocation()
+  return <div data-testid="tasks-route" data-state={JSON.stringify(location.state)}>Tasks list</div>
+}
+
 function renderPage(path = '/tasks/1') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/tasks/:id" element={<TaskDetailPage />} />
+          <Route path="/tasks" element={<TasksProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -124,8 +138,6 @@ function mockTask(overrides: Record<string, unknown> = {}) {
   } as never)
 }
 
-let confirmSpy: ReturnType<typeof vi.spyOn>
-
 describe('TaskDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -144,16 +156,11 @@ describe('TaskDetailPage', () => {
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
 
     vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-    vi.mocked(useDeleteNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useDeleteNoteUndoable).mockReturnValue(deleteNote)
 
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
-  })
-
-  afterEach(() => {
-    confirmSpy.mockRestore()
   })
 
   it('shows loading state', () => {
@@ -236,22 +243,71 @@ describe('TaskDetailPage', () => {
     await waitFor(() => expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument())
   })
 
-  it('delete with confirm=true calls deleteTask.mutate', async () => {
-    const deleteMutate = vi.fn()
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteMutate, isPending: false } as never)
-    confirmSpy.mockReturnValue(true)
+  it('Delete starts an undoable delete and navigates to /tasks at once, with no confirm (AC8)', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm')
     renderPage()
-    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
-    expect(deleteMutate).toHaveBeenCalledWith(1, expect.any(Object))
+    await userEvent.click(screen.getByRole('button', { name: /delete task/i }))
+    expect(deleteTask).toHaveBeenCalledWith({ id: 1, title: 'Fix login bug' }, expect.any(Function))
+    expect(confirmSpy).not.toHaveBeenCalled()
+    const route = screen.getByTestId('tasks-route')
+    expect(route).toHaveAttribute('data-state', JSON.stringify({ focusNewTask: true }))
+    confirmSpy.mockRestore()
   })
 
-  it('delete with confirm=false does not call deleteTask.mutate', async () => {
-    const deleteMutate = vi.fn()
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteMutate, isPending: false } as never)
-    confirmSpy.mockReturnValue(false)
+  it('shows an empty shell, not "Task not found", while leaving after a self-initiated delete', async () => {
+    // The pending filter makes the task disappear in the same render as the click.
+    deleteTask.mockImplementation(() => {
+      vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: null } as never)
+    })
+    const seen: string[] = []
+    const observer = new MutationObserver(() => seen.push(document.body.textContent ?? ''))
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
     renderPage()
-    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
-    expect(deleteMutate).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: /delete task/i }))
+    observer.disconnect()
+    expect(seen.some(text => text.includes('Task not found'))).toBe(false)
+  })
+
+  it('a direct visit to a missing task still shows "Task not found."', () => {
+    vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: null } as never)
+    renderPage()
+    expect(screen.getByText('Task not found.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /undo/i })).not.toBeInTheDocument()
+  })
+
+  describe('parent task with subtasks (AC14, AC15)', () => {
+    beforeEach(() => mockTask({ childTaskCount: 2 }))
+
+    it('Delete is aria-disabled, focusable and described by a visible hint below the title row', () => {
+      const { container } = renderPage()
+      const btn = screen.getByRole('button', { name: 'Delete task' })
+      expect(btn).toHaveAttribute('aria-disabled', 'true')
+      expect(btn).not.toBeDisabled()
+      expect(btn).toHaveAccessibleDescription('Delete subtasks first (2)')
+      const hint = screen.getByText('Delete subtasks first (2)')
+      expect(hint).toBeVisible()
+      expect(hint.closest('.t-card-actions')).toBeNull()
+      expect(hint.previousElementSibling).toHaveClass('t-card-row')
+      expect(container.querySelector('.sr-only')).toBeNull()
+      btn.focus()
+      expect(btn).toHaveFocus()
+    })
+
+    it('click and Enter schedule nothing and do not navigate', async () => {
+      renderPage()
+      const btn = screen.getByRole('button', { name: 'Delete task' })
+      await userEvent.click(btn)
+      btn.focus()
+      await userEvent.keyboard('{Enter}')
+      expect(deleteTask).not.toHaveBeenCalled()
+      expect(screen.queryByTestId('tasks-route')).not.toBeInTheDocument()
+    })
+  })
+
+  it('has no hint and an enabled Delete without subtasks', () => {
+    renderPage()
+    expect(screen.getByRole('button', { name: 'Delete task' })).not.toHaveAttribute('aria-disabled')
+    expect(screen.queryByText(/delete subtasks first/i)).not.toBeInTheDocument()
   })
 
   it('shows "No notes yet" when notes are empty', () => {
@@ -558,16 +614,14 @@ describe('TaskDetailPage on mobile (#320)', () => {
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-    vi.mocked(useDeleteNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
-    confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    vi.mocked(useDeleteNoteUndoable).mockReturnValue(deleteNote)
     setTouch(true)
   })
 
   afterEach(() => {
-    confirmSpy.mockRestore()
     Reflect.deleteProperty(window, 'matchMedia')
     __resetCoarsePointerCache()
   })
@@ -646,20 +700,50 @@ describe('TaskDetailPage on mobile (#320)', () => {
     expect(edit.compareDocumentPosition(del) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('still confirms before deleting a task or a note', async () => {
-    const deleteTaskMutate = vi.fn()
-    const deleteNoteMutate = vi.fn()
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteTaskMutate, isPending: false } as never)
-    vi.mocked(useDeleteNoteMutation).mockReturnValue({ mutate: deleteNoteMutate, isPending: false } as never)
+  it('deletes a note without confirm and focuses the next note, then Add Note (AC17, AC18)', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm')
+    const note2 = { ...note, id: 8, content: 'Second note' }
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note, note2] }, isLoading: false } as never)
+    renderPage()
+    const deletes = screen.getAllByRole('button', { name: /delete note/i })
+    expect(deletes).toHaveLength(2)
+    await userEvent.click(deletes[0])
+    expect(deleteNote).toHaveBeenCalledWith(7, expect.any(Function))
+    // Focus moved synchronously, before the note left the list.
+    expect(deletes[1]).toHaveFocus()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    confirmSpy.mockRestore()
+  })
+
+  it('focuses the previous note, and Add Note when it was the only one', async () => {
+    const note2 = { ...note, id: 8, content: 'Second note' }
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note, note2] }, isLoading: false } as never)
+    const { unmount } = renderPage()
+    const deletes = screen.getAllByRole('button', { name: /delete note/i })
+    await userEvent.click(deletes[1])
+    expect(deletes[0]).toHaveFocus()
+    unmount()
+
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note] }, isLoading: false } as never)
     renderPage()
-    // With a note present, "Delete" is only the note's button and "Delete task" is only the task's.
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(confirmSpy).toHaveBeenCalledWith('Delete this note?')
-    expect(deleteNoteMutate).toHaveBeenCalledWith(7)
-    await userEvent.click(screen.getByRole('button', { name: 'Delete task' }))
-    expect(confirmSpy).toHaveBeenCalledWith('Delete "Fix login bug"?')
-    expect(deleteTaskMutate).toHaveBeenCalledWith(1, expect.any(Object))
+    await userEvent.click(screen.getByRole('button', { name: /delete note/i }))
+    expect(screen.getByRole('button', { name: 'Add Note' })).toHaveFocus()
+  })
+
+  it('restoring a note focuses its Delete button', async () => {
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note] }, isLoading: false } as never)
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: /delete note/i }))
+    const restoreFocus = deleteNote.mock.calls[0][1] as () => void
+    restoreFocus()
+    expect(screen.getByRole('button', { name: /delete note/i })).toHaveFocus()
+  })
+
+  it('labels: the task Delete and the note Delete both show "Delete" (AC23, AC24)', () => {
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [note] }, isLoading: false } as never)
+    renderPage()
+    expect(screen.getByRole('button', { name: /delete task/i })).toHaveTextContent('Delete')
+    expect(screen.getByRole('button', { name: /delete note/i })).toHaveTextContent('Delete')
   })
 
   it('renders the same structure with a fine pointer (desktop)', () => {

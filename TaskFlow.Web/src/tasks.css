@@ -500,6 +500,15 @@ button.t-badge-blocked { cursor: pointer; }
 }
 .t-btn-danger:hover { background: var(--danger-bg); }
 
+/* Why the detail Delete is aria-disabled (#321): shown below the title row, full width. */
+.tasks-page .t-detail-hint {
+  display: block;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 /* ─── Task detail ─────────────────────────────────────────────────────────── */
 
 .t-detail-title {

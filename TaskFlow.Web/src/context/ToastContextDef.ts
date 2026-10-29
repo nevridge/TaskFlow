@@ -7,7 +7,10 @@ export interface PendingDeleteInput {
   /** Every key hidden by this delete (the parent plus its children). */
   keys: string[]
   message: string
-  errorMessage: string
+  /** A function receives the error the commit threw (e.g. to pick specific copy). */
+  errorMessage: string | ((err: unknown) => string)
+  /** Undo window in ms. Defaults to 6000. */
+  durationMs?: number
   /** Calls the API directly with captured ids (not a mutation: those do not report after unmount). */
   commit: () => Promise<unknown>
   /** Runs after the commit settles, success or failure (query invalidation). */

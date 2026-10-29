@@ -86,15 +86,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       bump()
       void (async () => {
         let ok = true
+        let failure: unknown
         try {
           await entry.commit()
-        } catch {
+        } catch (err) {
           ok = false
+          failure = err
         }
         if (!ok) {
           // Restore the item at once; the invalidation below then re-syncs with the server.
           entriesRef.current.delete(entry.id)
-          const next = [...errorsRef.current, { id: ++errorSeq.current, message: entry.errorMessage }]
+          const message = typeof entry.errorMessage === 'function' ? entry.errorMessage(failure) : entry.errorMessage
+          const next = [...errorsRef.current, { id: ++errorSeq.current, message }]
           errorsRef.current = next.slice(-MAX_ERRORS)
           bump()
         }
@@ -126,17 +129,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const schedule = useCallback(
     (pd: PendingDeleteInput) => {
       if (entriesRef.current.has(pd.id)) return
+      const windowMs = pd.durationMs ?? UNDO_WINDOW_MS
       const entry: Entry = {
         ...pd,
         phase: 'pending',
-        remainingMs: UNDO_WINDOW_MS,
+        remainingMs: windowMs,
         startedAt: Date.now(),
         timerId: undefined,
         paused: new Set(),
         wasHidden: false,
       }
       entriesRef.current.set(pd.id, entry)
-      startTimer(entry, UNDO_WINDOW_MS)
+      startTimer(entry, windowMs)
       // Toasts pushed out of the newest three keep running but stay hidden.
       const pending = [...entriesRef.current.values()].filter(e => e.phase === 'pending')
       pending.slice(0, Math.max(0, pending.length - MAX_VISIBLE_PENDING)).forEach(e => {

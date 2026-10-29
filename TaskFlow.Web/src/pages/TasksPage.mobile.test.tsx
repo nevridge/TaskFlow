@@ -14,7 +14,6 @@ vi.mock('@/hooks/useTasks', () => ({
   useTasksQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),
   useUpdateTaskMutation: vi.fn(),
-  useDeleteTaskMutation: vi.fn(),
   useBlockTaskMutation: vi.fn(),
   useUnblockTaskMutation: vi.fn(),
   useEditBlockedReasonMutation: vi.fn(),
@@ -26,6 +25,10 @@ vi.mock('@/hooks/useTasks', () => ({
   },
 }))
 
+vi.mock('@/hooks/useDeleteTaskUndoable', () => ({
+  useDeleteTaskUndoable: vi.fn(),
+}))
+
 vi.mock('@/hooks/useProjects', () => ({
   useProjectsQuery: vi.fn(),
   useChangeTaskProject: vi.fn(),
@@ -35,13 +38,13 @@ import {
   useTasksQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
-  useDeleteTaskMutation,
   useBlockTaskMutation,
   useUnblockTaskMutation,
   useEditBlockedReasonMutation,
   useTaskHistoryQuery,
 } from '@/hooks/useTasks'
 import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
+import { useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
 
 const PREFS_KEY = 'taskflow_journal_prefs_v1'
 
@@ -137,7 +140,7 @@ describe('TasksPage on mobile (#317)', () => {
     deleteMutate.mockReset()
     vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: updateMutate, mutateAsync: updateAsync, isPending: false } as never)
     vi.mocked(useCreateTaskMutation).mockReturnValue({ mutate: createMutate, mutateAsync: vi.fn(), isPending: false } as never)
-    vi.mocked(useDeleteTaskMutation).mockReturnValue({ mutate: deleteMutate, isPending: false } as never)
+    vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteMutate)
     vi.mocked(useBlockTaskMutation).mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never)
     vi.mocked(useUnblockTaskMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useEditBlockedReasonMutation).mockReturnValue({ mutateAsync: vi.fn(), isPending: false } as never)
@@ -526,16 +529,13 @@ describe('TasksPage on mobile (#317)', () => {
       expect(within(row).getByRole('button', { name: /^Status: todo/ })).toHaveClass('tap-target')
     })
 
-    it('asks for confirmation and does not delete when cancelled (AC42)', async () => {
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    it('Delete starts an undoable delete without asking for confirmation (AC42)', async () => {
+      const confirm = vi.spyOn(window, 'confirm')
       renderPage()
-      await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
-      expect(confirm).toHaveBeenCalledWith('Delete "Alpha task"?')
-      expect(deleteMutate).not.toHaveBeenCalled()
-      confirm.mockReturnValue(true)
-      await userEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+      await userEvent.click(screen.getByRole('button', { name: 'Delete task: Alpha task' }))
+      expect(confirm).not.toHaveBeenCalled()
       expect(deleteMutate).toHaveBeenCalledTimes(1)
-      expect(deleteMutate.mock.calls[0][0]).toBe(2)
+      expect(deleteMutate.mock.calls[0][0]).toEqual({ id: 2, title: 'Alpha task' })
       confirm.mockRestore()
     })
   })

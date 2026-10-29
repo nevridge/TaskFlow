@@ -143,8 +143,8 @@ export function TaskListRow({
 
   return (
     <Fragment>
-    <tr className={rowClasses}>
-      <td className="t-list-cell t-list-cell--title">
+    <tr role="row" className={rowClasses}>
+      <td role="cell" className="t-list-cell t-list-cell--title">
         <div className={`t-title-wrap t-depth-${depth}`}>
           {hasChildren ? (
             <button
@@ -192,11 +192,11 @@ export function TaskListRow({
           </div>
         </div>
       </td>
-      <td className="t-list-cell">
+      <td role="cell" className="t-list-cell t-list-cell--status">
         {blocked ? (
           <button
             type="button"
-            className="t-badge t-badge-blocked t-badge-clickable"
+            className="t-badge t-badge-blocked t-badge-clickable t-status-btn tap-target"
             aria-label={`Unblock task: ${task.title}`}
             title="Unblock"
             onClick={() => onUnblock?.(task)}
@@ -206,7 +206,7 @@ export function TaskListRow({
           </button>
         ) : (
           <span
-            className={`t-badge t-badge-${status} t-badge-clickable`}
+            className={`t-badge t-badge-${status} t-badge-clickable t-status-btn tap-target`}
             onClick={() => onStatusCycle(task)}
             role="button"
             tabIndex={0}
@@ -217,10 +217,10 @@ export function TaskListRow({
           </span>
         )}
       </td>
-      <td className="t-list-cell">
+      <td role="cell" className="t-list-cell t-list-cell--priority">
         <span className={`t-badge t-badge-${priority}`}>{priority}</span>
       </td>
-      <td className="t-list-cell t-list-cell--due">
+      <td role="cell" className="t-list-cell t-list-cell--due">
         {task.dueDate ? (
           <span
             className={overdue ? 't-overdue' : ''}
@@ -233,7 +233,7 @@ export function TaskListRow({
           <span className="t-list-empty">{'—'}</span>
         )}
       </td>
-      <td className="t-list-cell t-list-cell--actions">
+      <td role="cell" className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
           <button className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`} aria-label="Add subtask" title="Add subtask" onClick={() => onAddChild?.(task)}>
             <PlusIcon />
@@ -252,18 +252,18 @@ export function TaskListRow({
           <button className="t-btn-icon" aria-label="Task history" title="Task history" onClick={() => onHistory(task)}>
             <ClockIcon />
           </button>
-          <button className="t-btn-icon" aria-label="Edit" title="Edit" onClick={() => onEdit(task)}>
+          <button className="t-btn-icon" aria-label="Edit" title="Edit" data-task-edit-id={task.id} onClick={() => onEdit(task)}>
             <PencilIcon />
           </button>
-          <button className="t-btn-icon t-btn-icon--danger" aria-label="Delete" title="Delete" onClick={() => onDelete(task)}>
+          <button className="t-btn-icon t-btn-icon--danger t-action-delete" aria-label="Delete" title="Delete" onClick={() => onDelete(task)}>
             <XIcon />
           </button>
         </div>
       </td>
     </tr>
     {(blocking || reasonEditing) && (
-      <tr className="t-list-row t-list-row--block-editor">
-        <td className="t-list-cell" colSpan={5}>
+      <tr role="row" className="t-list-row t-list-row--block-editor">
+        <td role="cell" className="t-list-cell" colSpan={5}>
           <BlockReasonInput
             className="t-input t-block-input"
             initialValue={blocking ? blockDraft : (task.blockedReason ?? '')}

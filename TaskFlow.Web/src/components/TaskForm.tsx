@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type Ref, useEffect, useRef, useState } from 'react'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
@@ -37,6 +37,8 @@ interface Props {
   isSaving?: boolean
   onSubmit: (data: TaskFormPayload) => void
   onCancel: () => void
+  /** Lets a parent focus the title field (e.g. the Tasks page after scrolling the panel into view). */
+  titleInputRef?: Ref<HTMLInputElement>
 }
 
 export function TaskForm({
@@ -49,6 +51,7 @@ export function TaskForm({
   isSaving = false,
   onSubmit,
   onCancel,
+  titleInputRef,
 }: Props) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -106,7 +109,7 @@ export function TaskForm({
     <form onSubmit={handleSubmit} className="t-form">
       <div className="t-field">
         <label htmlFor="title" className="t-label">Title</label>
-        <input id="title" className="t-input" value={title} onChange={e => setTitle(e.target.value)} required />
+        <input id="title" ref={titleInputRef} className="t-input" value={title} onChange={e => setTitle(e.target.value)} required />
       </div>
       <div className="t-field">
         <label htmlFor="description" className="t-label">Description</label>

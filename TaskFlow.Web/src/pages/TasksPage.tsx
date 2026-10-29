@@ -130,13 +130,19 @@ export function TasksPage() {
   // Set by a detail-page delete: focus New Task once on arrival. Captured on mount so a plain visit never does.
   const focusNewTaskRef = useRef((location.state as { focusNewTask?: boolean } | null)?.focusNewTask === true)
 
+  // Clear the route state on mount whether or not the button ever renders (e.g. on a load error).
+  useEffect(() => {
+    if (!focusNewTaskRef.current) return
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // The button only renders once the list has loaded, so this re-runs until the ref is set.
   useEffect(() => {
     if (!focusNewTaskRef.current || !newTaskBtnRef.current) return
     focusNewTaskRef.current = false
     newTaskBtnRef.current.focus()
-    navigate(location.pathname, { replace: true, state: null })
-  }, [isLoading, error, navigate, location.pathname])
+  }, [isLoading, error])
 
   // Debounce search input
   useEffect(() => {

@@ -403,6 +403,13 @@ describe('TasksPage undoable delete (#321)', () => {
       await waitFor(() => expect(locationSeen.state).toBeNull())
     })
 
+    it('clears the navigation state even when the list fails to load (no button)', async () => {
+      vi.mocked(sdk.getApiV1TaskItems).mockImplementation((() => Promise.reject(new Error('boom'))) as never)
+      renderPage({ pathname: '/tasks', state: { focusNewTask: true } })
+      await screen.findByText('Failed to load tasks.')
+      await waitFor(() => expect(locationSeen.state).toBeNull())
+    })
+
     it('does not focus New Task on a plain visit', async () => {
       renderPage('/tasks')
       const newTask = await screen.findByRole('button', { name: 'New Task' })

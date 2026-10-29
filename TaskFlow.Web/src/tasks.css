@@ -500,6 +500,7 @@ button.t-badge-blocked { cursor: pointer; }
 }
 .t-btn-danger:hover { background: var(--danger-bg); }
 
+/* Visible "Delete subtasks first (N)" hint (#321). */
 /* Why the detail Delete is aria-disabled (#321): shown below the title row, full width. */
 .tasks-page .t-detail-hint {
   display: block;

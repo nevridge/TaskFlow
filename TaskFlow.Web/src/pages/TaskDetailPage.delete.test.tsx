@@ -221,7 +221,7 @@ describe('TaskDetailPage undoable delete (#321)', () => {
       expect(deleteNoteCalls()[0][0]).toEqual({ path: { taskId: 1, id: 7 } })
     })
 
-    it('Undo refetches and the note returns in its server-sorted position', async () => {
+    it('Undo returns the note in its original server-sorted position and sends no DELETE', async () => {
       await loadDetail()
       fireEvent.click(screen.getAllByRole('button', { name: 'Delete note' })[0])
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }))

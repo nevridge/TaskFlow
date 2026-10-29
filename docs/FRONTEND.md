@@ -213,7 +213,8 @@ useCreateTaskMutation()
 // Update — invalidates list + specific detail
 useUpdateTaskMutation()
 
-// Delete — invalidates list, removes detail from cache
+// Delete — UI deletes go through useDeleteTaskUndoable (Undo toast, 10s window).
+// useDeleteTaskMutation remains for direct use with throwOnError; invalidates list, removes detail from cache
 useDeleteTaskMutation()
 ```
 
@@ -226,7 +227,7 @@ useNotesQuery(taskId: number)
 // Mutations — all invalidate noteKeys.all(taskId)
 useCreateNoteMutation(taskId: number)
 useUpdateNoteMutation(taskId: number)
-useDeleteNoteMutation(taskId: number)
+useDeleteNoteMutation(taskId: number) // UI deletes use useDeleteNoteUndoable (Undo toast, 6s window); this remains for direct use with throwOnError
 ```
 
 ## Pages and Components

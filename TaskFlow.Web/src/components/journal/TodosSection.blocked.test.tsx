@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { TaskItemResponseDto } from '@/api/journal'
 
@@ -10,6 +11,11 @@ const editReasonMutate = vi.fn()
 const removeTodoMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalTodos: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
   useCreateTodoMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useToggleTodoMutation: vi.fn(() => ({ mutate: toggleTodoMutate, isPending: false })),
@@ -81,7 +87,7 @@ describe('TodosSection blocked tasks', () => {
       await userEvent.tab()
       expect(block).toHaveFocus()
       await userEvent.tab()
-      expect(screen.getByRole('button', { name: 'Delete' })).toHaveFocus()
+      expect(screen.getByRole('button', { name: 'Remove from day: Write tests' })).toHaveFocus()
     })
 
     it('is revealed by CSS on focus-within, so keyboard focus on any row control reaches it', () => {

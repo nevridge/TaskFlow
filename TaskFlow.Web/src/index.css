@@ -829,6 +829,81 @@ html.is-dark .settings-seg-btn {
   touch-action: manipulation;
 }
 
+/* ─── Toasts (undoable deletes) ────────────────────────────────────────────────
+   Plain classes, not scoped to the journal page. z-index 150: above the sticky nav (30), below the settings
+   backdrop and drawer (200/201). The region never blocks the page; only the toasts take pointer events. */
+
+.toast-region {
+  position: fixed;
+  left: calc(8px + env(safe-area-inset-left));
+  right: calc(8px + env(safe-area-inset-right));
+  bottom: calc(8px + env(safe-area-inset-bottom) + var(--toast-kb-offset, 0px));
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+@media (min-width: 481px) and (hover: hover) and (pointer: fine) {
+  .toast-region {
+    right: auto;
+    max-width: 360px;
+  }
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 8px 8px 12px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.toast-enter {
+  animation: toast-in 150ms ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast-enter { animation: none; transition: none; }
+}
+
+.toast-error {
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+
+.toast-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast-btn {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toast-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
 /* ─── Sheet (shared dialog primitive) ──────────────────────────────────────────
    Centred panel on desktop, full-screen sheet on phones. The panel scrolls (not the page) and its header
    sticks to the top. Not scoped to a page so Journal and Tasks can both use it. The panel has no padding of

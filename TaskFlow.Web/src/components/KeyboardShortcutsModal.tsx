@@ -27,6 +27,8 @@ const SHORTCUTS = [
       { keys: ['l'], description: 'New log entry' },
       { keys: ['n'], description: 'Focus notes' },
       { keys: ['j'], description: 'Go to today' },
+      { keys: ['Ctrl/⌘+Z'], description: 'Undo delete' },
+      { keys: ['u'], description: 'Undo delete' },
     ],
   },
   {
@@ -89,7 +91,7 @@ export function KeyboardShortcutsModal({ onClose }: Props) {
               <table className="kb-table">
                 <tbody>
                   {group.items.map(item => (
-                    <tr key={item.description} className="kb-row">
+                    <tr key={`${item.keys.join('+')}:${item.description}`} className="kb-row">
                       <td className="kb-keys">
                         {item.keys.map((k, i) => (
                           <span key={k}>

@@ -1,21 +1,31 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { screen, fireEvent, act } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { JournalNoteResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 const createNoteMutate = vi.fn()
 const updateNoteMutate = vi.fn()
-const deleteNoteMutate = vi.fn()
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  deleteJournalNote: vi.fn(() => Promise.resolve({})),
+}))
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalNotes: vi.fn(() => ({ data: [], isLoading: false })),
   useCreateJournalNoteMutation: vi.fn(() => ({ mutate: createNoteMutate, isPending: false })),
   useUpdateJournalNoteMutation: vi.fn(() => ({ mutate: updateNoteMutate, isPending: false })),
-  useDeleteJournalNoteMutation: vi.fn(() => ({ mutate: deleteNoteMutate, isPending: false })),
 }))
 
 import { useJournalNotes, useCreateJournalNoteMutation } from '@/hooks/useJournal'
+import { deleteJournalNote } from '@/api/journal'
 import { NotesSection } from './NotesSection'
 
 const note1: JournalNoteResponseDto = {
@@ -259,7 +269,7 @@ describe('NotesSection on touch', () => {
       expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
       fireEvent.blur(edit)
       expect(updateNoteMutate).not.toHaveBeenCalled()
-      expect(deleteNoteMutate).not.toHaveBeenCalled()
+      expect(deleteJournalNote).not.toHaveBeenCalled()
       expect(screen.getByText('Remember to update docs')).toBeInTheDocument()
     })
 

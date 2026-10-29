@@ -1,6 +1,9 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { deleteLogEntry } from '@/api/journal'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
-import { useAddLogEntryMutation, useDeleteLogEntryMutation, useUpdateLogEntryMutation } from '@/hooks/useJournal'
+import { useAddLogEntryMutation, useUpdateLogEntryMutation, journalKeys } from '@/hooks/useJournal'
+import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { useTapToEditBlock } from '@/hooks/useTapToEditBlock'
 import { isCoarsePointer } from '@/lib/pointer'
 import { formatTime } from '@/lib/journal-utils'
@@ -28,9 +31,12 @@ function LogText({ id, content, onEdit }: { id: number; content: string; onEdit:
   )
 }
 
-export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function DailyLogSection({ entryId, logEntries }, ref) {
+export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function DailyLogSection({ entryId, logEntries: allLogEntries }, ref) {
   const addLog = useAddLogEntryMutation(entryId)
-  const deleteLog = useDeleteLogEntryMutation(entryId)
+  const queryClient = useQueryClient()
+  const { requestDelete, isHidden } = useUndoableDelete()
+  // Entries waiting out the undo window stay in the cache but are not shown or counted.
+  const logEntries = useMemo(() => allLogEntries.filter(l => !isHidden(`log:${l.id}`)), [allLogEntries, isHidden])
   const updateLog = useUpdateLogEntryMutation(entryId)
 
   // Decided once per mount because it changes whether the field is disabled while saving (disabling would
@@ -96,6 +102,26 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     updateLog.mutate({ id: logId, content: live.content, taskItemId })
   }
 
+  function removeEntry(en: JournalLogEntryResponseDto) {
+    const next = logEntries[logEntries.findIndex(l => l.id === en.id) + 1]
+    const nextButton = next
+      ? sectionRef.current?.querySelector<HTMLElement>(`[data-log-x="${next.id}"]`)
+      : null
+    ;(nextButton ?? inputRef.current)?.focus()
+    const section = sectionRef.current
+    requestDelete({
+      key: `log:${en.id}`,
+      message: 'Log entry deleted',
+      errorMessage: "Couldn't delete. Restored.",
+      commit: () => deleteLogEntry(entryId, en.id),
+      invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.all }),
+      restoreFocus: () => {
+        if (section?.dataset.entryId !== String(entryId)) return
+        section.querySelector<HTMLElement>(`[data-log-x="${en.id}"]`)?.focus()
+      },
+    })
+  }
+
   function startEdit(en: JournalLogEntryResponseDto) {
     committedRef.current = false
     setEditingId(en.id)
@@ -122,7 +148,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   }
 
   return (
-    <section className="card log" ref={sectionRef}>
+    <section className="card log" ref={sectionRef} data-entry-id={entryId}>
       <div className="card-hdr">
         <h2 className="card-title">Daily Log</h2>
         <div className="card-meta">
@@ -182,7 +208,8 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
             </div>
             <button
               className="todo-x"
-              onClick={() => deleteLog.mutate(en.id)}
+              data-log-x={en.id}
+              onClick={() => removeEntry(en)}
               aria-label="Delete entry"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">

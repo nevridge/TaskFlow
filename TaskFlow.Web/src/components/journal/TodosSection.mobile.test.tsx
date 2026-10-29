@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
+import { screen, within, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { TaskItemResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -7,21 +8,29 @@ import { __resetCoarsePointerCache } from '@/lib/pointer'
 const createTodoMutate = vi.fn()
 const toggleTodoMutate = vi.fn()
 const editTodoMutate = vi.fn()
-const removeTodoMutate = vi.fn()
 const blockTodoMutate = vi.fn()
 const unblockTodoMutate = vi.fn()
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalTodos: vi.fn(() => ({ data: { data: [] }, isLoading: false })),
   useCreateTodoMutation: vi.fn(() => ({ mutate: createTodoMutate, isPending: false })),
   useToggleTodoMutation: vi.fn(() => ({ mutate: toggleTodoMutate, isPending: false })),
   useEditTodoMutation: vi.fn(() => ({ mutate: editTodoMutate, isPending: false })),
-  useRemoveTodoMutation: vi.fn(() => ({ mutate: removeTodoMutate, isPending: false })),
   useBlockTodoMutation: vi.fn(() => ({ mutate: blockTodoMutate, isPending: false })),
   useUnblockTodoMutation: vi.fn(() => ({ mutate: unblockTodoMutate, isPending: false })),
   useEditBlockedReasonTodoMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   openTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status !== 'Completed').length),
   blockedTodoCount: vi.fn((todos: TaskItemResponseDto[]) => todos.filter(t => t.status === 'Blocked').length),
+}))
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  removeJournalTodo: vi.fn(() => Promise.resolve({})),
 }))
 
 vi.mock('@/components/TaskHistoryPanel', () => ({
@@ -34,6 +43,7 @@ vi.mock('@/lib/journal-utils', async importOriginal => {
 })
 
 import { useJournalTodos } from '@/hooks/useJournal'
+import { removeJournalTodo } from '@/api/journal'
 import { TodosSection } from './TodosSection'
 
 function row(overrides: Partial<TaskItemResponseDto>): TaskItemResponseDto {
@@ -211,14 +221,16 @@ describe('TodosSection title tap-to-edit', () => {
     expect(createTodoMutate).toHaveBeenCalledWith('Buy milk', expect.any(Object))
   })
 
-  it('delete is immediate with no confirm dialog', async () => {
+  it('delete hides the row with no confirm dialog and commits after the undo window', async () => {
     const confirm = vi.spyOn(window, 'confirm')
     renderSection()
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
-    expect(removeTodoMutate).toHaveBeenCalledWith(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Remove from day: Write tests' }))
+    expect(screen.queryByText('Write tests')).not.toBeInTheDocument()
+    expect(removeJournalTodo).not.toHaveBeenCalled()
+    await waitFor(() => expect(removeJournalTodo).toHaveBeenCalledWith(10, 1), { timeout: 7000 })
     expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
-  })
+  }, 10000)
 
   it('groups badges and row actions in a .todo-subline after the title', () => {
     renderSection()
@@ -228,7 +240,7 @@ describe('TodosSection title tap-to-edit', () => {
     expect(within(actions as HTMLElement).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual([
       'History',
       'Block',
-      'Delete',
+      'Remove from day: Write tests',
     ])
   })
 
@@ -240,7 +252,7 @@ describe('TodosSection title tap-to-edit', () => {
     expect(actions.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Block' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove from day: Write tests' })).toBeInTheDocument()
   })
 
   it('renders the Blocked pill and reason of a Blocked subtask inside its own li.todo-child', () => {
@@ -279,10 +291,10 @@ describe('TodosSection blocked unblock badge and touch block editor', () => {
     load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
     renderSection()
     const actions = document.querySelector('.todo-subline-actions') as HTMLElement
-    expect(within(actions).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['History', 'Delete'])
+    expect(within(actions).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['History', 'Remove from day: Waiting'])
   })
 
-  it('Tab order on a Blocked row follows the DOM: History, Delete, then the Unblock task badge', async () => {
+  it('Tab order on a Blocked row follows the DOM: History, Remove from day, then the Unblock task badge', async () => {
     load([row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
     renderSection()
     const user = userEvent.setup()
@@ -291,9 +303,9 @@ describe('TodosSection blocked unblock badge and touch block editor', () => {
       await user.tab()
       const el = document.activeElement as HTMLElement
       const name = el.getAttribute('aria-label')
-      if (name === 'History' || name === 'Delete' || name === 'Unblock task') focusOrder.push(name)
+      if (name === 'History' || name?.startsWith('Remove from day') || name === 'Unblock task') focusOrder.push(name)
     }
-    expect(focusOrder).toEqual(['History', 'Delete', 'Unblock task'])
+    expect(focusOrder).toEqual(['History', 'Remove from day: Waiting', 'Unblock task'])
     expect(screen.getByRole('button', { name: 'Unblock task' })).toHaveFocus()
   })
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent, act } from '@testing-library/react'
+import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { JournalLogEntryResponseDto, JournalNoteResponseDto } from '@/api/journal'
 import { useJournalKeyboardShortcuts } from '@/hooks/useJournalKeyboardShortcuts'
@@ -7,15 +8,23 @@ import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 const updateNoteMutate = vi.fn()
 const updateLogMutate = vi.fn()
-const deleteLogMutate = vi.fn()
+
+vi.mock('@/api/journal', async importOriginal => ({
+  ...(await importOriginal<typeof import('@/api/journal')>()),
+  deleteLogEntry: vi.fn(() => Promise.resolve({})),
+}))
 
 vi.mock('@/hooks/useJournal', () => ({
+  journalKeys: {
+    all: ['journal'],
+    todos: (id: number) => ['journal', id, 'todos'],
+    notes: (id: number) => ['journal', id, 'notes'],
+  },
   useJournalNotes: vi.fn(() => ({ data: [], isLoading: false })),
   useCreateJournalNoteMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUpdateJournalNoteMutation: vi.fn(() => ({ mutate: updateNoteMutate, isPending: false })),
   useDeleteJournalNoteMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useAddLogEntryMutation: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useDeleteLogEntryMutation: vi.fn(() => ({ mutate: deleteLogMutate, isPending: false })),
   useUpdateLogEntryMutation: vi.fn(() => ({ mutate: updateLogMutate, isPending: false })),
 }))
 
@@ -24,6 +33,7 @@ vi.mock('./TaskTypeahead', () => ({
 }))
 
 import { useJournalNotes } from '@/hooks/useJournal'
+import { deleteLogEntry } from '@/api/journal'
 import { NotesSection } from './NotesSection'
 import { DailyLogSection } from './DailyLogSection'
 
@@ -82,6 +92,7 @@ describe('journal notes and log acceptance', () => {
     setTouch(true)
   })
   afterEach(() => {
+    vi.useRealTimers()
     Reflect.deleteProperty(window, 'matchMedia')
     __resetCoarsePointerCache()
     document.body.innerHTML = ''
@@ -124,6 +135,7 @@ describe('journal notes and log acceptance', () => {
 
   describe('log edit then delete', () => {
     it('commits the edit once through blur and then deletes the row', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true })
       render(<DailyLogSection entryId={10} logEntries={[logEntry]} />)
       await userEvent.click(screen.getByRole('button', { name: 'Fixed the bug' }))
       const edit = screen.getByRole('textbox', { name: 'Edit log entry' })
@@ -132,8 +144,10 @@ describe('journal notes and log acceptance', () => {
       await userEvent.click(screen.getByRole('button', { name: /delete entry/i }))
       expect(updateLogMutate).toHaveBeenCalledTimes(1)
       expect(updateLogMutate).toHaveBeenCalledWith({ id: 1, content: 'Fixed the bug!', taskItemId: 7 })
-      expect(deleteLogMutate).toHaveBeenCalledTimes(1)
-      expect(deleteLogMutate).toHaveBeenCalledWith(1)
+      expect(deleteLogEntry).not.toHaveBeenCalled()
+      await act(async () => { vi.advanceTimersByTime(6000) })
+      expect(deleteLogEntry).toHaveBeenCalledTimes(1)
+      expect(deleteLogEntry).toHaveBeenCalledWith(10, 1)
     })
   })
 

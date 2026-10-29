@@ -51,6 +51,10 @@ export type TaskItemResponseDto = Omit<
 }
 
 const J = { 'Content-Type': 'application/json' }
+// The client only rejects on HTTP errors when throwOnError is truthy at runtime;
+// the `true` generic is type-only. Deferred-delete commits (undo toast) rely on
+// rejection to restore the item and show the error toast.
+const THROW = { throwOnError: true } as const
 
 export const getJournalEntries = () =>
   client.get<{ 200: JournalEntryResponseDto[] }, unknown, true>(
@@ -84,7 +88,7 @@ export const addJournalTodo = (entryId: number, taskItemId: number) =>
 
 export const removeJournalTodo = (entryId: number, taskItemId: number) =>
   client.delete<{ 204: unknown }, unknown, true>(
-    { url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}', path: { entryId, taskItemId } },
+    { url: '/api/v1/JournalEntries/{entryId}/todos/{taskItemId}', path: { entryId, taskItemId }, ...THROW },
   )
 
 export const createLogEntry = (entryId: number, content: string, taskItemId?: number | null) =>
@@ -99,7 +103,7 @@ export const updateLogEntry = (entryId: number, logId: number, content: string, 
 
 export const deleteLogEntry = (entryId: number, logId: number) =>
   client.delete<{ 204: unknown }, unknown, true>(
-    { url: '/api/v1/JournalEntries/{entryId}/logs/{id}', path: { entryId, id: logId } },
+    { url: '/api/v1/JournalEntries/{entryId}/logs/{id}', path: { entryId, id: logId }, ...THROW },
   )
 
 export type JournalNoteResponseDto = {
@@ -127,5 +131,5 @@ export const updateJournalNote = (entryId: number, id: number, content: string) 
 
 export const deleteJournalNote = (entryId: number, id: number) =>
   client.delete<{ 204: unknown }, unknown, true>(
-    { url: '/api/v1/JournalEntries/{entryId}/notes/{id}', path: { entryId, id } },
+    { url: '/api/v1/JournalEntries/{entryId}/notes/{id}', path: { entryId, id }, ...THROW },
   )

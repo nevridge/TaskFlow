@@ -1,15 +1,18 @@
-import { useState, useRef, useEffect, useLayoutEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import type { RefObject } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { deleteJournalNote } from '@/api/journal'
 import type { JournalNoteResponseDto } from '@/api/journal'
 import {
   useJournalNotes,
   useCreateJournalNoteMutation,
   useUpdateJournalNoteMutation,
-  useDeleteJournalNoteMutation,
+  journalKeys,
 } from '@/hooks/useJournal'
 import { useTapToEditBlock } from '@/hooks/useTapToEditBlock'
 import { isCoarsePointer } from '@/lib/pointer'
 import { formatTime } from '@/lib/journal-utils'
+import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { NoteContent } from './NoteContent'
 
 interface Props {
@@ -74,10 +77,13 @@ function NoteActions({ saveDisabled, onCancel, onSave }: NoteActionsProps) {
 }
 
 export const NotesSection = forwardRef<NotesSectionHandle, Props>(function NotesSection({ entryId }, ref) {
-  const { data: notes = [] } = useJournalNotes(entryId)
+  const { data: allNotes = [] } = useJournalNotes(entryId)
+  const queryClient = useQueryClient()
+  const { requestDelete, isHidden } = useUndoableDelete()
+  // Notes waiting out the undo window stay in the cache but are not shown.
+  const notes = useMemo(() => allNotes.filter(n => !isHidden(`note:${n.id}`)), [allNotes, isHidden])
   const createNote = useCreateJournalNoteMutation(entryId)
   const updateNote = useUpdateJournalNoteMutation(entryId)
-  const deleteNote = useDeleteJournalNoteMutation(entryId)
 
   // Decided once per mount because it changes the rendered DOM (buttons, placeholder, Enter). The edit trigger
   // decides per event instead, so a hybrid device can differ between the two. That is accepted, not a bug.
@@ -138,6 +144,26 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
     inputRef.current?.blur()
   }
 
+  function removeNote(note: JournalNoteResponseDto) {
+    const next = notes[notes.findIndex(n => n.id === note.id) + 1]
+    const nextButton = next
+      ? sectionRef.current?.querySelector<HTMLElement>(`[data-note-x="${next.id}"]`)
+      : null
+    ;(nextButton ?? inputRef.current)?.focus()
+    const section = sectionRef.current
+    requestDelete({
+      key: `note:${note.id}`,
+      message: 'Note deleted',
+      errorMessage: "Couldn't delete. Restored.",
+      commit: () => deleteJournalNote(entryId, note.id),
+      invalidate: () => queryClient.invalidateQueries({ queryKey: journalKeys.notes(entryId) }),
+      restoreFocus: () => {
+        if (section?.dataset.entryId !== String(entryId)) return
+        section.querySelector<HTMLElement>(`[data-note-x="${note.id}"]`)?.focus()
+      },
+    })
+  }
+
   function startEdit(note: JournalNoteResponseDto) {
     committedRef.current = false
     setEditingId(note.id)
@@ -165,7 +191,7 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   const showDraftActions = touch && (draft.trim() !== '' || draftFocused)
 
   return (
-    <section className="card notes-section" ref={sectionRef}>
+    <section className="card notes-section" ref={sectionRef} data-entry-id={entryId}>
       <ol className="log-list">
         {notes.length === 0 && (
           <li className="j-empty">No notes yet — capture anything below.</li>
@@ -212,7 +238,8 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
             )}
             <button
               className="todo-x"
-              onClick={() => deleteNote.mutate(note.id)}
+              data-note-x={note.id}
+              onClick={() => removeNote(note)}
               aria-label="Delete note"
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">

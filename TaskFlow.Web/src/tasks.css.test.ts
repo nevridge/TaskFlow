@@ -261,6 +261,8 @@ describe('Projects pages on mobile (#320)', () => {
   it('makes the row name and back link real 44px boxes and wraps task meta', () => {
     expect(projTouch).toMatch(/\.projects-page \.p-row-name \{[^}]*display: inline-flex[^}]*min-height: 44px/)
     expect(projTouch).toMatch(/\.projects-page \.p-back \{[^}]*display: inline-flex[^}]*min-height: 44px/)
+    expect(projTouch).toMatch(/\.projects-page \.p-row-name \{[^}]*max-width: 100%[^}]*min-width: 0/)
+    expect(projWidth).toMatch(/\.projects-page \.p-toolbar > \.p-toggle:only-child \{ flex: 1 1 100%; \}/)
     expect(projWidth).toMatch(/\.projects-page \.p-task-meta \{[^}]*overflow-wrap: anywhere/)
   })
 

@@ -587,6 +587,13 @@ describe('TaskDetailPage on mobile (#320)', () => {
     expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
   })
 
+  it('shows a very long unbroken blocked reason as visible text in the meta', () => {
+    const reason = 'https://example.com/' + 'a'.repeat(200)
+    mockTask({ projectId: 1, projectName: 'Alpha', status: 'Blocked', blockedReason: reason })
+    renderPage()
+    expect(screen.getByText(reason)).toBeVisible()
+  })
+
   it('renders no project-name span for "No project"', () => {
     mockTask({ projectId: null, projectName: null })
     const { container } = renderPage()

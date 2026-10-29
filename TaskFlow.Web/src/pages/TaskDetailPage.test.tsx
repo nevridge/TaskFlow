@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
@@ -611,6 +611,24 @@ describe('TaskDetailPage on mobile (#320)', () => {
     expect(projectName(container)).toHaveTextContent('Alpha')
     await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
     expect(projectName(container)).toHaveTextContent('Beta')
+  })
+
+  it('keeps the visible project name on the new project after the quick change succeeds', async () => {
+    const { container } = renderPage()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    const options = changeMutate.mock.calls[0][1] as { onSuccess?: () => void }
+    act(() => options.onSuccess?.())
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Beta')
+    expect(projectName(container)).toHaveTextContent('Beta')
+  })
+
+  it('reverts the visible project name with the select to the server value when the quick change fails', async () => {
+    const { container } = renderPage()
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: /project/i }), 'Beta')
+    const options = changeMutate.mock.calls[0][1] as { onError: (err: unknown) => void }
+    act(() => options.onError(new Error('boom')))
+    expect(screen.getByRole('combobox', { name: /project/i })).toHaveDisplayValue('Alpha')
+    expect(projectName(container)).toHaveTextContent('Alpha')
   })
 
   it('replaces the panel inline with the TaskForm when Edit is clicked on touch', async () => {

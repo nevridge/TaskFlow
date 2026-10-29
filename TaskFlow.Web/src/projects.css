@@ -307,6 +307,7 @@
 @media (hover: none), (pointer: coarse) {
   .projects-page .p-btn { min-height: 44px; }
   .projects-page .p-row-actions { gap: 8px; }
+  /* The Archived/status badge wraps below a long name by design, keeping its small left margin. */
   .projects-page .p-row-name { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; min-width: 0; }
   .projects-page .p-toggle { min-height: 44px; }
   .projects-page .p-toggle input[type="checkbox"] { width: 20px; height: 20px; }

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { TOUCH, allSelectors, body, media, sectionBetween, sectionFrom, stripMedia } from '@/test/cssContract'
+import { TOUCH, allSelectors, blockEnd, body, media, sectionBetween, sectionFrom, stripMedia } from '@/test/cssContract'
 
 const path = (name: string) => fileURLToPath(new URL(name, import.meta.url))
 const css = readFileSync(path('./tasks.css'), 'utf-8')
@@ -91,6 +91,19 @@ describe('MOBILE (#320) scoping contract', () => {
     expect(css.indexOf(MARKER_320)).toBeGreaterThan(css.indexOf(MARKER))
     expect(css.split(MARKER_320)).toHaveLength(2)
     expect(projectsCss.split(MARKER_320)).toHaveLength(2)
+  })
+
+  it('ends each file with the #320 touch block: one width block, one touch block, nothing after it', () => {
+    const noComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const [name, source] of [['tasks.css', section320], ['projects.css', projSection]]) {
+      expect(source.match(/@media/g), `${name}: one width block and one touch block`).toHaveLength(2)
+      const touchOpen = source.indexOf(`@media ${TOUCH} {`)
+      expect(touchOpen, `${name}: touch block comes after the width block`).toBeGreaterThan(source.indexOf(`@media ${WIDTH} {`))
+      const afterTouch = source.slice(blockEnd(source, source.indexOf('{', touchOpen) + 1))
+      expect(afterTouch.trim(), `${name}: nothing follows the touch block`).toBe('')
+    }
+    // projects.css holds no base rules in its #320 section: only comments plus the two blocks.
+    expect(noComments(stripMedia(projSection)).trim()).toBe('')
   })
 
   it('roots every tasks.css selector in the #320 section at .tasks-page', () => {
@@ -264,6 +277,13 @@ describe('Projects pages on mobile (#320)', () => {
     expect(projTouch).toMatch(/\.projects-page \.p-row-name \{[^}]*max-width: 100%[^}]*min-width: 0/)
     expect(projWidth).toMatch(/\.projects-page \.p-toolbar > \.p-toggle:only-child \{ flex: 1 1 100%; \}/)
     expect(projWidth).toMatch(/\.projects-page \.p-task-meta \{[^}]*overflow-wrap: anywhere/)
+  })
+
+  it('gives ProjectDetailPage task rows the shared 44px name and wraps badges below the name', () => {
+    // ProjectDetailPage renders each task as .p-row > .p-row-main > a.p-row-name + .p-badge, so the shared rules apply.
+    expect(projTouch).toMatch(/\.projects-page \.p-row-name \{[^}]*min-height: 44px/)
+    expect(projWidth).toMatch(/\.projects-page \.p-row-main \{ flex: 1 1 100%; \}/)
+    expect(projWidth).toMatch(/\.projects-page \.p-badge \{ white-space: nowrap; \}/)
   })
 
   it('keeps the mobile section after the base rules it overrides', () => {

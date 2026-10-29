@@ -162,18 +162,50 @@ export function TasksPage() {
   // because rows remount when a task changes priority group; if the row is gone, skip silently.
   const panelKind = editingSnapshot ? `edit:${Number(editingSnapshot.id)}` : showCreate ? 'new' : null
   const prevPanelKindRef = useRef<string | null>(null)
-  useEffect(() => {
-    const prev = prevPanelKindRef.current
-    prevPanelKindRef.current = panelKind
-    if (panelKind !== null || prev === null) return
-    if (prev === 'new') newTaskBtnRef.current?.focus()
-    else document.querySelector<HTMLElement>(`[data-task-edit-id="${prev.slice(5)}"]`)?.focus()
-  }, [panelKind])
-
+  // Edit button id still waiting for focus: a save that changes priority closes the panel first and the
+  // refetch then remounts the row, discarding the button focused at close time. Re-applied after list changes.
+  const pendingFocusIdRef = useRef<string | null>(null)
   const tasks: TaskListModel[] = useMemo(
     () => (data?.data as TaskListModel[] | undefined) ?? [],
     [data],
   )
+  useEffect(() => {
+    const prev = prevPanelKindRef.current
+    prevPanelKindRef.current = panelKind
+    if (panelKind !== null) {
+      pendingFocusIdRef.current = null
+      return
+    }
+    if (prev === null) return
+    if (prev === 'new') newTaskBtnRef.current?.focus()
+    else {
+      const id = prev.slice(5)
+      pendingFocusIdRef.current = id
+      document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
+    }
+  }, [panelKind])
+
+  useEffect(() => {
+    const id = pendingFocusIdRef.current
+    if (id === null) return
+    const active = document.activeElement
+    if (active && active !== document.body && active.isConnected) {
+      // Focus is intact (or the user moved it elsewhere): nothing to restore.
+      return
+    }
+    document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
+  }, [tasks])
+
+  // Any user interaction ends the pending restore so a later refetch never steals focus.
+  useEffect(() => {
+    const clear = () => { pendingFocusIdRef.current = null }
+    window.addEventListener('pointerdown', clear)
+    window.addEventListener('keydown', clear)
+    return () => {
+      window.removeEventListener('pointerdown', clear)
+      window.removeEventListener('keydown', clear)
+    }
+  }, [])
 
   const editingTask: TaskListModel | null = editingSnapshot
     ? (tasks.find(t => Number(t.id) === Number(editingSnapshot.id)) ?? editingSnapshot)

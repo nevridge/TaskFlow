@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { useSyncExternalStore } from 'react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -367,6 +368,55 @@ describe('TasksPage on mobile (#317)', () => {
       await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument())
       expect(editButton(2)).not.toBe(before)
       expect(editButton(2)).toHaveFocus()
+    })
+
+    it('restores focus to the new Edit button when the refetch remounts the row after the panel closed', async () => {
+      const listeners = new Set<() => void>()
+      vi.mocked(useTasksQuery).mockImplementation((() => {
+        useSyncExternalStore(
+          cb => { listeners.add(cb); return () => { listeners.delete(cb) } },
+          () => queryResult,
+        )
+        return queryResult
+      }) as never)
+      renderPage()
+      const before = editButton(2)
+      await userEvent.click(before)
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument())
+      expect(editButton(2)).toHaveFocus()
+
+      // The refetch lands after the panel closed and moves the task to another group.
+      act(() => {
+        setTasks(tasks.map(t => (t.id === 2 ? { ...t, priority: 'Low' } : t)))
+        listeners.forEach(l => l())
+      })
+      const after = editButton(2)
+      expect(after).not.toBe(before)
+      expect(document.activeElement).toBe(after)
+      expect(after).toHaveAttribute('data-task-edit-id', '2')
+    })
+
+    it('does not steal focus on a later refetch once the user moved focus', async () => {
+      const listeners = new Set<() => void>()
+      vi.mocked(useTasksQuery).mockImplementation((() => {
+        useSyncExternalStore(
+          cb => { listeners.add(cb); return () => { listeners.delete(cb) } },
+          () => queryResult,
+        )
+        return queryResult
+      }) as never)
+      renderPage()
+      await userEvent.click(editButton(2))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(editButton(2)).toHaveFocus())
+      await userEvent.click(document.body)
+      expect(document.activeElement).toBe(document.body)
+      act(() => {
+        setTasks(tasks.map(t => (t.id === 2 ? { ...t, priority: 'Low' } : t)))
+        listeners.forEach(l => l())
+      })
+      expect(document.activeElement).toBe(document.body)
     })
 
     it('keeps the panel open and does not steal focus when the save fails', async () => {

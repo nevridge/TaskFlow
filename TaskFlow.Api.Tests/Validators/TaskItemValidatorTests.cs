@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Validators;
 

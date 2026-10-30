@@ -14,6 +14,9 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     public async Task<TaskItem?> GetByIdAsync(int id) =>
         await _context.TaskItems.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
 
+    public async Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId) =>
+        await _context.TaskItems.Where(t => t.ParentTaskItemId == parentId).ToListAsync();
+
     public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
         await _context.TaskItems
             .Where(t => t.Id == taskId)

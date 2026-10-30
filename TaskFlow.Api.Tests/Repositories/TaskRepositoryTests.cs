@@ -554,4 +554,59 @@ public class TaskRepositoryTests
         Assert.Single(remainingTasks);
         Assert.Equal(2, remainingTasks.First().Id);
     }
+
+    [Fact]
+    public async Task GetChildrenAsync_ShouldReturnOnlyDirectChildren()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddRangeAsync(
+            new TaskItem { Id = 1, Title = "Parent", Status = Status.Todo },
+            new TaskItem { Id = 2, Title = "Open child", Status = Status.Todo, ParentTaskItemId = 1 },
+            new TaskItem { Id = 3, Title = "Done child", Status = Status.Completed, ParentTaskItemId = 1 },
+            new TaskItem { Id = 4, Title = "Other parent", Status = Status.Todo },
+            new TaskItem { Id = 5, Title = "Other child", Status = Status.Todo, ParentTaskItemId = 4 },
+            new TaskItem { Id = 6, Title = "Unrelated", Status = Status.Todo });
+        await context.SaveChangesAsync();
+
+        // Act
+        var children = (await repository.GetChildrenAsync(1)).ToList();
+
+        // Assert
+        Assert.Equal([2, 3], children.Select(c => c.Id).Order());
+    }
+
+    [Fact]
+    public async Task GetChildrenAsync_ShouldReturnEmpty_WhenTaskHasNoChildren()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddRangeAsync(
+            new TaskItem { Id = 1, Title = "Childless", Status = Status.Todo },
+            new TaskItem { Id = 2, Title = "Other parent", Status = Status.Todo },
+            new TaskItem { Id = 3, Title = "Other child", Status = Status.Todo, ParentTaskItemId = 2 });
+        await context.SaveChangesAsync();
+
+        // Act
+        var children = await repository.GetChildrenAsync(1);
+
+        // Assert
+        Assert.Empty(children);
+    }
+
+    [Fact]
+    public async Task GetChildrenAsync_ShouldReturnEmpty_WhenParentDoesNotExist()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        // Act
+        var children = await repository.GetChildrenAsync(999);
+
+        // Assert
+        Assert.Empty(children);
+    }
 }

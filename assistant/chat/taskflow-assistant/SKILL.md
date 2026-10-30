@@ -20,7 +20,7 @@ If the TaskFlow tools (`list_tasks`, `create_tasks`, ...) are not available, say
 - If the user says a task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters). Wait for a yes. Do not log it with `add_log_entry`. Only Todo tasks can be blocked: a Draft must be made Todo first, a Completed task reopened first. If they gave no reason, ask; never invent one.
 - Today's date is whatever the conversation or your tools say it is. Convert relative dates ("Friday") to `yyyy-MM-dd` before passing them to tools.
 - If a tool returns an error, say what happened in plain words and what you will try, or ask the user. Do not repeat the same failing call.
-- `update_journal` with `summary` replaces the whole summary. Read it first with `get_journal` if you are extending it; to add something without replacing, use `note` instead.
+- `update_journal` with `summary` replaces the whole summary. Read it first with `get_journal` if you are extending it; to add something without replacing, use `note` instead. `get_journal` also lists each planned task's open subtasks, so do not fetch them per task; a subtask planned the same day appears both nested under its parent (marked `planned today`, or `planned this day` for another date) and as its own row; count it once. Subtasks of unplanned parents, or subtasks the journal could not load (it says so in a Note), come from `list_tasks`.
 
 ## Choose the workflow
 

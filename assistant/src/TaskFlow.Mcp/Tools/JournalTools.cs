@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using TaskFlow.Mcp.Api;
@@ -13,7 +14,9 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "get_journal")]
     [Description(
         "Shows the daily journal for a date: summary, the tasks planned for that day, log entries and notes. Defaults to today. "
-        + "Creates the day's journal entry if it does not exist yet (the journal always has one entry per day), so calling it for today is safe. Use it to start planning a day.")]
+        + "Creates the day's journal entry if it does not exist yet (the journal always has one entry per day), so calling it for today is safe. Use it to start planning a day. "
+        + "Each planned task lists its open subtasks (id, title, status) beneath it; completed subtasks are hidden. "
+        + "Subtasks are listed only under planned parents; use list_tasks to find subtasks of tasks that are not planned.")]
     public Task<string> GetJournal(
         [Description("yyyy-MM-dd, today, tomorrow or yesterday. Default today.")] string? date = null,
         [Description("concise (default) or detailed (adds descriptions and journal info to planned tasks).")] string responseFormat = "concise",
@@ -26,18 +29,59 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 
             var todosTask = api.GetJournalTodosAsync(entry.Id, ct);
             var notesTask = api.GetJournalNotesAsync(entry.Id, ct);
-            await Task.WhenAll(todosTask, notesTask);
+            var allTasksTask = LoadAllTasksAsync(ct);
+            await Task.WhenAll(todosTask, notesTask, allTasksTask);
 
             var detailed = Formatting.IsDetailed(responseFormat);
             var sb = new StringBuilder();
             sb.AppendLine($"Journal {day:yyyy-MM-dd} (entry #{entry.Id}){(day == today ? " - today" : string.Empty)}");
             sb.AppendLine(string.IsNullOrWhiteSpace(entry.Summary) ? "Summary: (none)" : "Summary: " + entry.Summary.Trim());
 
-            var todos = Formatting.OrderByUrgency(todosTask.Result).ToList();
+            var todos = Formatting.OrderByUrgency(await todosTask).ToList();
             sb.AppendLine(todos.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({todos.Count}):");
-            foreach (var task in todos)
+            if (todos.Count > 0)
             {
-                sb.AppendLine("  " + Formatting.Task(task, today, detailed, time.GetUtcNow()));
+                var nowUtc = time.GetUtcNow();
+                var plannedIds = todos.Select(t => t.Id).ToHashSet();
+                var (allTasks, failure) = await allTasksTask;
+                var subtasks = allTasks is null ? null : Formatting.OpenSubtasksByParent(allTasks);
+                var marker = day == today ? " | planned today" : " | planned this day";
+                foreach (var task in todos)
+                {
+                    sb.AppendLine("  " + Formatting.Task(task, today, detailed, nowUtc, showChildCount: subtasks is null));
+                    if (subtasks is null)
+                    {
+                        continue;
+                    }
+
+                    var open = Formatting.OrderByUrgency(subtasks[task.Id]).ToList();
+                    if (open.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    sb.AppendLine($"    Open subtasks ({open.Count}):");
+                    foreach (var sub in open)
+                    {
+                        sb.Append($"      - #{sub.Id} [{sub.Status}] {sub.Title}");
+                        if (detailed && sub.IsBlocked)
+                        {
+                            sb.Append(" | ").Append(Formatting.BlockedLabel(sub, nowUtc));
+                        }
+
+                        if (plannedIds.Contains(sub.Id))
+                        {
+                            sb.Append(marker);
+                        }
+
+                        sb.AppendLine();
+                    }
+                }
+
+                if (failure is not null)
+                {
+                    sb.AppendLine($"Note: open subtasks could not be loaded ({failure}); call list_tasks to see them.");
+                }
             }
 
             var logs = entry.LogEntries.OrderBy(l => l.CreatedAt).ToList();
@@ -189,6 +233,22 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 
             return $"Journal {day:yyyy-MM-dd}: {string.Join(", ", done)}.";
         });
+
+    // Subtask enrichment is optional: API failures degrade the journal instead of failing it.
+    // A timeout (TaskCanceledException without caller cancellation) and an unreadable body (JsonException) degrade too.
+    // Caller cancellation and McpException are deliberately not caught.
+    private async Task<(List<TaskItemDto>? Tasks, string? Failure)> LoadAllTasksAsync(CancellationToken ct)
+    {
+        try
+        {
+            return (await api.GetTasksAsync(ct), null);
+        }
+        catch (Exception ex) when (ex is TaskFlowApiException or HttpRequestException or JsonException
+            || ex is TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return (null, Formatting.CleanReason(ex.Message));
+        }
+    }
 
     private string LocalTime(DateTime utc) =>
         TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), time.LocalTimeZone).ToString("HH:mm");

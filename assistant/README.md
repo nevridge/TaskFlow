@@ -33,7 +33,7 @@ It bundles:
 
 | Command | What it does |
 |---|---|
-| `/taskflow-assistant:plan-my-day [date or project]` | Reviews the journal, overdue/due-soon/stale tasks, proposes a focus list, plans what you confirm |
+| `/taskflow-assistant:plan-my-day [date or project]` | Reviews the journal (with open subtasks), overdue/due-soon/stale tasks, proposes a focus list, plans what you confirm |
 | `/taskflow-assistant:capture-tasks [notes]` | Turns notes into tasks (project, priority, due date), creates them after you confirm |
 | `/taskflow-assistant:weekly-review [from] [to]` | Summarizes the week and drafts a status update |
 | `/taskflow-assistant:journal-log [what happened]` | Logs progress to the journal, linked to the right task |
@@ -69,7 +69,7 @@ Fourteen tools, deliberately consolidated around workflows rather than one per e
 |---|---|
 | Projects | `list_projects`, `save_project` (create / rename / archive), `project_status` |
 | Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, blocked, completed, all; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported), `update_task` (merge, complete/reopen, project move, block/unblock with `blockedReason`), `delete_task`, `add_task_note` |
-| Journal | `get_journal` (creates the day's entry if missing), `set_journal_todos`, `add_log_entry`, `update_journal` |
+| Journal | `get_journal` (creates the day's entry if missing; lists open subtasks under planned tasks; others via `list_tasks`), `set_journal_todos`, `add_log_entry`, `update_journal` |
 | Review | `weekly_review` (read-only) |
 
 Behaviors worth knowing:

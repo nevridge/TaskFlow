@@ -16,6 +16,8 @@ internal sealed class StubHandler : HttpMessageHandler
 {
     private readonly Dictionary<(HttpMethod, string), Queue<Func<HttpResponseMessage>>> _routes = [];
 
+    private readonly object _gate = new();
+
     public List<RecordedRequest> Requests { get; } = [];
 
     public Exception? Throw { get; set; }
@@ -29,6 +31,18 @@ internal sealed class StubHandler : HttpMessageHandler
         }
 
         queue.Enqueue(() => Respond(status, body));
+        return this;
+    }
+
+    public StubHandler Fail(HttpMethod method, string path, Exception exception)
+    {
+        var key = (method, path);
+        if (!_routes.TryGetValue(key, out var queue))
+        {
+            _routes[key] = queue = new Queue<Func<HttpResponseMessage>>();
+        }
+
+        queue.Enqueue(() => throw exception);
         return this;
     }
 
@@ -55,15 +69,18 @@ internal sealed class StubHandler : HttpMessageHandler
 
         var path = request.RequestUri!.AbsolutePath["/api/v1/".Length..];
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add(new RecordedRequest(request.Method, path, body));
 
-        if (_routes.TryGetValue((request.Method, path), out var queue))
+        Func<HttpResponseMessage>? next = null;
+        lock (_gate)
         {
-            var next = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
-            return next();
+            Requests.Add(new RecordedRequest(request.Method, path, body));
+            if (_routes.TryGetValue((request.Method, path), out var queue))
+            {
+                next = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
+            }
         }
 
-        return new HttpResponseMessage(HttpStatusCode.NotFound);
+        return next is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : next();
     }
 
     private static HttpResponseMessage Respond(HttpStatusCode status, object? body)
@@ -117,7 +134,8 @@ internal static class Fixtures
         string? description = null,
         string? blockedReason = null,
         string? blockedAt = null,
-        string? previousStatus = null) => new
+        string? previousStatus = null,
+        int childTaskCount = 0) => new
         {
             id,
             title,
@@ -130,7 +148,7 @@ internal static class Fixtures
             projectId,
             projectName,
             currentJournalEntryId = (int?)null,
-            childTaskCount = 0,
+            childTaskCount,
             currentJournalDate = plannedOn,
             moveCount,
             daysTagged,

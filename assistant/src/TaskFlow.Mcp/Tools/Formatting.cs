@@ -12,7 +12,7 @@ internal static class Formatting
     public static bool IsDetailed(string? responseFormat) =>
         string.Equals(responseFormat, "detailed", StringComparison.OrdinalIgnoreCase);
 
-    public static string Task(TaskItemDto t, DateOnly today, bool detailed = false, DateTimeOffset? nowUtc = null)
+    public static string Task(TaskItemDto t, DateOnly today, bool detailed = false, DateTimeOffset? nowUtc = null, bool showChildCount = true)
     {
         var sb = new StringBuilder();
         sb.Append('#').Append(t.Id).Append(" [").Append(t.Priority).Append('/').Append(t.Status).Append("] ").Append(t.Title);
@@ -63,7 +63,7 @@ internal static class Formatting
                 sb.Append(" | blocked since ").Append(since.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)).Append(" UTC");
             }
 
-            if (t.ChildTaskCount > 0)
+            if (showChildCount && t.ChildTaskCount > 0)
             {
                 sb.Append(" | ").Append(t.ChildTaskCount).Append(" subtask(s)");
             }
@@ -148,6 +148,11 @@ internal static class Formatting
         tasks.OrderBy(t => PriorityRank(t.Priority))
             .ThenBy(t => t.DueOn ?? DateOnly.MaxValue)
             .ThenBy(t => t.Id);
+
+    /// <summary>Open (not done) subtasks grouped by parent id. Group order follows the source; order each group at render time.</summary>
+    public static ILookup<int, TaskItemDto> OpenSubtasksByParent(IEnumerable<TaskItemDto> tasks) =>
+        tasks.Where(t => !t.IsDone && t.ParentTaskItemId != null)
+            .ToLookup(t => t.ParentTaskItemId!.Value);
 
     public static IOrderedEnumerable<TaskItemDto> OrderByDue(IEnumerable<TaskItemDto> tasks) =>
         tasks.OrderBy(t => t.DueOn ?? DateOnly.MaxValue)

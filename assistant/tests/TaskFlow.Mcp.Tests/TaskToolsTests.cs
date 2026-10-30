@@ -957,6 +957,29 @@ public class CreateTasksTests
     }
 
     [Fact]
+    public async Task AllItemsBlockedOrUntitled_MakeNoRequestAtAll()
+    {
+        var handler = new StubHandler().Get("TaskItems", Array.Empty<object>());
+
+        var act = () => Tools(handler).CreateTasks([new NewTask { Title = "A", Status = "blocked" }, new NewTask { Title = " " }]);
+
+        await act.Should().ThrowAsync<McpException>();
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OneValidItemAmongInvalid_ReadsExistingTasksExactlyOnce()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Fixtures.Task(20, "B"), HttpStatusCode.Created);
+
+        await Tools(handler).CreateTasks([new NewTask { Title = "A", Status = "blocked" }, new NewTask { Title = "B" }, new NewTask { Title = "C", Status = "blocked" }]);
+
+        handler.Sent(HttpMethod.Get, "TaskItems").Should().HaveCount(1);
+    }
+
+    [Fact]
     public async Task EmptyAndOversizedBatches_AreRejected()
     {
         var (tools, _) = Setup();
@@ -1559,4 +1582,38 @@ public class UpdateTasksTests
         handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
         handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
     }
+
+    [Fact]
+    public async Task ExactlyTheBatchLimit_IsAccepted()
+    {
+        var handler = HandlerFor(Enumerable.Range(1, 25).ToArray());
+
+        var text = await Tools(handler).UpdateTasks(Enumerable.Range(1, 25).Select(i => new TaskUpdate { Id = i, Priority = "low" }).ToList());
+
+        text.Should().StartWith("Updated 25 of 25 task(s).");
+    }
+
+    [Fact]
+    public async Task BlockWithReasonAndParent_SendsTheSameRequestAsUpdateTask()
+    {
+        var single = HandlerFor(5);
+        await Tools(single).UpdateTask(5, status: "blocked", blockedReason: "Waiting on legal", parentTaskId: 9, title: "Renamed", description: "");
+        var batch = HandlerFor(5);
+
+        await Tools(batch).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked", BlockedReason = "Waiting on legal", ParentTaskId = 9, Title = "Renamed", Description = "" }]);
+
+        batch.Sent(HttpMethod.Put, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Put, "TaskItems/5").Last().Body);
+    }
+
+    [Fact]
+    public async Task ValidationFailureOnOneItem_DoesNotStopTheOthers()
+    {
+        var handler = HandlerFor(1, 2);
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "urgent" }, new TaskUpdate { Id = 2, Priority = "low" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #1: ").And.Contain("+ #2 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
 }

@@ -351,6 +351,44 @@ describe('DailyLogSection', () => {
       expect(screen.getByRole('textbox')).toBeDisabled()
     })
 
+    // The draft's typeahead is the last one rendered (one per log entry comes first).
+    const clickDraftTypeahead = () => fireEvent.click(screen.getAllByTestId('task-typeahead').at(-1)!)
+    const failLastAdd = () => {
+      const options = addLogMutate.mock.calls.at(-1)![1] as { onError: () => void }
+      act(() => options.onError())
+    }
+
+    it('failed add with nothing newer typed restores the text and the linked task', async () => {
+      renderSection([])
+      const input = screen.getByRole('textbox')
+      clickDraftTypeahead()
+      await userEvent.type(input, 'first')
+      await userEvent.keyboard('{Enter}')
+      expect(input).toHaveValue('')
+
+      failLastAdd()
+      expect(input).toHaveValue('first')
+      expect(input).toHaveFocus()
+
+      await userEvent.keyboard('{Enter}')
+      expect(addLogMutate).toHaveBeenLastCalledWith({ content: 'first', taskItemId: 99 }, expect.any(Object))
+    })
+
+    it('failed add does not overwrite text typed while the save was in flight, nor restore the old link', async () => {
+      renderSection([])
+      const input = screen.getByRole('textbox')
+      clickDraftTypeahead()
+      await userEvent.type(input, 'first')
+      await userEvent.keyboard('{Enter}')
+      await userEvent.type(input, 'second')
+
+      failLastAdd()
+      expect(input).toHaveValue('second')
+
+      await userEvent.keyboard('{Enter}')
+      expect(addLogMutate).toHaveBeenLastCalledWith({ content: 'second', taskItemId: null }, expect.any(Object))
+    })
+
     it('prevents default on pointerdown and mousedown of Add so the input keeps focus', async () => {
       renderSection([])
       await userEvent.type(screen.getByRole('textbox'), 'text')

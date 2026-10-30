@@ -145,7 +145,7 @@ public class TaskItemsControllerV1Tests
     public async Task GetAll_ShouldReturnOkWithAllTasks()
     {
         // Arrange
-        var dueDate = new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        var dueDate = new DateOnly(2025, 12, 31);
         var tasks = new List<TaskItem>
         {
             new() { Id = 1, Title = "Task 1", Description = "Description 1", Status = Status.Todo, Priority = Priority.Low, DueDate = dueDate },
@@ -169,7 +169,7 @@ public class TaskItemsControllerV1Tests
     public async Task Get_ShouldReturnOkWithTask_WhenTaskExists()
     {
         // Arrange
-        var dueDate = new DateTime(2025, 6, 15, 0, 0, 0, DateTimeKind.Utc);
+        var dueDate = new DateOnly(2025, 6, 15);
         var task = new TaskItem
         {
             Id = 1,
@@ -214,7 +214,7 @@ public class TaskItemsControllerV1Tests
     public async Task Create_ShouldReturnCreatedAtRoute_WhenValid()
     {
         // Arrange
-        var dueDate = new DateTime(2025, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+        var dueDate = new DateOnly(2025, 12, 31);
         var createDto = new CreateTaskItemDto
         {
             Title = "New Task",
@@ -625,7 +625,7 @@ public class TaskItemsControllerV1Tests
     public async Task Update_ShouldReturnOkWithUpdatedTask_WhenValid()
     {
         // Arrange
-        var dueDate = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        var dueDate = new DateOnly(2026, 3, 1);
         var updateDto = new UpdateTaskItemDto
         {
             Title = "Updated Task",

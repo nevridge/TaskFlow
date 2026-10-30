@@ -16,7 +16,7 @@ public static class UtcDateTimeModelBuilderExtensions
 
     /// <summary>
     /// Applies the UTC converter to audit timestamp properties (CreatedAt, UpdatedAt, OccurredAtUtc, BlockedAt, StartedAt) only.
-    /// Other DateTime properties (e.g. TaskItem.DueDate) are intentionally left untouched.
+    /// Other DateTime properties are intentionally left untouched. TaskItem.DueDate is a DateOnly? calendar date (no time, no timezone), deliberately outside the UTC converter.
     /// </summary>
     public static ModelBuilder ApplyUtcAuditTimestamps(this ModelBuilder modelBuilder)
     {

@@ -100,9 +100,9 @@ public class TaskRepositoryUpdateEventTests
             Id = 1,
             Title = "T",
             Status = Status.Todo,
-            DueDate = from is null ? null : DateTime.Parse(from)
+            DueDate = from is null ? null : DateOnly.Parse(from)
         });
-        task.DueDate = to is null ? null : DateTime.Parse(to);
+        task.DueDate = to is null ? null : DateOnly.Parse(to);
 
         // Act
         await repository.UpdateAsync(task);
@@ -127,12 +127,12 @@ public class TaskRepositoryUpdateEventTests
             Description = "a",
             Priority = Priority.Low,
             Status = Status.Todo,
-            DueDate = new DateTime(2026, 1, 15)
+            DueDate = new DateOnly(2026, 1, 15)
         });
         task.Title = "New";
         task.Priority = Priority.High;
         task.Description = "b";
-        task.DueDate = new DateTime(2026, 2, 1);
+        task.DueDate = new DateOnly(2026, 2, 1);
 
         // Act
         await repository.UpdateAsync(task);
@@ -157,12 +157,12 @@ public class TaskRepositoryUpdateEventTests
             Description = "a",
             Priority = Priority.Low,
             Status = Status.Todo,
-            DueDate = new DateTime(2026, 1, 15)
+            DueDate = new DateOnly(2026, 1, 15)
         });
         task.Title = "New";
         task.Priority = Priority.High;
         task.Description = "b";
-        task.DueDate = new DateTime(2026, 2, 1);
+        task.DueDate = new DateOnly(2026, 2, 1);
         var before = DateTime.UtcNow.AddSeconds(-5);
 
         // Act
@@ -211,7 +211,7 @@ public class TaskRepositoryUpdateEventTests
             Description = "d",
             Priority = Priority.Medium,
             Status = Status.Todo,
-            DueDate = new DateTime(2026, 1, 15)
+            DueDate = new DateOnly(2026, 1, 15)
         });
 
         // Act
@@ -290,10 +290,10 @@ public class TaskRepositoryUpdateEventTests
             Title = "T",
             Priority = Priority.High,
             Status = Status.Todo,
-            DueDate = new DateTime(2026, 1, 15)
+            DueDate = new DateOnly(2026, 1, 15)
         });
         task.Priority = Priority.High;
-        task.DueDate = new DateTime(2026, 1, 15);
+        task.DueDate = new DateOnly(2026, 1, 15);
 
         // Act
         await repository.UpdateAsync(task);
@@ -303,7 +303,7 @@ public class TaskRepositoryUpdateEventTests
     }
 
     [Fact]
-    public async Task UpdateAsync_SameDueDateDifferentKind_WritesNoEvent()
+    public async Task UpdateAsync_SameDueDateValueReassigned_WritesNoEvent()
     {
         // Arrange
         using var context = CreateInMemoryContext();
@@ -313,9 +313,9 @@ public class TaskRepositoryUpdateEventTests
             Id = 1,
             Title = "T",
             Status = Status.Todo,
-            DueDate = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Unspecified)
+            DueDate = new DateOnly(2026, 1, 15)
         });
-        task.DueDate = new DateTime(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);
+        task.DueDate = DateOnly.ParseExact("2026-01-15", "yyyy-MM-dd");
 
         // Act
         await repository.UpdateAsync(task);

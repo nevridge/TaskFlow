@@ -140,4 +140,61 @@ public class JsonSerializerOptionsProviderTests
             ["autoCompleteParentWhenChildrenDone", "blockedReason", "description", "dueDate", "parentTaskItemId", "priority", "status", "timezoneOffsetMinutes", "title"],
             names);
     }
+
+    [Fact]
+    public void Serialize_ResponseDtoWithDueDate_WritesCalendarDateString()
+    {
+        var json = JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t", DueDate = new DateOnly(2026, 5, 1) }, JsonSerializerOptionsProvider.Default);
+
+        using var document = JsonDocument.Parse(json);
+        var due = document.RootElement.GetProperty("dueDate");
+        Assert.Equal(JsonValueKind.String, due.ValueKind);
+        Assert.Equal("2026-05-01", due.GetString());
+        Assert.Contains("\"2026-05-01\"", json);
+    }
+
+    [Fact]
+    public void Serialize_ResponseDtoWithoutDueDate_WritesNull()
+    {
+        var json = JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t" }, JsonSerializerOptionsProvider.Default);
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("dueDate").ValueKind);
+    }
+
+    [Fact]
+    public void Deserialize_CreateDtoWithDateOnlyString_ParsesDate()
+    {
+        var dto = JsonSerializer.Deserialize<CreateTaskItemDto>("""{"title":"t","dueDate":"2026-05-01"}""", JsonSerializerOptionsProvider.Default);
+
+        Assert.Equal(new DateOnly(2026, 5, 1), dto!.DueDate);
+    }
+
+    [Fact]
+    public void Deserialize_CreateDtoWithNullDueDate_ParsesNull()
+    {
+        var dto = JsonSerializer.Deserialize<CreateTaskItemDto>("""{"title":"t","dueDate":null}""", JsonSerializerOptionsProvider.Default);
+
+        Assert.Null(dto!.DueDate);
+    }
+
+    [Theory]
+    [InlineData("2026-05-01T00:00:00.000Z")]
+    [InlineData("2026-05-01T00:00:00")]
+    [InlineData("2026-05-01 00:00:00")]
+    [InlineData("2026-13-40")]
+    [InlineData("05/01/2026")]
+    [InlineData("")]
+    public void Deserialize_CreateDtoWithNonCalendarDueDate_ThrowsJsonException(string value)
+    {
+        var json = $$"""{"title":"t","dueDate":"{{value}}"}""";
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<CreateTaskItemDto>(json, JsonSerializerOptionsProvider.Default));
+    }
+
+    [Fact]
+    public void Deserialize_PatchDtoWithIsoTimestampDueDate_ThrowsJsonException()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<PatchTaskItemDto>("""{"dueDate":"2026-05-01T00:00:00.000Z"}""", JsonSerializerOptionsProvider.Default));
+    }
 }

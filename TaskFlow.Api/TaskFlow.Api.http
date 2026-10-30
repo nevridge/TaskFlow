@@ -19,7 +19,7 @@ Content-Type: application/json
 {
   "title": "Test Task",
   "description": "Testing from .http file",
-  "dueDate": "2025-12-31T00:00:00Z"
+  "dueDate": "2025-12-31"
 }
 
 ###
@@ -32,7 +32,7 @@ Content-Type: application/json
   "title": "Updated Task",
   "description": "Updated description",
   "status": "completed",
-  "dueDate": "2025-12-31T00:00:00Z"
+  "dueDate": "2025-12-31"
 }
 
 ###

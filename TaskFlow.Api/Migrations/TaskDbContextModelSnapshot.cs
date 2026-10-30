@@ -199,7 +199,7 @@ namespace TaskFlow.Api.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("DueDate")
+                    b.Property<DateOnly?>("DueDate")
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly?>("FirstTaggedDate")

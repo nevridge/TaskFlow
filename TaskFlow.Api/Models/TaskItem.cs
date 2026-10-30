@@ -7,7 +7,7 @@ public class TaskItem
     public string? Description { get; set; }
     public Priority Priority { get; set; } = Priority.Low;
     public Status Status { get; set; } = Status.Draft;
-    public DateTime? DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
 
     // Blocked-state fields. Invariant: when Status != Blocked all three are null;
     // when Status == Blocked, BlockedAt and PreviousStatus are non-null.

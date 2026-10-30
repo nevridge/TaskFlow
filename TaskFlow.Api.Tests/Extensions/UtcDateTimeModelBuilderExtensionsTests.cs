@@ -309,11 +309,11 @@ public class UtcDateTimeModelBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task TaskItem_DueDate_RoundTrip_IsUnchanged()
+    public async Task TaskItem_DueDate_RoundTrip_StoresCalendarDateText()
     {
         var (connection, options) = CreateSqlite();
         using var _ = connection;
-        var due = new DateTime(2026, 12, 25, 0, 0, 0, DateTimeKind.Unspecified);
+        var due = new DateOnly(2026, 12, 25);
         int withDueId;
         int withoutDueId;
         await using (var writer = new TaskDbContext(options))
@@ -331,8 +331,13 @@ public class UtcDateTimeModelBuilderExtensionsTests
         var b = await reader.TaskItems.AsNoTracking().SingleAsync(t => t.Id == withoutDueId);
 
         Assert.Equal(due, a.DueDate);
-        Assert.Equal(DateTimeKind.Unspecified, a.DueDate!.Value.Kind);
         Assert.Null(b.DueDate);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT DueDate FROM TaskItems WHERE Id = {withDueId}";
+        Assert.Equal("2026-12-25", (string?)await command.ExecuteScalarAsync());
+        command.CommandText = $"SELECT DueDate FROM TaskItems WHERE Id = {withoutDueId}";
+        Assert.Equal(DBNull.Value, await command.ExecuteScalarAsync());
     }
 
     [Fact]
@@ -396,7 +401,11 @@ public class UtcDateTimeModelBuilderExtensionsTests
         using var _ = connection;
         using var context = new TaskDbContext(options);
 
-        var allowlist = new HashSet<string> { "TaskItem.DueDate" };
+        // TaskItem.DueDate is a DateOnly? calendar date (not DateTime), so it is neither converted nor allowlisted.
+        var allowlist = new HashSet<string>();
+        var dueDate = context.Model.FindEntityType(typeof(TaskItem))!.FindProperty(nameof(TaskItem.DueDate))!;
+        Assert.Equal(typeof(DateOnly?), dueDate.ClrType);
+        Assert.False(ReferenceEquals(dueDate.GetValueConverter(), UtcDateTimeModelBuilderExtensions.UtcConverter));
 
         foreach (var entityType in context.Model.GetEntityTypes())
         {

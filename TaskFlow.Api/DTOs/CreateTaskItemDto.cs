@@ -8,7 +8,7 @@ public class CreateTaskItemDto
     public string? Description { get; set; }
     public Status Status { get; set; } = Status.Draft;
     public Priority Priority { get; set; } = Priority.Low;
-    public DateTime? DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public DateOnly? JournalDate { get; set; }
     public int? ParentTaskItemId { get; set; }
     /// <summary>

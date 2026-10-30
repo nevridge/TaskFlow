@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
@@ -114,7 +115,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         var originalDescription = persisted?.Description ?? entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));
         var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
         var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
-        var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateTime?>(nameof(TaskItem.DueDate));
+        var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateOnly?>(nameof(TaskItem.DueDate));
         // A null stored reason is meaningful, so do not fall back to OriginalValues when a persisted row exists.
         var originalBlockedReason = persisted is not null
             ? persisted.BlockedReason
@@ -245,8 +246,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
     }
 
-    private static string FormatDueDate(DateTime? value) =>
-        value?.ToString("yyyy-MM-dd") ?? "none";
+    private static string FormatDueDate(DateOnly? value) =>
+        value?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "none";
 
     private void AddFieldChangedEvent(int taskId, bool changed, string eventType, Func<string> summary)
     {

@@ -322,14 +322,14 @@ describe('TaskListRow', () => {
         'Block task: Fix login bug',
         'Task history',
         'Edit',
-        'Delete',
+        'Delete task: Fix login bug',
       ])
       actions.forEach(b => expect(b).toHaveTextContent(''))
     })
 
     it('has four actions and no Block slot on non-Todo rows (AC7)', () => {
       renderFull({ ...baseTask, status: 'Completed' })
-      expect(rowActions().map(b => b.getAttribute('aria-label'))).toEqual(['Add subtask', 'Task history', 'Edit', 'Delete'])
+      expect(rowActions().map(b => b.getAttribute('aria-label'))).toEqual(['Add subtask', 'Task history', 'Edit', 'Delete task: Fix login bug'])
     })
 
     it('exposes table, row, cell and columnheader semantics (AC11)', () => {
@@ -402,10 +402,50 @@ describe('TaskListRow', () => {
       expect(document.querySelector('.t-depth-1 .t-tree-spacer')).not.toBeNull()
     })
 
-    it('Delete calls onDelete', async () => {
-      const { onDelete } = renderFull(baseTask)
-      await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
-      expect(onDelete).toHaveBeenCalledWith(baseTask)
+    it('Delete calls onDelete and carries the id used for focus handling', async () => {
+      const { onDelete } = renderFull({ ...baseTask, id: 7 })
+      const btn = screen.getByRole('button', { name: 'Delete task: Fix login bug' })
+      expect(btn).toHaveAttribute('data-task-delete-id', '7')
+      expect(btn).not.toHaveAttribute('aria-disabled')
+      await userEvent.click(btn)
+      expect(onDelete).toHaveBeenCalledWith({ ...baseTask, id: 7 })
+    })
+
+    describe('parent with subtasks (#321)', () => {
+      const parent = { ...baseTask, id: 9, childTaskCount: 2 } as TaskProp
+
+      it('is aria-disabled, never disabled, tabbable and described by the hidden hint', () => {
+        renderFull(parent)
+        const btn = screen.getByRole('button', { name: 'Delete task: Fix login bug' })
+        expect(btn).toHaveAttribute('aria-disabled', 'true')
+        expect(btn).not.toBeDisabled()
+        expect(btn).toHaveAttribute('title', 'Delete subtasks first (2)')
+        expect(btn).toHaveAccessibleDescription('Delete subtasks first (2)')
+        const hint = document.getElementById('del-hint-9')!
+        expect(hint).toHaveClass('sr-only')
+        // The hint is a sibling of the button, not inside it.
+        expect(btn.contains(hint)).toBe(false)
+        btn.focus()
+        expect(btn).toHaveFocus()
+      })
+
+      it('does nothing on click, Enter or Space', async () => {
+        const { onDelete } = renderFull(parent)
+        const btn = screen.getByRole('button', { name: 'Delete task: Fix login bug' })
+        await userEvent.click(btn)
+        btn.focus()
+        await userEvent.keyboard('{Enter}')
+        await userEvent.keyboard(' ')
+        expect(onDelete).not.toHaveBeenCalled()
+      })
+
+      it('is enabled when there are no subtasks', () => {
+        renderFull({ ...baseTask, childTaskCount: 0 } as TaskProp)
+        const btn = screen.getByRole('button', { name: 'Delete task: Fix login bug' })
+        expect(btn).not.toHaveAttribute('aria-disabled')
+        expect(btn).not.toHaveAttribute('aria-describedby')
+        expect(btn).toHaveAttribute('title', 'Delete')
+      })
     })
   })
 })

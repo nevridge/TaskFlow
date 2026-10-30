@@ -3,14 +3,15 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   useTaskQuery,
   useTasksQuery,
-  useDeleteTaskMutation,
   type TaskItemViewModel,
 } from '@/hooks/useTasks'
 import { useChangeTaskProject, useProjectsQuery } from '@/hooks/useProjects'
 import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
 import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
 import { getProjectMutationErrorMessage, normalizeProjectId } from '@/lib/project-errors'
-import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation, useDeleteNoteMutation } from '@/hooks/useNotes'
+import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation } from '@/hooks/useNotes'
+import { useDeleteNoteUndoable, useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
+import { getTaskMutationErrorMessage } from '@/lib/task-errors'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
 import { usePrefs } from '@/context/usePrefs'
@@ -18,7 +19,7 @@ import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
 import { formatShort } from '@/lib/journal-utils'
-import { getBlockErrorMessage, isBlocked } from '@/lib/task-status'
+import { isBlocked } from '@/lib/task-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
@@ -34,20 +35,24 @@ export function TaskDetailPage() {
   const { data: projectsData } = useProjectsQuery()
   const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
   const changeProject = useChangeTaskProject()
-  const deleteTask = useDeleteTaskMutation()
+  const deleteTaskUndoable = useDeleteTaskUndoable()
   const createNote = useCreateNoteMutation(taskId)
   const updateNote = useUpdateNoteMutation(taskId)
-  const deleteNote = useDeleteNoteMutation(taskId)
+  const deleteNoteUndoable = useDeleteNoteUndoable(taskId)
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
 
   const navigate = useNavigate()
 
   const [editingTask, setEditingTask] = useState(false)
+  // Set by a self-initiated delete so the frame between the pending filter and the navigation is empty,
+  // not "Task not found".
+  const [leaving, setLeaving] = useState(false)
   const [showNoteForm, setShowNoteForm] = useState(false)
   const [editingNote, setEditingNote] = useState<NoteResponseDto | null>(null)
   const [quickProjectValue, setQuickProjectValue] = useState<string | null>(null)
   const [quickProjectError, setQuickProjectError] = useState<string | null>(null)
   const projectSelectRef = useRef<HTMLSelectElement>(null)
+  const addNoteBtnRef = useRef<HTMLButtonElement>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
   const refocusProjectSelect = useRef(false)
   const refocusEditButton = useRef(false)
@@ -89,6 +94,7 @@ export function TaskDetailPage() {
     .map(t => ({ id: Number(t.id), title: t.title }))
 
   if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
+  if (leaving) return <div className="tasks-page"><div className="t-shell" /></div>
   if (taskLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading…</p></div></div>
   if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
@@ -121,16 +127,30 @@ export function TaskDetailPage() {
   }
 
   function handleDeleteTask() {
-    if (window.confirm(`Delete "${task!.title}"?`)) {
-      deleteTask.mutate(taskId, { onSuccess: () => navigate('/tasks') })
-    }
+    if (deleteBlocked) return
+    // Undo restores focus to the row's Delete in the list (a no-op if the list has not rendered it).
+    deleteTaskUndoable({ id: taskId, title: task!.title }, () => {
+      document.querySelector<HTMLElement>(`[data-task-delete-id="${taskId}"]`)?.focus()
+    })
+    setLeaving(true)
+    navigate('/tasks', { replace: true, state: { focusNewTask: true } })
   }
 
   function handleDeleteNote(note: NoteResponseDto) {
-    if (window.confirm('Delete this note?')) {
-      deleteNote.mutate(Number(note.id))
-    }
+    const noteId = Number(note.id)
+    // Focus first, synchronously: the next note's Delete, else the previous, else Add Note.
+    const all = [...document.querySelectorAll<HTMLElement>('[data-note-delete-id]')]
+    const index = all.findIndex(el => el.dataset.noteDeleteId === String(noteId))
+    const next = index >= 0 ? (all[index + 1] ?? all[index - 1]) : undefined
+    ;(next ?? addNoteBtnRef.current)?.focus()
+    deleteNoteUndoable(noteId, () => {
+      document.querySelector<HTMLElement>(`[data-note-delete-id="${noteId}"]`)?.focus()
+    })
   }
+
+  const childCount = Number(task.childTaskCount ?? 0)
+  const deleteBlocked = childCount > 0
+  const deleteHint = `Delete subtasks first (${childCount})`
 
   const status = String(task.status ?? 'draft').toLowerCase()
   const priority = String(task.priority ?? 'low').toLowerCase()
@@ -166,9 +186,20 @@ export function TaskDetailPage() {
                 <h1 className="t-detail-title">{task.title}</h1>
                 <div className="t-card-actions">
                   <button ref={editButtonRef} className="t-btn" onClick={() => setEditingTask(true)}>Edit</button>
-                  <button className="t-btn-danger" aria-label="Delete task" onClick={handleDeleteTask}>Delete</button>
+                  {/* aria-disabled (never `disabled`) keeps it focusable; the `!` variants beat tasks.css hover/cursor. */}
+                  <button
+                    className="t-btn-danger aria-disabled:opacity-50 aria-disabled:cursor-not-allowed! aria-disabled:hover:bg-transparent!"
+                    aria-label="Delete task"
+                    data-task-delete-id={taskId}
+                    aria-disabled={deleteBlocked ? 'true' : undefined}
+                    aria-describedby={deleteBlocked ? 'task-delete-hint' : undefined}
+                    onClick={handleDeleteTask}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
+              {deleteBlocked && <p id="task-delete-hint" className="t-detail-hint">{deleteHint}</p>}
               {task.description && <p className="t-detail-desc">{task.description}</p>}
               <div className="t-detail-meta">
                 <span>Status: <strong>{task.status}</strong></span>
@@ -224,7 +255,7 @@ export function TaskDetailPage() {
           <div className="t-section-hdr">
             <h2 className="t-section-title">Notes</h2>
             {!showNoteForm && !editingNote && (
-              <button className="t-btn-primary" onClick={() => setShowNoteForm(true)}>Add Note</button>
+              <button ref={addNoteBtnRef} className="t-btn-primary" onClick={() => setShowNoteForm(true)}>Add Note</button>
             )}
           </div>
 
@@ -270,39 +301,4 @@ export function TaskDetailPage() {
       </div>
     </div>
   )
-}
-
-function getTaskMutationErrorMessage(error: unknown): string {
-  const code = getErrorCode(error)
-  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
-    return 'Completed tasks assigned to past days cannot be reopened.'
-  }
-  if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN' || code === 'TASK_PARENT_INCOMPLETE_CHILDREN') {
-    return 'Parent tasks cannot be completed while child tasks are still open.'
-  }
-  if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') {
-    return 'A task cannot be set as its own parent.'
-  }
-  if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') {
-    return 'This parent assignment would create a cycle.'
-  }
-  if (code === 'TASK_PARENT_DEPTH_NOT_ALLOWED') {
-    return 'Only one subtask level is supported.'
-  }
-  if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') {
-    return 'This task has subtasks. Remove or reassign subtasks before deleting.'
-  }
-  if (code === 'TASK_PARENT_NOT_FOUND') {
-    return 'The selected parent task was not found.'
-  }
-  const blockMessage = getBlockErrorMessage(code)
-  if (blockMessage) return blockMessage
-
-  return 'Unable to save task changes. Please try again.'
-}
-
-function getErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null
-  const maybeCode = (error as { code?: unknown }).code
-  return typeof maybeCode === 'string' ? maybeCode : null
 }

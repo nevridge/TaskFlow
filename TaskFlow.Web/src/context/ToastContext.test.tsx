@@ -96,6 +96,19 @@ describe('ToastProvider', () => {
   })
 
   describe('timers', () => {
+    it('honours a per-call durationMs and keeps 6s as the default', async () => {
+      renderProvider()
+      const long = makeDelete('long', { durationMs: 10000 })
+      const short = makeDelete('short')
+      act(() => { api.schedule(long); api.schedule(short) })
+      advance(6000)
+      await flush()
+      expect(short.commit).toHaveBeenCalledTimes(1)
+      expect(long.commit).not.toHaveBeenCalled()
+      advance(4000)
+      expect(long.commit).toHaveBeenCalledTimes(1)
+    })
+
     it('commits exactly once after 6s, then runs onSettled', async () => {
       renderProvider()
       const pd = makeDelete('a')
@@ -354,6 +367,17 @@ describe('ToastProvider', () => {
       expect(within(region()).getByRole('alert')).toBeInTheDocument()
       fireEvent.click(within(alert).getByRole('button', { name: /dismiss/i }))
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('passes the thrown error to a function-form errorMessage', async () => {
+      renderProvider()
+      const boom = { code: 'SPECIFIC' }
+      const errorMessage = vi.fn((err: unknown) => (err === boom ? 'Specific copy' : 'Generic copy'))
+      act(() => api.schedule(makeDelete('a', { errorMessage, commit: vi.fn(() => Promise.reject(boom)) })))
+      advance(6000)
+      await flush()
+      expect(errorMessage).toHaveBeenCalledWith(boom)
+      expect(screen.getByRole('alert')).toHaveTextContent('Specific copy')
     })
 
     it('shows the error toast for a rejected 404-shaped response', async () => {

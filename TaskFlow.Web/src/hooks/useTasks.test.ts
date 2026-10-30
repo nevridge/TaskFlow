@@ -123,6 +123,26 @@ describe('useDeleteTaskMutation', () => {
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
     expect(sdk.deleteApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({ path: { id: 5 } }))
   })
+
+  it('passes throwOnError per call so a non-2xx rejects the mutation', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: new Response() } as never)
+    const { result } = renderHook(() => useDeleteTaskMutation(), { wrapper: makeWrapper() })
+    result.current.mutate(5)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(sdk.deleteApiV1TaskItemsById).toHaveBeenCalledWith({ path: { id: 5 }, throwOnError: true })
+  })
+
+  it('removes the detail query before invalidating tasks, projects and the journal', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: new Response() } as never)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const order: string[] = []
+    vi.spyOn(qc, 'removeQueries').mockImplementation(f => { order.push('remove:' + JSON.stringify(f?.queryKey)); return undefined })
+    vi.spyOn(qc, 'invalidateQueries').mockImplementation(f => { order.push('invalidate:' + JSON.stringify(f?.queryKey)); return Promise.resolve() })
+    const { result } = renderHook(() => useDeleteTaskMutation(), { wrapper: makeWrapper(qc) })
+    result.current.mutate(5)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(order).toEqual(['remove:["tasks",5]', 'invalidate:["tasks"]', 'invalidate:["projects"]', 'invalidate:["journal"]'])
+  })
 })
 
 describe('project handling in task mutations', () => {

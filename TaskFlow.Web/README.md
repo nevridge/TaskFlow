@@ -141,13 +141,15 @@ All server state (fetching, caching, mutation, invalidation) is encapsulated in 
 - `useTaskQuery(id)` — fetch a single task (disabled when id is not finite)
 - `useCreateTaskMutation()` — create task, invalidates task list
 - `useUpdateTaskMutation()` — update task, invalidates list and detail
-- `useDeleteTaskMutation()` — delete task, invalidates list, removes detail from cache
+- `useDeleteTaskUndoable()` — the UI delete path (Undo toast, 10s window)
+- `useDeleteTaskMutation()` — direct delete (use with `throwOnError`), invalidates list, removes detail from cache
 
 **`useNotes.ts`** exports:
 - `useNotesQuery(taskId)` — fetch notes for a task (disabled when taskId is not finite)
 - `useCreateNoteMutation(taskId)` — add note, invalidates note list
 - `useUpdateNoteMutation(taskId)` — update note, invalidates note list
-- `useDeleteNoteMutation(taskId)` — delete note, invalidates note list
+- `useDeleteNoteUndoable(taskId)` — the UI delete path (Undo toast, 6s window)
+- `useDeleteNoteMutation(taskId)` — direct delete (use with `throwOnError`), invalidates note list
 
 **`useJournal.ts`** exports:
 - `useJournalEntries()` — fetch all journal entries (includes embedded log entries)

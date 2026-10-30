@@ -500,6 +500,15 @@ button.t-badge-blocked { cursor: pointer; }
 }
 .t-btn-danger:hover { background: var(--danger-bg); }
 
+/* Visible "Delete subtasks first (N)" hint below the title row, full width (#321). */
+.tasks-page .t-detail-hint {
+  display: block;
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 /* ─── Task detail ─────────────────────────────────────────────────────────── */
 
 .t-detail-title {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import {
@@ -31,16 +31,14 @@ import {
   applyOptimisticTaskUpdate,
   rollbackTaskCache,
 } from '@/hooks/useTasks'
+import { journalKeys } from '@/hooks/journalKeys'
+import { filterPending, pendingKey, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
 import { isBlocked, withBlockedCompleted } from '@/lib/task-status'
 import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
 import { usePrefs } from '@/context/usePrefs'
 
-export const journalKeys = {
-  all: ['journal'] as const,
-  todos: (entryId: number) => ['journal', entryId, 'todos'] as const,
-  notes: (entryId: number) => ['journal', entryId, 'notes'] as const,
-  logUpdate: (entryId: number) => ['journal', entryId, 'log-update'] as const,
-}
+// Re-exported so existing imports from '@/hooks/useJournal' keep working.
+export { journalKeys }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
 
@@ -52,11 +50,27 @@ export function useJournalEntries() {
   })
 }
 
+/** Hides tasks whose Tasks-page delete is still inside the undo window (top-level and subtasks). */
 export function useJournalTodos(entryId: number | undefined) {
+  const { pendingKeys } = usePendingDeleteIds()
+  const select = useCallback(
+    (res: Awaited<ReturnType<typeof getJournalTodos>>) => {
+      const list = res.data as TaskItemResponseDto[] | undefined
+      if (!list || pendingKeys.size === 0) return res
+      const visible = filterPending('task', list, pendingKeys).map(t =>
+        t.children?.some(c => c.id != null && pendingKeys.has(pendingKey('task', c.id)))
+          ? { ...t, children: filterPending('task', t.children, pendingKeys) }
+          : t,
+      )
+      return { ...res, data: visible } as typeof res
+    },
+    [pendingKeys],
+  )
   return useQuery({
     queryKey: journalKeys.todos(entryId ?? 0),
     queryFn: () => getJournalTodos(entryId!),
     enabled: entryId != null,
+    select,
   })
 }
 

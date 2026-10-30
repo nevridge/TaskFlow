@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   useTasksQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
-  useDeleteTaskMutation,
   useBlockTaskMutation,
   useUnblockTaskMutation,
   useEditBlockedReasonMutation,
@@ -12,6 +12,8 @@ import {
   type UpdateTaskPayload,
 } from '@/hooks/useTasks'
 import { useProjectsQuery } from '@/hooks/useProjects'
+import { useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
+import { getErrorCode, getTaskMutationErrorMessage } from '@/lib/task-errors'
 import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
 import { normalizeProjectId, PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
 import { usePrefs } from '@/context/usePrefs'
@@ -25,7 +27,6 @@ import { todayISO } from '@/lib/journal-utils'
 import {
   STATUS_LABELS,
   STATUS_ORDER,
-  getBlockErrorMessage,
   isBlocked,
   isCompleted,
   nextCycleStatus,
@@ -75,7 +76,9 @@ export function TasksPage() {
   const { data, isLoading, error } = useTasksQuery()
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
-  const deleteMutation = useDeleteTaskMutation()
+  const deleteTaskUndoable = useDeleteTaskUndoable()
+  const location = useLocation()
+  const navigate = useNavigate()
   const blockMutation = useBlockTaskMutation()
   const unblockMutation = useUnblockTaskMutation()
   const editReasonMutation = useEditBlockedReasonMutation()
@@ -124,6 +127,22 @@ export function TasksPage() {
   // Never re-derived afterwards, so changing or clearing a filter inside the panel keeps it open/closed as the user left it.
   const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0)
   const knownParentIdsRef = useRef<Set<number>>(new Set())
+  // Set by a detail-page delete: focus New Task once on arrival. Captured on mount so a plain visit never does.
+  const focusNewTaskRef = useRef((location.state as { focusNewTask?: boolean } | null)?.focusNewTask === true)
+
+  // Clear the route state on mount whether or not the button ever renders (e.g. on a load error).
+  useEffect(() => {
+    if (!focusNewTaskRef.current) return
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The button only renders once the list has loaded, so this re-runs until the ref is set.
+  useEffect(() => {
+    if (!focusNewTaskRef.current || !newTaskBtnRef.current) return
+    focusNewTaskRef.current = false
+    newTaskBtnRef.current.focus()
+  }, [isLoading, error])
 
   // Debounce search input
   useEffect(() => {
@@ -488,12 +507,20 @@ export function TasksPage() {
     .map(t => ({ id: Number(t.id), title: t.title }))
 
   function handleDelete(task: TaskListModel) {
-    if (window.confirm(`Delete "${task.title}"?`)) {
-      setMutationError(null)
-      deleteMutation.mutate(Number(task.id), {
-        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
-      })
-    }
+    const id = Number(task.id)
+    setMutationError(null)
+    // Focus moves synchronously, before the row unmounts: next row's Delete (skipping group headers and
+    // collapsed groups, which the DOM query does for free), else the previous, else New Task.
+    const all = [...document.querySelectorAll<HTMLElement>('[data-task-delete-id]')]
+    const index = all.findIndex(el => el.dataset.taskDeleteId === String(id))
+    const next = index >= 0 ? (all[index + 1] ?? all[index - 1]) : undefined
+    ;(next ?? newTaskBtnRef.current)?.focus()
+    // An editor open for the deleted task would be left orphaned.
+    if (editingSnapshot && Number(editingSnapshot.id) === id) setEditingSnapshot(null)
+    if (addingChildForTaskId === id) { setAddingChildForTaskId(null); setChildDraftTitle('') }
+    deleteTaskUndoable({ id, title: task.title }, () => {
+      document.querySelector<HTMLElement>(`[data-task-delete-id="${id}"]`)?.focus()
+    })
   }
 
   function toggleChildren(task: TaskListModel) {
@@ -765,28 +792,6 @@ export function TasksPage() {
       </div>
     </div>
   )
-}
-
-function getTaskMutationErrorMessage(error: unknown): string {
-  const code = getErrorCode(error)
-  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') return 'Completed tasks assigned to past days cannot be reopened.'
-  if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN' || code === 'TASK_PARENT_INCOMPLETE_CHILDREN') return 'Parent tasks cannot be completed while child tasks are still open.'
-  if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') return 'A task cannot be set as its own parent.'
-  if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') return 'This parent assignment would create a cycle.'
-  if (code === 'TASK_PARENT_DEPTH_NOT_ALLOWED') return 'Only one subtask level is supported.'
-  if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') return 'This task has subtasks. Remove or reassign subtasks before deleting.'
-  if (code === 'TASK_PARENT_NOT_FOUND') return 'The selected parent task was not found.'
-  if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') return 'You cannot create new tasks on a past journal day.'
-  if (code === 'TASK_PROJECT_NOT_FOUND') return PROJECT_CREATE_NOT_FOUND_MESSAGE
-  const blockMessage = getBlockErrorMessage(code)
-  if (blockMessage) return blockMessage
-  return 'Unable to save task changes. Please try again.'
-}
-
-function getErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null
-  const maybeCode = (error as { code?: unknown }).code
-  return typeof maybeCode === 'string' ? maybeCode : null
 }
 
 function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {

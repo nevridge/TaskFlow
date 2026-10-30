@@ -213,7 +213,8 @@ useCreateTaskMutation()
 // Update — invalidates list + specific detail
 useUpdateTaskMutation()
 
-// Delete — invalidates list, removes detail from cache
+// Delete — UI deletes go through useDeleteTaskUndoable (Undo toast, 10s window).
+// useDeleteTaskMutation remains for direct use with throwOnError; invalidates list, removes detail from cache
 useDeleteTaskMutation()
 ```
 
@@ -226,7 +227,7 @@ useNotesQuery(taskId: number)
 // Mutations — all invalidate noteKeys.all(taskId)
 useCreateNoteMutation(taskId: number)
 useUpdateNoteMutation(taskId: number)
-useDeleteNoteMutation(taskId: number)
+useDeleteNoteMutation(taskId: number) // UI deletes use useDeleteNoteUndoable (Undo toast, 6s window); this remains for direct use with throwOnError
 ```
 
 ## Pages and Components
@@ -238,7 +239,7 @@ The task list page. Responsibilities:
 - Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and title search
 - Sort by title, status, priority, or due date
 - Open create/edit modal inline (no separate route)
-- Delegate delete to `useDeleteTaskMutation`
+- Delete is undoable: `useDeleteTaskUndoable` hides the task (pending key `task:<id>`) and sends the DELETE after a 10s Undo toast window; no confirm dialog. A parent with subtasks has an `aria-disabled` Delete ("Delete subtasks first (N)")
 
 The **Status** filter is a multi-select group of checkboxes (Draft, To-do, Completed) labelled "Status". It defaults to Draft and To-do selected, so completed tasks are hidden until Completed is checked. There is no "All" option: selecting all three shows everything, and an empty selection (all unchecked) applies no restriction and also shows every task. The selection is page state only (not persisted) and resets to Draft + To-do whenever the page is reopened. It does not affect the view chips, so the Completed history chip is empty until Completed is checked.
 
@@ -251,8 +252,8 @@ The task detail page. Responsibilities:
 - Fetch task via `useTaskQuery(taskId)` (`enabled: Number.isFinite(taskId)`)
 - Fetch notes via `useNotesQuery(taskId)`
 - Inline edit task (replaces title/detail with `TaskForm`)
-- Delete task — navigates back to `/` on success
-- Inline note creation, editing, and deletion
+- Delete task — starts the undoable delete and navigates to `/tasks` at once (`replace`, with `state.focusNewTask` so New Task takes focus); the Undo toast persists across the navigation
+- Inline note creation and editing; note delete is undoable (pending key `tasknote:<id>`, 6s window)
 
 ### Current Tasks + Journal behavior (May 2026)
 

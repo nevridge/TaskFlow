@@ -698,6 +698,51 @@ public class CreateTasksTests
     }
 
     [Fact]
+    public async Task CreateTasks_TakesOneClockSnapshot_ForSeveralTasks()
+    {
+        var handler = new StubHandler().Post("TaskItems", Fixtures.Task(10), HttpStatusCode.Created);
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.CreateTasks([new NewTask { Title = "A" }, new NewTask { Title = "B" }, new NewTask { Title = "C" }]);
+
+        // One LocalNow for the call plus one direct GetUtcNow per created task.
+        clock.UtcReads.Should().Be(1 + 3);
+        handler.Sent(HttpMethod.Post, "TaskItems").Should().HaveCount(3);
+        handler.Sent(HttpMethod.Post, "TaskItems")
+            .Select(r => System.Text.Json.JsonDocument.Parse(r.Body!).RootElement.GetProperty("timezoneOffsetMinutes").GetInt32())
+            .Should().AllBeEquivalentTo(-420);
+    }
+
+    [Theory]
+    [InlineData(330)]
+    [InlineData(345)]
+    [InlineData(-570)]
+    public async Task CreateTasks_NonHourOffsets_AreSentUnchanged(int offset)
+    {
+        var handler = new StubHandler().Post("TaskItems", Fixtures.Task(10), HttpStatusCode.Created);
+        var tools = new TaskTools(Fixtures.Client(handler), new CountingTimeProvider(offset));
+
+        await tools.CreateTasks([new NewTask { Title = "A" }]);
+
+        handler.BodyOf(HttpMethod.Post, "TaskItems").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offset);
+    }
+
+    [Fact]
+    public async Task CreateTasks_DueDateToday_UsesTheSameSnapshotAsTheOffset()
+    {
+        var handler = new StubHandler().Post("TaskItems", Fixtures.Task(10), HttpStatusCode.Created);
+        var clock = new CountingTimeProvider(offsetMinutes: 330, utc: new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero));
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.CreateTasks([new NewTask { Title = "A", DueDate = "today" }]);
+
+        var body = handler.BodyOf(HttpMethod.Post, "TaskItems");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10T00:00:00Z");
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
+    }
+
+    [Fact]
     public async Task PartialFailures_AreReportedPerTask_WithoutStoppingTheBatch()
     {
         var handler = new StubHandler()
@@ -1021,6 +1066,48 @@ public class UpdateTaskTests
         body.GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         text.Should().StartWith("Updated #5. Changed priority.");
+    }
+
+    [Fact]
+    public async Task UpdateTask_TakesOneClockSnapshot()
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTask(5, priority: "low");
+
+        // One LocalNow for the call plus the direct GetUtcNow for the response's current time.
+        clock.UtcReads.Should().Be(2);
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+    }
+
+    [Theory]
+    [InlineData(330)]
+    [InlineData(345)]
+    [InlineData(-570)]
+    public async Task UpdateTask_NonHourOffsets_AreSentUnchanged(int offset)
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var tools = new TaskTools(Fixtures.Client(handler), new CountingTimeProvider(offset));
+
+        await tools.UpdateTask(5, priority: "low");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offset);
+    }
+
+    [Fact]
+    public async Task UpdateTask_DueDateToday_UsesTheSameSnapshotAsTheOffset()
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var clock = new CountingTimeProvider(offsetMinutes: 330, utc: new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero));
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTask(5, dueDate: "today");
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10T00:00:00Z");
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
     }
 
     [Fact]
@@ -1434,6 +1521,44 @@ public class UpdateTasksTests
         handler.BodyOf(HttpMethod.Put, "TaskItems/8").GetProperty("priority").GetString().Should().Be("low");
         handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(8);
         handler.BodyOf(HttpMethod.Post, "Projects/7/tasks").GetProperty("taskItemId").GetInt32().Should().Be(8);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(25)]
+    public async Task UpdateTasks_TakesOneClockSnapshot_ForTheWholeBatch(int count)
+    {
+        var ids = Enumerable.Range(1, count).ToArray();
+        var handler = HandlerFor(ids);
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTasks(ids.Select(i => new TaskUpdate { Id = i, Priority = "low" }).ToList());
+
+        // Only the single LocalNow for the whole batch reads the clock.
+        clock.UtcReads.Should().Be(1);
+        foreach (var id in ids)
+        {
+            handler.BodyOf(HttpMethod.Put, $"TaskItems/{id}").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        }
+    }
+
+    [Fact]
+    public async Task UpdateTasks_TodayDueDatesWithFailingItemMidBatch_StillTakesOneClockSnapshot()
+    {
+        var handler = HandlerFor(1, 3);
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTasks([
+            new TaskUpdate { Id = 1, DueDate = "today" },
+            new TaskUpdate { Id = 2, DueDate = "today" },
+            new TaskUpdate { Id = 3, DueDate = "today" },
+        ]);
+
+        clock.UtcReads.Should().Be(1);
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
     }
 
     [Fact]

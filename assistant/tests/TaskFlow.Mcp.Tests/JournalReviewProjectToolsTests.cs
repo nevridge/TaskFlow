@@ -674,21 +674,6 @@ public class JournalToolsTests
         .Get("JournalEntries/8/notes", Array.Empty<object>())
         .Get("TaskItems", Array.Empty<object>());
 
-    private sealed class CountingTimeProvider : TimeProvider
-    {
-        private readonly TimeZoneInfo _zone = TimeZoneInfo.CreateCustomTimeZone("test", TimeSpan.FromHours(-7), "test", "test");
-
-        public int UtcReads { get; set; }
-
-        public override TimeZoneInfo LocalTimeZone => _zone;
-
-        public override DateTimeOffset GetUtcNow()
-        {
-            UtcReads++;
-            return new DateTimeOffset(2026, 10, 9, 17, 0, 0, TimeSpan.Zero);
-        }
-    }
-
     [Fact]
     public async Task GetJournal_AcceptsOtherDates_AndRejectsGarbage()
     {

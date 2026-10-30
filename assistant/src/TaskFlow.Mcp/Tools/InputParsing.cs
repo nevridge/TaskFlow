@@ -8,10 +8,9 @@ internal static class InputParsing
     private static readonly string[] Priorities = ["low", "medium", "high"];
     private static readonly string[] Statuses = ["draft", "todo", "blocked", "completed"];
 
+    /// <summary>The local calendar date.</summary>
+    /// <remarks>Does its own clock read (one GetLocalNow). Use it only for read-only date resolution. Any call that also sends a UTC offset to the API must use <see cref="LocalNow"/> instead, so date and offset come from one snapshot.</remarks>
     public static DateOnly Today(TimeProvider time) => DateOnly.FromDateTime(time.GetLocalNow().DateTime);
-
-    /// <summary>The local UTC offset in minutes, which the API uses for its "past day" rules.</summary>
-    public static int OffsetMinutes(TimeProvider time) => (int)time.GetLocalNow().Offset.TotalMinutes;
 
     /// <summary>Local date and UTC offset from a single clock read, so the two can never straddle midnight or a DST change.</summary>
     public static (DateOnly Today, int OffsetMinutes) LocalNow(TimeProvider time)

@@ -51,7 +51,7 @@ cd TaskFlow.Web && npm run gen:api
 # Docker (dev — includes Seq logging UI at http://localhost:5380)
 docker compose up -d
 
-# Docker (production)
+# Docker (local prod-like run; NOT the real production compose - see CI/CD)
 docker compose -f docker-compose.prod.yml up
 
 # Docker (isolated test project: 3200 web / 8280 API, beside the live stack; for feature branches and /ux-test)
@@ -153,7 +153,7 @@ Test fixtures must use PascalCase status values too (see the enum rule under Saf
 
 ## CI/CD
 
-Push to `main` triggers automatic deployment. Images are tagged `sha-<commit>`. The GitOps compose file lives in `nevridge/taskflow-deploy`.
+Push to `main` triggers automatic deployment. Images are tagged `sha-<commit>`. The GitOps compose file (`docker-compose.yml`) lives in `nevridge/taskflow-deploy`; that is the production source of truth. `docker-compose.prod.yml` in this repo is only a local prod-like harness, differs from production, and is not kept in sync.
 
 ## Key Configuration
 

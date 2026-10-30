@@ -6,10 +6,12 @@ This document covers Docker configurations for all three TaskFlow services: the 
 
 ## Overview
 
-The `docker-compose.yml` (development) file runs all three services together. A separate `docker-compose.prod.yml` runs a production-like API configuration (the web service is not yet wired into the production compose).
+The `docker-compose.yml` (development) file runs all three services together. A separate `docker-compose.prod.yml` runs a production-like API configuration (the local harness does not include the web service).
+
+> **Note:** `docker-compose.prod.yml` is a local prod-like harness, not the production definition. The source of truth for production is `docker-compose.yml` in [nevridge/taskflow-deploy](https://github.com/nevridge/taskflow-deploy), which differs from this file; see that repo.
 
 - **Development**: Fast iteration with automatic migrations, Seq log viewer, React frontend
-- **Production**: Optimised build with automatic migrations, no Seq, no frontend
+- **Production-like (local harness)**: Optimised build with automatic migrations; the local harness has no Seq and no frontend. Real production is defined in nevridge/taskflow-deploy.
 
 **When to use this guide:**
 - Understanding intentional configuration differences between services and environments
@@ -58,7 +60,7 @@ A two-stage Node build. The build stage runs `npm run build`. The API client use
 
 **API service comparison:**
 
-| Aspect | Development (`docker-compose.yml`) | Production (`docker-compose.prod.yml`) |
+| Aspect | Development (`docker-compose.yml`) | Local prod-like (`docker-compose.prod.yml`) |
 |--------|-----------------------------------|--------------------------------------|
 | **Build Context** | `.` (repository root) | `.` (repository root) |
 | **Dockerfile** | `TaskFlow.Api/Dockerfile` | `TaskFlow.Api/Dockerfile` |
@@ -213,7 +215,7 @@ docker-compose -f docker-compose.prod.yml up
 ```
 
 **Characteristics:**
-- ✅ Production environment
+- ✅ Production-style environment (local harness)
 - ✅ Automatic migrations on startup
 - ✅ Scalar UI disabled
 - ✅ Production logging

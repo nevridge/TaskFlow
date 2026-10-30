@@ -139,7 +139,7 @@ TaskFlow/
 ├── TaskFlow.Api.Tests/         # xUnit test suite for the API
 ├── docs/                       # Extended documentation
 ├── docker-compose.yml          # Full-stack dev environment (api + web + seq)
-└── docker-compose.prod.yml     # Production-like compose
+└── docker-compose.prod.yml     # Local prod-like harness (NOT production; see nevridge/taskflow-deploy)
 ```
 
 ## Technology Stack

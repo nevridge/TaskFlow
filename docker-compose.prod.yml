@@ -1,3 +1,8 @@
+# LOCAL PROD-LIKE HARNESS - NOT the production source of truth.
+# This file builds the API from source for local testing of a production-style
+# configuration. It is not what Portainer runs and is not kept in sync with it.
+# The real production compose file is docker-compose.yml in the
+# nevridge/taskflow-deploy repository (GitOps). See that repo for current values.
 services:
   taskflow-api:
     image: taskflow-api:prod

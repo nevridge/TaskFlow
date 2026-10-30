@@ -225,8 +225,10 @@ When deploying with Docker Compose to an on-premises Docker Host (via Portainer 
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+> **Note:** `docker-compose.prod.yml` is a local prod-like harness. Production is defined in `docker-compose.yml` in nevridge/taskflow-deploy, which uses volumes `taskflow-data` and `taskflow-logs`; see that repo for current values.
+
 This configuration automatically:
-- Creates and manages named volumes (`taskflow-data`, `taskflow-logs`)
+- Creates and manages named volumes. The local harness creates `taskflow-data-prod` and `taskflow-logs-prod`; production uses `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values).
 - Persists data across container restarts
 - Provides consistent paths across environments
 - Supports backup and restore operations
@@ -576,22 +578,22 @@ Docker Host (Portainer GitOps) uses Docker Compose with named volumes, but with 
 
 **Volume Names:**
 - **Development** (docker-compose.yml): `taskflow-data`, `taskflow-logs`
-- **Production** (docker-compose.prod.yml): `taskflow-data-prod`, `taskflow-logs-prod`
+- **Local prod-like harness** (docker-compose.prod.yml): `taskflow-data-prod`, `taskflow-logs-prod` (real production uses `taskflow-data` and `taskflow-logs`)
 
 **Configuration:**
-1. **Configuration is automatic** - `docker-compose.prod.yml` creates and manages volumes
-2. **Separate volumes** - Production volumes are isolated from development (prevents accidental overwrites)
+1. **Configuration is automatic** - the compose file (local harness or production GitOps) creates and manages volumes
+2. **Separate volumes** - The local harness's `-prod` volumes are isolated from development volumes (prevents accidental overwrites)
 3. **Consistent paths** - Container paths are `/app/data` and `/app/logs` in both environments
 4. **Data persists** - Volumes outlive container lifecycle
 
-Your data in volumes will automatically persist when using the standard compose configuration. When migrating data between environments, ensure you're using the correct volume names for each environment.
+Your data in volumes will automatically persist when using the compose file for that environment (the local harness or the production GitOps file). When migrating data between environments, ensure you're using the correct volume names for each environment.
 
 ## Summary
 
 - **Volume Type**: Docker named volumes (default) or bind mounts (alternative)
 - **Default container paths**: `/app/logs` for logs, `/app/data` for database
 - **Development volumes**: `taskflow-data` and `taskflow-logs` (docker-compose.yml)
-- **Production volumes**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml)
+- **Local harness volumes**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml); production uses `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values)
 - **Environment variables**: `LOG_PATH` and `ConnectionStrings__DefaultConnection` for customization
 - **Persistence**: Data persists across container removal/recreation until volumes are explicitly deleted
 - **Management**: Use `docker volume` commands to manage, backup, and restore volumes

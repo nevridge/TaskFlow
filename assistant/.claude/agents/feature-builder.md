@@ -23,7 +23,7 @@ You must not touch `.claude/**`, `build.ps1`, `scripts/**`, `.github/**` or the 
 
 - Tool classes live in `src/TaskFlow.Mcp/Tools/`. Every tool body runs through `ToolGuard.RunAsync` so API failures become `McpException` messages that the model can act on (the SDK returns only `McpException` messages to the model). Use `ToolGuard.Invalid(...)` for bad input.
 - API access goes through `TaskFlowApiClient` and the DTOs in `Api/ApiModels.cs`. These are hand-written and mirror the TaskFlow API. If the brief needs an API field that does not exist yet, report a Spec Blocker rather than guessing.
-- Time handling uses `TimeProvider` (see `InputParsing.OffsetMinutes`). `timezoneOffsetMinutes` is minutes east of UTC.
+- Time handling uses `TimeProvider` (see `InputParsing.LocalNow`, which returns `(Today, OffsetMinutes)` from one snapshot). `timezoneOffsetMinutes` is minutes east of UTC.
 - Tests use xUnit v3, FluentAssertions and `FakeTimeProvider`. Build on `StubHandler` (route by method and path, records requests, `BodyOf` reads a sent body) and the `Fixtures` builders in `TestSupport.cs`. Extend an existing test file for the class under test rather than creating a parallel one.
 - Test names: `Method_Scenario_ExpectedBehavior`. Arrange / Act / Assert separated by blank lines. Zero build warnings.
 - Prefer `Edit` for existing files and `Write` for new ones. Use Bash only for `dotnet`, `claude plugin validate` and read-only `git` commands.

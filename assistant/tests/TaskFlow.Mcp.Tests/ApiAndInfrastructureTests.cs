@@ -195,7 +195,17 @@ public class InputParsingTests
         var time = Fixtures.Time();
 
         InputParsing.Today(time).Should().Be(Today);
-        InputParsing.OffsetMinutes(time).Should().Be(-420);
+        InputParsing.LocalNow(time).OffsetMinutes.Should().Be(-420);
+    }
+
+    [Fact]
+    public void CountingTimeProvider_OneGetLocalNow_IsOneUtcRead()
+    {
+        var provider = new CountingTimeProvider();
+
+        provider.GetLocalNow();
+
+        provider.UtcReads.Should().Be(1);
     }
 
     [Fact]

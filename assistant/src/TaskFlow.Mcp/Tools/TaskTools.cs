@@ -303,8 +303,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid($"Too many tasks ({tasks.Count}). Create at most {MaxBatch} per call.");
             }
 
-            var today = InputParsing.Today(time);
-            var offsetMinutes = InputParsing.OffsetMinutes(time);
+            var (today, offset) = InputParsing.LocalNow(time);
             IReadOnlyList<ProjectDto>? projects = null;
 
             var created = new List<string>();
@@ -365,7 +364,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         string.IsNullOrWhiteSpace(item.JournalDate) ? null : InputParsing.ParseDate(item.JournalDate, today, "journalDate"),
                         item.ParentTaskId,
                         projectId,
-                        offsetMinutes);
+                        offset);
 
                     var task = await api.CreateTaskAsync(request, ct);
                     var line = "+ " + Formatting.Task(task, today, nowUtc: time.GetUtcNow());
@@ -420,9 +419,9 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
-            var today = InputParsing.Today(time);
+            var (today, offset) = InputParsing.LocalNow(time);
             var outcome = await UpdateTaskCoreAsync(
-                id, title, description, status, priority, dueDate, project, parentTaskId, complete, blockedReason, today, ct);
+                id, title, description, status, priority, dueDate, project, parentTaskId, complete, blockedReason, today, offset, ct);
             var summary = outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes);
             return $"Updated #{id}. {summary}.\n{Formatting.Task(outcome.Task, today, detailed: true, nowUtc: time.GetUtcNow())}";
         });
@@ -457,7 +456,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 }
             }
 
-            var today = InputParsing.Today(time);
+            var (today, offset) = InputParsing.LocalNow(time);
             var lines = new List<string>();
             var updated = 0;
             var stopped = false;
@@ -473,7 +472,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 try
                 {
                     var outcome = await UpdateTaskCoreAsync(
-                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.ParentTaskId, item.Complete, item.BlockedReason, today, ct);
+                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.ParentTaskId, item.Complete, item.BlockedReason, today, offset, ct);
                     var summary = outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes);
                     lines.Add($"+ #{item.Id} \"{Formatting.CleanReason(outcome.Task.Title)}\": {summary}");
                     updated++;
@@ -510,6 +509,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         bool? complete,
         string? blockedReason,
         DateOnly today,
+        int offset,
         CancellationToken ct)
     {
         var existing = await api.GetTaskAsync(id, ct);
@@ -607,7 +607,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             newDue,
             newParent,
             AutoCompleteParentWhenChildrenDone: false,
-            InputParsing.OffsetMinutes(time),
+            offset,
             requestReason);
 
         var updated = await api.UpdateTaskAsync(id, request, ct);

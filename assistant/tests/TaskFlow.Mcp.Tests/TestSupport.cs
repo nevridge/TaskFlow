@@ -96,6 +96,32 @@ internal sealed class StubHandler : HttpMessageHandler
     }
 }
 
+/// <summary>
+/// Fixed-instant clock that counts reads. GetLocalNow is non-virtual and calls GetUtcNow, so we count GetUtcNow.
+/// </summary>
+internal sealed class CountingTimeProvider : TimeProvider
+{
+    private readonly TimeZoneInfo _zone;
+    private readonly DateTimeOffset _utc;
+
+    public CountingTimeProvider(int offsetMinutes = -420, DateTimeOffset? utc = null)
+    {
+        // CreateCustomTimeZone needs whole-minute offsets within +/-14h.
+        _zone = TimeZoneInfo.CreateCustomTimeZone("test", TimeSpan.FromMinutes(offsetMinutes), "test", "test");
+        _utc = utc ?? new DateTimeOffset(2026, 10, 9, 17, 0, 0, TimeSpan.Zero);
+    }
+
+    public int UtcReads { get; set; }
+
+    public override TimeZoneInfo LocalTimeZone => _zone;
+
+    public override DateTimeOffset GetUtcNow()
+    {
+        UtcReads++;
+        return _utc;
+    }
+}
+
 internal static class Fixtures
 {
     // 2026-10-09 10:00 local at UTC-7 (17:00Z)

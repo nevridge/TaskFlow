@@ -694,7 +694,7 @@ public class TaskItemsControllerPatchTests
 
     // ---- DTO timezone offset validation (issue #207) ----
 
-    private const string OffsetMessage = "TimezoneOffsetMinutes must be between -720 and 840 (UTC-12:00 to UTC+14:00).";
+    private const string OffsetMessage = TimezoneOffsetTestHelpers.OffsetMessage;
 
     private TaskItemsController NewControllerWithRealDtoValidators() => new(
         _mockRepo.Object,
@@ -706,11 +706,7 @@ public class TaskItemsControllerPatchTests
         new PatchTaskItemDtoValidator());
 
     private static void AssertOffsetBadRequest(ActionResult<TaskItemResponseDto> result)
-    {
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
-        var errors = Assert.IsAssignableFrom<IEnumerable<ValidationFailure>>(badRequest.Value);
-        Assert.Single(errors, e => e.PropertyName == "TimezoneOffsetMinutes" && e.ErrorMessage == OffsetMessage);
-    }
+        => TimezoneOffsetTestHelpers.AssertOffsetBadRequest(result.Result);
 
     [Fact]
     public async Task Patch_ShouldReturnBadRequestWithValidationErrors_WhenDtoValidatorFails()
@@ -767,6 +763,8 @@ public class TaskItemsControllerPatchTests
     [Fact]
     public async Task Patch_ShouldReturnBadRequestNotReopenError_WhenReopeningAndOffsetOutOfRange()
     {
+        // Positive control (same setup, valid offset 0 -> reopen guard fires):
+        // Patch_ShouldReturnUnprocessable_WhenReopeningTaskAssignedToPastDay
         var controller = NewControllerWithRealDtoValidators();
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Completed });
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1));
@@ -790,5 +788,6 @@ public class TaskItemsControllerPatchTests
         var result = await controller.Patch(1, new PatchTaskItemDto { Title = "T2", TimezoneOffsetMinutes = offset });
 
         Assert.Equal("T2", OkDto(result).Title);
+        _mockRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 }

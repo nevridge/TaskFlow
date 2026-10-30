@@ -1610,7 +1610,7 @@ public class TaskItemsControllerV1Tests
 
     // ---- DTO timezone offset validation (issue #207) ----
 
-    private const string OffsetMessage = "TimezoneOffsetMinutes must be between -720 and 840 (UTC-12:00 to UTC+14:00).";
+    private const string OffsetMessage = TimezoneOffsetTestHelpers.OffsetMessage;
 
     private TaskItemsController NewControllerWithRealDtoValidators() => new(
         _mockRepo.Object,
@@ -1622,11 +1622,7 @@ public class TaskItemsControllerV1Tests
         new PatchTaskItemDtoValidator());
 
     private static void AssertOffsetBadRequest(IActionResult? actionResult)
-    {
-        var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult);
-        var errors = Assert.IsAssignableFrom<IEnumerable<ValidationFailure>>(badRequest.Value);
-        Assert.Single(errors, e => e.PropertyName == "TimezoneOffsetMinutes" && e.ErrorMessage == OffsetMessage);
-    }
+        => TimezoneOffsetTestHelpers.AssertOffsetBadRequest(actionResult);
 
     [Fact]
     public async Task Create_ShouldReturnBadRequestWithValidationErrors_WhenDtoValidatorFails()
@@ -1741,6 +1737,20 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Update_ShouldReturnUnprocessableEntity_WhenReopeningAndOffsetValid()
+    {
+        // Positive control for the ordering test below: same setup, valid offset.
+        var controller = NewControllerWithRealDtoValidators();
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Completed });
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1));
+
+        var result = await controller.Update(1, new UpdateTaskItemDto { Title = "T", Status = Status.Todo, TimezoneOffsetMinutes = 0 });
+
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Update_ShouldReturnBadRequestNotReopenError_WhenReopeningAndOffsetOutOfRange()
     {
         var controller = NewControllerWithRealDtoValidators();
@@ -1768,6 +1778,7 @@ public class TaskItemsControllerV1Tests
         var result = await controller.Create(new CreateTaskItemDto { Title = "T", TimezoneOffsetMinutes = offset });
 
         Assert.IsType<CreatedAtRouteResult>(result.Result);
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Once);
     }
 
     [Theory]
@@ -1783,5 +1794,6 @@ public class TaskItemsControllerV1Tests
         var result = await controller.Update(1, new UpdateTaskItemDto { Title = "T2", TimezoneOffsetMinutes = offset });
 
         Assert.IsType<OkObjectResult>(result.Result);
+        _mockRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
     }
 }

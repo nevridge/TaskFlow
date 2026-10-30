@@ -243,6 +243,16 @@ public class JournalLogEntriesControllerV1Tests
         _logRepo.Setup(s => s.GetByIdAsync(1, 3)).ReturnsAsync(existing);
         SetupValidationSuccess();
         _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(20)).ReturnsAsync(task);
+        _logRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 3)).ReturnsAsync(
+            new JournalLogEntry
+            {
+                Id = 3,
+                JournalEntryId = 1,
+                Content = "Updated",
+                TaskItemId = 20,
+                TaskItem = task,
+                LinkedTaskTitleSnapshot = "New Task",
+            });
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated", TaskItemId = 20 });
 
@@ -252,6 +262,25 @@ public class JournalLogEntriesControllerV1Tests
         Assert.Equal("New Task", dto.LinkedTaskTitle);
         Assert.False(dto.LinkedTaskDeleted);
         _logRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
+        _logRepo.Verify(r => r.GetByIdNoTrackingAsync(1, 3), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_ShouldFallBackToExisting_WhenRereadReturnsNull()
+    {
+        var task = MakeTask(id: 20, title: "New Task");
+        var existing = new JournalLogEntry { Id = 3, JournalEntryId = 1, Content = "Old" };
+        _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
+        _logRepo.Setup(s => s.GetByIdAsync(1, 3)).ReturnsAsync(existing);
+        SetupValidationSuccess();
+        _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(20)).ReturnsAsync(task);
+        _logRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 3)).ReturnsAsync((JournalLogEntry?)null);
+
+        var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated", TaskItemId = 20 });
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalLogEntryResponseDto>(ok.Value);
+        Assert.Equal("New Task", dto.LinkedTaskTitle);
     }
 
     [Fact]
@@ -268,6 +297,8 @@ public class JournalLogEntriesControllerV1Tests
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
         _logRepo.Setup(s => s.GetByIdAsync(1, 3)).ReturnsAsync(existing);
         SetupValidationSuccess();
+        _logRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 3)).ReturnsAsync(
+            new JournalLogEntry { Id = 3, JournalEntryId = 1, Content = "Updated" });
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated" });
 

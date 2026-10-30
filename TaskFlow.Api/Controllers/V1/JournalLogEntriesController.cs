@@ -118,7 +118,10 @@ public class JournalLogEntriesController(
         }
 
         await _logRepo.UpdateAsync(existing);
-        return Ok(JournalLogEntryMapper.ToDto(existing));
+
+        // Post-save NoTracking re-read so the response does not depend on EF navigation fix-up of the stale Included task.
+        var reread = await _logRepo.GetByIdNoTrackingAsync(entryId, id);
+        return Ok(JournalLogEntryMapper.ToDto(reread ?? existing));
     }
 
     // DELETE: api/v1/JournalEntries/{entryId}/logs/{id}

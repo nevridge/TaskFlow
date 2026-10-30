@@ -129,6 +129,28 @@ public sealed class TaskItemsControllerRealStackTests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_AfterNoTrackingLookup_RemovesRow()
+    {
+        int id;
+        await using (var seed = NewContext())
+        {
+            var task = new TaskItem { Title = "Doomed" };
+            seed.TaskItems.Add(task);
+            await seed.SaveChangesAsync();
+            id = task.Id;
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var result = await NewController(ctx).Delete(id);
+            Assert.IsType<NoContentResult>(result);
+        }
+
+        await using var verify = NewContext();
+        Assert.False(await verify.TaskItems.AnyAsync(t => t.Id == id));
+    }
+
+    [Fact]
     public async Task Get_ReturnsProjectNameAndLeavesTrackerEmpty()
     {
         int id;

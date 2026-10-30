@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Trace;
 using TaskFlow.Api.Data;
+using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
@@ -56,6 +57,19 @@ public class ServiceCollectionExtensionsTests
         // Assert
         Assert.NotNull(serviceProvider.GetService<IValidator<TaskItem>>());
         Assert.IsType<TaskItemValidator>(serviceProvider.GetService<IValidator<TaskItem>>());
+    }
+
+    [Fact]
+    public void AddValidation_ShouldRegisterTaskItemDtoValidators()
+    {
+        var services = new ServiceCollection();
+
+        services.AddValidation();
+        var serviceProvider = services.BuildServiceProvider();
+
+        Assert.IsType<CreateTaskItemDtoValidator>(serviceProvider.GetRequiredService<IValidator<CreateTaskItemDto>>());
+        Assert.IsType<UpdateTaskItemDtoValidator>(serviceProvider.GetRequiredService<IValidator<UpdateTaskItemDto>>());
+        Assert.IsType<PatchTaskItemDtoValidator>(serviceProvider.GetRequiredService<IValidator<PatchTaskItemDto>>());
     }
 
     [Fact]

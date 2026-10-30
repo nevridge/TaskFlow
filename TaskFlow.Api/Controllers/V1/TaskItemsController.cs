@@ -15,7 +15,10 @@ public class TaskItemsController(
     ITaskRepository repo,
     IValidator<TaskItem> validator,
     IJournalEntryRepository journalRepo,
-    IProjectRepository projectRepo) : ControllerBase
+    IProjectRepository projectRepo,
+    IValidator<CreateTaskItemDto> createDtoValidator,
+    IValidator<UpdateTaskItemDto> updateDtoValidator,
+    IValidator<PatchTaskItemDto> patchDtoValidator) : ControllerBase
 {
     private const string ProjectNotFoundErrorCode = "TASK_PROJECT_NOT_FOUND";
     private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
@@ -34,6 +37,9 @@ public class TaskItemsController(
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IProjectRepository _projectRepo = projectRepo;
+    private readonly IValidator<CreateTaskItemDto> _createDtoValidator = createDtoValidator;
+    private readonly IValidator<UpdateTaskItemDto> _updateDtoValidator = updateDtoValidator;
+    private readonly IValidator<PatchTaskItemDto> _patchDtoValidator = patchDtoValidator;
 
     // GET: api/v1/TaskItems
     [HttpGet]
@@ -106,6 +112,12 @@ public class TaskItemsController(
     [HttpPost]
     public async Task<ActionResult<TaskItemResponseDto>> Create([FromBody] CreateTaskItemDto createDto)
     {
+        var dtoValidationResult = await _createDtoValidator.ValidateAsync(createDto);
+        if (!dtoValidationResult.IsValid)
+        {
+            return BadRequest(dtoValidationResult.Errors);
+        }
+
         if (createDto.Status == Status.Blocked)
         {
             return UnprocessableEntity(new
@@ -198,8 +210,15 @@ public class TaskItemsController(
 
     // PUT: api/v1/TaskItems/5
     [HttpPut("{id}")]
-    public Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto) =>
-        ApplyUpdateAsync(id, new TaskChanges
+    public async Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto)
+    {
+        var dtoValidationResult = await _updateDtoValidator.ValidateAsync(updateDto);
+        if (!dtoValidationResult.IsValid)
+        {
+            return BadRequest(dtoValidationResult.Errors);
+        }
+
+        return await ApplyUpdateAsync(id, new TaskChanges
         {
             HasTitle = true,
             Title = updateDto.Title,
@@ -219,12 +238,20 @@ public class TaskItemsController(
             AutoCompleteParentWhenChildrenDone = updateDto.AutoCompleteParentWhenChildrenDone,
             TimezoneOffsetMinutes = updateDto.TimezoneOffsetMinutes
         });
+    }
 
     // PATCH: api/v1/TaskItems/5
     // Partial update (JSON Merge Patch): absent fields are left unchanged.
     [HttpPatch("{id}")]
-    public Task<ActionResult<TaskItemResponseDto>> Patch(int id, [FromBody] PatchTaskItemDto patchDto) =>
-        ApplyUpdateAsync(id, new TaskChanges
+    public async Task<ActionResult<TaskItemResponseDto>> Patch(int id, [FromBody] PatchTaskItemDto patchDto)
+    {
+        var dtoValidationResult = await _patchDtoValidator.ValidateAsync(patchDto);
+        if (!dtoValidationResult.IsValid)
+        {
+            return BadRequest(dtoValidationResult.Errors);
+        }
+
+        return await ApplyUpdateAsync(id, new TaskChanges
         {
             // A present null/empty title becomes "" so the validator returns 400.
             HasTitle = patchDto.IsPresent(nameof(PatchTaskItemDto.Title)),
@@ -245,6 +272,7 @@ public class TaskItemsController(
             AutoCompleteParentWhenChildrenDone = patchDto.AutoCompleteParentWhenChildrenDone,
             TimezoneOffsetMinutes = patchDto.TimezoneOffsetMinutes
         });
+    }
 
     private sealed record TaskChanges
     {

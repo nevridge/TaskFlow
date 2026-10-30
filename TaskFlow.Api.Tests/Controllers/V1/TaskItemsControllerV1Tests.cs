@@ -10,6 +10,7 @@ using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Api.Validators;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 
@@ -19,6 +20,9 @@ public class TaskItemsControllerV1Tests
     private readonly Mock<IValidator<TaskItem>> _mockValidator;
     private readonly Mock<IJournalEntryRepository> _mockJournalRepo;
     private readonly Mock<IProjectRepository> _mockProjectRepo;
+    private readonly Mock<IValidator<CreateTaskItemDto>> _mockCreateDtoValidator = new();
+    private readonly Mock<IValidator<UpdateTaskItemDto>> _mockUpdateDtoValidator = new();
+    private readonly Mock<IValidator<PatchTaskItemDto>> _mockPatchDtoValidator = new();
     private readonly TaskItemsController _controller;
 
     public TaskItemsControllerV1Tests()
@@ -34,7 +38,17 @@ public class TaskItemsControllerV1Tests
             .ReturnsAsync(new Dictionary<int, DateOnly>());
         _mockRepo.Setup(r => r.GetLastMovedDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
             .ReturnsAsync(new Dictionary<int, DateOnly>());
-        _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object, _mockProjectRepo.Object);
+        _mockCreateDtoValidator.Setup(v => v.ValidateAsync(It.IsAny<CreateTaskItemDto>(), default)).ReturnsAsync(new ValidationResult());
+        _mockUpdateDtoValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdateTaskItemDto>(), default)).ReturnsAsync(new ValidationResult());
+        _mockPatchDtoValidator.Setup(v => v.ValidateAsync(It.IsAny<PatchTaskItemDto>(), default)).ReturnsAsync(new ValidationResult());
+        _controller = new TaskItemsController(
+            _mockRepo.Object,
+            _mockValidator.Object,
+            _mockJournalRepo.Object,
+            _mockProjectRepo.Object,
+            _mockCreateDtoValidator.Object,
+            _mockUpdateDtoValidator.Object,
+            _mockPatchDtoValidator.Object);
     }
 
     [Fact]
@@ -455,7 +469,14 @@ public class TaskItemsControllerV1Tests
         context.Database.EnsureCreated();
 
         var journalRepo = new JournalEntryRepository(context);
-        var controller = new TaskItemsController(new TaskRepository(context), _mockValidator.Object, journalRepo, _mockProjectRepo.Object);
+        var controller = new TaskItemsController(
+            new TaskRepository(context),
+            _mockValidator.Object,
+            journalRepo,
+            _mockProjectRepo.Object,
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
 
         const int offset = 0;
@@ -491,7 +512,14 @@ public class TaskItemsControllerV1Tests
         context.Database.EnsureCreated();
 
         var journalRepo = new JournalEntryRepository(context);
-        var controller = new TaskItemsController(new TaskRepository(context), _mockValidator.Object, journalRepo, _mockProjectRepo.Object);
+        var controller = new TaskItemsController(
+            new TaskRepository(context),
+            _mockValidator.Object,
+            journalRepo,
+            _mockProjectRepo.Object,
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
 
         // Pick the offset that puts the user's local time at about noon, so a run can never straddle the
@@ -1578,5 +1606,182 @@ public class TaskItemsControllerV1Tests
         Assert.Equal(2, dtos.Single(d => d.Id == 1).ChildTaskCount);
         Assert.Equal(0, dtos.Single(d => d.Id == 2).ChildTaskCount);
         Assert.Equal(0, dtos.Single(d => d.Id == 4).ChildTaskCount);
+    }
+
+    // ---- DTO timezone offset validation (issue #207) ----
+
+    private const string OffsetMessage = "TimezoneOffsetMinutes must be between -720 and 840 (UTC-12:00 to UTC+14:00).";
+
+    private TaskItemsController NewControllerWithRealDtoValidators() => new(
+        _mockRepo.Object,
+        _mockValidator.Object,
+        _mockJournalRepo.Object,
+        _mockProjectRepo.Object,
+        new CreateTaskItemDtoValidator(),
+        new UpdateTaskItemDtoValidator(),
+        new PatchTaskItemDtoValidator());
+
+    private static void AssertOffsetBadRequest(IActionResult? actionResult)
+    {
+        var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult);
+        var errors = Assert.IsAssignableFrom<IEnumerable<ValidationFailure>>(badRequest.Value);
+        Assert.Single(errors, e => e.PropertyName == "TimezoneOffsetMinutes" && e.ErrorMessage == OffsetMessage);
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnBadRequestWithValidationErrors_WhenDtoValidatorFails()
+    {
+        var failures = new List<ValidationFailure> { new("TimezoneOffsetMinutes", OffsetMessage) };
+        _mockCreateDtoValidator.Setup(v => v.ValidateAsync(It.IsAny<CreateTaskItemDto>(), default))
+            .ReturnsAsync(new ValidationResult(failures));
+
+        var result = await _controller.Create(new CreateTaskItemDto { Title = "T", TimezoneOffsetMinutes = 841 });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(failures, badRequest.Value);
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnBadRequestWithValidationErrors_WhenDtoValidatorFails()
+    {
+        var failures = new List<ValidationFailure> { new("TimezoneOffsetMinutes", OffsetMessage) };
+        _mockUpdateDtoValidator.Setup(v => v.ValidateAsync(It.IsAny<UpdateTaskItemDto>(), default))
+            .ReturnsAsync(new ValidationResult(failures));
+
+        var result = await _controller.Update(1, new UpdateTaskItemDto { Title = "T", TimezoneOffsetMinutes = -721 });
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        Assert.Equal(failures, badRequest.Value);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        _mockRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(-721)]
+    [InlineData(841)]
+    [InlineData(-2000000000)]
+    public async Task Create_ShouldReturnBadRequest_WhenOffsetOutOfRange_EvenWithJournalDate(int offset)
+    {
+        var controller = NewControllerWithRealDtoValidators();
+
+        var result = await controller.Create(new CreateTaskItemDto
+        {
+            Title = "T",
+            JournalDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            TimezoneOffsetMinutes = offset
+        });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(-721)]
+    [InlineData(841)]
+    [InlineData(-2000000000)]
+    public async Task Update_ShouldReturnBadRequest_WhenOffsetOutOfRange(int offset)
+    {
+        var controller = NewControllerWithRealDtoValidators();
+
+        var result = await controller.Update(1, new UpdateTaskItemDto { Title = "T", TimezoneOffsetMinutes = offset });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnBadRequestNotUnprocessable_WhenStatusBlockedAndOffsetOutOfRange()
+    {
+        var controller = NewControllerWithRealDtoValidators();
+
+        var result = await controller.Create(new CreateTaskItemDto { Title = "T", Status = Status.Blocked, TimezoneOffsetMinutes = 841 });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Create_ShouldReturnBadRequestNotPastDay_WhenJournalDateIsPastAndOffsetOutOfRange()
+    {
+        var controller = NewControllerWithRealDtoValidators();
+
+        var result = await controller.Create(new CreateTaskItemDto
+        {
+            Title = "T",
+            JournalDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-5),
+            TimezoneOffsetMinutes = -721
+        });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnBadRequestNotNotFound_WhenIdMissingAndOffsetOutOfRange()
+    {
+        var controller = NewControllerWithRealDtoValidators();
+        _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((TaskItem?)null);
+
+        var result = await controller.Update(999, new UpdateTaskItemDto { Title = "T", TimezoneOffsetMinutes = 841 });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnNotFound_WhenIdMissingAndOffsetValid()
+    {
+        var controller = NewControllerWithRealDtoValidators();
+        _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((TaskItem?)null);
+
+        var result = await controller.Update(999, new UpdateTaskItemDto { Title = "T", TimezoneOffsetMinutes = 0 });
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnBadRequestNotReopenError_WhenReopeningAndOffsetOutOfRange()
+    {
+        var controller = NewControllerWithRealDtoValidators();
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Completed });
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1));
+
+        var result = await controller.Update(1, new UpdateTaskItemDto { Title = "T", Status = Status.Todo, TimezoneOffsetMinutes = -2000000000 });
+
+        AssertOffsetBadRequest(result.Result);
+        _mockRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(-720)]
+    [InlineData(840)]
+    public async Task Create_ShouldNotReturnOffsetBadRequest_WhenOffsetAtBoundary(int offset)
+    {
+        var controller = NewControllerWithRealDtoValidators();
+        var created = new TaskItem { Id = 77, Title = "T", Status = Status.Todo };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(created);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(77)).ReturnsAsync(created);
+
+        var result = await controller.Create(new CreateTaskItemDto { Title = "T", TimezoneOffsetMinutes = offset });
+
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
+    }
+
+    [Theory]
+    [InlineData(-720)]
+    [InlineData(840)]
+    public async Task Update_ShouldNotReturnOffsetBadRequest_WhenOffsetAtBoundary(int offset)
+    {
+        var controller = NewControllerWithRealDtoValidators();
+        var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Todo };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+
+        var result = await controller.Update(1, new UpdateTaskItemDto { Title = "T2", TimezoneOffsetMinutes = offset });
+
+        Assert.IsType<OkObjectResult>(result.Result);
     }
 }

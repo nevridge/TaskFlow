@@ -296,10 +296,20 @@ public class TaskItemsControllerV1Tests
         var mockRepo = new Mock<ITaskRepository>();
         var mockValidator = new Mock<IValidator<TaskItem>>();
         var mockJournalRepo = new Mock<IJournalEntryRepository>();
-        mockRepo.Setup(r => r.GetByIdAsync(1))
+        var mockProjectRepo = new Mock<IProjectRepository>();
+        mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1))
                 .ReturnsAsync((TaskItem?)null);
 
-        var controller = new TaskItemsController(mockRepo.Object, mockValidator.Object, mockJournalRepo.Object);
+        // The DTO validators are only invoked by Create/Update/Patch; set up ValidateAsync on them
+        // (returning new ValidationResult()) or use the real validators for tests of those actions.
+        var controller = new TaskItemsController(
+            mockRepo.Object,
+            mockValidator.Object,
+            mockJournalRepo.Object,
+            mockProjectRepo.Object,
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
 
         // Act
         var result = await controller.Get(1);

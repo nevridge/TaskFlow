@@ -33,7 +33,14 @@ public sealed class TaskItemsControllerRealStackTests : IDisposable
     private TaskDbContext NewContext() => new(_options);
 
     private static TaskItemsController NewController(TaskDbContext ctx) =>
-        new(new TaskRepository(ctx), new TaskItemValidator(), new JournalEntryRepository(ctx), new ProjectRepository(ctx));
+        new(
+            new TaskRepository(ctx),
+            new TaskItemValidator(),
+            new JournalEntryRepository(ctx),
+            new ProjectRepository(ctx),
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
 
     [Fact]
     public async Task Update_TrackedLoad_PersistsChanges()

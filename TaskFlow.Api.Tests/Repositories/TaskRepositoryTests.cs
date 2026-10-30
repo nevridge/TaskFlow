@@ -866,6 +866,19 @@ public class TaskRepositoryTests
     }
 
     [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldHandleLargeIdList()
+    {
+        using var s = new SqliteStack();
+        var entry = await s.AddEntryAsync(new DateOnly(2026, 3, 5));
+        var task = await s.AddTaskAsync(entry: entry);
+        var ids = Enumerable.Range(task.Id, 1000).ToList();
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync(ids);
+
+        Assert.Equal(new DateOnly(2026, 3, 5), result[task.Id]);
+    }
+
+    [Fact]
     public async Task GetLastMovedDatesAsync_ShouldHandleLargeIdList()
     {
         using var s = new SqliteStack();

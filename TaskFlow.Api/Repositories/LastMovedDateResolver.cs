@@ -1,12 +1,12 @@
 namespace TaskFlow.Api.Repositories;
 
-public record MoveEventProjection(int Id, DateTime OccurredAtUtc, DateOnly? From, DateOnly? To);
+internal sealed record MoveEventProjection(int Id, DateTime OccurredAtUtc, DateOnly? From, DateOnly? To);
 
 /// <summary>
 /// Single copy of the "last moved date" rule: the latest event (by OccurredAtUtc) that carries a journal date,
 /// resolved as ToJournalDate ?? FromJournalDate. Ties on OccurredAtUtc resolve to the lowest event Id.
 /// </summary>
-public static class LastMovedDateResolver
+internal static class LastMovedDateResolver
 {
     public static DateOnly? Resolve(IEnumerable<MoveEventProjection> events) =>
         events

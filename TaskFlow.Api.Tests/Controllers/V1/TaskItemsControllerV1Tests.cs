@@ -111,6 +111,23 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
+    public async Task Get_ShouldReturnLastMovedDateOfLowestId_WhenEventsTieOnOccurredAt()
+    {
+        var at = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
+        _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync(
+        [
+            new TaskItemEvent { Id = 7, TaskItemId = 1, OccurredAtUtc = at, ToJournalDate = new DateOnly(2026, 3, 9) },
+            new TaskItemEvent { Id = 3, TaskItemId = 1, OccurredAtUtc = at, ToJournalDate = new DateOnly(2026, 3, 2) }
+        ]);
+
+        var result = await _controller.Get(1);
+
+        var dto = Assert.IsType<TaskItemResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(new DateOnly(2026, 3, 2), dto.LastMovedDate);
+    }
+
+    [Fact]
     public async Task GetAll_ShouldReturnOkWithAllTasks()
     {
         // Arrange

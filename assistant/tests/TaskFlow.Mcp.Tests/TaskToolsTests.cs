@@ -1544,6 +1544,24 @@ public class UpdateTasksTests
     }
 
     [Fact]
+    public async Task UpdateTasks_TodayDueDatesWithFailingItemMidBatch_StillTakesOneClockSnapshot()
+    {
+        var handler = HandlerFor(1, 3);
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTasks([
+            new TaskUpdate { Id = 1, DueDate = "today" },
+            new TaskUpdate { Id = 2, DueDate = "today" },
+            new TaskUpdate { Id = 3, DueDate = "today" },
+        ]);
+
+        clock.UtcReads.Should().Be(1);
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
+    }
+
+    [Fact]
     public async Task SingleItem_SendsTheSameRequestAsUpdateTask_AndReportsTheChanges()
     {
         var single = HandlerFor(5);

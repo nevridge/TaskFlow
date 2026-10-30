@@ -1,6 +1,6 @@
 ---
 name: claude-plugin-advisor
-description: Documentation-grounded advisor for Claude Code plugin, skill, subagent and memory changes in taskflow-assistant (plugin/, chat/, .claude/, CLAUDE.md, SKILL.md frontmatter, plugin.json, .mcp.json, marketplace.json). Fetches the current Claude Code documentation and returns cited recommendations. Invoke from feature-factory after the brief is approved and before the builder. Advisory only; never edits files.
+description: Documentation-grounded advisor for Claude Code plugin, skill, subagent and memory changes in taskflow-assistant (plugin/, chat/, .claude/, CLAUDE.md, SKILL.md frontmatter, plugin.json, .mcp.json, marketplace.json). Fetches the current Claude Code documentation and returns cited recommendations. Invoke from feature-factory after the draft brief is written and before Approval Stop 2. Advisory only; never edits files.
 tools: Read, Glob, Grep, WebFetch, WebSearch
 model: sonnet
 color: purple

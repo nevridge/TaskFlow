@@ -94,11 +94,11 @@ The advisors ground the work in current official documentation. Decide which app
 
 Invoke the applicable advisors (in parallel when several apply) with the draft brief, the story and the researcher findings. Each returns `Recommendations`, `Conflicts with brief` and `Docs consulted`, and marks guidance `UNVERIFIED` if it could not fetch documentation. Store their combined output as `advisories`.
 
-Then make one revision pass: re-invoke `spec-writer` with the draft brief and the recommendations that do not conflict with it, so they become part of the brief. This pass is not counted in `respec_count`, and it happens only here, before Approval Stop 2. Recommendations that conflict with the brief are left out and passed to Step 5 as they are.
+Then make one revision pass: re-invoke `spec-writer` with the draft brief and the recommendations that do not conflict with it, so they become part of the brief. This pass is not counted in `respec_count`, and it happens only in this step, before a brief stop. Recommendations that conflict with the brief are left out and passed to Step 5 as they are.
 
 ### Step 5 — APPROVAL STOP 2: Brief review
 
-Present the brief together with an **Advisor input** block: what was folded in, each conflict with the brief (the brief wins unless the user asks for the advisor's version under Changes requested), anything marked `UNVERIFIED`, and a note if documentation could not be fetched. **5a:** handle unanswered items in its **Risks and Open Questions** section as in 3a, re-invoking `spec-writer`. **5b:** same three options as 3b; on rejection the approved story is preserved. The brief must name which of `src/**`, `tests/**`, `plugin/**`, `chat/**` and `README.md` change, and whether any MCP tool name, description or schema changes.
+Present the brief together with an **Advisor input** block: what was folded in, each conflict with the brief (the brief wins unless the user asks for the advisor's version under Changes requested), anything marked `UNVERIFIED`, and a note if documentation could not be fetched. **5a:** handle unanswered items in its **Risks and Open Questions** section as in 3a, re-invoking `spec-writer`. **5b:** same three options as 3b; on rejection the approved story is preserved. If 5a or 5b changes the brief's file list, re-run Step 4.5 on the revised brief before presenting it again. The brief must name which of `src/**`, `tests/**`, `plugin/**`, `chat/**` and `README.md` change, and whether any MCP tool name, description or schema changes.
 
 ---
 
@@ -208,7 +208,7 @@ Used by Step 6 with a cap of 1. A spec blocker is a contradiction or impossibili
 - **Never implement anything yourself.** If you are about to edit a file, invoke `feature-builder` instead.
 - **Pass the researcher findings to every agent.**
 - **Exactly three human stops:** story (skipped for groomed issues), brief, final review. Re-approval after a spec blocker repeats the brief stop. The blocker check's "proceed anyway" is a precondition, not a fourth stop.
-- **Spec blockers go to spec-writer, not to builder workarounds.** Advisor output reaches spec-writer once, in Step 4.5 before the brief stop, and never afterwards.
+- **Spec blockers go to spec-writer, not to builder workarounds.** Advisor output reaches spec-writer only through Step 4.5 (including its re-runs), before a brief stop, and never after the brief is approved.
 - **Advisors never edit files and never block.** The user sees their input at the brief stop, and a conflict is resolved in favor of the brief unless the user asks otherwise. Guidance that could not be verified against current documentation is marked `UNVERIFIED`.
 - **Plugin and chat content stay in sync with tool behavior.** The builder updates all of it in the same change; the validator checks.
 - **No PR while any gate fails.** `build.ps1` is not a gate.

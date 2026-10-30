@@ -17,7 +17,7 @@
 param([string] $Configuration = 'Release')
 
 $ErrorActionPreference = 'Stop'
-$out = Join-Path $PSScriptRoot 'plugin/bin'
+$out = Join-Path $PSScriptRoot (Join-Path 'plugin' 'bin')
 # Staging and backup are repo-root siblings: same volume as plugin/bin (so the swap is a
 # rename, not a copy) and outside plugin/ (Claude Code copies and validates that directory).
 $staging = Join-Path $PSScriptRoot '.build-staging'
@@ -26,6 +26,7 @@ $backup = Join-Path $PSScriptRoot '.build-backup'
 function Get-BlockingServer {
     $all = Get-CimInstance Win32_Process
     $found = @($all | Where-Object {
+            # A process whose command line cannot be read (elevated or other user) is skipped.
             $_.Name -eq 'dotnet.exe' -and $_.CommandLine -and $_.CommandLine -like '*TaskFlow.Mcp.dll*'
         })
     foreach ($p in $found) {
@@ -54,7 +55,7 @@ try {
     }
 }
 catch {
-    throw "Could not clean up a leftover build directory: $($_.Exception.Message) Nothing was published and plugin/bin is untouched. Remove $staging and $backup by hand (if $backup exists and plugin/bin does not, rename it to plugin/bin), then run ./build.ps1 again."
+    throw "Could not clean up a leftover build directory: $($_.Exception.Message.TrimEnd('.')). Nothing was published and plugin/bin is untouched. Remove $staging and $backup by hand (if $backup exists and plugin/bin does not, rename it to plugin/bin), then run ./build.ps1 again."
 }
 
 # 2. Refuse to run while a server holds plugin/bin open.
@@ -96,11 +97,11 @@ try {
     [System.IO.Directory]::Move($staging, $out)
 }
 catch {
-    $swapError = $_.Exception.Message
+    $swapError = $_.Exception.Message.TrimEnd('.')
     $restoreError = $null
     if ($step -eq '5b' -and (Test-Path $backup) -and -not (Test-Path $out)) {
         try { [System.IO.Directory]::Move($backup, $out) }
-        catch { $restoreError = $_.Exception.Message }
+        catch { $restoreError = $_.Exception.Message.TrimEnd('.') }
     }
 
     $binState = if (-not (Test-Path $out)) { 'is missing' }
@@ -114,7 +115,7 @@ catch {
         $state += " Restore failed: $restoreError. The previous build is in $backup; rename it to plugin/bin by hand."
     }
 
-    $now = @(Get-BlockingServer)
+    try { $now = @(Get-BlockingServer) } catch { $now = @() }
     if ($now.Count -gt 0) {
         Write-Host (Format-BlockingList $now)
         throw "Could not replace plugin/bin: $swapError. A TaskFlow server appears to have started or holds a lock (see PIDs above). $state Stop the server and run ./build.ps1 again."
@@ -125,7 +126,7 @@ catch {
 # 5c. The new build is in place; a leftover backup is only a warning.
 if (Test-Path $backup) {
     try { Remove-Item $backup -Recurse -Force -ErrorAction Stop }
-    catch { Write-Warning "plugin/bin was replaced, but the old build in $backup could not be deleted: $($_.Exception.Message). The next build removes it." }
+    catch { Write-Warning "plugin/bin was replaced, but the old build in $backup could not be deleted: $($_.Exception.Message.TrimEnd('.')). The next build removes it." }
 }
 
 Write-Host "Published to $out"

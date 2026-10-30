@@ -308,11 +308,9 @@ If any `gh` write fails: print the full report to the conversation, report the e
 
 ## Step 11 - Cleanup (every exit path)
 
-Every `docker` command here uses the same variant chosen in Step 3. On the live-port refusal path, skip every `docker` command and do only item 3.
+Every `docker` command here uses the same variant chosen in Step 3. On the live-port refusal path, skip every `docker` command and every `curl` to 3200 (items 2 and 3) and do only item 1.
 
-1. If the stack was started and the API may be stopped, ensure it is running: `<variant> ps`, and `<variant> start taskflow-api` if needed. This is only needed if fixture deletion in item 2 is wanted. Re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop).
-2. Fixture deletion is optional because teardown in item 4 destroys the test DB. Run it (by recorded id or `<RUN_ID>-` prefix at `http://localhost:3200`, subtasks first, then parent tasks, then projects) only if teardown fails.
-3. Delete local files, using only these forms:
+1. Delete local files, using only these forms:
    ```bash
    rm -f .playwright-mcp/ux-test-step*.png
    rm -f .playwright-mcp/ux-test-results-*.md
@@ -320,8 +318,9 @@ Every `docker` command here uses the same variant chosen in Step 3. On the live-
    rm -f .playwright-mcp/console-*.log
    ```
    Missing files are not an error. Assume any `page-*.yml` and `console-*.log` in `.playwright-mcp/` are Playwright output from this run. Never remove the `.playwright-mcp` directory itself.
-4. Teardown: run `<variant> config --volumes` and apply the same check as Step 3 item 2 (exactly `test-data` and `test-logs`), then `<variant> down -v`. Skip this entirely on the live-port refusal path, if the volume check ever failed, or if the variant was never chosen.
-5. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
+2. Teardown: run `<variant> config --volumes` and apply the same check as Step 3 item 2 (exactly `test-data` and `test-logs`), then `<variant> down -v`. Skip this entirely on the live-port refusal path, if the volume check ever failed, or if the variant was never chosen.
+3. Only if teardown failed (or was skipped because the volume check failed) and the test project may still hold this run's fixtures: ensure the API is running (`<variant> ps`, and `<variant> start taskflow-api` if needed), re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop), then delete this run's fixtures by the `<RUN_ID>-` prefix at `http://localhost:3200`: subtasks first, then parent tasks, then projects. Never run this against a live port.
+4. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
 
 ---
 

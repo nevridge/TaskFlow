@@ -2,13 +2,14 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/logs")]
 public class JournalLogEntriesController(
     IJournalEntryRepository journalRepo,
@@ -17,7 +18,6 @@ public class JournalLogEntriesController(
     ITaskRepository taskRepo) : ControllerBase
 {
     private const string GetLogRouteName = "GetJournalLogEntryV1";
-    private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IJournalLogEntryRepository _logRepo = logRepo;
     private readonly IValidator<JournalLogEntry> _validator = validator;
@@ -81,7 +81,7 @@ public class JournalLogEntriesController(
         }
 
         var created = await _logRepo.AddAsync(log);
-        return CreatedAtRoute(GetLogRouteName, new { version = ApiVersionString, entryId, id = created.Id }, ToDto(created));
+        return CreatedAtRoute(GetLogRouteName, new { version = ApiVersions.V1, entryId, id = created.Id }, ToDto(created));
     }
 
     // PUT: api/v1/JournalEntries/{entryId}/logs/{id}

@@ -9,7 +9,7 @@ using TaskFlow.Api.Repositories;
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/todos")]
 public class JournalTodosController(
     IJournalEntryRepository journalRepo,

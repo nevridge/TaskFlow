@@ -9,7 +9,7 @@ using TaskFlow.Api.Repositories;
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/[controller]")]
 public class TaskItemsController(
     ITaskRepository repo,
@@ -17,7 +17,6 @@ public class TaskItemsController(
     IJournalEntryRepository journalRepo,
     IProjectRepository projectRepo) : ControllerBase
 {
-    private const string ApiVersionString = "1.0";
     private const string ProjectNotFoundErrorCode = "TASK_PROJECT_NOT_FOUND";
     private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
@@ -179,7 +178,7 @@ public class TaskItemsController(
         var refreshed = await _repo.GetByIdAsync(createdItem.Id) ?? createdItem;
         var responseDto = await MapTaskItemResponseAsync(refreshed);
 
-        return CreatedAtRoute("GetTaskV1", new { version = ApiVersionString, id = createdItem.Id }, responseDto);
+        return CreatedAtRoute("GetTaskV1", new { version = ApiVersions.V1, id = createdItem.Id }, responseDto);
     }
 
     // PUT: api/v1/TaskItems/5

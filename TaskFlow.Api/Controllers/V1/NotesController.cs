@@ -2,18 +2,18 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/TaskItems/{taskId}/notes")]
 public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo, IValidator<Note> validator) : ControllerBase
 {
     private const string GetNoteRouteName = "GetNoteV1";
-    private const string ApiVersionString = "1.0";
     private readonly INoteRepository _noteRepo = noteRepo;
     private readonly ITaskRepository _taskRepo = taskRepo;
     private readonly IValidator<Note> _validator = validator;
@@ -70,7 +70,7 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
         }
 
         var created = await _noteRepo.AddAsync(note);
-        return CreatedAtRoute(GetNoteRouteName, new { version = ApiVersionString, taskId, id = created.Id }, ToDto(created));
+        return CreatedAtRoute(GetNoteRouteName, new { version = ApiVersions.V1, taskId, id = created.Id }, ToDto(created));
     }
 
     // PUT: api/v1/taskitems/{taskId}/notes/{id}

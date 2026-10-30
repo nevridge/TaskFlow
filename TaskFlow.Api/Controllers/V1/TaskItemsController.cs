@@ -23,7 +23,6 @@ public class TaskItemsController(
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
     private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
     private const string ParentDepthNotAllowedErrorCode = "TASK_PARENT_DEPTH_NOT_ALLOWED";
-    private const string ParentCycleNotAllowedErrorCode = "TASK_PARENT_CYCLE_NOT_ALLOWED";
     private const string ParentCompleteBlockedByChildrenErrorCode = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN";
     private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
     private const string BlockDraftNotAllowedErrorCode = "TASK_BLOCK_DRAFT_NOT_ALLOWED";
@@ -178,7 +177,7 @@ public class TaskItemsController(
         }
 
         var refreshed = await _repo.GetByIdAsync(createdItem.Id) ?? createdItem;
-        var responseDto = await MapTaskItemResponseAsync(refreshed);
+        var responseDto = await MapTaskItemResponseAsync(refreshed, knownChildCount: 0);
 
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersions.V1, id = createdItem.Id }, responseDto);
     }
@@ -261,6 +260,11 @@ public class TaskItemsController(
             return NotFound();
         }
 
+        // This task's children, fetched at most once and only when a check or the response needs them.
+        List<TaskItem>? children = null;
+        async Task<List<TaskItem>> GetChildrenOnceAsync() =>
+            children ??= (await _repo.GetChildrenAsync(id)).ToList();
+
         if (changes.HasParent && changes.ParentTaskItemId.HasValue)
         {
             var proposedParentId = changes.ParentTaskItemId.Value;
@@ -295,17 +299,7 @@ public class TaskItemsController(
                 });
             }
 
-            if (await WouldCreateCycleAsync(id, proposedParentId))
-            {
-                return UnprocessableEntity(new
-                {
-                    code = ParentCycleNotAllowedErrorCode,
-                    message = "This parent assignment would create a cycle.",
-                    details = new { parentTaskItemId = changes.ParentTaskItemId }
-                });
-            }
-
-            if (await HasChildrenAsync(id))
+            if ((await GetChildrenOnceAsync()).Count > 0)
             {
                 return UnprocessableEntity(new
                 {
@@ -338,7 +332,7 @@ public class TaskItemsController(
         var wasCompleted = IsCompleted(existing.Status);
         var nowCompleted = IsCompleted(nextStatus);
 
-        if (!wasCompleted && nowCompleted && await HasIncompleteChildrenAsync(id))
+        if (!wasCompleted && nowCompleted && (await GetChildrenOnceAsync()).Any(c => !IsCompleted(c.Status)))
         {
             return UnprocessableEntity(new
             {
@@ -414,7 +408,8 @@ public class TaskItemsController(
             await TryAutoCompleteParentAsync(existing.ParentTaskItemId.Value);
         }
 
-        var responseDto = await MapTaskItemResponseAsync(existing);
+        // The update never changes this task's children, so a list already fetched is valid here.
+        var responseDto = await MapTaskItemResponseAsync(existing, knownChildCount: children?.Count);
 
         return Ok(responseDto); // Return 200 OK with the updated resource
     }
@@ -507,23 +502,11 @@ public class TaskItemsController(
         return (null, new BlockedState(next, null, null, null));
     }
 
-    private async Task<bool> HasIncompleteChildrenAsync(int taskId)
-    {
-        var allTasks = await _repo.GetAllAsync();
-        return allTasks.Any(t => t.ParentTaskItemId == taskId && !IsCompleted(t.Status));
-    }
+    private async Task<bool> HasChildrenAsync(int taskId) =>
+        (await _repo.GetChildrenAsync(taskId)).Any();
 
-    private async Task<bool> HasChildrenAsync(int taskId)
-    {
-        var allTasks = await _repo.GetAllAsync();
-        return allTasks.Any(t => t.ParentTaskItemId == taskId);
-    }
-
-    private async Task<int> GetChildTaskCountAsync(int taskId)
-    {
-        var allTasks = await _repo.GetAllAsync();
-        return allTasks.Count(t => t.ParentTaskItemId == taskId);
-    }
+    private async Task<int> GetChildTaskCountAsync(int taskId) =>
+        (await _repo.GetChildrenAsync(taskId)).Count();
 
     private async Task TryAutoCompleteParentAsync(int parentTaskId)
     {
@@ -539,17 +522,8 @@ public class TaskItemsController(
             return;
         }
 
-        var allTasks = await _repo.GetAllAsync();
-        var hasChildren = allTasks.Any(t => t.ParentTaskItemId == parentTaskId);
-        if (!hasChildren)
-        {
-            return;
-        }
-
-        var hasIncompleteChildren = allTasks.Any(t =>
-            t.ParentTaskItemId == parentTaskId && !IsCompleted(t.Status));
-
-        if (hasIncompleteChildren)
+        var children = (await _repo.GetChildrenAsync(parentTaskId)).ToList();
+        if (children.Count == 0 || children.Any(c => !IsCompleted(c.Status)))
         {
             return;
         }
@@ -575,8 +549,7 @@ public class TaskItemsController(
             return NotFound();
         }
 
-        var allTasks = await _repo.GetAllAsync();
-        if (allTasks.Any(t => t.ParentTaskItemId == id))
+        if (await HasChildrenAsync(id))
         {
             return UnprocessableEntity(new
             {
@@ -587,28 +560,6 @@ public class TaskItemsController(
 
         await _repo.DeleteAsync(id);
         return NoContent();
-    }
-
-    private async Task<bool> WouldCreateCycleAsync(int taskId, int proposedParentId)
-    {
-        var allTasks = await _repo.GetAllAsync();
-        var parentByTaskId = allTasks.ToDictionary(t => t.Id, t => t.ParentTaskItemId);
-
-        var cursor = proposedParentId;
-        while (true)
-        {
-            if (cursor == taskId)
-            {
-                return true;
-            }
-
-            if (!parentByTaskId.TryGetValue(cursor, out var next) || !next.HasValue)
-            {
-                return false;
-            }
-
-            cursor = next.Value;
-        }
     }
 
     private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate, int? timezoneOffsetMinutes = null)
@@ -645,10 +596,12 @@ public class TaskItemsController(
         await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
     }
 
-    private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null)
+    private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null, int? knownChildCount = null)
     {
         var currentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id);
-        var childTaskCount = childCounts?.GetValueOrDefault(item.Id) ?? await GetChildTaskCountAsync(item.Id);
+        var childTaskCount = childCounts is not null
+            ? childCounts.GetValueOrDefault(item.Id)
+            : knownChildCount ?? await GetChildTaskCountAsync(item.Id);
 
         return new TaskItemResponseDto
         {

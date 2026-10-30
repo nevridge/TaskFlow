@@ -29,7 +29,6 @@ public class TaskItemsControllerPatchTests
     public TaskItemsControllerPatchTests()
     {
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
-        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
         _mockRepo.Setup(r => r.GetHistoryAsync(It.IsAny<int>())).ReturnsAsync([]);
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
@@ -297,6 +296,64 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
+    public async Task Patch_ShouldNotQueryChildren_WhenParentIsMissingDuringAutoComplete()
+    {
+        var child = new TaskItem { Id = 2, Title = "Child", Status = Status.Todo, ParentTaskItemId = 10 };
+        _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
+        _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync((TaskItem?)null);
+
+        var result = await _mockedController.Patch(2, new PatchTaskItemDto
+        {
+            Status = Status.Completed,
+            AutoCompleteParentWhenChildrenDone = true
+        });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _mockRepo.Verify(r => r.GetChildrenAsync(10), Times.Never);
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task Put_ShouldAutoCompleteParent_WhenLastChildCompletesAgainstRealDatabase()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync(new TaskItem { Title = "Parent", Status = Status.Todo });
+        var child = await stack.SeedAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+
+        OkDto(await stack.Controller.Update(child.Id, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Completed,
+            Priority = Priority.Low,
+            ParentTaskItemId = parent.Id,
+            AutoCompleteParentWhenChildrenDone = true
+        }));
+
+        Assert.Equal(Status.Completed, (await stack.ReloadAsync(parent.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Put_ShouldRejectParentAssignment_WhenTaskHasChildrenAgainstRealDatabase()
+    {
+        using var stack = new RealStack();
+        var task = await stack.SeedAsync(new TaskItem { Title = "Task", Status = Status.Todo });
+        await stack.SeedAsync(new TaskItem { Title = "Its child", Status = Status.Todo, ParentTaskItemId = task.Id });
+        var newParent = await stack.SeedAsync(new TaskItem { Title = "New parent", Status = Status.Todo });
+
+        var result = await stack.Controller.Update(task.Id, new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = newParent.Id
+        });
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        Assert.Contains("TASK_PARENT_DEPTH_NOT_ALLOWED", System.Text.Json.JsonSerializer.Serialize(unprocessable.Value));
+        Assert.Null((await stack.ReloadAsync(task.Id)).ParentTaskItemId);
+    }
+
+    [Fact]
     public async Task Put_ThenPatchReopen_ShouldReadAsOpenEverywhere()
     {
         using var stack = new RealStack();
@@ -489,7 +546,7 @@ public class TaskItemsControllerPatchTests
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
         _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync(candidate);
-        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([root, candidate, child]);
+        _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([child]);
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 9 });
 
@@ -499,15 +556,11 @@ public class TaskItemsControllerPatchTests
     [Fact]
     public async Task Patch_ShouldReturnDepthError_WhenProposedParentIsOwnChild()
     {
-        // The cycle guard (TASK_PARENT_CYCLE_NOT_ALLOWED) is unreachable in a one-level hierarchy: the walk starts at
-        // the proposed parent, which has already passed the depth guard (no parent of its own) and the self guard
-        // (it is not the task), so the walk ends immediately. It is kept identical to PUT, so only the depth guard
-        // is asserted here.
+        // A proposed parent that is itself a child is rejected by the one-level depth guard.
         var root = new TaskItem { Id = 1, Title = "Root" };
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
         _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
-        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([root, child]);
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 2 });
 

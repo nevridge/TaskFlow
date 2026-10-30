@@ -600,7 +600,7 @@ public class TaskItemsControllerBlockedTests
             BlockedAt = blockedAt,
             PreviousStatus = Status.Todo
         });
-        repo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
+        repo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([]);
         repo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync([]);
         var validator = new Mock<FluentValidation.IValidator<TaskItem>>();
         validator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());

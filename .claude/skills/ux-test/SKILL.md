@@ -196,6 +196,7 @@ State-changing features must be carried through to completion, never dismiss-onl
 **API-stopped steps** (testing behaviour when the API is down): run `<variant> stop taskflow-api`, observe the UI, then IMMEDIATELY run `<variant> start taskflow-api` and re-poll the Step 4 check against 3200 (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop) until `200` before any later step runs.
 
 **Native dialogs:** when a step triggers a native `confirm`/`alert` dialog, accept it with `browser_handle_dialog` to carry the state-changing action through to completion. Dismiss only for an explicit cancel-path edge case. Record the dialog text in the step result. Task and task-note deletes on TasksPage and TaskDetailPage no longer show a native confirm: they show an Undo toast and send the DELETE only after the window (10s for tasks, 6s for notes), so wait out the window (or confirm the row is gone after it) to carry the delete through to completion, and use Undo (or Ctrl/Cmd+Z, or `u`) for the cancel path.
+
 ---
 
 ## Step 8 - Compile results

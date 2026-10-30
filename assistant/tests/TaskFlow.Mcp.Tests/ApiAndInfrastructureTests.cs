@@ -398,7 +398,7 @@ public class ToolSurfaceTests
 
         toolDescription.Should().Contain("completedFrom").And.Contain("completedTo").And.Contain("plannedDate");
         views.Should().OnlyContain(v => toolDescription.Contains(v) && viewDescription.Contains(v));
-        foreach (var name in new[] { "completedFrom", "plannedDate" })
+        foreach (var name in new[] { "completedFrom", "completedTo", "plannedDate" })
         {
             var description = method.GetParameters().Single(p => p.Name == name).GetCustomAttribute<DescriptionAttribute>()!.Description;
             description.Should().Contain("yyyy-MM-dd").And.Contain("yesterday");

@@ -1397,7 +1397,7 @@ public class TaskItemsControllerV1Tests
     }
 
     [Fact]
-    public async Task Update_ShouldNotQueryChildrenForCheck_WhenNeitherParentSetNorCompleting()
+    public async Task Update_ShouldQueryChildrenOnlyForResponseCount_WhenNeitherParentSetNorCompleting()
     {
         var updateDto = new UpdateTaskItemDto { Title = "T", Status = Status.Todo, Priority = Priority.Low };
         var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Todo, Priority = Priority.Low };

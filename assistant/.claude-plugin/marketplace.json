@@ -8,7 +8,7 @@
     {
       "name": "taskflow-assistant",
       "source": "./plugin",
-      "description": "Plan the day, capture tasks, log progress and review the week in a local TaskFlow instance."
+      "description": "Plan the day, capture tasks, log progress, review the week and build the weekday stand-up in a local TaskFlow instance."
     }
   ]
 }

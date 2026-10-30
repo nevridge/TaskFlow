@@ -5,7 +5,7 @@ Helps you manage your **own work tasks and projects** in a local [TaskFlow](http
 | Where | How | Section |
 |---|---|---|
 | **Claude Desktop, Chat** | MCP server registered in `claude_desktop_config.json` + one uploaded skill | [Claude Desktop (Chat)](#claude-desktop-chat) |
-| **Claude Code** (terminal, IDE extensions, the desktop app's Code tab where available) | A Claude Code plugin: MCP server + agent + four slash-command skills | [Claude Code plugin](#claude-code-plugin) |
+| **Claude Code** (terminal, IDE extensions, the desktop app's Code tab where available) | A Claude Code plugin: MCP server + agent + five slash-command skills | [Claude Code plugin](#claude-code-plugin) |
 
 A Claude Code plugin does **not** load in Chat: Chat ignores a plugin's local MCP servers, agents and `bin/` executables (see the [plugin support table](https://claude.com/docs/plugins/platform-support)), so Chat needs the separate setup below.
 
@@ -19,7 +19,7 @@ Needs the .NET 10 runtime on `PATH`, Claude Desktop, and TaskFlow running with t
 4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 15 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
 5. Package and upload the skill: `./scripts/package-chat-skill.ps1`, then in Claude Desktop go to **Customize > Skills > + > Upload a skill** and choose `dist/taskflow-assistant-skill.zip`.
 
-Chat applies the skill automatically when your request fits ("plan my day", "turn these notes into tasks", "draft my weekly update"); there are no slash commands in Chat. Skills need code execution enabled for your account; if your organization disables it, paste `chat/taskflow-assistant/SKILL.md` into a Project's instructions instead. The skill lives in `chat/taskflow-assistant/` and mirrors the plugin's four skills, restricted to the frontmatter keys Chat accepts.
+Chat applies the skill automatically when your request fits ("plan my day", "turn these notes into tasks", "draft my weekly update", "stand-up"); there are no slash commands in Chat. Skills need code execution enabled for your account; if your organization disables it, paste `chat/taskflow-assistant/SKILL.md` into a Project's instructions instead. The skill lives in `chat/taskflow-assistant/` and mirrors the plugin's five skills, restricted to the frontmatter keys Chat accepts.
 
 ## Claude Code plugin
 
@@ -29,7 +29,7 @@ It bundles:
 
 - **An MCP server** (`src/TaskFlow.Mcp`, C# / .NET 10, stdio) wrapping the TaskFlow REST API.
 - **An agent**, `work-task-assistant`, for delegated task work.
-- **Four skills** for interactive workflows (all user-invoked, nothing runs on its own):
+- **Five skills** for interactive workflows (all user-invoked, nothing runs on its own):
 
 | Command | What it does |
 |---|---|
@@ -37,6 +37,7 @@ It bundles:
 | `/taskflow-assistant:capture-tasks [notes]` | Turns notes into tasks (project, priority, due date), creates them after you confirm |
 | `/taskflow-assistant:weekly-review [from] [to]` | Summarizes the week and drafts a status update |
 | `/taskflow-assistant:journal-log [what happened]` | Logs progress to the journal, linked to the right task |
+| `/taskflow-assistant:standup` | Builds the weekday stand-up: last working day's completed work (Friday on Mondays and weekends), today's plan, overdue; grouped by project, read-only |
 
 Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` by default) and has no auth, hosting or deployment story.
 

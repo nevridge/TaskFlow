@@ -9,7 +9,7 @@
 
 ## Keep these in sync
 
-The four workflows (plan-my-day, capture-tasks, weekly-review, journal-log) exist twice: `plugin/skills/*/SKILL.md` and `chat/taskflow-assistant/references/*.md`. When an MCP tool name, parameter or behavior changes, update both sets, `plugin/agents/work-task-assistant.md`, `chat/taskflow-assistant/SKILL.md` and the README tool list in the same change. A reflection test guards the tool surface; update it deliberately.
+Every workflow under `plugin/skills/` (`plugin/skills/*/SKILL.md`) has a matching file in `chat/taskflow-assistant/references/` (`*.md`), so each workflow exists twice. When an MCP tool name, parameter or behavior changes, update both sets, `plugin/agents/work-task-assistant.md`, `chat/taskflow-assistant/SKILL.md` and the README tool list in the same change. A reflection test guards the tool surface; update it deliberately.
 
 ## The TaskFlow API is a separate repo
 

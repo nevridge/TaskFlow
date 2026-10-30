@@ -2,7 +2,7 @@
   "name": "taskflow-assistant",
   "displayName": "TaskFlow Assistant",
   "version": "0.2.0",
-  "description": "Manage your work tasks and projects in a local TaskFlow instance: plan the day, capture tasks from notes, log progress, and review the week.",
+  "description": "Manage your work tasks and projects in a local TaskFlow instance: plan the day, capture tasks from notes, log progress, review the week, and build the weekday stand-up.",
   "author": {
     "name": "Neil"
   },

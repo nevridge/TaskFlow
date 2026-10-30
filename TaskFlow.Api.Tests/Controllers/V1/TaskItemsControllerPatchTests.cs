@@ -30,6 +30,10 @@ public class TaskItemsControllerPatchTests
     {
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
         _mockRepo.Setup(r => r.GetHistoryAsync(It.IsAny<int>())).ReturnsAsync([]);
+        _mockRepo.Setup(r => r.GetAssignedJournalDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly>());
+        _mockRepo.Setup(r => r.GetLastMovedDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly>());
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockedController = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object, _mockProjectRepo.Object);
@@ -99,6 +103,39 @@ public class TaskItemsControllerPatchTests
     };
 
     // ---- Real-stack success paths ----
+
+    [Fact]
+    public async Task GetAll_ShouldResolveDatesForManyTasks_OnRealSqliteStack()
+    {
+        using var stack = new RealStack();
+        var day1 = new JournalEntry { Title = "d1", Date = new DateOnly(2026, 3, 1) };
+        var day2 = new JournalEntry { Title = "d2", Date = new DateOnly(2026, 3, 2) };
+        stack.Context.JournalEntries.AddRange(day1, day2);
+        var a = new TaskItem { Title = "A", Status = Status.Todo, CurrentJournalEntry = day1, FirstTaggedDate = day1.Date };
+        var b = new TaskItem { Title = "B", Status = Status.Todo, CurrentJournalEntry = day2, FirstTaggedDate = day1.Date };
+        var c = new TaskItem { Title = "C", Status = Status.Todo };
+        stack.Context.TaskItems.AddRange(a, b, c);
+        await stack.Context.SaveChangesAsync();
+        var t0 = new DateTime(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc);
+        stack.Context.TaskItemEvents.AddRange(
+            new TaskItemEvent { TaskItemId = a.Id, EventType = "TaskCreated", OccurredAtUtc = t0 },
+            new TaskItemEvent { TaskItemId = a.Id, EventType = "MovedToJournalDay", OccurredAtUtc = t0.AddHours(1), ToJournalDate = day1.Date },
+            new TaskItemEvent { TaskItemId = b.Id, EventType = "MovedToJournalDay", OccurredAtUtc = t0, ToJournalDate = day1.Date },
+            new TaskItemEvent { TaskItemId = b.Id, EventType = "MovedToJournalDay", OccurredAtUtc = t0.AddHours(2), FromJournalDate = day1.Date, ToJournalDate = day2.Date });
+        await stack.Context.SaveChangesAsync();
+        stack.Context.ChangeTracker.Clear();
+
+        var result = await stack.Controller.GetAll();
+
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(Assert.IsType<OkObjectResult>(result.Result).Value).ToDictionary(d => d.Id);
+        Assert.Equal(3, dtos.Count);
+        Assert.Equal(day1.Date, dtos[a.Id].CurrentJournalDate);
+        Assert.Equal(day1.Date, dtos[a.Id].LastMovedDate);
+        Assert.Equal(day2.Date, dtos[b.Id].CurrentJournalDate);
+        Assert.Equal(day2.Date, dtos[b.Id].LastMovedDate);
+        Assert.Null(dtos[c.Id].CurrentJournalDate);
+        Assert.Null(dtos[c.Id].LastMovedDate);
+    }
 
     [Fact]
     public async Task Patch_ShouldLeaveEveryOtherFieldUnchanged_WhenOnlyTitleSent()

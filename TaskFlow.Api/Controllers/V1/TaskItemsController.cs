@@ -39,14 +39,28 @@ public class TaskItemsController(
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetAll()
     {
-        var items = await _repo.GetAllAsync();
+        var items = (await _repo.GetAllAsync()).ToList();
+        if (items.Count == 0)
+        {
+            return Ok(Array.Empty<TaskItemResponseDto>());
+        }
+
         var childCounts = items
             .Where(t => t.ParentTaskItemId.HasValue)
             .GroupBy(t => t.ParentTaskItemId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        var dtoTasks = items.Select(i => MapTaskItemResponseAsync(i, childCounts));
-        return Ok(await Task.WhenAll(dtoTasks));
+        var ids = items.Select(i => i.Id).ToList();
+        // Sequential on purpose: both calls share one scoped DbContext, which does not support concurrent operations.
+        var journalDates = await _repo.GetAssignedJournalDatesAsync(ids);
+        var lastMovedDates = await _repo.GetLastMovedDatesAsync(ids);
+
+        var dtos = items.Select(i => BuildTaskItemResponse(
+            i,
+            journalDates.TryGetValue(i.Id, out var jd) ? jd : null,
+            lastMovedDates.TryGetValue(i.Id, out var lm) ? lm : null,
+            childCounts.GetValueOrDefault(i.Id)));
+        return Ok(dtos.ToList());
     }
 
     // GET: api/v1/TaskItems/5
@@ -596,13 +610,16 @@ public class TaskItemsController(
         await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
     }
 
-    private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, IReadOnlyDictionary<int, int>? childCounts = null, int? knownChildCount = null)
+    private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, int? knownChildCount = null)
     {
         var currentJournalDate = await _repo.GetAssignedJournalDateAsync(item.Id);
-        var childTaskCount = childCounts is not null
-            ? childCounts.GetValueOrDefault(item.Id)
-            : knownChildCount ?? await GetChildTaskCountAsync(item.Id);
+        var childTaskCount = knownChildCount ?? await GetChildTaskCountAsync(item.Id);
+        var lastMovedDate = await GetLastMovedDateAsync(item.Id);
+        return BuildTaskItemResponse(item, currentJournalDate, lastMovedDate, childTaskCount);
+    }
 
+    private static TaskItemResponseDto BuildTaskItemResponse(TaskItem item, DateOnly? currentJournalDate, DateOnly? lastMovedDate, int childTaskCount)
+    {
         return new TaskItemResponseDto
         {
             Id = item.Id,
@@ -616,7 +633,7 @@ public class TaskItemsController(
             ProjectName = item.Project?.Name,
             CurrentJournalEntryId = item.CurrentJournalEntryId,
             FirstTaggedDate = item.FirstTaggedDate,
-            LastMovedDate = await GetLastMovedDateAsync(item.Id),
+            LastMovedDate = lastMovedDate,
             ChildTaskCount = childTaskCount,
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,
@@ -631,9 +648,7 @@ public class TaskItemsController(
     private async Task<DateOnly?> GetLastMovedDateAsync(int taskId)
     {
         var history = await _repo.GetHistoryAsync(taskId);
-        return history
-            .OrderByDescending(e => e.OccurredAtUtc)
-            .Select(e => e.ToJournalDate ?? e.FromJournalDate)
-            .FirstOrDefault(d => d.HasValue);
+        return LastMovedDateResolver.Resolve(
+            history.Select(e => new MoveEventProjection(e.Id, e.OccurredAtUtc, e.FromJournalDate, e.ToJournalDate)));
     }
 }

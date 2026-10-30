@@ -23,6 +23,49 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
             .Select(t => t.CurrentJournalEntry == null ? (DateOnly?)null : t.CurrentJournalEntry.Date)
             .SingleOrDefaultAsync();
 
+    // The id lists below are intentionally not chunked: GetAll already loads every task, and the counts involved
+    // are far below SQLite's 32766 bound-variable limit. Keeping one query preserves the fixed-query-count goal.
+    public async Task<IReadOnlyDictionary<int, DateOnly>> GetAssignedJournalDatesAsync(IReadOnlyCollection<int> taskIds)
+    {
+        if (taskIds.Count == 0)
+        {
+            return new Dictionary<int, DateOnly>();
+        }
+
+        var rows = await _context.TaskItems
+            .Where(t => taskIds.Contains(t.Id) && t.CurrentJournalEntryId != null)
+            .Select(t => new { t.Id, t.CurrentJournalEntry!.Date })
+            .ToListAsync();
+
+        return rows.ToDictionary(r => r.Id, r => r.Date);
+    }
+
+    public async Task<IReadOnlyDictionary<int, DateOnly>> GetLastMovedDatesAsync(IReadOnlyCollection<int> taskIds)
+    {
+        if (taskIds.Count == 0)
+        {
+            return new Dictionary<int, DateOnly>();
+        }
+
+        var rows = await _context.TaskItemEvents
+            .Where(e => taskIds.Contains(e.TaskItemId) && (e.ToJournalDate != null || e.FromJournalDate != null))
+            .Select(e => new { e.Id, e.TaskItemId, e.OccurredAtUtc, e.FromJournalDate, e.ToJournalDate })
+            .ToListAsync();
+
+        var result = new Dictionary<int, DateOnly>();
+        foreach (var group in rows.GroupBy(r => r.TaskItemId))
+        {
+            var date = LastMovedDateResolver.Resolve(
+                group.Select(r => new MoveEventProjection(r.Id, r.OccurredAtUtc, r.FromJournalDate, r.ToJournalDate)));
+            if (date.HasValue)
+            {
+                result[group.Key] = date.Value;
+            }
+        }
+
+        return result;
+    }
+
     public async Task<IEnumerable<TaskItemEvent>> GetHistoryAsync(int taskId) =>
         await _context.TaskItemEvents
             .Where(e => e.TaskItemId == taskId)

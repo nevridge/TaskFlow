@@ -609,4 +609,285 @@ public class TaskRepositoryTests
         // Assert
         Assert.Empty(children);
     }
+
+    // ---- Bulk journal date / last moved date lookups (real in-memory SQLite) ----
+
+    private sealed class SqliteStack : IDisposable
+    {
+        private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
+
+        public SqliteStack()
+        {
+            _connection = new Microsoft.Data.Sqlite.SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+            Context = new TaskDbContext(new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(_connection).Options);
+            Context.Database.EnsureCreated();
+            Repository = new TaskRepository(Context);
+        }
+
+        public TaskDbContext Context { get; }
+        public TaskRepository Repository { get; }
+
+        public async Task<TaskItem> AddTaskAsync(string title = "T", JournalEntry? entry = null)
+        {
+            var task = new TaskItem { Title = title, Status = Status.Todo, CurrentJournalEntry = entry };
+            Context.TaskItems.Add(task);
+            await Context.SaveChangesAsync();
+            return task;
+        }
+
+        public async Task<JournalEntry> AddEntryAsync(DateOnly date)
+        {
+            var entry = new JournalEntry { Title = date.ToString("O"), Date = date };
+            Context.JournalEntries.Add(entry);
+            await Context.SaveChangesAsync();
+            return entry;
+        }
+
+        public async Task<TaskItemEvent> AddEventAsync(int taskId, DateTime at, DateOnly? from = null, DateOnly? to = null, string type = "MovedToJournalDay")
+        {
+            var evt = new TaskItemEvent { TaskItemId = taskId, EventType = type, OccurredAtUtc = at, FromJournalDate = from, ToJournalDate = to };
+            Context.TaskItemEvents.Add(evt);
+            await Context.SaveChangesAsync();
+            return evt;
+        }
+
+        public void Dispose()
+        {
+            Context.Dispose();
+            _connection.Dispose();
+        }
+    }
+
+    private static readonly DateTime BaseTime = new(2026, 3, 1, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldReturnDate_WhenTaskAssigned()
+    {
+        using var s = new SqliteStack();
+        var entry = await s.AddEntryAsync(new DateOnly(2026, 3, 5));
+        var task = await s.AddTaskAsync(entry: entry);
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 5), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldOmitUnassignedTasks()
+    {
+        using var s = new SqliteStack();
+        var entry = await s.AddEntryAsync(new DateOnly(2026, 3, 5));
+        var assigned = await s.AddTaskAsync(entry: entry);
+        var unassigned = await s.AddTaskAsync();
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync([assigned.Id, unassigned.Id]);
+
+        Assert.Single(result);
+        Assert.False(result.ContainsKey(unassigned.Id));
+    }
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldReturnSameDate_WhenTasksShareEntry()
+    {
+        using var s = new SqliteStack();
+        var entry = await s.AddEntryAsync(new DateOnly(2026, 3, 5));
+        var a = await s.AddTaskAsync(entry: entry);
+        var b = await s.AddTaskAsync(entry: entry);
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync([a.Id, b.Id]);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(new DateOnly(2026, 3, 5), result[a.Id]);
+        Assert.Equal(new DateOnly(2026, 3, 5), result[b.Id]);
+    }
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldReturnEmpty_WhenInputEmpty()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        var result = await repository.GetAssignedJournalDatesAsync([]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldReturnEmpty_WhenIdDoesNotExist()
+    {
+        using var s = new SqliteStack();
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync([999]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldReturnToDate_WhenSingleDatedEvent()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 2), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldReturnLatestEvent_WhenMultipleEvents()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime.AddHours(2), to: new DateOnly(2026, 3, 4));
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+        await s.AddEventAsync(task.Id, BaseTime.AddHours(1), to: new DateOnly(2026, 3, 3));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 4), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldPreferToOverFrom_WhenBothSet()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, from: new DateOnly(2026, 3, 1), to: new DateOnly(2026, 3, 2));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 2), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldReturnFrom_WhenOnlyFromSet()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, from: new DateOnly(2026, 3, 1));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 1), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldCountRemovedFromJournalDay()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 1));
+        await s.AddEventAsync(task.Id, BaseTime.AddHours(1), from: new DateOnly(2026, 3, 1), type: "RemovedFromJournalDay");
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 1), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldResolveEachTask_WhenSeveralTasksRequested()
+    {
+        using var s = new SqliteStack();
+        var a = await s.AddTaskAsync();
+        var b = await s.AddTaskAsync();
+        var c = await s.AddTaskAsync();
+        await s.AddEventAsync(a.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+        await s.AddEventAsync(b.Id, BaseTime, to: new DateOnly(2026, 3, 3));
+        await s.AddEventAsync(b.Id, BaseTime.AddHours(1), to: new DateOnly(2026, 3, 6));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([a.Id, b.Id, c.Id]);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(new DateOnly(2026, 3, 2), result[a.Id]);
+        Assert.Equal(new DateOnly(2026, 3, 6), result[b.Id]);
+        Assert.False(result.ContainsKey(c.Id));
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldOmitTask_WhenNoEventsOrOnlyUndatedEvents()
+    {
+        using var s = new SqliteStack();
+        var noEvents = await s.AddTaskAsync();
+        var undated = await s.AddTaskAsync();
+        await s.AddEventAsync(undated.Id, BaseTime, type: "TaskCreated");
+
+        var result = await s.Repository.GetLastMovedDatesAsync([noEvents.Id, undated.Id]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldSkipNewestEvent_WhenItHasNoDates()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+        await s.AddEventAsync(task.Id, BaseTime.AddHours(5), type: "TitleChanged");
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 2), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldReturnEmpty_WhenIdDoesNotExist()
+    {
+        using var s = new SqliteStack();
+
+        var result = await s.Repository.GetLastMovedDatesAsync([999]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldReturnEmpty_WhenInputEmpty()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        var result = await repository.GetLastMovedDatesAsync([]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldPreferLowerId_WhenOccurredAtTies()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 9));
+
+        var result = await s.Repository.GetLastMovedDatesAsync([task.Id]);
+
+        Assert.Equal(new DateOnly(2026, 3, 2), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetAssignedJournalDatesAsync_ShouldHandleLargeIdList()
+    {
+        using var s = new SqliteStack();
+        var entry = await s.AddEntryAsync(new DateOnly(2026, 3, 5));
+        var task = await s.AddTaskAsync(entry: entry);
+        var ids = Enumerable.Range(task.Id, 1000).ToList();
+
+        var result = await s.Repository.GetAssignedJournalDatesAsync(ids);
+
+        Assert.Equal(new DateOnly(2026, 3, 5), result[task.Id]);
+    }
+
+    [Fact]
+    public async Task GetLastMovedDatesAsync_ShouldHandleLargeIdList()
+    {
+        using var s = new SqliteStack();
+        var task = await s.AddTaskAsync();
+        await s.AddEventAsync(task.Id, BaseTime, to: new DateOnly(2026, 3, 2));
+        var ids = Enumerable.Range(task.Id, 1000).ToList();
+
+        var result = await s.Repository.GetLastMovedDatesAsync(ids);
+
+        Assert.Equal(new DateOnly(2026, 3, 2), result[task.Id]);
+    }
 }

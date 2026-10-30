@@ -1,6 +1,6 @@
 ---
 name: mcp-advisor
-description: Documentation-grounded advisor for changes to the taskflow-assistant MCP server (tool names, descriptions, input and output schemas, error handling, ToolGuard). Fetches the current MCP specification, the MCP C# SDK docs and Anthropic's guidance on writing tools for agents, then returns cited recommendations. Invoke from feature-factory after the brief is approved and before the builder, when the brief changes src/TaskFlow.Mcp. Advisory only; never edits files.
+description: Documentation-grounded advisor for changes to the taskflow-assistant MCP server (tool names, descriptions, input and output schemas, error handling, ToolGuard). Fetches the current MCP specification, the MCP C# SDK docs and Anthropic's guidance on writing tools for agents, then returns cited recommendations. Invoke from feature-factory after the draft brief is written and before Approval Stop 2, when the brief changes src/TaskFlow.Mcp. Advisory only; never edits files.
 tools: Read, Glob, Grep, WebFetch, WebSearch
 model: sonnet
 color: cyan

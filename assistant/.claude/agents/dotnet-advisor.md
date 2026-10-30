@@ -1,6 +1,6 @@
 ---
 name: dotnet-advisor
-description: Documentation-grounded advisor for .NET 10 and C# changes in taskflow-assistant. Searches current Microsoft Learn documentation and code samples and returns cited recommendations on idioms, HttpClient, async and cancellation, time handling, JSON serialization, nullability, and xUnit testing. Invoke from feature-factory after the brief is approved and before the builder, when the brief changes any .cs or .csproj file. Advisory only; never edits files.
+description: Documentation-grounded advisor for .NET 10 and C# changes in taskflow-assistant. Searches current Microsoft Learn documentation and code samples and returns cited recommendations on idioms, HttpClient, async and cancellation, time handling, JSON serialization, nullability, and xUnit testing. Invoke from feature-factory after the draft brief is written and before Approval Stop 2, when the brief changes any .cs or .csproj file. Advisory only; never edits files.
 tools: Read, Glob, Grep, WebFetch, WebSearch, mcp__plugin_microsoft-docs_microsoft-learn
 model: sonnet
 color: blue

@@ -22,11 +22,10 @@ allowed-tools: >-
   Edit(/.playwright-mcp/**),
   Bash(gh pr view *),
   Bash(gh issue view *),
-  Bash(GH_TOKEN="$(gh auth token --user nevridge)" gh api --paginate repos/{owner}/{repo}/issues/*/comments*),
-  Bash(GH_TOKEN="$(gh auth token --user nevridge)" gh api -X PATCH repos/{owner}/{repo}/issues/comments/*),
-  Bash(GH_TOKEN="$(gh auth token --user nevridge)" gh issue comment *),
-  Bash(GH_TOKEN="$(gh auth token --user nevridge)" gh pr comment *),
-  Bash(gh auth token --user nevridge),
+  Bash(gh api --paginate repos/{owner}/{repo}/issues/*/comments*),
+  Bash(gh api -X PATCH repos/{owner}/{repo}/issues/comments/*),
+  Bash(gh issue comment *),
+  Bash(gh pr comment *),
   Bash(date +%Y%m%d%H%M%S),
   Bash(docker compose up -d --build),
   Bash(docker compose ps *),
@@ -268,17 +267,17 @@ If a PR and an issue are both given, post once, to the issue.
 1. Write the report with the Write tool to `.playwright-mcp/ux-test-results-<RUN_ID>.md`. The first line must be exactly `<!-- ux-test-results -->`.
 2. Look for an existing results comment (PR conversation comments use the same issues endpoint). No grep pipe is needed; the filter matches only this skill's own marker, so a `<!-- ux-checklist -->` comment from feature-factory Step 10.5 is never touched:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh api --paginate repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | select(.body | startswith("<!-- ux-test-results -->")) | .id'
+   gh api --paginate repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | select(.body | startswith("<!-- ux-test-results -->")) | .id'
    ```
 3. If one or more ids come back, update the first:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh api -X PATCH repos/{owner}/{repo}/issues/comments/<id> -F body=@.playwright-mcp/ux-test-results-<RUN_ID>.md
+   gh api -X PATCH repos/{owner}/{repo}/issues/comments/<id> -F body=@.playwright-mcp/ux-test-results-<RUN_ID>.md
    ```
 4. Otherwise create it:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh issue comment <N> --body-file .playwright-mcp/ux-test-results-<RUN_ID>.md
+   gh issue comment <N> --body-file .playwright-mcp/ux-test-results-<RUN_ID>.md
    ```
-   (or `gh pr comment <N> --body-file ...` with the same token prefix when the target is the PR).
+   (or `gh pr comment <N> --body-file ...` when the target is the PR).
 
 Never use inline `--body`.
 
@@ -307,7 +306,7 @@ If any `gh` write fails: print the full report to the conversation, report the e
 - **Only target `http://localhost:3000`.** Never `taskflow.skalaforge.com` or any non-localhost URL.
 - **Never edit `docker-compose.yml`**, and never read or depend on `docker-compose.override.yml`.
 - **No login step.** TaskFlow has no authentication; never wait for the user mid-run.
-- **Never run `gh auth switch`.** Use the per-command `GH_TOKEN="$(gh auth token --user nevridge)"` prefix only for `gh` writes and `gh api`; read-only `gh pr view` / `gh issue view` run without it.
+- **Never run `gh auth switch`.** Run `gh` commands as plain `gh ...` using the already-active account.
 - **Always `--body-file`** (or `-F body=@file` for PATCH). Never inline `--body`.
 - **`gh`, `docker`, `git` and `curl` always go through the Bash tool**, never PowerShell.
 - **Scope is strict.** Test only what the PR/issue describes. The plan comes from the PR/issue body only.

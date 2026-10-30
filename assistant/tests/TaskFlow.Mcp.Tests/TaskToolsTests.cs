@@ -656,8 +656,11 @@ public class CreateTasksTests
     private static (TaskTools Tools, StubHandler Handler) Setup(StubHandler? handler = null)
     {
         handler ??= new StubHandler();
+        handler.Get("TaskItems", Array.Empty<object>());
         return (new TaskTools(Fixtures.Client(handler), Fixtures.Time()), handler);
     }
+
+    private static TaskTools Tools(StubHandler handler) => new(Fixtures.Client(handler), Fixtures.Time());
 
     [Fact]
     public async Task SendsDefaults_TimezoneOffset_AndUtcDueDate()
@@ -749,6 +752,231 @@ public class CreateTasksTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Created 0 of 1").And.Contain("update_task with status=blocked");
         handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExistingOpenTask_WithSameTitle_WarnsButStillCreates()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Buy milk") })
+            .Post("TaskItems", Fixtures.Task(20, "Buy   Milk"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "  Buy \t  MILK " }]);
+
+        text.Should().StartWith("Created 1 of 1 task(s), 1 possible duplicate(s).")
+            .And.Contain("+ #20 ").And.Contain("! Possible duplicate of #12 \"Buy milk\" (open)")
+            .And.NotContain("Duplicate check skipped");
+        handler.Sent(HttpMethod.Post, "TaskItems").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ExistingDoneTask_WithSameTitle_WarnsWithDoneStatus()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Buy milk", status: "Completed", isComplete: true) })
+            .Post("TaskItems", Fixtures.Task(20, "Buy milk"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Buy milk" }]);
+
+        text.Should().Contain("! Possible duplicate of #12 \"Buy milk\" (done)");
+    }
+
+    [Fact]
+    public async Task SameTitleTwiceInABatch_BothCreated_LaterOneNamesTheEarlier()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Fixtures.Task(20, "Call Bob"), HttpStatusCode.Created)
+            .Post("TaskItems", Fixtures.Task(21, "call bob"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Call Bob" }, new NewTask { Title = "call bob" }]);
+
+        var lines = text.Split('\n');
+        lines[1].Should().StartWith("+ #20 ").And.NotContain("!");
+        lines[2].Should().StartWith("+ #21 ").And.Contain("! Possible duplicate of #20 \"Call Bob\" (open)");
+        text.Should().StartWith("Created 2 of 2 task(s), 1 possible duplicate(s).");
+    }
+
+    [Fact]
+    public async Task NoMatch_HasNoWarningsAndNoSkipLine_AndSimilarTitlesDoNotWarn()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Buy milks") })
+            .Post("TaskItems", Fixtures.Task(20, "Buy milk"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Buy milk" }]);
+
+        text.Should().StartWith("Created 1 of 1 task(s).").And.NotContain("!").And.NotContain("Duplicate check skipped");
+    }
+
+    [Fact]
+    public async Task CaseDifference_StillWarns()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "buy MILK") })
+            .Post("TaskItems", Fixtures.Task(20, "BUY milk"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "BUY milk" }]);
+
+        text.Should().Contain("! Possible duplicate of #12 \"buy MILK\"");
+    }
+
+    [Theory]
+    [InlineData("  Buy milk  ", "Buy milk")]
+    [InlineData("Buy\tmilk", "Buy milk")]
+    [InlineData("Buy\r\nmilk", "Buy milk")]
+    [InlineData("Buy    big   milk", "Buy big milk")]
+    [InlineData("Buy MILK", "Buy MILK")]
+    [InlineData("", "")]
+    [InlineData("   ", "")]
+    public void NormalizeTitle_CollapsesWhitespace_AndKeepsCase(string input, string expected) =>
+        Formatting.NormalizeTitle(input).Should().Be(expected);
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task FailingLookup_StillCreatesAllTasks_AndReportsTheSkippedCheck(HttpStatusCode status)
+    {
+        var handler = new StubHandler()
+            .On(HttpMethod.Get, "TaskItems", null, status)
+            .Post("TaskItems", Fixtures.Task(20, "A"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "A" }, new NewTask { Title = "B" }]);
+
+        text.Should().StartWith("Created 2 of 2 task(s).").And.NotContain("Possible duplicate")
+            .And.EndWith("Duplicate check skipped: could not read existing tasks.");
+        handler.Sent(HttpMethod.Post, "TaskItems").Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task TimedOutLookup_StillCreatesTasks_AndReportsTheSkippedCheck()
+    {
+        var handler = new StubHandler()
+            .Fail(HttpMethod.Get, "TaskItems", new TaskCanceledException("timeout"))
+            .Post("TaskItems", Fixtures.Task(20, "A"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "A" }]);
+
+        text.Should().StartWith("Created 1 of 1 task(s).").And.EndWith("Duplicate check skipped: could not read existing tasks.");
+    }
+
+    [Fact]
+    public async Task FailingLookup_StillFlagsSameBatchDuplicates()
+    {
+        var handler = new StubHandler()
+            .On(HttpMethod.Get, "TaskItems", null, HttpStatusCode.InternalServerError)
+            .Post("TaskItems", Fixtures.Task(20, "Call Bob"), HttpStatusCode.Created)
+            .Post("TaskItems", Fixtures.Task(21, "Call Bob"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Call Bob" }, new NewTask { Title = "Call Bob" }]);
+
+        text.Should().Contain("! Possible duplicate of #20").And.EndWith("Duplicate check skipped: could not read existing tasks.");
+    }
+
+    [Fact]
+    public async Task FailingLookup_WithEveryCreateFailing_ThrowsWithTheSkipLine()
+    {
+        var handler = new StubHandler()
+            .On(HttpMethod.Get, "TaskItems", null, HttpStatusCode.InternalServerError)
+            .Post("TaskItems", new { code = "X", message = "Nope." }, HttpStatusCode.UnprocessableEntity);
+
+        var act = () => Tools(handler).CreateTasks([new NewTask { Title = "A" }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("Created 0 of 1").And.EndWith("Duplicate check skipped: could not read existing tasks.");
+    }
+
+    [Fact]
+    public async Task PreCancelledToken_Propagates_AndCreatesNothing()
+    {
+        var handler = new StubHandler().Get("TaskItems", Array.Empty<object>()).Post("TaskItems", Fixtures.Task(20, "A"), HttpStatusCode.Created);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => Tools(handler).CreateTasks([new NewTask { Title = "A" }], cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Sent(HttpMethod.Post, "TaskItems").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task FailedOrInvalidEarlierItems_DoNotTriggerSameBatchWarnings()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Fixtures.Task(20, "Dup"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks(
+        [
+            new NewTask { Title = "Dup", Status = "blocked" },
+            new NewTask { Title = "Dup", Project = "nope" },
+            new NewTask { Title = "Dup" },
+        ]);
+
+        text.Should().StartWith("Created 1 of 3 task(s).").And.NotContain("Possible duplicate");
+    }
+
+    [Fact]
+    public async Task ExistingAndEarlierItemMatch_GiveOneWarning_PreferringTheExistingTask()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Call Bob") })
+            .Post("TaskItems", Fixtures.Task(20, "Call Bob"), HttpStatusCode.Created)
+            .Post("TaskItems", Fixtures.Task(21, "Call Bob"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Call Bob" }, new NewTask { Title = "Call Bob" }]);
+
+        var line = text.Split('\n')[2];
+        line.Should().Contain("! Possible duplicate of #12 ");
+        line.Split("Possible duplicate").Should().HaveCount(2);
+        text.Should().StartWith("Created 2 of 2 task(s), 2 possible duplicate(s).");
+    }
+
+    [Fact]
+    public async Task SeveralExistingTasksWithTheSameTitle_LowestIdIsNamed()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(30, "Call Bob"), Fixtures.Task(12, "call bob") })
+            .Post("TaskItems", Fixtures.Task(40, "Call Bob"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Call Bob" }]);
+
+        text.Should().Contain("! Possible duplicate of #12 ").And.NotContain("#30 \"");
+    }
+
+    [Fact]
+    public async Task ControlCharactersInTheMatchedTitle_AreStrippedFromTheWarning()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Call\u0007 Bob") })
+            .Post("TaskItems", Fixtures.Task(20, "Call Bob"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).CreateTasks([new NewTask { Title = "Call\u0007 Bob" }]);
+
+        text.Should().Contain("! Possible duplicate of #12 \"Call Bob\"").And.NotContain("\u0007");
+    }
+
+    [Fact]
+    public async Task AllItemsBlockedOrUntitled_MakeNoRequestAtAll()
+    {
+        var handler = new StubHandler().Get("TaskItems", Array.Empty<object>());
+
+        var act = () => Tools(handler).CreateTasks([new NewTask { Title = "A", Status = "blocked" }, new NewTask { Title = " " }]);
+
+        await act.Should().ThrowAsync<McpException>();
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OneValidItemAmongInvalid_ReadsExistingTasksExactlyOnce()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Fixtures.Task(20, "B"), HttpStatusCode.Created);
+
+        await Tools(handler).CreateTasks([new NewTask { Title = "A", Status = "blocked" }, new NewTask { Title = "B" }, new NewTask { Title = "C", Status = "blocked" }]);
+
+        handler.Sent(HttpMethod.Get, "TaskItems").Should().HaveCount(1);
     }
 
     [Fact]
@@ -1172,4 +1400,220 @@ public class DeleteAndNoteTests
         handler.BodyOf(HttpMethod.Post, "TaskItems/5/notes").GetProperty("content").GetString().Should().Be("hello");
         await FluentActions.Awaiting(() => tools.AddTaskNote(5, "  ")).Should().ThrowAsync<McpException>();
     }
+}
+
+public class UpdateTasksTests
+{
+    private static object Existing(int id, string title = "Original", string status = "Todo", int? projectId = null) =>
+        Fixtures.Task(id, title, status: status, priority: "High", due: "2026-10-12", projectId: projectId, description: "Keep me");
+
+    private static StubHandler HandlerFor(params int[] ids)
+    {
+        var handler = new StubHandler();
+        foreach (var id in ids)
+        {
+            handler.Get($"TaskItems/{id}", Existing(id, $"Task {id}")).Put($"TaskItems/{id}", Existing(id, $"Task {id}"));
+        }
+
+        return handler;
+    }
+
+    private static TaskTools Tools(StubHandler handler) => new(Fixtures.Client(handler), Fixtures.Time());
+
+    [Fact]
+    public async Task EightTasksEachWithAProject_AreAllUpdated()
+    {
+        var handler = HandlerFor(1, 2, 3, 4, 5, 6, 7, 8)
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent);
+
+        var text = await Tools(handler).UpdateTasks(Enumerable.Range(1, 8).Select(i => new TaskUpdate { Id = i, Project = "Alpha", Priority = "low" }).ToList());
+
+        text.Should().StartWith("Updated 8 of 8 task(s).");
+        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
+        handler.BodyOf(HttpMethod.Put, "TaskItems/8").GetProperty("priority").GetString().Should().Be("low");
+        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(8);
+        handler.BodyOf(HttpMethod.Post, "Projects/7/tasks").GetProperty("taskItemId").GetInt32().Should().Be(8);
+    }
+
+    [Fact]
+    public async Task SingleItem_SendsTheSameRequestAsUpdateTask_AndReportsTheChanges()
+    {
+        var single = HandlerFor(5);
+        await Tools(single).UpdateTask(5, priority: "low", dueDate: "none");
+        var batch = HandlerFor(5);
+
+        var text = await Tools(batch).UpdateTasks([new TaskUpdate { Id = 5, Priority = "low", DueDate = "none" }]);
+
+        batch.Sent(HttpMethod.Put, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Put, "TaskItems/5").Last().Body);
+        text.Should().Be("Updated 1 of 1 task(s).\n+ #5 \"Task 5\": Changed priority, dueDate");
+    }
+
+    [Fact]
+    public async Task UnsuppliedFields_KeepTheirCurrentValues()
+    {
+        var handler = HandlerFor(5);
+
+        await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Complete = true }]);
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("title").GetString().Should().Be("Task 5");
+        body.GetProperty("description").GetString().Should().Be("Keep me");
+        body.GetProperty("priority").GetString().Should().Be("high");
+        body.GetProperty("dueDate").GetString().Should().StartWith("2026-10-12");
+        body.GetProperty("status").GetString().Should().Be("completed");
+    }
+
+    [Fact]
+    public async Task UnknownIdAndInvalidProject_AreReportedPerItem_WithTheRealSuccessCount()
+    {
+        var handler = HandlerFor(1, 3)
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 1, Priority = "low" },
+            new TaskUpdate { Id = 2, Priority = "low" },
+            new TaskUpdate { Id = 3, Project = "nope" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[0].Should().Be("Updated 1 of 3 task(s).");
+        lines[1].Should().StartWith("+ #1 \"Task 1\": Changed priority");
+        lines[2].Should().StartWith("x #2: Not found");
+        lines[3].Should().StartWith("x #3: No project matches 'nope'");
+    }
+
+    [Fact]
+    public async Task BlockGuidance_IsKeptOnAFailedItem()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing(5, status: "Draft"))
+            .Put("TaskItems/5", new { code = "TASK_BLOCK_DRAFT_NOT_ALLOWED", message = "Draft tasks cannot be blocked." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/6", Existing(6))
+            .Put("TaskItems/6", Existing(6));
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked" }, new TaskUpdate { Id = 6, Priority = "low" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: ").And.Contain("Only Todo tasks can be blocked");
+    }
+
+    [Fact]
+    public async Task AllItemsFailing_Throws_WithTheReport()
+    {
+        var handler = new StubHandler();
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 1 }, new TaskUpdate { Id = 2 }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().StartWith("Updated 0 of 2 task(s).").And.Contain("x #1: ").And.Contain("x #2: ");
+    }
+
+    [Fact]
+    public async Task EmptyBatch_IsRejected() =>
+        await FluentActions.Awaiting(() => Tools(new StubHandler()).UpdateTasks([])).Should().ThrowAsync<McpException>().WithMessage("*at least one*");
+
+    [Fact]
+    public async Task OversizedBatch_IsRejected_BeforeAnyRequest()
+    {
+        var handler = new StubHandler();
+
+        var act = () => Tools(handler).UpdateTasks(Enumerable.Range(1, 26).Select(i => new TaskUpdate { Id = i }).ToList());
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("26").And.Contain("at most 25");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DuplicateIds_AreRejected_BeforeAnyRequest()
+    {
+        var handler = HandlerFor(7, 8);
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 7, Priority = "low" }, new TaskUpdate { Id = 8 }, new TaskUpdate { Id = 7, Status = "draft" }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Task id 7 appears twice");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Timeout_OnOneItem_ReportsItShortly_AndStopsTheRest()
+    {
+        var handler = HandlerFor(4)
+            .Get("TaskItems/5", Existing(5))
+            .Fail(HttpMethod.Put, "TaskItems/5", new TaskCanceledException("timeout"));
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 4, Priority = "low" },
+            new TaskUpdate { Id = 5, Priority = "low" },
+            new TaskUpdate { Id = 6, Priority = "low" },
+            new TaskUpdate { Id = 7, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[0].Should().Be("Updated 1 of 4 task(s).");
+        lines[2].Should().Be("x #5: request timed out");
+        lines[3].Should().Be("x #6: not attempted");
+        lines[4].Should().Be("x #7: not attempted");
+        handler.Requests.Should().NotContain(r => r.Path == "TaskItems/6" || r.Path == "TaskItems/7");
+    }
+
+    [Fact]
+    public async Task UnreachableApi_ThrowsWithShortReasons_AndNoLongDockerText()
+    {
+        var handler = new StubHandler { Throw = new HttpRequestException("refused") };
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 1 }, new TaskUpdate { Id = 2 }]);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("x #1: cannot reach the TaskFlow API").And.Contain("x #2: not attempted").And.NotContain("docker");
+    }
+
+    [Fact]
+    public async Task PreCancelledToken_Propagates_AndNoItemIsSent()
+    {
+        var handler = HandlerFor(1, 2);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "low" }, new TaskUpdate { Id = 2, Priority = "low" }], cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExactlyTheBatchLimit_IsAccepted()
+    {
+        var handler = HandlerFor(Enumerable.Range(1, 25).ToArray());
+
+        var text = await Tools(handler).UpdateTasks(Enumerable.Range(1, 25).Select(i => new TaskUpdate { Id = i, Priority = "low" }).ToList());
+
+        text.Should().StartWith("Updated 25 of 25 task(s).");
+    }
+
+    [Fact]
+    public async Task BlockWithReasonAndParent_SendsTheSameRequestAsUpdateTask()
+    {
+        var single = HandlerFor(5);
+        await Tools(single).UpdateTask(5, status: "blocked", blockedReason: "Waiting on legal", parentTaskId: 9, title: "Renamed", description: "");
+        var batch = HandlerFor(5);
+
+        await Tools(batch).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked", BlockedReason = "Waiting on legal", ParentTaskId = 9, Title = "Renamed", Description = "" }]);
+
+        batch.Sent(HttpMethod.Put, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Put, "TaskItems/5").Last().Body);
+    }
+
+    [Fact]
+    public async Task ValidationFailureOnOneItem_DoesNotStopTheOthers()
+    {
+        var handler = HandlerFor(1, 2);
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "urgent" }, new TaskUpdate { Id = 2, Priority = "low" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #1: ").And.Contain("+ #2 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
 }

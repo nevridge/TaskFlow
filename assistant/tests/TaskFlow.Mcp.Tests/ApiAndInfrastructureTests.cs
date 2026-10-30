@@ -350,7 +350,7 @@ public class ToolSurfaceTests
     private static readonly string[] ExpectedTools =
     [
         "list_projects", "save_project", "project_status",
-        "list_tasks", "get_task", "create_tasks", "update_task", "delete_task", "add_task_note",
+        "list_tasks", "get_task", "create_tasks", "update_task", "update_tasks", "delete_task", "add_task_note",
         "get_journal", "set_journal_todos", "add_log_entry", "update_journal",
         "weekly_review",
     ];
@@ -386,6 +386,26 @@ public class ToolSurfaceTests
         update.GetParameters().Should().Contain(p => p.Name == "blockedReason" && p.GetCustomAttribute<DescriptionAttribute>() != null);
         update.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
         Tools().Single(t => t.Attribute.Name == "list_tasks").Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
+    }
+
+    [Fact]
+    public void UpdateTasks_DocumentsEveryItemProperty_AndLimits()
+    {
+        var update = Tools().Single(t => t.Attribute.Name == "update_tasks");
+
+        typeof(TaskUpdate).GetProperties().Where(p => p.GetCustomAttribute<DescriptionAttribute>() is null).Select(p => p.Name).Should().BeEmpty();
+        update.Attribute.Idempotent.Should().BeTrue();
+        update.Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("25").And.Contain("update_task");
+    }
+
+    [Fact]
+    public void UpdateJournal_DocumentsAppend_AndIsNotIdempotent()
+    {
+        var update = Tools().Single(t => t.Attribute.Name == "update_journal");
+
+        update.Method.GetParameters().Should().Contain(p => p.Name == "append" && p.GetCustomAttribute<DescriptionAttribute>() != null);
+        update.Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("append=true").And.Contain("not idempotent");
+        update.Attribute.Idempotent.Should().BeFalse();
     }
 
     [Fact]

@@ -67,7 +67,7 @@ public class TaskItemsController(
     [HttpGet("{id}", Name = "GetTaskV1")]
     public async Task<ActionResult<TaskItemResponseDto>> Get(int id)
     {
-        var item = await _repo.GetByIdAsync(id);
+        var item = await _repo.GetByIdNoTrackingAsync(id);
         if (item is null)
         {
             return NotFound();
@@ -81,7 +81,7 @@ public class TaskItemsController(
     [HttpGet("{id}/history")]
     public async Task<ActionResult<IEnumerable<TaskItemEventResponseDto>>> GetHistory(int id)
     {
-        var item = await _repo.GetByIdAsync(id);
+        var item = await _repo.GetByIdNoTrackingAsync(id);
         if (item is null)
         {
             return NotFound();
@@ -133,7 +133,7 @@ public class TaskItemsController(
 
         if (createDto.ParentTaskItemId.HasValue)
         {
-            var parent = await _repo.GetByIdAsync(createDto.ParentTaskItemId.Value);
+            var parent = await _repo.GetByIdNoTrackingAsync(createDto.ParentTaskItemId.Value);
             if (parent is null)
             {
                 return UnprocessableEntity(new
@@ -155,7 +155,7 @@ public class TaskItemsController(
             }
         }
 
-        if (createDto.ProjectId.HasValue && await _projectRepo.GetByIdAsync(createDto.ProjectId.Value) is null)
+        if (createDto.ProjectId.HasValue && await _projectRepo.GetByIdNoTrackingAsync(createDto.ProjectId.Value) is null)
         {
             return UnprocessableEntity(new
             {
@@ -190,7 +190,7 @@ public class TaskItemsController(
             await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value, createDto.TimezoneOffsetMinutes);
         }
 
-        var refreshed = await _repo.GetByIdAsync(createdItem.Id) ?? createdItem;
+        var refreshed = await _repo.GetByIdNoTrackingAsync(createdItem.Id) ?? createdItem;
         var responseDto = await MapTaskItemResponseAsync(refreshed, knownChildCount: 0);
 
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersions.V1, id = createdItem.Id }, responseDto);
@@ -292,7 +292,7 @@ public class TaskItemsController(
                 });
             }
 
-            var parent = await _repo.GetByIdAsync(proposedParentId);
+            var parent = await _repo.GetByIdNoTrackingAsync(proposedParentId);
             if (parent is null)
             {
                 return UnprocessableEntity(new
@@ -557,7 +557,7 @@ public class TaskItemsController(
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var existing = await _repo.GetByIdAsync(id);
+        var existing = await _repo.GetByIdNoTrackingAsync(id);
         if (existing is null)
         {
             return NotFound();

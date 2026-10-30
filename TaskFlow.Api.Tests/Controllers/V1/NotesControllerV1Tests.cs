@@ -35,7 +35,7 @@ public class NotesControllerV1Tests
             new() { Id = 1, Content = "Note 1", TaskItemId = 1, CreatedAt = DateTime.UtcNow },
             new() { Id = 2, Content = "Note 2", TaskItemId = 1, CreatedAt = DateTime.UtcNow }
         };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockNoteRepo.Setup(r => r.GetAllByTaskIdAsync(1)).ReturnsAsync(notes);
 
         var result = await _controller.GetAll(1);
@@ -49,7 +49,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task GetAll_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.GetAll(99);
 
@@ -64,8 +64,8 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var note = new Note { Id = 5, Content = "My note", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
-        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(note);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 5)).ReturnsAsync(note);
 
         var result = await _controller.Get(1, 5);
 
@@ -79,7 +79,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Get_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Get(99, 1);
 
@@ -90,8 +90,8 @@ public class NotesControllerV1Tests
     public async Task Get_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
-        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Get(1, 99);
 
@@ -106,7 +106,7 @@ public class NotesControllerV1Tests
         var task = new TaskItem { Id = 1, Title = "Task" };
         var createDto = new CreateNoteDto { Content = "New note" };
         var created = new Note { Id = 3, Content = "New note", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockNoteRepo.Setup(r => r.AddAsync(It.IsAny<Note>())).ReturnsAsync(created);
@@ -123,7 +123,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Create_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Create(99, new CreateNoteDto { Content = "Note" });
 
@@ -135,7 +135,7 @@ public class NotesControllerV1Tests
     public async Task Create_ShouldReturnBadRequest_WhenValidationFails()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult(
                 [new ValidationFailure("Content", "Content is required.")]));
@@ -153,7 +153,7 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var existing = new Note { Id = 5, Content = "Old", TaskItemId = 1, CreatedAt = DateTime.UtcNow };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(existing);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Note>(), default))
             .ReturnsAsync(new ValidationResult());
@@ -169,7 +169,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Update_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Update(99, 1, new UpdateNoteDto { Content = "x" });
 
@@ -180,7 +180,7 @@ public class NotesControllerV1Tests
     public async Task Update_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Update(1, 99, new UpdateNoteDto { Content = "x" });
@@ -195,8 +195,8 @@ public class NotesControllerV1Tests
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
         var note = new Note { Id = 5, Content = "Note", TaskItemId = 1 };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
-        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 5)).ReturnsAsync(note);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 5)).ReturnsAsync(note);
         _mockNoteRepo.Setup(r => r.DeleteAsync(1, 5)).Returns(Task.CompletedTask);
 
         var result = await _controller.Delete(1, 5);
@@ -208,7 +208,7 @@ public class NotesControllerV1Tests
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Delete(99, 1);
 
@@ -219,8 +219,8 @@ public class NotesControllerV1Tests
     public async Task Delete_ShouldReturnNotFound_WhenNoteDoesNotExist()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockTaskRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
-        _mockNoteRepo.Setup(r => r.GetByIdAsync(1, 99)).ReturnsAsync((Note?)null);
+        _mockTaskRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
+        _mockNoteRepo.Setup(r => r.GetByIdNoTrackingAsync(1, 99)).ReturnsAsync((Note?)null);
 
         var result = await _controller.Delete(1, 99);
 

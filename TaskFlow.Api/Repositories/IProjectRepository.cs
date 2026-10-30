@@ -7,6 +7,7 @@ public interface IProjectRepository
     /// <summary>Returns all projects with their tasks loaded (used for open/completed counts).</summary>
     Task<IEnumerable<Project>> GetAllAsync();
     Task<Project?> GetByIdAsync(int id);
+    Task<Project?> GetByIdNoTrackingAsync(int id);
     Task<bool> NameExistsAsync(string name, int? excludeProjectId = null);
     Task<IEnumerable<TaskItem>> GetTasksAsync(int projectId);
     Task<Project> AddAsync(Project project);

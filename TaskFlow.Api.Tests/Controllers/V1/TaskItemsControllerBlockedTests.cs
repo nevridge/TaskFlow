@@ -591,7 +591,7 @@ public class TaskItemsControllerBlockedTests
     {
         var repo = new Mock<ITaskRepository>();
         var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
-        repo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem
+        repo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new TaskItem
         {
             Id = 1,
             Title = "T",

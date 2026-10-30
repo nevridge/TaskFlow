@@ -22,7 +22,7 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
     [HttpGet]
     public async Task<ActionResult<IEnumerable<NoteResponseDto>>> GetAll(int taskId)
     {
-        var task = await _taskRepo.GetByIdAsync(taskId);
+        var task = await _taskRepo.GetByIdNoTrackingAsync(taskId);
         if (task is null)
         {
             return NotFound();
@@ -36,13 +36,13 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
     [HttpGet("{id}", Name = GetNoteRouteName)]
     public async Task<ActionResult<NoteResponseDto>> Get(int taskId, int id)
     {
-        var task = await _taskRepo.GetByIdAsync(taskId);
+        var task = await _taskRepo.GetByIdNoTrackingAsync(taskId);
         if (task is null)
         {
             return NotFound();
         }
 
-        var note = await _noteRepo.GetByIdAsync(taskId, id);
+        var note = await _noteRepo.GetByIdNoTrackingAsync(taskId, id);
         if (note is null)
         {
             return NotFound();
@@ -55,7 +55,7 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
     [HttpPost]
     public async Task<ActionResult<NoteResponseDto>> Create(int taskId, [FromBody] CreateNoteDto createDto)
     {
-        var task = await _taskRepo.GetByIdAsync(taskId);
+        var task = await _taskRepo.GetByIdNoTrackingAsync(taskId);
         if (task is null)
         {
             return NotFound();
@@ -77,7 +77,7 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
     [HttpPut("{id}")]
     public async Task<ActionResult<NoteResponseDto>> Update(int taskId, int id, [FromBody] UpdateNoteDto updateDto)
     {
-        var task = await _taskRepo.GetByIdAsync(taskId);
+        var task = await _taskRepo.GetByIdNoTrackingAsync(taskId);
         if (task is null)
         {
             return NotFound();
@@ -105,13 +105,13 @@ public class NotesController(INoteRepository noteRepo, ITaskRepository taskRepo,
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int taskId, int id)
     {
-        var task = await _taskRepo.GetByIdAsync(taskId);
+        var task = await _taskRepo.GetByIdNoTrackingAsync(taskId);
         if (task is null)
         {
             return NotFound();
         }
 
-        var existing = await _noteRepo.GetByIdAsync(taskId, id);
+        var existing = await _noteRepo.GetByIdNoTrackingAsync(taskId, id);
         if (existing is null)
         {
             return NotFound();

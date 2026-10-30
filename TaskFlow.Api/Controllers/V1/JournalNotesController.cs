@@ -45,7 +45,7 @@ public class JournalNotesController(
             return NotFound();
         }
 
-        var note = await _noteRepo.GetByIdAsync(entryId, id);
+        var note = await _noteRepo.GetByIdNoTrackingAsync(entryId, id);
         if (note is null)
         {
             return NotFound();
@@ -114,7 +114,7 @@ public class JournalNotesController(
             return NotFound();
         }
 
-        var existing = await _noteRepo.GetByIdAsync(entryId, id);
+        var existing = await _noteRepo.GetByIdNoTrackingAsync(entryId, id);
         if (existing is null)
         {
             return NotFound();

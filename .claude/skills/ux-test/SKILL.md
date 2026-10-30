@@ -1,6 +1,6 @@
 ---
 name: ux-test
-description: "Drives the live TaskFlow dev stack (http://localhost:3000) via Playwright to verify the UI/UX behaviour described in a PR or issue. Reads the PR/issue body with gh, rebuilds the Docker stack, seeds uxtest- fixtures through /api/v1, runs a numbered test plan step by step, posts one idempotent pass/fail comment (marker <!-- ux-test-results -->), then removes fixtures, screenshots and temp files. Invoke: /ux-test PR#228, /ux-test #228, /ux-test PR#250 #228."
+description: "Drives a disposable TaskFlow test stack (docker compose project `taskflow-test`, http://localhost:3200) via Playwright to verify the UI/UX behaviour described in a PR or issue. Reads the PR/issue body with gh, builds the working tree into the test project, seeds uxtest- fixtures through /api/v1, runs a numbered test plan step by step, posts one idempotent pass/fail comment (marker <!-- ux-test-results -->), then removes fixtures, screenshots and temp files and tears the test project down. Invoke: /ux-test PR#228, /ux-test #228, /ux-test PR#250 #228."
 when_to_use: "Trigger phrases: 'run UX tests', 'test the UI', 'verify the frontend', 'check the UI changes', 'run ux-test', 'test this PR', 'verify UI changes'."
 argument-hint: "[PR#N] [#N]"
 disable-model-invocation: true
@@ -27,12 +27,24 @@ allowed-tools: >-
   Bash(gh issue comment *),
   Bash(gh pr comment *),
   Bash(date +%Y%m%d%H%M%S),
-  Bash(docker compose up -d --build),
-  Bash(docker compose ps *),
-  Bash(docker compose logs *),
-  Bash(docker compose stop taskflow-api),
-  Bash(docker compose start taskflow-api),
-  Bash(curl * http://localhost:3000/api/v1/*),
+  Bash(test -f docker-compose.test.local.yml),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml config --volumes),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml down -v),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml up -d --build),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml ps),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml ps *),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml logs *),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml stop taskflow-api),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml start taskflow-api),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml config --volumes),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml down -v),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml up -d --build),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml ps),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml ps *),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml logs *),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml stop taskflow-api),
+  Bash(docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml start taskflow-api),
+  Bash(curl * http://localhost:3200/api/v1/*),
   Bash(git branch --show-current),
   Bash(git rev-parse *),
   Bash(git status --short *),
@@ -42,7 +54,7 @@ allowed-tools: >-
   Bash(rm -f .playwright-mcp/console-*.log)
 ---
 
-You are the UX test driver for TaskFlow. Your role is to verify UI/UX behavior described in a PR or issue by driving the live Docker dev stack via Playwright against the real API, executing a scoped test plan, and posting a structured pass/fail summary as a GitHub comment.
+You are the UX test driver for TaskFlow. Your role is to verify UI/UX behavior described in a PR or issue by driving a disposable Docker test stack via Playwright against the real API, executing a scoped test plan, and posting a structured pass/fail summary as a GitHub comment.
 
 Run `gh`, `docker`, `git` and `curl` only through the Bash tool, never PowerShell. Every `.playwright-mcp/` path below is relative to the repository root. The `Edit(/.playwright-mcp/**)` grant is the only file-write grant and also covers the Write tool for the report file; if Write prompts anyway, a `Write(/.playwright-mcp/**)` entry can be added to the allowed tools.
 
@@ -63,6 +75,7 @@ Keep these identifiers for the whole run. Then:
 1. Generate the run id by running the plain Bash command `date +%Y%m%d%H%M%S`. Form `RUN_ID` as `uxtest-<that value>`, print it, and keep the literal value in your context. Shell variables do not persist between Bash calls, so substitute the literal `RUN_ID` into every later command and file name. Every fixture this run creates is prefixed `<RUN_ID>-`.
 2. Record `git branch --show-current`, `git rev-parse --short HEAD` and `git status --short -- . ':(exclude).playwright-mcp'`. A non-empty status is a dirty-tree note for the report. Do not stop on a dirty tree.
 3. Sweep stale local files from a crashed earlier run, using only these forms: `rm -f .playwright-mcp/ux-test-step*.png` and `rm -f .playwright-mcp/ux-test-results-*.md`.
+4. Live-port guard: the base URL is the fixed literal `http://localhost:3200`. If the URL in use resolves to port 3000, 8080 or 8081 (including `localhost`, `127.0.0.1` and `[::1]` forms), stop with `Refusing to run: base URL targets a live port (3000/8080/8081). Step 5 sweeps all uxtest- data at the base URL.` Then go to Step 11, which skips every `docker` command and deletes only local files. This is a text-level rule, no tool call.
 
 ---
 
@@ -85,25 +98,31 @@ If any `gh` read errors (404, permission, network), stop with `gh read failed: <
 
 ---
 
-## Step 3 - Rebuild and start the dev stack
+## Step 3 - Build and start the isolated test project
 
-Run `docker compose up -d --build` so the checked-out working tree is what runs, not a stale image. Run it with the Bash `timeout` parameter set to 600000 (10 minutes, the maximum), because a build can exceed the 120s default.
+Every docker command below uses the same compose variant for the WHOLE run, including Step 11. Shell state does not persist, so record the choice in context and write the chosen command out in full each time. Variants (all `docker compose` commands carry `-p taskflow-test`):
+- **B:** `docker compose -p taskflow-test -f docker-compose.test.yml`
+- **L:** `docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml`
 
-If it fails or times out (build error, Docker daemon not running, etc.), stop with `Docker build/start failed` followed by the command output. Go to Step 11.
+1. Run the plain Bash command `test -f docker-compose.test.local.yml`. Exit 0 means use L; non-zero (file absent) means use B. Record the choice.
+2. Run `<variant> config --volumes`. It prints volume keys. Accept only the exact lines `test-data` and `test-logs`; reject anything else (including `taskflow-data`, `taskflow-logs`, `seq-data`). The check does not depend on any project-name string. On rejection stop with `Volume check failed: <output>`, run no `down`, and go to Step 11 (which also runs no `down`).
+3. Run `<variant> down -v` to clear a stale test project from a crashed earlier run.
+4. Run `<variant> up -d --build` so the checked-out working tree is what runs, not a stale image. Run it with the Bash `timeout` parameter set to 600000 (10 minutes, the maximum), because a build can exceed the 120s default.
+5. If it fails or times out (build error, Docker daemon not running, etc.), stop with `Docker build/start failed` followed by the command output. Go to Step 11.
 
-Never edit `docker-compose.yml`. Never read or depend on `docker-compose.override.yml`.
+Never run `docker compose` without `-p taskflow-test` and the test `-f` file(s) (`-f docker-compose.test.yml`, plus `-f docker-compose.test.local.yml` only when that file exists). Never run `up`, `stop`, `start`, `restart` or `down` against the live stack. Never edit any `docker-compose*.yml`. Never read or depend on `docker-compose.override.yml`. `docker-compose.test.local.yml` is a different, test-only file and is allowed only as the second `-f`.
 
 ---
 
 ## Step 4 - Verify reachability
 
 Poll up to 40 times (about 120 seconds). No shell `sleep` or loop is allowed. Each poll is one separate Bash call, and the wait between polls is Playwright `browser_wait_for` with a time of 3 seconds:
-- `curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/v1/Projects` until it returns `200`. This goes through the web proxy, so it proves the web container and the API are both up.
-- `docker compose ps` to see container status when a poll does not return `200`.
+- `curl -s -o /dev/null -w "%{http_code}" http://localhost:3200/api/v1/Projects` until it returns `200`. This goes through the web proxy, so it proves the web container and the API are both up. The web service has no healthcheck, so this 200 is the readiness signal for both.
+- `<variant> ps` to see container status when a poll does not return `200`.
 
-Then call Playwright `browser_navigate` to `http://localhost:3000` and take a `browser_snapshot`.
+Then call Playwright `browser_navigate` to `http://localhost:3200` and take a `browser_snapshot`.
 
-- If 40 polls pass without `200` (about 120 seconds), stop with `App not reachable at http://localhost:3000 after 120s`, include the last `docker compose ps` output and `docker compose logs --tail 50`. Go to Step 11.
+- If 40 polls pass without `200` (about 120 seconds), stop with `App not reachable at http://localhost:3200 after 120s`, include the last `<variant> ps` output and `<variant> logs --tail 50`. Go to Step 11.
 - If any Playwright tool call fails as not-found or unavailable, stop with `Playwright unavailable. Ensure the Playwright plugin is configured and running.` Go to Step 11.
 
 There is no login step: TaskFlow has no authentication. Never wait for the user at this point.
@@ -115,16 +134,18 @@ There is no login step: TaskFlow has no authentication. Never wait for the user 
 A crashed earlier run may have left `uxtest-` data behind. List everything through the proxy:
 
 ```bash
-curl -s http://localhost:3000/api/v1/Projects
-curl -s http://localhost:3000/api/v1/TaskItems
+curl -s http://localhost:3200/api/v1/Projects
+curl -s http://localhost:3200/api/v1/TaskItems
 ```
+
+The test DB is fresh; this sweep is a safety net and must never run against a live port (Step 0 guard).
 
 Both list endpoints take no paging, filter or query parameters and return everything: `/Projects` includes archived projects (`isArchived`), and `/TaskItems` includes completed tasks and subtasks (`parentTaskItemId` is non-null for subtasks). No extra parameter is needed.
 
 Delete every project whose `name` and every task whose `title` starts with `uxtest-` (any run id), in this order:
-1. Subtasks (tasks with a `parentTaskItemId`): `curl -s -X DELETE http://localhost:3000/api/v1/TaskItems/<id>`
+1. Subtasks (tasks with a `parentTaskItemId`): `curl -s -X DELETE http://localhost:3200/api/v1/TaskItems/<id>`
 2. Parent tasks (same call). Deleting a parent that still has children returns 422 `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`.
-3. Projects: `curl -s -X DELETE http://localhost:3000/api/v1/Projects/<id>`
+3. Projects: `curl -s -X DELETE http://localhost:3200/api/v1/Projects/<id>`
 
 Report the swept count.
 
@@ -161,13 +182,13 @@ Print the plan, the AC map and the fixtures list to the user.
 
 ## Step 7 - Seed fixtures
 
-Seed only what the plan needs, through `curl` to `http://localhost:3000/api/v1/...` ONLY. Never use the host API ports (8080 or 8081): 8080 is occupied by another app on this machine and the host API port may be remapped. The web proxy at 3000 is always the right base URL.
+Seed only what the plan needs, through `curl` to `http://localhost:3200/api/v1/...` ONLY, into the test project. Never use 3000, 8080 or 8081 (live ports).
 
 Fixtures (create only those the plan uses):
 - Projects: `<RUN_ID>-active-1`, `<RUN_ID>-active-2`, and `<RUN_ID>-archived`.
-  - Create: `curl -s -X POST http://localhost:3000/api/v1/Projects -H 'Content-Type: application/json' -d '{"name":"<RUN_ID>-active-1"}'`
-  - Archive by full-replace PUT (name and description are overwritten, so resend them): `curl -s -X PUT http://localhost:3000/api/v1/Projects/<id> -H 'Content-Type: application/json' -d '{"name":"<RUN_ID>-archived","isArchived":true}'`
-- Tasks titled `<RUN_ID>-<label>`, with and without `projectId`: `curl -s -X POST http://localhost:3000/api/v1/TaskItems -H 'Content-Type: application/json' -d '{"title":"<RUN_ID>-<label>","status":"Todo","priority":"Medium","projectId":<id>}'`
+  - Create: `curl -s -X POST http://localhost:3200/api/v1/Projects -H 'Content-Type: application/json' -d '{"name":"<RUN_ID>-active-1"}'`
+  - Archive by full-replace PUT (name and description are overwritten, so resend them): `curl -s -X PUT http://localhost:3200/api/v1/Projects/<id> -H 'Content-Type: application/json' -d '{"name":"<RUN_ID>-archived","isArchived":true}'`
+- Tasks titled `<RUN_ID>-<label>`, with and without `projectId`: `curl -s -X POST http://localhost:3200/api/v1/TaskItems -H 'Content-Type: application/json' -d '{"title":"<RUN_ID>-<label>","status":"Todo","priority":"Medium","projectId":<id>}'`
 
 Rules:
 - Enum values are PascalCase strings: status `"Todo"`/`"Completed"`, priority `"Low"`/`"Medium"`/`"High"`.
@@ -198,7 +219,7 @@ Continue unless a FAIL is a prerequisite for later steps; those may be skipped w
 
 State-changing features must be carried through to completion, never dismiss-only.
 
-**API-stopped steps** (testing behaviour when the API is down): run `docker compose stop taskflow-api`, observe the UI, then IMMEDIATELY run `docker compose start taskflow-api` and re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop) until `200` before any later step runs.
+**API-stopped steps** (testing behaviour when the API is down): run `<variant> stop taskflow-api`, observe the UI, then IMMEDIATELY run `<variant> start taskflow-api` and re-poll the Step 4 check against 3200 (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop) until `200` before any later step runs.
 
 **Native dialogs:** when a step triggers a native `confirm`/`alert` dialog, accept it with `browser_handle_dialog` to carry the state-changing action through to completion. Dismiss only for an explicit cancel-path edge case. Record the dialog text in the step result. Task and task-note deletes on TasksPage and TaskDetailPage no longer show a native confirm: they show an Undo toast and send the DELETE only after the window (10s for tasks, 6s for notes), so wait out the window (or confirm the row is gone after it) to carry the delete through to completion, and use Undo (or Ctrl/Cmd+Z, or `u`) for the cancel path. Cleanup also begins with an ensure-API-running check, so a mid-step crash never leaves the API stopped.
 
@@ -287,8 +308,10 @@ If any `gh` write fails: print the full report to the conversation, report the e
 
 ## Step 11 - Cleanup (every exit path)
 
-1. If the stack was started and the API may be stopped, ensure it is running: `docker compose ps`, and `docker compose start taskflow-api` if needed. Re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop).
-2. If seeding had started, delete this run's fixtures by recorded id (or by the `<RUN_ID>-` prefix from the list calls in Step 5): subtasks first, then parent tasks, then projects.
+Every `docker` command here uses the same variant chosen in Step 3. On the live-port refusal path, skip every `docker` command and do only item 3.
+
+1. If the stack was started and the API may be stopped, ensure it is running: `<variant> ps`, and `<variant> start taskflow-api` if needed. This is only needed if fixture deletion in item 2 is wanted. Re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop).
+2. Fixture deletion is optional because teardown in item 4 destroys the test DB. Run it (by recorded id or `<RUN_ID>-` prefix at `http://localhost:3200`, subtasks first, then parent tasks, then projects) only if teardown fails.
 3. Delete local files, using only these forms:
    ```bash
    rm -f .playwright-mcp/ux-test-step*.png
@@ -297,14 +320,16 @@ If any `gh` write fails: print the full report to the conversation, report the e
    rm -f .playwright-mcp/console-*.log
    ```
    Missing files are not an error. Assume any `page-*.yml` and `console-*.log` in `.playwright-mcp/` are Playwright output from this run. Never remove the `.playwright-mcp` directory itself.
-4. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
+4. Teardown: run `<variant> config --volumes` and apply the same check as Step 3 item 2 (exactly `test-data` and `test-logs`), then `<variant> down -v`. Skip this entirely on the live-port refusal path, if the volume check ever failed, or if the variant was never chosen.
+5. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
 
 ---
 
 ## Guardrails and Invariants
 
-- **Only target `http://localhost:3000`.** Never `taskflow.skalaforge.com` or any non-localhost URL.
-- **Never edit `docker-compose.yml`**, and never read or depend on `docker-compose.override.yml`.
+- **Only target `http://localhost:3200`.** Never `taskflow.skalaforge.com` or any non-localhost URL. Refuse if the base URL maps to live ports 3000, 8080 or 8081.
+- **Never edit any `docker-compose*.yml`.** Never read or depend on `docker-compose.override.yml`. Never run `docker compose` without `-p taskflow-test` and the test `-f` file(s) (the `-f docker-compose.test.local.yml` form only when that file exists). Never run `down` before the `config --volumes` check passes with the same `-f` set used for `up`.
+- **Seed `uxtest-` fixtures only into the test project.**
 - **No login step.** TaskFlow has no authentication; never wait for the user mid-run.
 - **Never run `gh auth switch`.** Run `gh` commands as plain `gh ...` using the already-active account.
 - **Always `--body-file`** (or `-F body=@file` for PATCH). Never inline `--body`.

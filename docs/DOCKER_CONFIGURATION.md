@@ -260,6 +260,79 @@ kubectl apply -f k8s/deployment.yaml
 - ✅ Resource limits
 - ✅ Rolling updates
 
+## Live vs Test Stack Workflow
+
+### Purpose
+
+A disposable instance of TaskFlow runs alongside the live local stack, so a feature branch can be deployed and tested (including by `/ux-test`) without rebuilding, restarting or seeding the live stack or risking a migration on its database.
+
+- Compose project: `taskflow-test` (file: `docker-compose.test.yml`, standalone, not an override)
+- Ports: web `3200`, API `8280`
+- Images: `taskflow-api:test` and `taskflow-web:test`
+- Volumes: `test-data` and `test-logs` (separate from the live `taskflow-data`, `taskflow-logs` and `seq-data`)
+- No Seq. Config requires a valid OTLP endpoint, so the test API points at a closed local port (`http://127.0.0.1:9/ingest/otlp`); exports fail instantly and are harmless.
+
+### Start
+
+```bash
+docker compose -p taskflow-test -f docker-compose.test.yml up -d --build
+```
+
+### Stop and delete
+
+```bash
+docker compose -p taskflow-test -f docker-compose.test.yml down -v
+```
+
+`-p taskflow-test` is mandatory. Without it compose falls back to the live project name (`taskflow` on this machine, or whatever the root `.env` sets via `COMPOSE_PROJECT_NAME`), and `down` could remove live containers.
+
+### Pre-teardown check
+
+Before running `down -v`, confirm it can only touch test volumes:
+
+```bash
+docker compose -p taskflow-test -f docker-compose.test.yml config --volumes
+```
+
+This prints volume keys. The output must be exactly `test-data` and `test-logs`. If anything else appears (for example `taskflow-data`, `taskflow-logs` or `seq-data`), do not run `down -v`.
+
+### Rule
+
+The live stack is rebuilt only from `main`. Feature branches are deployed through the test project.
+
+### Verify
+
+- Live stays on web `3000` and API `8081` (the local override remap); the test stack is on `3200` and `8280`.
+- `docker-compose.override.yml` is local-only and is not loaded when `-f` is passed, so the test project ignores it.
+- Host port `8080` may be held by another app on this machine; do not treat it as the live TaskFlow API.
+
+### Behind a TLS-inspecting corporate proxy
+
+If the tracked Dockerfiles cannot build because a TLS-inspecting proxy breaks certificate validation, create a git-ignored `docker-compose.test.local.yml` at the repo root:
+
+```yaml
+services:
+  taskflow-api:
+    build:
+      dockerfile: TaskFlow.Api/Dockerfile.local
+  taskflow-web:
+    build:
+      dockerfile: Dockerfile.local
+```
+
+It points the API and web builds at the existing `Dockerfile.local` variants, which trust the CA in each project's `certs/` directory. Use the two-file form, with the local file second:
+
+```bash
+docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml up -d --build
+```
+
+Use the same two `-f` files for `config --volumes` and `down -v`. The file is git-ignored: never commit it. The committed compose file never references it.
+
+### Caveats
+
+- Ports `3200` and `8280` must be free.
+- A crashed or interrupted run is cleaned up by the `down -v` command above.
+
 ## Build Context Explained
 
 Understanding build context is crucial for successful Docker builds:

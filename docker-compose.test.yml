@@ -1,0 +1,48 @@
+# Disposable test stack. Run ONLY with: docker compose -p taskflow-test -f docker-compose.test.yml ...
+services:
+  taskflow-api:
+    image: taskflow-api:test
+    build:
+      context: .
+      dockerfile: TaskFlow.Api/Dockerfile
+    ports:
+      - "8280:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+      - Database__MigrateOnStartup=true
+      # No Seq in this stack. Config requires a valid absolute URI (empty throws at startup),
+      # so point at a closed local port (connection refused instantly, no DNS wait).
+      - OpenTelemetry__Endpoint=http://127.0.0.1:9/ingest/otlp
+      - OpenTelemetry__Header=
+    volumes:
+      - test-data:/app/data
+      - test-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 40s
+    restart: "no"
+
+  taskflow-web:
+    image: taskflow-web:test
+    build:
+      context: ./TaskFlow.Web
+      dockerfile: Dockerfile
+    ports:
+      - "3200:3000"
+    environment:
+      - API_TARGET=http://taskflow-api:8080
+    restart: "no"
+    depends_on:
+      taskflow-api:
+        condition: service_healthy
+
+volumes:
+  test-data:
+    driver: local
+  test-logs:
+    driver: local

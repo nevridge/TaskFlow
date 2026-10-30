@@ -2,13 +2,14 @@ using Asp.Versioning;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
+using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/JournalEntries/{entryId}/notes")]
 public class JournalNotesController(
     IJournalEntryRepository journalRepo,
@@ -16,7 +17,6 @@ public class JournalNotesController(
     IValidator<JournalNote> validator) : ControllerBase
 {
     private const string GetNoteRouteName = "GetJournalNoteV1";
-    private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IJournalNoteRepository _noteRepo = noteRepo;
     private readonly IValidator<JournalNote> _validator = validator;
@@ -73,7 +73,7 @@ public class JournalNotesController(
         }
 
         var created = await _noteRepo.AddAsync(note);
-        return CreatedAtRoute(GetNoteRouteName, new { version = ApiVersionString, entryId, id = created.Id }, ToDto(created));
+        return CreatedAtRoute(GetNoteRouteName, new { version = ApiVersions.V1, entryId, id = created.Id }, ToDto(created));
     }
 
     // PUT: api/v1/JournalEntries/{entryId}/notes/{id}

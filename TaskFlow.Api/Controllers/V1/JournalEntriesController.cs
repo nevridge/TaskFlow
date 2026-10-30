@@ -9,7 +9,7 @@ using TaskFlow.Api.Repositories;
 namespace TaskFlow.Api.Controllers.V1;
 
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion(ApiVersions.V1)]
 [Route("api/v{version:apiVersion}/[controller]")]
 public class JournalEntriesController(
     IJournalEntryRepository journalRepo,
@@ -20,7 +20,6 @@ public class JournalEntriesController(
     private readonly IValidator<CreateJournalEntryDto> _createValidator = createValidator;
     private readonly IValidator<CarryForwardRequestDto> _carryForwardValidator = carryForwardValidator;
     private const string GetRouteEntryName = "GetJournalEntryV1";
-    private const string ApiVersionString = "1.0";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IValidator<JournalEntry> _validator = validator;
 
@@ -91,7 +90,7 @@ public class JournalEntriesController(
             var response = ToDto(created);
             response.MovedCount = moved.Count;
             response.MovedTaskItemIds = moved;
-            return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersionString, id = created.Id }, response);
+            return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersions.V1, id = created.Id }, response);
         }
         catch (DuplicateJournalDateException)
         {

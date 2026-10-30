@@ -33,7 +33,7 @@ public class ProjectsController(
     [HttpGet("{id}", Name = GetProjectRouteName)]
     public async Task<ActionResult<ProjectResponseDto>> Get(int id)
     {
-        var project = await _repo.GetByIdAsync(id);
+        var project = await _repo.GetByIdNoTrackingAsync(id);
         if (project is null)
         {
             return NotFound();
@@ -46,7 +46,7 @@ public class ProjectsController(
     [HttpGet("{id}/tasks")]
     public async Task<ActionResult<IEnumerable<TaskItemResponseDto>>> GetTasks(int id)
     {
-        var project = await _repo.GetByIdAsync(id);
+        var project = await _repo.GetByIdNoTrackingAsync(id);
         if (project is null)
         {
             return NotFound();
@@ -132,7 +132,7 @@ public class ProjectsController(
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var existing = await _repo.GetByIdAsync(id);
+        var existing = await _repo.GetByIdNoTrackingAsync(id);
         if (existing is null)
         {
             return NotFound();

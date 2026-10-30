@@ -21,11 +21,19 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
             .Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.Id == id);
 
+    public async Task<Project?> GetByIdNoTrackingAsync(int id) =>
+        // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
+        await _context.Projects
+            .AsNoTracking()
+            .Include(p => p.Tasks)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
     public async Task<bool> NameExistsAsync(string name, int? excludeProjectId = null) =>
         await _context.Projects.AnyAsync(p => p.Name == name && (excludeProjectId == null || p.Id != excludeProjectId));
 
     public async Task<IEnumerable<TaskItem>> GetTasksAsync(int projectId) =>
         await _context.TaskItems
+            .AsNoTracking()
             .Include(t => t.Project)
             .Where(t => t.ProjectId == projectId)
             .ToListAsync();

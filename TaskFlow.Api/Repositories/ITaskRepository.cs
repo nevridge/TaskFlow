@@ -6,6 +6,7 @@ public interface ITaskRepository
 {
     Task<IEnumerable<TaskItem>> GetAllAsync();
     Task<TaskItem?> GetByIdAsync(int id);
+    Task<TaskItem?> GetByIdNoTrackingAsync(int id);
     Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId);
     Task<DateOnly?> GetAssignedJournalDateAsync(int taskId);
     Task<IReadOnlyDictionary<int, DateOnly>> GetAssignedJournalDatesAsync(IReadOnlyCollection<int> taskIds);

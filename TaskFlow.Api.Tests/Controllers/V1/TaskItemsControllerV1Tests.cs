@@ -96,7 +96,7 @@ public class TaskItemsControllerV1Tests
     [Fact]
     public async Task Get_ShouldReturnLastMovedDateFromHistory_WhenEventsHaveDates()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
         _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync(
         [
             new TaskItemEvent { Id = 1, TaskItemId = 1, OccurredAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc), ToJournalDate = new DateOnly(2026, 3, 1) },
@@ -114,7 +114,7 @@ public class TaskItemsControllerV1Tests
     public async Task Get_ShouldReturnLastMovedDateOfLowestId_WhenEventsTieOnOccurredAt()
     {
         var at = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc);
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
         _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync(
         [
             new TaskItemEvent { Id = 7, TaskItemId = 1, OccurredAtUtc = at, ToJournalDate = new DateOnly(2026, 3, 9) },
@@ -165,7 +165,7 @@ public class TaskItemsControllerV1Tests
             Priority = Priority.Medium,
             DueDate = dueDate
         };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
 
         // Act
         var result = await _controller.Get(1);
@@ -179,21 +179,21 @@ public class TaskItemsControllerV1Tests
         Assert.Equal("Todo", dto.Status);
         Assert.Equal("Medium", dto.Priority);
         Assert.Equal(dueDate, dto.DueDate);
-        _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
+        _mockRepo.Verify(r => r.GetByIdNoTrackingAsync(1), Times.Once);
     }
 
     [Fact]
     public async Task Get_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync((TaskItem?)null);
 
         // Act
         var result = await _controller.Get(1);
 
         // Assert
         Assert.IsType<NotFoundResult>(result.Result);
-        _mockRepo.Verify(r => r.GetByIdAsync(1), Times.Once);
+        _mockRepo.Verify(r => r.GetByIdNoTrackingAsync(1), Times.Once);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public class TaskItemsControllerV1Tests
         var project = new Project { Id = 7, Name = "Alpha" };
         var createDto = new CreateTaskItemDto { Title = "New Task", ProjectId = 7 };
         TaskItem? captured = null;
-        _mockProjectRepo.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(project);
+        _mockProjectRepo.Setup(r => r.GetByIdNoTrackingAsync(7)).ReturnsAsync(project);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>()))
@@ -261,7 +261,7 @@ public class TaskItemsControllerV1Tests
                 t.Project = project;
                 return t;
             });
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(() => captured);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(() => captured);
 
         var result = await _controller.Create(createDto);
 
@@ -277,7 +277,7 @@ public class TaskItemsControllerV1Tests
     public async Task Create_ShouldReturnUnprocessableEntity_WhenProjectDoesNotExist()
     {
         var createDto = new CreateTaskItemDto { Title = "New Task", ProjectId = 999 };
-        _mockProjectRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((Project?)null);
+        _mockProjectRepo.Setup(r => r.GetByIdNoTrackingAsync(999)).ReturnsAsync((Project?)null);
 
         var result = await _controller.Create(createDto);
 
@@ -313,7 +313,7 @@ public class TaskItemsControllerV1Tests
             ParentTaskItemId = 999
         };
 
-        _mockRepo.Setup(r => r.GetByIdAsync(999)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(999)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Create(createDto);
 
@@ -378,7 +378,7 @@ public class TaskItemsControllerV1Tests
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(77)).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(77)).ReturnsAsync(createdTask);
         _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync(entry);
         _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, createdTask.Id)).ReturnsAsync(AddTodoResult.Success);
 
@@ -409,7 +409,7 @@ public class TaskItemsControllerV1Tests
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(88)).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(88)).ReturnsAsync(createdTask);
 
         _mockJournalRepo.SetupSequence(r => r.GetByDateAsync(targetDate))
             .ReturnsAsync((JournalEntry?)null)
@@ -433,7 +433,7 @@ public class TaskItemsControllerV1Tests
         var createdTask = new TaskItem { Id = 91, Title = "Tomorrow", Status = Status.Todo };
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(91)).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(91)).ReturnsAsync(createdTask);
         _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync((JournalEntry?)null);
         _mockJournalRepo.Setup(r => r.AddAsync(It.IsAny<JournalEntry>()))
             .ReturnsAsync(new JournalEntry { Id = 4, Title = "J", Date = targetDate });
@@ -559,7 +559,7 @@ public class TaskItemsControllerV1Tests
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(55)).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(55)).ReturnsAsync(createdTask);
         _mockJournalRepo.Setup(r => r.GetByDateAsync(userToday)).ReturnsAsync(entry);
         _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, createdTask.Id, offsetMinutes))
             .ReturnsAsync(AddTodoResult.Success);
@@ -580,7 +580,7 @@ public class TaskItemsControllerV1Tests
             ParentTaskItemId = 5
         };
 
-        _mockRepo.Setup(r => r.GetByIdAsync(5)).ReturnsAsync(new TaskItem
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(5)).ReturnsAsync(new TaskItem
         {
             Id = 5,
             Title = "Existing Child",
@@ -640,7 +640,7 @@ public class TaskItemsControllerV1Tests
     {
         // Arrange
         var task = new TaskItem { Id = 1, Title = "Task 1", Description = "Description", Status = Status.Todo };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockRepo.Setup(r => r.DeleteAsync(1)).Returns(Task.CompletedTask);
 
         // Act
@@ -655,7 +655,7 @@ public class TaskItemsControllerV1Tests
     public async Task Delete_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
         // Arrange
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync((TaskItem?)null);
 
         // Act
         var result = await _controller.Delete(1);
@@ -1089,7 +1089,7 @@ public class TaskItemsControllerV1Tests
         };
 
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(12)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Update(1, updateDto);
 
@@ -1119,7 +1119,7 @@ public class TaskItemsControllerV1Tests
         };
 
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(new TaskItem
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(12)).ReturnsAsync(new TaskItem
         {
             Id = 12,
             Title = "Existing Child",
@@ -1171,7 +1171,7 @@ public class TaskItemsControllerV1Tests
         };
 
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existingTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(parentCandidate);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(12)).ReturnsAsync(parentCandidate);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([existingChild]);
 
         var result = await _controller.Update(1, updateDto);
@@ -1238,7 +1238,7 @@ public class TaskItemsControllerV1Tests
         var grandchild = new TaskItem { Id = 3, Title = "Grandchild", Status = Status.Todo, ParentTaskItemId = 2 };
 
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
-        _mockRepo.Setup(r => r.GetByIdAsync(3)).ReturnsAsync(grandchild);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(3)).ReturnsAsync(grandchild);
 
         var result = await _controller.Update(1, updateDto);
 
@@ -1250,7 +1250,7 @@ public class TaskItemsControllerV1Tests
     [Fact]
     public async Task GetHistory_ShouldReturnNotFound_WhenTaskDoesNotExist()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(7)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(7)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.GetHistory(7);
 
@@ -1260,7 +1260,7 @@ public class TaskItemsControllerV1Tests
     [Fact]
     public async Task GetHistory_ShouldReturnOk_WhenTaskExists()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "Task" });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "Task" });
         _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync([
             new TaskItemEvent
             {
@@ -1287,7 +1287,7 @@ public class TaskItemsControllerV1Tests
         var parent = new TaskItem { Id = 1, Title = "Parent" };
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
 
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(parent);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([child]);
 
         var result = await _controller.Delete(1);
@@ -1301,7 +1301,7 @@ public class TaskItemsControllerV1Tests
     public async Task Delete_ShouldReturnNoContent_WhenTaskHasNoChildren()
     {
         var task = new TaskItem { Id = 1, Title = "Task" };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(task);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([]);
 
         var result = await _controller.Delete(1);
@@ -1344,6 +1344,7 @@ public class TaskItemsControllerV1Tests
 
         _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
         _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(10)).ReturnsAsync(parent);
         _mockRepo.Setup(r => r.GetChildrenAsync(10)).ReturnsAsync([
             new TaskItem { Id = 2, Title = "Child", Status = Status.Completed, ParentTaskItemId = 10 }
         ]);
@@ -1369,7 +1370,7 @@ public class TaskItemsControllerV1Tests
             new() { Id = 2, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 },
             new() { Id = 3, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 1 }
         };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(parent);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync(children);
 
         // Act
@@ -1406,7 +1407,7 @@ public class TaskItemsControllerV1Tests
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default))
             .ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(refreshedTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(refreshedTask);
 
         // Act
         var result = await _controller.Create(createDto);
@@ -1459,7 +1460,7 @@ public class TaskItemsControllerV1Tests
         var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Todo, Priority = Priority.Low };
         var newParent = new TaskItem { Id = 12, Title = "P", Status = Status.Todo, Priority = Priority.Low };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
-        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(newParent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(12)).ReturnsAsync(newParent);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
 
@@ -1477,7 +1478,7 @@ public class TaskItemsControllerV1Tests
         var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Todo, Priority = Priority.Low };
         var newParent = new TaskItem { Id = 12, Title = "P", Status = Status.Todo, Priority = Priority.Low };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
-        _mockRepo.Setup(r => r.GetByIdAsync(12)).ReturnsAsync(newParent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(12)).ReturnsAsync(newParent);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([]);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
@@ -1520,6 +1521,7 @@ public class TaskItemsControllerV1Tests
         var parent = new TaskItem { Id = 10, Title = "Parent", Status = Status.Todo, Priority = Priority.Low };
         _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
         _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(10)).ReturnsAsync(parent);
         _mockRepo.Setup(r => r.GetChildrenAsync(10)).ReturnsAsync([]);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
@@ -1544,6 +1546,7 @@ public class TaskItemsControllerV1Tests
         var parent = new TaskItem { Id = 10, Title = "Parent", Status = Status.Blocked, Priority = Priority.Low };
         _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
         _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(10)).ReturnsAsync(parent);
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
         _mockRepo.Setup(r => r.UpdateAsync(It.IsAny<TaskItem>())).Returns(Task.CompletedTask);
 

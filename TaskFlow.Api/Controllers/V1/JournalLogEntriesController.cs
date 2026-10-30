@@ -48,7 +48,7 @@ public class JournalLogEntriesController(
             return NotFound();
         }
 
-        var log = await _logRepo.GetByIdAsync(entryId, id);
+        var log = await _logRepo.GetByIdNoTrackingAsync(entryId, id);
         if (log is null)
         {
             return NotFound();
@@ -131,7 +131,7 @@ public class JournalLogEntriesController(
             return NotFound();
         }
 
-        var existing = await _logRepo.GetByIdAsync(entryId, id);
+        var existing = await _logRepo.GetByIdNoTrackingAsync(entryId, id);
         if (existing is null)
         {
             return NotFound();
@@ -145,7 +145,7 @@ public class JournalLogEntriesController(
     {
         if (taskItemId.HasValue)
         {
-            var task = await _taskRepo.GetByIdAsync(taskItemId.Value);
+            var task = await _taskRepo.GetByIdNoTrackingAsync(taskItemId.Value);
             if (task is null)
             {
                 return BadRequest($"TaskItem with id {taskItemId.Value} was not found.");

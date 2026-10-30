@@ -99,7 +99,7 @@ public class JournalLogEntriesControllerV1Tests
     public async Task Get_ShouldReturnOk_WhenFound()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _logRepo.Setup(s => s.GetByIdAsync(1, 2))
+        _logRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 2))
             .ReturnsAsync(new JournalLogEntry { Id = 2, JournalEntryId = 1, Content = "Started", CreatedAt = DateTime.UtcNow });
 
         var result = await _controller.Get(1, 2);
@@ -155,7 +155,7 @@ public class JournalLogEntriesControllerV1Tests
         var dto = Assert.IsType<JournalLogEntryResponseDto>(created.Value);
         Assert.Null(dto.TaskItemId);
         Assert.False(dto.LinkedTaskDeleted);
-        _taskRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+        _taskRepo.Verify(r => r.GetByIdNoTrackingAsync(It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class JournalLogEntriesControllerV1Tests
         var task = MakeTask(id: 10, title: "Build feature");
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
         SetupValidationSuccess();
-        _taskRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync(task);
+        _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(10)).ReturnsAsync(task);
         _logRepo.Setup(s => s.AddAsync(It.IsAny<JournalLogEntry>()))
             .ReturnsAsync((JournalLogEntry l) =>
             {
@@ -188,7 +188,7 @@ public class JournalLogEntriesControllerV1Tests
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
         SetupValidationSuccess();
-        _taskRepo.Setup(r => r.GetByIdAsync(99)).ReturnsAsync((TaskItem?)null);
+        _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(99)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Create(1, new CreateJournalLogEntryDto { Content = "Work", TaskItemId = 99 });
 
@@ -226,7 +226,7 @@ public class JournalLogEntriesControllerV1Tests
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
         _logRepo.Setup(s => s.GetByIdAsync(1, 3)).ReturnsAsync(existing);
         SetupValidationSuccess();
-        _taskRepo.Setup(r => r.GetByIdAsync(42)).ReturnsAsync((TaskItem?)null);
+        _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(42)).ReturnsAsync((TaskItem?)null);
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "New", TaskItemId = 42 });
 
@@ -242,7 +242,7 @@ public class JournalLogEntriesControllerV1Tests
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
         _logRepo.Setup(s => s.GetByIdAsync(1, 3)).ReturnsAsync(existing);
         SetupValidationSuccess();
-        _taskRepo.Setup(r => r.GetByIdAsync(20)).ReturnsAsync(task);
+        _taskRepo.Setup(r => r.GetByIdNoTrackingAsync(20)).ReturnsAsync(task);
 
         var result = await _controller.Update(1, 3, new UpdateJournalLogEntryDto { Content = "Updated", TaskItemId = 20 });
 
@@ -276,7 +276,7 @@ public class JournalLogEntriesControllerV1Tests
         Assert.Null(dto.TaskItemId);
         Assert.Null(dto.LinkedTaskTitle);
         Assert.False(dto.LinkedTaskDeleted);
-        _taskRepo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+        _taskRepo.Verify(r => r.GetByIdNoTrackingAsync(It.IsAny<int>()), Times.Never);
     }
 
     // ── DELETE ────────────────────────────────────────────────────────────────
@@ -285,7 +285,7 @@ public class JournalLogEntriesControllerV1Tests
     public async Task Delete_ShouldReturnNoContent_WhenFound()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _logRepo.Setup(s => s.GetByIdAsync(1, 4))
+        _logRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 4))
             .ReturnsAsync(new JournalLogEntry { Id = 4, JournalEntryId = 1, Content = "x" });
 
         var result = await _controller.Delete(1, 4);

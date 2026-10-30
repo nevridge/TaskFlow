@@ -59,7 +59,7 @@ public class JournalNotesControllerV1Tests
     public async Task GetById_ShouldReturn200_WhenFound()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _noteRepo.Setup(s => s.GetByIdAsync(1, 5)).ReturnsAsync(MakeNote(5));
+        _noteRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 5)).ReturnsAsync(MakeNote(5));
 
         var result = await _controller.Get(1, 5);
 
@@ -73,7 +73,7 @@ public class JournalNotesControllerV1Tests
     public async Task GetById_ShouldReturn404_WhenNoteMissing()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _noteRepo.Setup(s => s.GetByIdAsync(1, 99)).ReturnsAsync((JournalNote?)null);
+        _noteRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 99)).ReturnsAsync((JournalNote?)null);
 
         var result = await _controller.Get(1, 99);
 
@@ -192,7 +192,7 @@ public class JournalNotesControllerV1Tests
     public async Task Delete_ShouldReturn204_WhenFound()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _noteRepo.Setup(s => s.GetByIdAsync(1, 4)).ReturnsAsync(MakeNote(4));
+        _noteRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 4)).ReturnsAsync(MakeNote(4));
 
         var result = await _controller.Delete(1, 4);
 
@@ -215,7 +215,7 @@ public class JournalNotesControllerV1Tests
     public async Task Delete_ShouldReturn404_WhenNoteMissing()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
-        _noteRepo.Setup(s => s.GetByIdAsync(1, 99)).ReturnsAsync((JournalNote?)null);
+        _noteRepo.Setup(s => s.GetByIdNoTrackingAsync(1, 99)).ReturnsAsync((JournalNote?)null);
 
         var result = await _controller.Delete(1, 99);
 

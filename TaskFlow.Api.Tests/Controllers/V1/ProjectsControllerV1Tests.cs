@@ -105,7 +105,7 @@ public class ProjectsControllerV1Tests
     {
         var project = new Project { Id = 1, Name = "Alpha" };
         var startedAt = new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc);
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
         _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
         [
             new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Status = Status.InProgress, StartedAt = startedAt },
@@ -127,7 +127,7 @@ public class ProjectsControllerV1Tests
     {
         var project = new Project { Id = 1, Name = "Alpha" };
         var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
         _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
         [
             new TaskItem
@@ -162,7 +162,7 @@ public class ProjectsControllerV1Tests
     [Fact]
     public async Task Get_ShouldReturnNotFound_WhenMissing()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync((Project?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync((Project?)null);
 
         var result = await _controller.Get(9);
 
@@ -172,7 +172,7 @@ public class ProjectsControllerV1Tests
     [Fact]
     public async Task Get_ShouldReturnOk_WhenFound()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Project { Id = 1, Name = "Alpha" });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new Project { Id = 1, Name = "Alpha" });
 
         var result = await _controller.Get(1);
 
@@ -183,7 +183,7 @@ public class ProjectsControllerV1Tests
     [Fact]
     public async Task GetTasks_ShouldReturnNotFound_WhenProjectMissing()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync((Project?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync((Project?)null);
 
         var result = await _controller.GetTasks(9);
 
@@ -194,7 +194,7 @@ public class ProjectsControllerV1Tests
     public async Task GetTasks_ShouldReturnMappedTasks()
     {
         var project = new Project { Id = 1, Name = "Alpha" };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
         _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
             [new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Priority = Priority.High, Status = Status.Todo }]);
 
@@ -212,7 +212,7 @@ public class ProjectsControllerV1Tests
     public async Task GetTasks_ShouldExposeCompletionOnlyThroughStatus()
     {
         var project = new Project { Id = 1, Name = "Alpha" };
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
         _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
             [new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Status = Status.Completed }]);
 
@@ -317,7 +317,7 @@ public class ProjectsControllerV1Tests
     [Fact]
     public async Task Delete_ShouldReturnNotFound_WhenMissing()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync((Project?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync((Project?)null);
 
         var result = await _controller.Delete(9);
 
@@ -327,7 +327,7 @@ public class ProjectsControllerV1Tests
     [Fact]
     public async Task Delete_ShouldReturnNoContent_WhenFound()
     {
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Project { Id = 1, Name = "A" });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(new Project { Id = 1, Name = "A" });
 
         var result = await _controller.Delete(1);
 

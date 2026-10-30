@@ -9,13 +9,19 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     private readonly TaskDbContext _context = context;
 
     public async Task<IEnumerable<TaskItem>> GetAllAsync() =>
-        await _context.TaskItems.Include(t => t.Project).ToListAsync();
+        // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
+        await _context.TaskItems.AsNoTracking().Include(t => t.Project).ToListAsync();
 
     public async Task<TaskItem?> GetByIdAsync(int id) =>
         await _context.TaskItems.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
 
+    public async Task<TaskItem?> GetByIdNoTrackingAsync(int id) =>
+        // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
+        await _context.TaskItems.AsNoTracking().Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
+
     public async Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId) =>
-        await _context.TaskItems.Where(t => t.ParentTaskItemId == parentId).ToListAsync();
+        // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
+        await _context.TaskItems.AsNoTracking().Where(t => t.ParentTaskItemId == parentId).ToListAsync();
 
     public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
         await _context.TaskItems
@@ -68,6 +74,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
     public async Task<IEnumerable<TaskItemEvent>> GetHistoryAsync(int taskId) =>
         await _context.TaskItemEvents
+            .AsNoTracking()
             .Where(e => e.TaskItemId == taskId)
             .OrderBy(e => e.OccurredAtUtc)
             .ToListAsync();

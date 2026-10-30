@@ -557,7 +557,7 @@ public class TaskItemsControllerPatchTests
     public async Task Patch_ShouldReturnUnprocessable_WhenParentNotFound()
     {
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T" });
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync((TaskItem?)null);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync((TaskItem?)null);
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 9 });
 
@@ -568,7 +568,7 @@ public class TaskItemsControllerPatchTests
     public async Task Patch_ShouldReturnUnprocessable_WhenParentWouldExceedDepth()
     {
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T" });
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync(new TaskItem { Id = 9, Title = "Child", ParentTaskItemId = 4 });
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync(new TaskItem { Id = 9, Title = "Child", ParentTaskItemId = 4 });
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 9 });
 
@@ -582,7 +582,7 @@ public class TaskItemsControllerPatchTests
         var candidate = new TaskItem { Id = 9, Title = "Candidate" };
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
-        _mockRepo.Setup(r => r.GetByIdAsync(9)).ReturnsAsync(candidate);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(9)).ReturnsAsync(candidate);
         _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([child]);
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 9 });
@@ -597,7 +597,7 @@ public class TaskItemsControllerPatchTests
         var root = new TaskItem { Id = 1, Title = "Root" };
         var child = new TaskItem { Id = 2, Title = "Child", ParentTaskItemId = 1 };
         _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(root);
-        _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(child);
 
         var result = await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = 2 });
 
@@ -616,7 +616,7 @@ public class TaskItemsControllerPatchTests
 
         OkDto(await _mockedController.Patch(1, new PatchTaskItemDto { ParentTaskItemId = null }));
         Assert.Null(existing.ParentTaskItemId);
-        _mockRepo.Verify(r => r.GetByIdAsync(5), Times.Never);
+        _mockRepo.Verify(r => r.GetByIdNoTrackingAsync(5), Times.Never);
     }
 
     [Fact]
@@ -657,7 +657,7 @@ public class TaskItemsControllerPatchTests
         _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>()))
             .Callback<TaskItem>(t => captured = t)
             .ReturnsAsync((TaskItem t) => { t.Id = 1; return t; });
-        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(() => captured);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(() => captured);
 
         var result = await _mockedController.Create(new CreateTaskItemDto { Title = "T", Status = Status.Completed });
 

@@ -296,6 +296,64 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
+    public async Task Patch_ShouldNotQueryChildren_WhenParentIsMissingDuringAutoComplete()
+    {
+        var child = new TaskItem { Id = 2, Title = "Child", Status = Status.Todo, ParentTaskItemId = 10 };
+        _mockRepo.Setup(r => r.GetByIdAsync(2)).ReturnsAsync(child);
+        _mockRepo.Setup(r => r.GetByIdAsync(10)).ReturnsAsync((TaskItem?)null);
+
+        var result = await _mockedController.Patch(2, new PatchTaskItemDto
+        {
+            Status = Status.Completed,
+            AutoCompleteParentWhenChildrenDone = true
+        });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _mockRepo.Verify(r => r.GetChildrenAsync(10), Times.Never);
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task Put_ShouldAutoCompleteParent_WhenLastChildCompletesAgainstRealDatabase()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync(new TaskItem { Title = "Parent", Status = Status.Todo });
+        var child = await stack.SeedAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+
+        OkDto(await stack.Controller.Update(child.Id, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Completed,
+            Priority = Priority.Low,
+            ParentTaskItemId = parent.Id,
+            AutoCompleteParentWhenChildrenDone = true
+        }));
+
+        Assert.Equal(Status.Completed, (await stack.ReloadAsync(parent.Id)).Status);
+    }
+
+    [Fact]
+    public async Task Put_ShouldRejectParentAssignment_WhenTaskHasChildrenAgainstRealDatabase()
+    {
+        using var stack = new RealStack();
+        var task = await stack.SeedAsync(new TaskItem { Title = "Task", Status = Status.Todo });
+        await stack.SeedAsync(new TaskItem { Title = "Its child", Status = Status.Todo, ParentTaskItemId = task.Id });
+        var newParent = await stack.SeedAsync(new TaskItem { Title = "New parent", Status = Status.Todo });
+
+        var result = await stack.Controller.Update(task.Id, new UpdateTaskItemDto
+        {
+            Title = "Task",
+            Status = Status.Todo,
+            Priority = Priority.Low,
+            ParentTaskItemId = newParent.Id
+        });
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        Assert.Contains("TASK_PARENT_DEPTH_NOT_ALLOWED", System.Text.Json.JsonSerializer.Serialize(unprocessable.Value));
+        Assert.Null((await stack.ReloadAsync(task.Id)).ParentTaskItemId);
+    }
+
+    [Fact]
     public async Task Put_ThenPatchReopen_ShouldReadAsOpenEverywhere()
     {
         using var stack = new RealStack();

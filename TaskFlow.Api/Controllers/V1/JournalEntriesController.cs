@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
+using TaskFlow.Api.Mappers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -182,16 +183,6 @@ public class JournalEntriesController(
         CreatedAt = e.CreatedAt,
         UpdatedAt = e.UpdatedAt,
         TodoTaskItemIds = e.Todos.Select(t => t.Id),
-        LogEntries = e.LogEntries.OrderBy(l => l.CreatedAt).Select(l => new JournalLogEntryResponseDto
-        {
-            Id = l.Id,
-            Content = l.Content,
-            JournalEntryId = l.JournalEntryId,
-            CreatedAt = l.CreatedAt,
-            UpdatedAt = l.UpdatedAt,
-            TaskItemId = l.TaskItemId,
-            LinkedTaskTitle = l.TaskItem?.Title ?? l.LinkedTaskTitleSnapshot,
-            LinkedTaskDeleted = l.TaskItemId is null && l.LinkedTaskTitleSnapshot is not null,
-        }),
+        LogEntries = e.LogEntries.OrderBy(l => l.CreatedAt).Select(JournalLogEntryMapper.ToDto),
     };
 }

@@ -48,6 +48,54 @@ public class JournalLogEntriesControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldReturnMappedLinkFields_WhenLogsHaveLinkedAndDeletedTasks()
+    {
+        var created1 = new DateTime(2026, 5, 10, 8, 0, 0, DateTimeKind.Utc);
+        var created2 = new DateTime(2026, 5, 10, 9, 0, 0, DateTimeKind.Utc);
+        _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());
+        _logRepo.Setup(s => s.GetAllByEntryIdAsync(1)).ReturnsAsync(
+        [
+            new JournalLogEntry
+            {
+                Id = 1,
+                JournalEntryId = 1,
+                Content = "Linked log",
+                CreatedAt = created1,
+                TaskItemId = 10,
+                TaskItem = MakeTask(10, "Live Title"),
+                LinkedTaskTitleSnapshot = "Old Snapshot",
+            },
+            new JournalLogEntry
+            {
+                Id = 2,
+                JournalEntryId = 1,
+                Content = "Orphan log",
+                CreatedAt = created2,
+                TaskItemId = null,
+                LinkedTaskTitleSnapshot = "Deleted Task",
+            },
+        ]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<JournalLogEntryResponseDto>>(ok.Value).ToList();
+        Assert.Equal(2, dtos.Count);
+
+        Assert.Equal("Linked log", dtos[0].Content);
+        Assert.Equal(created1, dtos[0].CreatedAt);
+        Assert.Equal(10, dtos[0].TaskItemId);
+        Assert.Equal("Live Title", dtos[0].LinkedTaskTitle);
+        Assert.False(dtos[0].LinkedTaskDeleted);
+
+        Assert.Equal("Orphan log", dtos[1].Content);
+        Assert.Equal(created2, dtos[1].CreatedAt);
+        Assert.Null(dtos[1].TaskItemId);
+        Assert.Equal("Deleted Task", dtos[1].LinkedTaskTitle);
+        Assert.True(dtos[1].LinkedTaskDeleted);
+    }
+
+    [Fact]
     public async Task Get_ShouldReturnOk_WhenFound()
     {
         _entryRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(MakeEntry());

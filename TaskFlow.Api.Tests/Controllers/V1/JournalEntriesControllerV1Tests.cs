@@ -306,6 +306,30 @@ public class JournalEntriesControllerV1Tests
     }
 
     [Fact]
+    public async Task Get_ShouldReturnLogEntriesOrderedByCreatedAt_WhenRepositoryReturnsThemOutOfOrder()
+    {
+        var baseTime = new DateTime(2026, 5, 10, 8, 0, 0, DateTimeKind.Utc);
+        _repo.Setup(r => r.GetByIdAsync(60)).ReturnsAsync(new JournalEntry
+        {
+            Id = 60,
+            Title = "t",
+            Date = new DateOnly(2026, 5, 10),
+            LogEntries =
+            [
+                new JournalLogEntry { Id = 2, Content = "second", JournalEntryId = 60, CreatedAt = baseTime.AddHours(2) },
+                new JournalLogEntry { Id = 3, Content = "third", JournalEntryId = 60, CreatedAt = baseTime.AddHours(3) },
+                new JournalLogEntry { Id = 1, Content = "first", JournalEntryId = 60, CreatedAt = baseTime.AddHours(1) },
+            ],
+        });
+
+        var result = await _controller.Get(60);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsType<JournalEntryResponseDto>(ok.Value);
+        Assert.Equal([1, 2, 3], dto.LogEntries.Select(l => l.Id));
+    }
+
+    [Fact]
     public async Task Create_ShouldReturnConflict_WhenDateAlreadyExists()
     {
         var date = new DateOnly(2026, 5, 10);

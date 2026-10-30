@@ -217,7 +217,7 @@ describe('NotesSection on touch', () => {
       const edit = await startEditing()
       await userEvent.type(edit, '!')
       await userEvent.keyboard('{Control>}{Enter}{/Control}')
-      expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Remember to update docs!' })
+      expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Remember to update docs!' }, expect.any(Object))
     })
 
     it('blur saves once', async () => {
@@ -226,7 +226,7 @@ describe('NotesSection on touch', () => {
       fireEvent.blur(edit)
       fireEvent.blur(edit)
       expect(updateNoteMutate).toHaveBeenCalledTimes(1)
-      expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Remember to update docs!' })
+      expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Remember to update docs!' }, expect.any(Object))
     })
 
     it('Save then blur gives exactly one update and returns focus to the note', async () => {

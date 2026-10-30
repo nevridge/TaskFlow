@@ -218,7 +218,7 @@ describe('TaskDetailPage undoable delete (#321)', () => {
       expect(deleteNoteCalls()).toHaveLength(0)
       await advance(200)
       expect(deleteNoteCalls()).toHaveLength(1)
-      expect(deleteNoteCalls()[0][0]).toEqual({ path: { taskId: 1, id: 7 } })
+      expect(deleteNoteCalls()[0][0]).toEqual({ path: { taskId: 1, id: 7 }, throwOnError: false })
     })
 
     it('Undo returns the note in its original server-sorted position and sends no DELETE', async () => {

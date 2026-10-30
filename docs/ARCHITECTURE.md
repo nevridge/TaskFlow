@@ -617,7 +617,7 @@ export function useCreateTaskMutation() {
 }
 ```
 
-`throwOnError: true` is set at the client level so non-2xx API responses throw, which React Query routes to `isError` / `error` rather than treating the response as a successful (empty) result.
+`throwOnError` is a runtime flag set once at startup by `configureApiClient()` (`src/api/configure-client.ts`, called from `main.tsx`), so non-2xx API responses throw, which React Query routes to `isError` / `error` rather than treating the response as a successful (empty) result. The `true` generic on client calls is type-only. Calls that must inspect `{ error, response }` (undo-delete commits) pass `throwOnError: false`.
 
 #### PascalCase normalisation
 

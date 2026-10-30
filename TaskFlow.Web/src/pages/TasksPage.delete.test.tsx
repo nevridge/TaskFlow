@@ -269,7 +269,7 @@ describe('TasksPage undoable delete (#321)', () => {
       expect(deleteCalls()).toHaveLength(0)
       await advance(200)
       expect(deleteCalls()).toHaveLength(1)
-      expect(deleteCalls()[0][0]).toEqual({ path: { id: 2 } })
+      expect(deleteCalls()[0][0]).toEqual({ path: { id: 2 }, throwOnError: false })
       expect(order).toEqual(['remove:["tasks",2]', 'invalidate:["tasks"]', 'invalidate:["projects"]', 'invalidate:["journal"]'])
       expect(screen.queryByText('Bravo task')).not.toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()

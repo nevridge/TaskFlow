@@ -30,8 +30,9 @@ export type ProjectTaskDto = {
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
-// The client only rejects on HTTP errors when throwOnError is truthy at runtime;
-// the `true` generic is type-only. Every call must pass this.
+// throwOnError is a runtime flag, set globally by configureApiClient() at startup; the `true`
+// generic is type-only. Calls already reject on HTTP errors, so THROW is a redundant, harmless
+// belt-and-braces spread.
 const THROW = { throwOnError: true } as const
 
 export const getProjects = () =>

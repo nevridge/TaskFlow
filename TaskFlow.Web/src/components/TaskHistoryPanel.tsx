@@ -8,11 +8,21 @@ interface Props {
 }
 
 export function TaskHistoryPanel({ taskId, emptyText = 'No history yet.' }: Props) {
-  const { data, isLoading } = useTaskHistoryQuery(taskId)
+  const { data, isLoading, isError, isFetching, refetch } = useTaskHistoryQuery(taskId)
   const history: TaskItemEventResponseDto[] = (data?.data as TaskItemEventResponseDto[] | undefined) ?? []
 
   if (isLoading) {
     return <p className="t-empty">Loading history…</p>
+  }
+
+  if (isError) {
+    // Retry stays mounted (disabled) during a refetch so keyboard focus is not lost.
+    return (
+      <>
+        <p className="t-error" role="alert">Failed to load history.</p>
+        <button type="button" className="t-btn" disabled={isFetching} onClick={() => refetch()}>Retry</button>
+      </>
+    )
   }
 
   if (history.length === 0) {

@@ -53,8 +53,11 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   // Latest props for event handlers: a relink and a text edit are both full-row PUTs, so each must send the
   // other field's current value, not one captured when the row rendered.
   const logEntriesRef = useRef(logEntries)
+  // Latest draft for the add-failure restore, which must not overwrite text typed while the save was in flight.
+  const draftRef = useRef(draft)
   useEffect(() => {
     logEntriesRef.current = logEntries
+    draftRef.current = draft
   })
   // Set once the text edit has been committed or cancelled, so a following blur does nothing.
   const committedRef = useRef(false)
@@ -84,10 +87,19 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
+    const linkedTaskId = draftTaskItemId
     addLog.mutate(
-      { content: text, taskItemId: draftTaskItemId },
+      { content: text, taskItemId: linkedTaskId },
       {
         onSuccess: () => inputRef.current?.focus(),
+        // Put the text and link back if the save failed, unless something was typed since
+        onError: () => {
+          setDraft(current => current || text)
+          if (!draftRef.current) {
+            setDraftTaskItemId(linkedTaskId)
+            inputRef.current?.focus()
+          }
+        },
       },
     )
     // Reset the link with the text: on touch the field stays enabled while saving, so a quick second entry

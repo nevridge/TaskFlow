@@ -7,6 +7,14 @@ describe('getErrorCode', () => {
     expect(getErrorCode({ code: 'X' })).toBe('X')
   })
 
+  it('reads the code from a parsed API error body alongside other fields', () => {
+    expect(getErrorCode({ code: 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN', message: 'm' })).toBe('TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN')
+  })
+
+  it('returns null for an error body without a code', () => {
+    expect(getErrorCode({ message: 'boom' })).toBeNull()
+  })
+
   it.each([null, undefined, 'text', 4, {}, { code: 5 }])('returns null for %j', value => {
     expect(getErrorCode(value)).toBeNull()
   })

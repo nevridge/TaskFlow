@@ -51,9 +51,9 @@ export type TaskItemResponseDto = Omit<
 }
 
 const J = { 'Content-Type': 'application/json' }
-// The client only rejects on HTTP errors when throwOnError is truthy at runtime;
-// the `true` generic is type-only. Deferred-delete commits (undo toast) rely on
-// rejection to restore the item and show the error toast.
+// throwOnError is a runtime flag, set globally by configureApiClient() at startup; the `true`
+// generic is type-only. THROW is therefore redundant but kept (deferred-delete commits rely on
+// rejection to restore the item and show the error toast).
 const THROW = { throwOnError: true } as const
 
 export const getJournalEntries = () =>
@@ -61,9 +61,9 @@ export const getJournalEntries = () =>
     { url: '/api/v1/JournalEntries' },
   )
 
-export const createJournalEntry = (body: CreateJournalEntryDto) =>
-  client.post<{ 201: JournalEntryResponseDto }, unknown, true>(
-    { url: '/api/v1/JournalEntries', body, headers: J },
+export const createJournalEntry = <T extends boolean = true>(body: CreateJournalEntryDto, opts?: { throwOnError?: T }) =>
+  client.post<{ 201: JournalEntryResponseDto }, unknown, T>(
+    { url: '/api/v1/JournalEntries', body, headers: J, ...opts },
   )
 
 export const carryForwardJournalEntry = (id: number, timezoneOffsetMinutes?: number) =>

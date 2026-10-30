@@ -210,6 +210,13 @@ describe('TasksPage', () => {
     vi.clearAllMocks()
   })
 
+  it('shows an alert (not the empty state) when the task list fails to load', () => {
+    vi.mocked(useTasksQuery).mockReturnValue({ data: undefined, isLoading: false, error: new Error('boom') } as never)
+    renderPage()
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load tasks.')
+    expect(screen.queryByText(/no tasks yet/i)).not.toBeInTheDocument()
+  })
+
   it('renders hierarchical tasks without maximum update depth warnings', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 

@@ -6,6 +6,7 @@ vi.mock('./client/client.gen', () => ({
     post: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
+    setConfig: vi.fn(),
   },
 }))
 

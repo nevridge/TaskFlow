@@ -178,7 +178,7 @@ describe('NotesSection', () => {
     await userEvent.type(editInput, 'Updated note')
     await userEvent.keyboard('{Enter}')
     expect(updateNoteMutate).toHaveBeenCalledTimes(1)
-    expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Updated note' })
+    expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Updated note' }, expect.any(Object))
     expect(screen.queryByDisplayValue('Updated note')).not.toBeInTheDocument()
   })
 
@@ -194,7 +194,7 @@ describe('NotesSection', () => {
     await userEvent.clear(editInput)
     await userEvent.type(editInput, 'Blurred update')
     await userEvent.tab()
-    expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Blurred update' })
+    expect(updateNoteMutate).toHaveBeenCalledWith({ id: 1, content: 'Blurred update' }, expect.any(Object))
   })
 
   it('Escape after changing text discards the edit', async () => {

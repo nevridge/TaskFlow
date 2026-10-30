@@ -30,9 +30,9 @@ You must not touch `.claude/**`, `build.ps1`, `scripts/**`, `.github/**` or the 
 
 ## Plugin and chat sync (mandatory)
 
-The four workflows exist twice: `plugin/skills/{plan-my-day,capture-tasks,weekly-review,journal-log}/SKILL.md` and `chat/taskflow-assistant/references/*.md` (entry point `chat/taskflow-assistant/SKILL.md`). The plugin agent `plugin/agents/work-task-assistant.md` lists tool names too.
+Every workflow under `plugin/skills/` (`plugin/skills/*/SKILL.md`) has a matching file in `chat/taskflow-assistant/references/` (`*.md`), so each workflow exists twice (entry point `chat/taskflow-assistant/SKILL.md`). The plugin agent `plugin/agents/work-task-assistant.md` lists tool names too.
 
-When a change alters an MCP tool name, parameter or output, or the behavior a workflow relies on, update **all** of these in the same change: the 4 plugin skills, the 4 chat references, `plugin/agents/work-task-assistant.md`, `chat/taskflow-assistant/SKILL.md`, and any README tool list or count. Work in this order: server code and tests first, then plugin and chat text. Grep for the old tool name or parameter across `plugin/`, `chat/` and `README.md` before you finish.
+When a change alters an MCP tool name, parameter or output, or the behavior a workflow relies on, update **all** of these in the same change: every plugin skill under `plugin/skills/`, every matching chat reference under `chat/taskflow-assistant/references/`, `plugin/agents/work-task-assistant.md`, `chat/taskflow-assistant/SKILL.md`, and any README tool list or count. Work in this order: server code and tests first, then plugin and chat text. Grep for the old tool name or parameter across `plugin/`, `chat/` and `README.md` before you finish.
 
 ## Workflow
 

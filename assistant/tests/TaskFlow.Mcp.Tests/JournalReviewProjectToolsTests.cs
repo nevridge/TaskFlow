@@ -21,16 +21,131 @@ public class JournalToolsTests
             .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", "Busy day", logs) })
             .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Spec", priority: "High") })
             .Get("JournalEntries/3/notes", new[] { new { id = 1, content = "Remember the demo", createdAt = "2026-10-09T15:00:00Z" } })
-            .Get("TaskItems", Array.Empty<object>());
+            .Get("TaskItems", new[] { Fixtures.Task(5, "Spec", priority: "High", projectId: 7, projectName: "Apollo") });
 
         var text = await Tools(handler).GetJournal();
 
         text.Should().Contain("Journal 2026-10-09 (entry #3) - today")
             .And.Contain("Summary: Busy day")
             .And.Contain("Planned tasks (1):").And.Contain("#5 [High/Todo] Spec")
-            .And.Contain("09:30 Kicked off the spec [task #5]")
+            .And.Contain("09:30 Kicked off the spec [task #5 | Apollo | High]")
             .And.Contain("Remember the demo");
         handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Post);
+    }
+
+    private static object LinkedLog(int id, int? taskId, bool deleted = false) =>
+        new { id, content = "Did work", journalEntryId = 3, createdAt = "2026-10-09T16:30:00Z", taskItemId = taskId, linkedTaskTitle = "T", linkedTaskDeleted = deleted };
+
+    private static StubHandler LogHandler(object[] logs, Action<StubHandler>? tasks = null)
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", null, logs) })
+            .Get("JournalEntries/3/todos", Array.Empty<object>())
+            .Get("JournalEntries/3/notes", Array.Empty<object>());
+        tasks?.Invoke(handler);
+        return handler;
+    }
+
+    [Fact]
+    public async Task GetJournal_LinkedTaskWithoutProject_OmitsProjectSegment()
+    {
+        var handler = LogHandler([LinkedLog(1, 5)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "Spec", priority: "High") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5 | High]");
+    }
+
+    [Fact]
+    public async Task GetJournal_LinkedTaskNotInList_ShowsBareTaskId()
+    {
+        var handler = LogHandler([LinkedLog(1, 99)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "Spec") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #99]").And.NotContain("Note: task details unavailable");
+    }
+
+    [Fact]
+    public async Task GetJournal_DeletedLink_KeepsDeletedMarkerEvenWhenIdIsInList()
+    {
+        var handler = LogHandler([LinkedLog(1, 5, deleted: true)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "Spec", projectName: "Apollo") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5, deleted]").And.NotContain("Apollo");
+    }
+
+    [Fact]
+    public async Task GetJournal_LogWithoutLinkedTask_IsUnchanged()
+    {
+        var handler = LogHandler([LinkedLog(1, null)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "Spec") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("09:30 Did work").And.NotContain("[task");
+    }
+
+    [Fact]
+    public async Task GetJournal_LinkedLogs_MakeNoExtraTaskRequests()
+    {
+        var handler = LogHandler([LinkedLog(1, 5), LinkedLog(2, 6)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "A"), Fixtures.Task(6, "B") }));
+
+        await Tools(handler).GetJournal();
+
+        handler.Requests.Count(r => r.Path.StartsWith("TaskItems", StringComparison.Ordinal)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsFails_LinkedLinesAreBareAndJournalStillReturns()
+    {
+        var handler = LogHandler([LinkedLog(1, 5)], h => h.On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5]").And.Contain("Log (1):").And.Contain("Note: task details unavailable for linked log lines (");
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsTimesOut_LinkedLinesAreBare()
+    {
+        var handler = LogHandler([LinkedLog(1, 5)], h => h.Fail(HttpMethod.Get, "TaskItems", new TaskCanceledException("timeout")));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5]");
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsBadJson_LinkedLinesAreBare()
+    {
+        var handler = LogHandler([LinkedLog(1, 5)], h => h.Get("TaskItems", "not json"));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5]");
+    }
+
+    [Fact]
+    public async Task GetJournal_BlankProjectAndPriority_OmitsBothSegments()
+    {
+        var handler = LogHandler(
+            [LinkedLog(1, 5), LinkedLog(2, 6)],
+            h => h.Get("TaskItems", new[] { Fixtures.Task(5, "A", priority: "", projectName: "  "), Fixtures.Task(6, "B", priority: "", projectName: "Apollo") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5]").And.Contain("Did work [task #6 | Apollo]");
+    }
+
+    [Fact]
+    public async Task GetJournal_ProjectNameWithPipeAndBracket_IsRenderedVerbatim()
+    {
+        var handler = LogHandler([LinkedLog(1, 5)], h => h.Get("TaskItems", new[] { Fixtures.Task(5, "A", priority: "High", projectName: "R|D [x]") }));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Did work [task #5 | R|D [x] | High]");
     }
 
     [Fact]
@@ -914,7 +1029,7 @@ public class WeeklyReviewTests
 
         var text = await new ReviewTools(Fixtures.Client(handler), Fixtures.Time()).WeeklyReview();
 
-        text.Should().Contain("Blocked:").And.Contain("#1 [Low/Blocked] Old blocked | blocked: Waiting (4d)").And.Contain("most recent of 305 tasks");
+        text.Should().Contain("Blocked:").And.Contain("#1 [Low/Blocked] Old blocked | blocked: Waiting (4d)").And.Contain("highest-id of 305 tasks");
     }
 
     [Fact]

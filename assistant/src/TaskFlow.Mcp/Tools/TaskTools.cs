@@ -54,6 +54,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         "Lists tasks, most urgent first. Use 'view' to choose what you want: open (default), overdue, due_soon (open tasks overdue or due within dueWithinDays), "
         + "stale (moved 3+ times or tagged 7+ days), unassigned (open tasks with no project), today (planned on today's journal), blocked (Blocked status only), completed, all. "
         + "Blocked tasks still appear in the other open views and are flagged 'blocked: <reason> (Nd)', where (Nd) = days blocked, <1d if under a day. "
+        + "To find what was finished on or between days, use completedFrom/completedTo with view=completed or all. Use plannedDate for tasks on a given day's journal. "
         + "Results are paged (default 25); follow the 'Next page' hint for more. Use responseFormat=detailed to include descriptions and journal info.")]
     public Task<string> ListTasks(
         [Description("open, all, completed, overdue, due_soon, stale, unassigned, today or blocked (Blocked status only). Blocked tasks still appear in the other open views and are flagged. Default open.")] string view = "open",
@@ -64,6 +65,9 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         [Description("Page size, 1-100. Default 25.")] int limit = 25,
         [Description("Number of results to skip, for paging. Default 0.")] int offset = 0,
         [Description("concise (default) or detailed.")] string responseFormat = "concise",
+        [Description("Only tasks completed on or after this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Only done tasks are checked: a reopened task is not matched. Based on completion history of the 300 highest-id matching done tasks; see the incomplete-results note.")] string? completedFrom = null,
+        [Description("Only tasks completed on or before this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Must not be earlier than completedFrom.")] string? completedTo = null,
+        [Description("Only tasks planned on the journal of this day. yyyy-MM-dd, today, tomorrow or yesterday. Done tasks need view=all.")] string? plannedDate = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -74,6 +78,14 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             }
 
             var today = InputParsing.Today(time);
+            DateOnly? from = string.IsNullOrWhiteSpace(completedFrom) ? null : InputParsing.ParseDate(completedFrom, today, "completedFrom");
+            DateOnly? to = string.IsNullOrWhiteSpace(completedTo) ? null : InputParsing.ParseDate(completedTo, today, "completedTo");
+            DateOnly? planned = string.IsNullOrWhiteSpace(plannedDate) ? null : InputParsing.ParseDate(plannedDate, today, "plannedDate");
+            if (from is { } f && to is { } t2 && f > t2)
+            {
+                throw ToolGuard.Invalid($"'completedFrom' ({f:yyyy-MM-dd}) is after 'completedTo' ({t2:yyyy-MM-dd}).");
+            }
+
             var tasks = await api.GetTasksAsync(ct);
 
             IEnumerable<TaskItemDto> query = tasks.Where(t => MatchesView(t, normalizedView, today, Math.Max(dueWithinDays, 0)));
@@ -100,6 +112,47 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 filters.Add($"priority={wanted}");
             }
 
+            if (planned is { } plannedDay)
+            {
+                query = query.Where(t => t.CurrentJournalDate == plannedDay);
+                filters.Add($"plannedDate={plannedDay:yyyy-MM-dd}");
+            }
+
+            var capNote = string.Empty;
+            if (from is not null || to is not null)
+            {
+                // Not-done tasks are skipped on purpose, so a reopened task whose Completed event is in range
+                // is excluded, unlike weekly_review.
+                var candidates = query.Where(t => t.IsDone).ToList();
+                var lookups = candidates.Count > HistoryLookup.MaxHistoryLookups
+                    ? candidates.OrderByDescending(t => t.Id).Take(HistoryLookup.MaxHistoryLookups).ToList()
+                    : candidates;
+                if (candidates.Count > HistoryLookup.MaxHistoryLookups)
+                {
+                    capNote = $"\nNote: results may be incomplete; completed history was checked for only the {HistoryLookup.MaxHistoryLookups} highest-id of {candidates.Count} candidate tasks. "
+                        + "Narrow with project, status, priority or plannedDate, or use weekly_review for a summary.";
+                }
+
+                var start = from ?? DateOnly.MinValue;
+                var end = to ?? DateOnly.MaxValue;
+                var histories = await HistoryLookup.LoadHistoriesAsync(api, lookups, ct);
+                query = histories
+                    .Where(h => h.Events.Any(e => e.EventType == HistoryLookup.CompletedEvent
+                        && HistoryLookup.InRange(e.OccurredAtUtc, time.LocalTimeZone, start, end)))
+                    .Select(h => h.Task)
+                    .ToList();
+
+                if (from is { } fromDay)
+                {
+                    filters.Add($"completedFrom={fromDay:yyyy-MM-dd}");
+                }
+
+                if (to is { } toDay)
+                {
+                    filters.Add($"completedTo={toDay:yyyy-MM-dd}");
+                }
+            }
+
             var ordered = (normalizedView is "overdue" or "due_soon"
                     ? Formatting.OrderByDue(query)
                     : Formatting.OrderByUrgency(query))
@@ -112,12 +165,15 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
 
             if (ordered.Count == 0)
             {
-                return $"No tasks match ({label}).";
+                var tip = normalizedView == "open" && (from is not null || to is not null)
+                    ? " Tip: view=open excludes completed tasks; use view=completed or view=all with completedFrom/completedTo."
+                    : string.Empty;
+                return $"No tasks match ({label}).{tip}{capNote}";
             }
 
             if (page.Count == 0)
             {
-                return $"{ordered.Count} task(s) match ({label}), but offset {skip} is past the end.";
+                return $"{ordered.Count} task(s) match ({label}), but offset {skip} is past the end.{capNote}";
             }
 
             var detailed = Formatting.IsDetailed(responseFormat);
@@ -133,7 +189,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 sb.AppendLine($"Next page: offset={skip + page.Count}");
             }
 
-            return sb.ToString().TrimEnd();
+            return sb.ToString().TrimEnd() + capNote;
         });
 
     [McpServerTool(Name = "get_task", ReadOnly = true)]

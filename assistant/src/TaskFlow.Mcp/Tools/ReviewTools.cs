@@ -8,8 +8,6 @@ namespace TaskFlow.Mcp.Tools;
 [McpServerToolType]
 public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
 {
-    private const int MaxHistoryLookups = 300;
-    private const int HistoryParallelism = 8;
     private const int ListLimit = 10;
 
     [McpServerTool(Name = "weekly_review", ReadOnly = true)]
@@ -34,19 +32,19 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
             var projects = await api.GetProjectsAsync(ct);
             var journal = await api.GetJournalEntriesAsync(ct);
 
-            var lookups = tasks.OrderByDescending(t => t.Id).Take(MaxHistoryLookups).ToList();
-            var histories = await LoadHistoriesAsync(lookups, ct);
+            var lookups = tasks.OrderByDescending(t => t.Id).Take(HistoryLookup.MaxHistoryLookups).ToList();
+            var histories = await HistoryLookup.LoadHistoriesAsync(api, lookups, ct);
 
             var completed = new List<TaskItemDto>();
             var added = new List<TaskItemDto>();
             foreach (var (task, events) in histories)
             {
-                if (events.Any(e => e.EventType == "Completed" && InRange(e.OccurredAtUtc, start, end)))
+                if (events.Any(e => e.EventType == HistoryLookup.CompletedEvent && HistoryLookup.InRange(e.OccurredAtUtc, time.LocalTimeZone, start, end)))
                 {
                     completed.Add(task);
                 }
 
-                if (events.Any(e => e.EventType == "TaskCreated" && InRange(e.OccurredAtUtc, start, end)))
+                if (events.Any(e => e.EventType == "TaskCreated" && HistoryLookup.InRange(e.OccurredAtUtc, time.LocalTimeZone, start, end)))
                 {
                     added.Add(task);
                 }
@@ -98,37 +96,11 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
 
             if (tasks.Count > lookups.Count)
             {
-                sb.AppendLine($"Note: completed/added counts only cover the {lookups.Count} most recent of {tasks.Count} tasks.");
+                sb.AppendLine($"Note: completed/added counts only cover the {lookups.Count} highest-id of {tasks.Count} tasks.");
             }
 
             return sb.ToString().TrimEnd();
         });
-
-    private async Task<List<(TaskItemDto Task, List<TaskEventDto> Events)>> LoadHistoriesAsync(List<TaskItemDto> tasks, CancellationToken ct)
-    {
-        using var gate = new SemaphoreSlim(HistoryParallelism);
-        var results = await Task.WhenAll(tasks.Select(async task =>
-        {
-            await gate.WaitAsync(ct);
-            try
-            {
-                return (task, events: await api.GetTaskHistoryAsync(task.Id, ct));
-            }
-            finally
-            {
-                gate.Release();
-            }
-        }));
-
-        return [.. results];
-    }
-
-    private bool InRange(DateTime utc, DateOnly start, DateOnly end)
-    {
-        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), time.LocalTimeZone);
-        var date = DateOnly.FromDateTime(local);
-        return date >= start && date <= end;
-    }
 
     private static void AppendGrouped(StringBuilder sb, string title, List<TaskItemDto> items)
     {

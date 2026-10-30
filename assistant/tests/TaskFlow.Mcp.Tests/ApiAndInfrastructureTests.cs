@@ -389,6 +389,23 @@ public class ToolSurfaceTests
     }
 
     [Fact]
+    public void ListTasks_DescriptionsMentionNewFiltersAndAllNineViews()
+    {
+        var method = Tools().Single(t => t.Attribute.Name == "list_tasks").Method;
+        var toolDescription = method.GetCustomAttribute<DescriptionAttribute>()!.Description;
+        var viewDescription = method.GetParameters().Single(p => p.Name == "view").GetCustomAttribute<DescriptionAttribute>()!.Description;
+        string[] views = ["open", "all", "completed", "overdue", "due_soon", "stale", "unassigned", "today", "blocked"];
+
+        toolDescription.Should().Contain("completedFrom").And.Contain("completedTo").And.Contain("plannedDate");
+        views.Should().OnlyContain(v => toolDescription.Contains(v) && viewDescription.Contains(v));
+        foreach (var name in new[] { "completedFrom", "completedTo", "plannedDate" })
+        {
+            var description = method.GetParameters().Single(p => p.Name == name).GetCustomAttribute<DescriptionAttribute>()!.Description;
+            description.Should().Contain("yyyy-MM-dd").And.Contain("yesterday");
+        }
+    }
+
+    [Fact]
     public void ReadOnlyAndDestructiveFlags_AreSetWhereExpected()
     {
         var byName = Tools().ToDictionary(t => t.Attribute.Name!, t => t.Attribute);

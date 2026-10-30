@@ -165,6 +165,323 @@ public class ListTasksTests
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("open, all, completed, overdue, due_soon, stale, unassigned, today, blocked");
     }
 
+    private static object DoneTask(int id, string title = "Done", int? projectId = null, string? projectName = null, string? plannedOn = null) =>
+        Fixtures.Task(id, title, status: "Completed", isComplete: true, projectId: projectId, projectName: projectName, plannedOn: plannedOn);
+
+    private static StubHandler WithHistory(StubHandler handler, int id, params object[] events) =>
+        handler.Get($"TaskItems/{id}/history", events);
+
+    private static (TaskTools Tools, StubHandler Handler) SetupHistory(TimeProvider? time, Action<StubHandler> routes, params object[] tasks)
+    {
+        var handler = new StubHandler().Get("TaskItems", tasks);
+        routes(handler);
+        return (new TaskTools(Fixtures.Client(handler), time ?? Fixtures.Time()), handler);
+    }
+
+    private static int HistoryRequests(StubHandler handler) =>
+        handler.Requests.Count(r => r.Path.EndsWith("/history", StringComparison.Ordinal));
+
+    [Fact]
+    public async Task ListTasks_CompletedRange_IsInclusiveAtBothBoundaries()
+    {
+        // Local zone is UTC-7: 2026-10-05T07:00Z is 00:00 local on the 5th; 2026-10-07T06:59Z is 23:59 local on the 6th.
+        var (tools, _) = SetupHistory(null, h =>
+        {
+            WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-05T07:00:00Z"));
+            WithHistory(h, 2, Fixtures.Event(2, "Completed", "2026-10-07T06:59:00Z"));
+            WithHistory(h, 3, Fixtures.Event(3, "Completed", "2026-10-05T06:59:00Z"));
+            WithHistory(h, 4, Fixtures.Event(4, "Completed", "2026-10-07T07:00:00Z"));
+        }, DoneTask(1), DoneTask(2), DoneTask(3), DoneTask(4));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-05", completedTo: "2026-10-06");
+
+        text.Should().StartWith("2 task(s) match (view=completed, completedFrom=2026-10-05, completedTo=2026-10-06).")
+            .And.Contain("#1 ").And.Contain("#2 ").And.NotContain("#3 ").And.NotContain("#4 ");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedFromOnly_HasNoUpperBound()
+    {
+        var (tools, _) = SetupHistory(null, h =>
+        {
+            WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z"));
+            WithHistory(h, 2, Fixtures.Event(2, "Completed", "2026-09-01T18:00:00Z"));
+        }, DoneTask(1), DoneTask(2));
+
+        var text = await tools.ListTasks(view: "all", completedFrom: "yesterday");
+
+        text.Should().Contain("#1 ").And.NotContain("#2 ").And.Contain("completedFrom=2026-10-08");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedToOnly_HasNoLowerBound()
+    {
+        var (tools, _) = SetupHistory(null, h =>
+        {
+            WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z"));
+            WithHistory(h, 2, Fixtures.Event(2, "Completed", "2026-09-01T18:00:00Z"));
+        }, DoneTask(1), DoneTask(2));
+
+        var text = await tools.ListTasks(view: "all", completedTo: "2026-09-30");
+
+        text.Should().Contain("#2 ").And.NotContain("#1 ").And.Contain("completedTo=2026-09-30");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedTwice_AnyEventInRangeMatches()
+    {
+        var (tools, _) = SetupHistory(null, h => WithHistory(h, 1,
+            Fixtures.Event(1, "Completed", "2026-09-01T18:00:00Z"),
+            Fixtures.Event(1, "Reopened", "2026-09-02T18:00:00Z"),
+            Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z")), DoneTask(1));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-08", completedTo: "2026-10-08");
+
+        text.Should().StartWith("1 task(s) match").And.Contain("#1 ");
+    }
+
+    [Fact]
+    public async Task ListTasks_DoneTaskWithoutCompletedEvent_IsExcluded()
+    {
+        var (tools, _) = SetupHistory(null, h => WithHistory(h, 1, Fixtures.Event(1, "TaskCreated", "2026-10-08T18:00:00Z")), DoneTask(1));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-01");
+
+        text.Should().StartWith("No tasks match (view=completed, completedFrom=2026-10-01).");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedFilter_CombinesWithProjectAndView()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { DoneTask(1, projectId: 7, projectName: "Alpha"), DoneTask(2, projectId: 8, projectName: "Beta"), Fixtures.Task(3, "Open", projectId: 7, projectName: "Alpha") })
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha"), Fixtures.Project(8, "Beta") });
+        WithHistory(handler, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z"));
+        WithHistory(handler, 2, Fixtures.Event(2, "Completed", "2026-10-08T18:00:00Z"));
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var text = await tools.ListTasks(view: "completed", project: "Alpha", completedFrom: "2026-10-08");
+
+        text.Should().StartWith("1 task(s) match (view=completed, project=Alpha, completedFrom=2026-10-08).").And.Contain("#1 ").And.NotContain("#2 ");
+        handler.Requests.Should().NotContain(r => r.Path == "TaskItems/2/history");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedRangeWithViewCompleted_MatchesWeeklyReviewSet()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { DoneTask(1, "One"), DoneTask(2, "Two"), DoneTask(3, "Three") })
+            .Get("Projects", Array.Empty<object>())
+            .Get("JournalEntries", Array.Empty<object>());
+        WithHistory(handler, 1, Fixtures.Event(1, "Completed", "2026-10-07T18:00:00Z"));
+        WithHistory(handler, 2, Fixtures.Event(2, "Completed", "2026-09-07T18:00:00Z"));
+        WithHistory(handler, 3, Fixtures.Event(3, "Completed", "2026-10-09T10:00:00Z"));
+        var client = Fixtures.Client(handler);
+
+        var list = await new TaskTools(client, Fixtures.Time()).ListTasks(view: "completed", completedFrom: "2026-10-05", completedTo: "2026-10-09");
+        var review = await new ReviewTools(client, Fixtures.Time()).WeeklyReview(from: "2026-10-05", to: "2026-10-09");
+
+        list.Should().Contain("#1 ").And.Contain("#3 ").And.NotContain("#2 ");
+        review.Should().Contain("#1 One").And.Contain("#3 Three").And.NotContain("#2 Two");
+    }
+
+    [Fact]
+    public async Task ListTasks_NoCompletedFilter_MakesNoHistoryRequests()
+    {
+        var (tools, handler) = Setup(DoneTask(1), Fixtures.Task(2));
+
+        await tools.ListTasks(view: "all");
+
+        HistoryRequests(handler).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedFilter_RequestsHistoryOnlyForDoneTasks()
+    {
+        var (tools, handler) = SetupHistory(null, h => WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z")), DoneTask(1), Fixtures.Task(2));
+
+        await tools.ListTasks(view: "all", completedFrom: "2026-10-01");
+
+        handler.Requests.Where(r => r.Path.EndsWith("/history", StringComparison.Ordinal)).Select(r => r.Path).Should().Equal("TaskItems/1/history");
+    }
+
+    [Fact]
+    public async Task ListTasks_ReopenedTaskWithCompletedEvent_IsExcludedAndNotFetched()
+    {
+        var (tools, handler) = SetupHistory(null, h => WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z")), Fixtures.Task(1, "Reopened"));
+
+        var text = await tools.ListTasks(view: "all", completedFrom: "2026-10-01");
+
+        text.Should().StartWith("No tasks match (view=all, completedFrom=2026-10-01).");
+        HistoryRequests(handler).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("2026-10-09", "2026-10-09", true)]
+    [InlineData("today", "2026-10-09", true)]
+    [InlineData("tomorrow", "2026-10-10", true)]
+    [InlineData("yesterday", "2026-10-08", true)]
+    [InlineData("2026-10-09", "2026-10-10", false)]
+    public async Task ListTasks_PlannedDate_MatchesOnlyEqualJournalDate(string param, string plannedOn, bool expected)
+    {
+        var (tools, _) = Setup(Fixtures.Task(1, "Planned", plannedOn: plannedOn), Fixtures.Task(2, "Unplanned"));
+
+        var text = await tools.ListTasks(plannedDate: param);
+
+        if (expected)
+        {
+            text.Should().Contain("#1 ").And.NotContain("#2 ");
+        }
+        else
+        {
+            text.Should().StartWith("No tasks match");
+        }
+    }
+
+    [Fact]
+    public async Task ListTasks_PlannedDate_DoneTasksNeedViewAll()
+    {
+        var (tools, _) = Setup(DoneTask(1, plannedOn: "2026-10-09"), Fixtures.Task(2, plannedOn: "2026-10-09"));
+
+        var open = await tools.ListTasks(plannedDate: "2026-10-09");
+        var all = await tools.ListTasks(view: "all", plannedDate: "2026-10-09");
+
+        open.Should().Contain("#2 ").And.NotContain("#1 ");
+        all.Should().Contain("#1 ").And.Contain("#2 ").And.Contain("plannedDate=2026-10-09");
+    }
+
+    private static object[] ManyDone(int count) => [.. Enumerable.Range(1, count).Select(i => DoneTask(i))];
+
+    private static void RouteHistories(StubHandler h, int from, int to, string completedUtc = "2026-10-08T18:00:00Z")
+    {
+        for (var i = from; i <= to; i++)
+        {
+            WithHistory(h, i, Fixtures.Event(i, "Completed", completedUtc));
+        }
+    }
+
+    private const string CapNoteStart = "Note: results may be incomplete; completed history was checked for only the 300 highest-id of 301 candidate tasks.";
+
+    [Fact]
+    public async Task ListTasks_MoreThan300DoneCandidates_ChecksHighestIdsAndAddsNote()
+    {
+        var (tools, handler) = SetupHistory(null, h => RouteHistories(h, 2, 301), ManyDone(301));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-01", limit: 100);
+
+        text.Should().Contain("300 task(s) match").And.Contain(CapNoteStart).And.Contain("weekly_review for a summary.");
+        handler.Requests.Should().NotContain(r => r.Path == "TaskItems/1/history");
+        HistoryRequests(handler).Should().Be(300);
+    }
+
+    [Theory]
+    [InlineData(300)]
+    [InlineData(5)]
+    public async Task ListTasks_300OrFewerDoneCandidates_HasNoNote(int count)
+    {
+        var (tools, _) = SetupHistory(null, h => RouteHistories(h, 1, count), ManyDone(count));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-01");
+
+        text.Should().NotContain("Note: results may be incomplete");
+    }
+
+    [Fact]
+    public async Task ListTasks_CapExceeded_NoteAlsoOnEmptyResult()
+    {
+        var (tools, _) = SetupHistory(null, h => RouteHistories(h, 2, 301, "2026-01-01T18:00:00Z"), ManyDone(301));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-01");
+
+        text.Should().StartWith("No tasks match (view=completed, completedFrom=2026-10-01).").And.Contain(CapNoteStart);
+    }
+
+    [Fact]
+    public async Task ListTasks_CapExceeded_NoteAlsoWhenOffsetIsPastTheEnd()
+    {
+        var (tools, _) = SetupHistory(null, h => RouteHistories(h, 2, 301), ManyDone(301));
+
+        var text = await tools.ListTasks(view: "completed", completedFrom: "2026-10-01", offset: 1000);
+
+        text.Should().Contain("but offset 1000 is past the end.").And.Contain(CapNoteStart);
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedLateUtcFallingOnNextLocalDay_UsesLocalZone()
+    {
+        // Zone UTC+2: 23:30Z on the 9th is 01:30 local on the 10th.
+        var time = Fixtures.Time(new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.Zero), 120);
+        var (tools, _) = SetupHistory(time, h => WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-09T23:30:00Z")), DoneTask(1));
+
+        var onTenth = await tools.ListTasks(view: "completed", completedFrom: "2026-10-10", completedTo: "2026-10-10");
+        var onNinth = await tools.ListTasks(view: "completed", completedFrom: "2026-10-09", completedTo: "2026-10-09");
+
+        onTenth.Should().Contain("#1 ");
+        onNinth.Should().StartWith("No tasks match");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedEarlyUtcFallingOnPreviousLocalDay_UsesLocalZone()
+    {
+        // Zone UTC-7: 02:00Z on the 10th is 19:00 local on the 9th.
+        var (tools, _) = SetupHistory(null, h => WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-10T02:00:00Z")), DoneTask(1));
+
+        var onNinth = await tools.ListTasks(view: "completed", completedFrom: "2026-10-09", completedTo: "2026-10-09");
+        var onTenth = await tools.ListTasks(view: "completed", completedFrom: "2026-10-10", completedTo: "2026-10-10");
+
+        onNinth.Should().Contain("#1 ");
+        onTenth.Should().StartWith("No tasks match");
+    }
+
+    [Fact]
+    public async Task ListTasks_OpenViewWithCompletedFilterAndNoResults_ShowsTipAndLabel()
+    {
+        var (tools, _) = Setup(DoneTask(1));
+
+        var text = await tools.ListTasks(completedFrom: "2026-03-01");
+
+        text.Should().Be("No tasks match (view=open, completedFrom=2026-03-01). Tip: view=open excludes completed tasks; use view=completed or view=all with completedFrom/completedTo.");
+    }
+
+    [Fact]
+    public async Task ListTasks_CompletedFromAfterCompletedTo_FailsWithoutApiCalls()
+    {
+        var (tools, handler) = Setup(DoneTask(1));
+
+        var act = () => tools.ListTasks(view: "all", completedFrom: "2026-03-05", completedTo: "2026-03-01");
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("'completedFrom' (2026-03-05) is after 'completedTo' (2026-03-01).");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("completedFrom")]
+    [InlineData("completedTo")]
+    [InlineData("plannedDate")]
+    public async Task ListTasks_InvalidDate_NamesTheParameterAndMakesNoApiCall(string parameter)
+    {
+        var (tools, handler) = Setup(DoneTask(1));
+
+        var act = () => tools.ListTasks(
+            view: "all",
+            completedFrom: parameter == "completedFrom" ? "next week" : null,
+            completedTo: parameter == "completedTo" ? "next week" : null,
+            plannedDate: parameter == "plannedDate" ? "next week" : null);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain(parameter);
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ListTasks_HistoryNotFoundForOneTask_FailsTheWholeCall()
+    {
+        var (tools, _) = SetupHistory(null, h => WithHistory(h, 1, Fixtures.Event(1, "Completed", "2026-10-08T18:00:00Z")), DoneTask(1), DoneTask(2));
+
+        var act = () => tools.ListTasks(view: "all", completedFrom: "2026-10-01");
+
+        await act.Should().ThrowAsync<McpException>();
+    }
+
     private static readonly object[] WithBlocked =
     [
         Fixtures.Task(1, "Plain"),

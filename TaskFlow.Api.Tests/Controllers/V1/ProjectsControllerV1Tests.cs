@@ -77,6 +77,52 @@ public class ProjectsControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldCountInProgressTasksAsOpen()
+    {
+        var project = new Project
+        {
+            Id = 1,
+            Name = "Alpha",
+            Tasks =
+            [
+                new TaskItem { Id = 1, Title = "Open", Status = Status.Todo },
+                new TaskItem { Id = 2, Title = "Started", Status = Status.InProgress },
+                new TaskItem { Id = 3, Title = "Done", Status = Status.Completed },
+            ]
+        };
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([project]);
+
+        var result = await _controller.GetAll();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<ProjectResponseDto>>(ok.Value).Single();
+        Assert.Equal(2, dto.OpenTaskCount);
+        Assert.Equal(1, dto.CompletedTaskCount);
+    }
+
+    [Fact]
+    public async Task GetTasks_ShouldIncludeStartedAt_ForInProgressTask()
+    {
+        var project = new Project { Id = 1, Name = "Alpha" };
+        var startedAt = new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
+        [
+            new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Status = Status.InProgress, StartedAt = startedAt },
+            new TaskItem { Id = 5, Title = "Plain", ProjectId = 1, Project = project, Status = Status.Todo }
+        ]);
+
+        var result = await _controller.GetTasks(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        var started = dtos.Single(d => d.Id == 4);
+        Assert.Equal("InProgress", started.Status);
+        Assert.Equal(startedAt, started.StartedAt);
+        Assert.Null(dtos.Single(d => d.Id == 5).StartedAt);
+    }
+
+    [Fact]
     public async Task GetTasks_ShouldIncludeBlockedTasksWithBlockedFields()
     {
         var project = new Project { Id = 1, Name = "Alpha" };

@@ -13,7 +13,7 @@ public class TaskItemValidator : AbstractValidator<TaskItem>
 
         RuleFor(t => t.Status)
             .IsInEnum()
-            .WithMessage("Status must be a valid value (Draft, Todo, Blocked, or Completed).");
+            .WithMessage("Status must be a valid value (Draft, Todo, InProgress, Blocked, or Completed).");
 
         RuleFor(t => t.BlockedReason)
             .MaximumLength(200).WithMessage("Blocked reason must not exceed 200 characters.");

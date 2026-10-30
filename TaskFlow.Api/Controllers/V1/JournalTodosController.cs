@@ -111,6 +111,7 @@ public class JournalTodosController(
             BlockedReason = task.BlockedReason,
             BlockedAt = task.BlockedAt,
             PreviousStatus = task.PreviousStatus?.ToString(),
+            StartedAt = task.StartedAt,
             Children = children.Count > 0 ? children : null,
         };
     }

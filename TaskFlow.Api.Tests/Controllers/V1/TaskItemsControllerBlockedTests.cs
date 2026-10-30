@@ -182,7 +182,7 @@ public class TaskItemsControllerBlockedTests
         var result = await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Blocked, BlockedReason = "x" });
 
         Assert.Equal("TASK_BLOCK_DRAFT_NOT_ALLOWED", ErrorCode(result));
-        Assert.Equal("Only open Todo tasks can be blocked.", ErrorMessage(result));
+        Assert.Equal("Only Todo or In Progress tasks can be blocked.", ErrorMessage(result));
         var reloaded = await stack.ReloadAsync(seeded.Id);
         Assert.Equal(Status.Draft, reloaded.Status);
         Assert.Null(reloaded.BlockedReason);
@@ -423,6 +423,19 @@ public class TaskItemsControllerBlockedTests
 
         Assert.Equal("Todo", dto.Status);
         Assert.Null(dto.PreviousStatus);
+    }
+
+    [Fact]
+    public async Task Patch_ShouldRestoreInProgress_WhenUnblockingTaskBlockedFromInProgress()
+    {
+        using var stack = new RealStack();
+        var seeded = await stack.SeedBlockedAsync("Waiting", Status.InProgress);
+
+        var dto = OkDto(await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Todo }));
+
+        Assert.Equal("InProgress", dto.Status);
+        Assert.Null(dto.PreviousStatus);
+        Assert.Null(dto.BlockedAt);
     }
 
     [Fact]

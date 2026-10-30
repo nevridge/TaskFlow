@@ -243,7 +243,7 @@ public class TaskItemValidatorTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e =>
             e.PropertyName == "Status" &&
-            e.ErrorMessage == "Status must be a valid value (Draft, Todo, Blocked, or Completed).");
+            e.ErrorMessage == "Status must be a valid value (Draft, Todo, InProgress, Blocked, or Completed).");
     }
 
     [Fact]
@@ -286,6 +286,7 @@ public class TaskItemValidatorTests
     [Theory]
     [InlineData(Status.Draft)]
     [InlineData(Status.Todo)]
+    [InlineData(Status.InProgress)]
     [InlineData(Status.Completed)]
     public async Task Validate_ShouldFail_WhenNonBlockedTaskHasBlockedFields(Status status)
     {

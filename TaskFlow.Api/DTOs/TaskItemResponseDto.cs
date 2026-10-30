@@ -23,6 +23,7 @@ public class TaskItemResponseDto
     public string? BlockedReason { get; set; }
     public DateTime? BlockedAt { get; set; }
     public string? PreviousStatus { get; set; }
+    public DateTime? StartedAt { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ICollection<TaskItemResponseDto>? Children { get; set; }

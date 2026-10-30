@@ -267,6 +267,32 @@ public class JournalEntryRepositoryTests
     }
 
     [Fact]
+    public async Task CarryForwardIncompleteTasksAsync_ShouldCarryInProgressTaskIntoToday_AndKeepStatusAndStartedAt()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var today = new DateOnly(2026, 10, 13);
+        var (source, _) = await SeedLinkedTaskAsync(context, today.AddDays(-2));
+        var startedAt = new DateTime(2026, 10, 10, 8, 30, 0, DateTimeKind.Utc);
+        var started = await LinkNewTaskAsync(context, source, new TaskItem
+        {
+            Title = "Started",
+            Status = Status.InProgress,
+            StartedAt = startedAt
+        });
+        var target = await repo.AddAsync(new JournalEntry { Title = "Today", Date = today });
+
+        var moved = await repo.CarryForwardIncompleteTasksAsync(target.Id, today);
+
+        Assert.Contains(started.Id, moved);
+        context.ChangeTracker.Clear();
+        var reloaded = await context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == started.Id);
+        Assert.Equal(target.Id, reloaded.CurrentJournalEntryId);
+        Assert.Equal(Status.InProgress, reloaded.Status);
+        Assert.Equal(startedAt, reloaded.StartedAt);
+    }
+
+    [Fact]
     public async Task CarryForwardIncompleteTasksAsync_ShouldNotResetBlockedAt_WhenCarriedAcrossSeveralDays()
     {
         using var context = CreateInMemoryContext();

@@ -220,6 +220,9 @@ namespace TaskFlow.Api.Migrations
                     b.Property<int?>("ProjectId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Status")
                         .HasColumnType("INTEGER");
 

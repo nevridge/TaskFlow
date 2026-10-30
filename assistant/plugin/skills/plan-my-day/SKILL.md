@@ -16,6 +16,6 @@ Plan the user's day in TaskFlow. Optional argument: a date (default today) or a 
 3. List stale tasks (moved 3+ times) separately and suggest one decision each: do it today, re-scope, or drop. Do not change or delete them yourself.
    List Blocked tasks as their own group (`#id title`, reason, days blocked). If the wait may be over, offer to unblock with `update_task status=todo`. Wait for a yes. If the user says another task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters) and wait for a yes. Do not log it with `add_log_entry`. Only Todo tasks can be blocked: a Draft must be made Todo first, a Completed task reopened first. If they gave no reason, ask; never invent one.
 4. Ask the user to confirm or adjust the list. Wait for their answer.
-5. Once confirmed, call `set_journal_todos` with the agreed ids (and `remove` for anything they dropped). Report what is now planned.
+5. Once confirmed, call `set_journal_todos` with the agreed ids (and `remove` for anything they dropped). Report what is now planned. If the user also wants several tasks changed (re-date, unblock, re-prioritize), use one `update_tasks` call with an item per task instead of repeated `update_task` calls.
 
 Keep the whole exchange short. If there is nothing overdue, due soon or high priority, say so and ask what they want to focus on instead.

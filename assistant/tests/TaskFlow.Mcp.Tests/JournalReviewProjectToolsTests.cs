@@ -797,6 +797,120 @@ public class JournalToolsTests
     [Fact]
     public async Task UpdateJournal_NeedsSomethingToDo() =>
         await FluentActions.Awaiting(() => Tools(new StubHandler()).UpdateJournal()).Should().ThrowAsync<McpException>();
+
+    private static StubHandler AppendHandler(string? existing) => new StubHandler()
+        .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", existing) })
+        .Put("JournalEntries/3", Fixtures.Journal(3, "2026-10-09", "saved"))
+        .Post("JournalEntries/3/notes", new { id = 1, content = "n", createdAt = "2026-10-09T17:00:00Z" }, HttpStatusCode.Created);
+
+    [Fact]
+    public async Task UpdateJournal_Append_AddsAfterABlankLine_AndReportsTheLength()
+    {
+        var handler = AppendHandler("Morning: spec review.");
+
+        var text = await Tools(handler).UpdateJournal(summary: "Afternoon: demo.", append: true);
+
+        var put = handler.BodyOf(HttpMethod.Put, "JournalEntries/3");
+        put.GetProperty("summary").GetString().Should().Be("Morning: spec review.\n\nAfternoon: demo.");
+        put.GetProperty("title").GetString().Should().Be("Journal 2026-10-09");
+        text.Should().Be("Appended to the journal summary for 2026-10-09 (now 39 of 10000 characters).");
+    }
+
+    [Fact]
+    public async Task UpdateJournal_Append_TrimsTrailingWhitespaceBeforeTheSeparator()
+    {
+        var handler = AppendHandler("Old text  \n\n");
+
+        await Tools(handler).UpdateJournal(summary: "  New text \n", append: true);
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/3").GetProperty("summary").GetString().Should().Be("Old text\n\nNew text");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  \n")]
+    public async Task UpdateJournal_Append_ToAnEmptySummary_SavesJustTheNewText(string? existing)
+    {
+        var handler = AppendHandler(existing);
+
+        await Tools(handler).UpdateJournal(summary: "First entry", append: true);
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/3").GetProperty("summary").GetString().Should().Be("First entry");
+    }
+
+    [Fact]
+    public async Task UpdateJournal_Append_WithNoEntry_CreatesItAndSavesTheNewText()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", Array.Empty<object>())
+            .Post("JournalEntries", Fixtures.Journal(8, "2026-10-09"), HttpStatusCode.Created)
+            .Put("JournalEntries/8", Fixtures.Journal(8, "2026-10-09", "Fresh"));
+
+        await Tools(handler).UpdateJournal(summary: "Fresh", append: true);
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/8").GetProperty("summary").GetString().Should().Be("Fresh");
+    }
+
+    [Fact]
+    public async Task UpdateJournal_Append_WithANote_SavesBoth()
+    {
+        var handler = AppendHandler("Old");
+
+        var text = await Tools(handler).UpdateJournal(summary: "New", note: "A note", append: true);
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/3").GetProperty("summary").GetString().Should().Be("Old\n\nNew");
+        handler.BodyOf(HttpMethod.Post, "JournalEntries/3/notes").GetProperty("content").GetString().Should().Be("A note");
+        text.Should().StartWith("Appended to the journal summary for 2026-10-09 (now 8 of 10000 characters).").And.EndWith("Note added.");
+    }
+
+    [Fact]
+    public async Task UpdateJournal_BlankSummaryWithoutAppend_StillReplaces()
+    {
+        var handler = AppendHandler("Old");
+
+        var text = await Tools(handler).UpdateJournal(summary: "");
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/3").GetProperty("summary").GetString().Should().BeEmpty();
+        text.Should().Be("Journal 2026-10-09: summary replaced.");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public async Task UpdateJournal_AppendWithBlankSummary_IsRejected_AndSavesNothing(string? summary)
+    {
+        var handler = AppendHandler("Old");
+
+        var act = () => Tools(handler).UpdateJournal(summary: summary, note: "n", append: true);
+
+        await act.Should().ThrowAsync<McpException>().WithMessage("*append=true needs*");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateJournal_Append_AtExactlyTheLimit_IsAccepted()
+    {
+        var handler = AppendHandler(new string('a', 4998));
+
+        await Tools(handler).UpdateJournal(summary: new string('b', 5000), append: true);
+
+        handler.BodyOf(HttpMethod.Put, "JournalEntries/3").GetProperty("summary").GetString()!.Length.Should().Be(10000);
+    }
+
+    [Fact]
+    public async Task UpdateJournal_Append_OverTheLimit_IsRejected_WithLengthsAndAWayOut()
+    {
+        var handler = AppendHandler(new string('a', 5000));
+
+        var act = () => Tools(handler).UpdateJournal(summary: new string('b', 5000), note: "n", append: true);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("10002 characters").And.Contain("existing 5000").And.Contain("new 5000").And.Contain("limit is 10000")
+            .And.Contain("Nothing was saved").And.Contain("append=false");
+        handler.Sent(HttpMethod.Put, "JournalEntries/3").Should().BeEmpty();
+        handler.Sent(HttpMethod.Post, "JournalEntries/3/notes").Should().BeEmpty();
+    }
 }
 
 public class ProjectToolsTests

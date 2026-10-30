@@ -11,6 +11,9 @@ namespace TaskFlow.Mcp.Tools;
 [McpServerToolType]
 public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 {
+    // Summary limit of the API, in UTF-16 code units (string.Length).
+    private const int MaxSummaryLength = 10000;
+
     [McpServerTool(Name = "get_journal")]
     [Description(
         "Shows the daily journal for a date: summary, the tasks planned for that day, log entries and notes. Defaults to today. "
@@ -213,11 +216,15 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "update_journal")]
-    [Description("Updates a day's journal: replaces its summary text and/or adds a note. Pass at least one of summary or note. The summary REPLACES the existing one (read it with get_journal first if you want to extend it); notes are appended. Defaults to today.")]
+    [Description(
+        "Updates a day's journal: changes its summary text and/or adds a note. Pass at least one of summary or note. "
+        + "The summary REPLACES the whole existing summary unless append=true, which adds it after a blank line (no need to read the entry first). "
+        + "append=true is not idempotent: a retried call adds the text twice, so check with get_journal before retrying. Notes are always appended. Defaults to today.")]
     public Task<string> UpdateJournal(
-        [Description("New summary text (max 10000 characters). Replaces the current summary.")] string? summary = null,
+        [Description("Summary text (max 10000 characters in total). Replaces the whole current summary unless append=true, then it is added after the current summary.")] string? summary = null,
         [Description("A note to append (max 2000 characters).")] string? note = null,
         [Description("yyyy-MM-dd, today, tomorrow or yesterday. Default today.")] string? date = null,
+        [Description("true adds to the existing summary after a blank line, no need to read it first; default false replaces.")] bool append = false,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -226,12 +233,34 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid("Pass 'summary' and/or 'note'.");
             }
 
+            if (append && string.IsNullOrWhiteSpace(summary))
+            {
+                throw ToolGuard.Invalid("append=true needs a non-blank 'summary' to add. To add only a note, omit append and pass 'note'.");
+            }
+
             var (today, offset) = InputParsing.LocalNow(time);
             var day = InputParsing.ParseDateOrToday(date, today, "date");
             var entry = await JournalResolver.EnsureAsync(api, day, offset, ct);
             var done = new List<string>();
+            string? appended = null;
 
-            if (summary is not null)
+            if (append)
+            {
+                // Read-then-PUT is not atomic: an edit made between the read and the PUT is overwritten.
+                var addition = summary!.Trim();
+                var existing = entry.Summary;
+                var combined = string.IsNullOrWhiteSpace(existing) ? addition : existing.TrimEnd() + "\n\n" + addition;
+                if (combined.Length > MaxSummaryLength)
+                {
+                    throw ToolGuard.Invalid(
+                        $"The combined summary would be {combined.Length} characters (existing {existing?.Length ?? 0} + new {addition.Length}); the limit is {MaxSummaryLength}. Nothing was saved. "
+                        + "Shorten the new text, or pass append=false to rewrite the whole summary.");
+                }
+
+                await api.UpdateJournalEntryAsync(entry.Id, entry.Title, combined, ct);
+                appended = $"Appended to the journal summary for {day:yyyy-MM-dd} (now {combined.Length} of {MaxSummaryLength} characters).";
+            }
+            else if (summary is not null)
             {
                 await api.UpdateJournalEntryAsync(entry.Id, entry.Title, summary, ct);
                 done.Add("summary replaced");
@@ -241,6 +270,11 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
             {
                 await api.AddJournalNoteAsync(entry.Id, note.Trim(), ct);
                 done.Add("note added");
+            }
+
+            if (appended is not null)
+            {
+                return done.Count == 0 ? appended : $"{appended} Note added.";
             }
 
             return $"Journal {day:yyyy-MM-dd}: {string.Join(", ", done)}.";

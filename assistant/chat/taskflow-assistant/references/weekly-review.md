@@ -11,4 +11,4 @@ Goal: summarize a period from real data and draft a status update in the user's 
    - **At risk**: overdue and stalled tasks, each with a one-line suggestion (re-date, split, drop, escalate).
    - **Notes**: anything notable from the journal summaries and logs.
 4. Keep to what the data shows. Do not invent accomplishments or reasons for delays; phrase guesses as questions.
-5. Offer to save the draft as a journal note (`update_journal` with `note`). Only do it if the user agrees.
+5. Offer to save the draft as a journal note (`update_journal` with `note`). Only do it if the user agrees. To add to the day's summary instead, pass `summary` with `append=true`: it is added after the existing summary, which is otherwise replaced. Appending twice duplicates the text, so do not retry blindly.

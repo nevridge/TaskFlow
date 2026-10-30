@@ -135,6 +135,10 @@ internal static class Formatting
         return sb.ToString();
     }
 
+    /// <summary>Trims and collapses runs of whitespace to one space. Case is kept; compare with an ignore-case comparer.</summary>
+    public static string NormalizeTitle(string? title) =>
+        string.Join(' ', (title ?? string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
     /// <summary>Strips control characters and collapses newlines so a reason stays on one line.</summary>
     public static string CleanReason(string? reason)
     {

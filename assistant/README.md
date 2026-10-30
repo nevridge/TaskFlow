@@ -16,7 +16,7 @@ Needs the .NET 10 runtime on `PATH`, Claude Desktop, and TaskFlow running with t
 1. Publish the server: `./build.ps1`
 2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open.
 3. Register the server: `./scripts/install-claude-desktop.ps1` (add `-ApiUrl http://host:port` if TaskFlow is not on `localhost:8081`; `-DryRun` previews, `-Uninstall` removes). It merges a `taskflow` entry into `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other settings and saves a timestamped backup next to it.
-4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 14 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
+4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 15 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
 5. Package and upload the skill: `./scripts/package-chat-skill.ps1`, then in Claude Desktop go to **Customize > Skills > + > Upload a skill** and choose `dist/taskflow-assistant-skill.zip`.
 
 Chat applies the skill automatically when your request fits ("plan my day", "turn these notes into tasks", "draft my weekly update"); there are no slash commands in Chat. Skills need code execution enabled for your account; if your organization disables it, paste `chat/taskflow-assistant/SKILL.md` into a Project's instructions instead. The skill lives in `chat/taskflow-assistant/` and mirrors the plugin's four skills, restricted to the frontmatter keys Chat accepts.
@@ -63,18 +63,21 @@ Check it: `claude mcp list` should show `plugin:taskflow-assistant:taskflow ... 
 
 ## Tools
 
-Fourteen tools, deliberately consolidated around workflows rather than one per endpoint. Tasks and projects are referred to by name; ids are returned for follow-up calls.
+Fifteen tools, deliberately consolidated around workflows rather than one per endpoint. Tasks and projects are referred to by name; ids are returned for follow-up calls.
 
 | Area | Tools |
 |---|---|
 | Projects | `list_projects`, `save_project` (create / rename / archive), `project_status` |
-| Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, blocked, completed, all; `completedFrom`, `completedTo`, `plannedDate`; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported), `update_task` (merge, complete/reopen, project move, block/unblock with `blockedReason`), `delete_task`, `add_task_note` |
-| Journal | `get_journal` (creates the day's entry if missing; lists open subtasks under planned tasks; others via `list_tasks`; log lines read `[task #id | Project | Priority]`), `set_journal_todos`, `add_log_entry`, `update_journal` |
+| Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, blocked, completed, all; `completedFrom`, `completedTo`, `plannedDate`; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported, possible-duplicate warnings), `update_task` (merge, complete/reopen, project move, block/unblock with `blockedReason`), `update_tasks` (up to 25 updates in one call, same fields as `update_task`, failures reported per item), `delete_task`, `add_task_note` |
+| Journal | `get_journal` (creates the day's entry if missing; lists open subtasks under planned tasks; others via `list_tasks`; log lines read `[task #id | Project | Priority]`), `set_journal_todos`, `add_log_entry`, `update_journal` (`summary` replaces; `append=true` adds after the existing summary; `note` adds a note) |
 | Review | `weekly_review` (read-only) |
 
 Behaviors worth knowing:
 
 - The TaskFlow task `PUT` is full-replace; `update_task` reads the task, merges your changes and sends the full body.
+- `create_tasks` flags a new task whose title equals an existing open or done task (ignoring case and extra spaces), or an earlier task in the same call, with `! Possible duplicate of #id "Title" (open|done)`. The task is still created. The check is best-effort: if existing tasks cannot be read, tasks are created anyway and the report ends with "Duplicate check skipped". Matching is exact after normalizing, not fuzzy.
+- `update_journal` with `append=true` reads the day's summary and saves it plus a blank line plus the new text; it fails without saving when the total would exceed 10000 characters. It reads then writes, so an edit made in between (for example in the web app) is overwritten, and a retried append adds the text twice.
+- `update_tasks` runs each item like `update_task`. Items are independent; if the API cannot be reached, the remaining items are reported as not attempted.
 - Statuses are Draft, Todo, Blocked and Completed. Only a Todo task can be blocked, and tasks cannot be created as Blocked. Blocked tasks still count as open and are shown as `blocked: <reason> (Nd)`; `project_status` and `weekly_review` list them in their own group.
 - `update_task` re-sends the task's status on every PUT, so a Blocked task stays Blocked. An omitted `blockedReason` keeps the stored reason; an empty string clears it (the task stays Blocked); `status=todo` unblocks.
 - Blocked support needs the TaskFlow API change [#311](https://github.com/nevridge/TaskFlow/issues/311) deployed. Plugin 0.2.0 ships prompts that rely on it, so do not publish or tag this release until #311 is live on your API. The server is published with `build.ps1` into `plugin/bin`, so the plugin version and the server ship together.

@@ -139,9 +139,7 @@ describe('journal sections against real HTTP errors (#232)', () => {
       await waitFor(() => expect(input).toHaveValue('Draft note'))
     })
 
-    // KNOWN BUG (AC4): DailyLogSection.addEntry clears the draft before the request settles and has no onError
-    // restore, so a 5xx loses the typed text. it.fails keeps the suite green; remove .fails once production is fixed.
-    it.fails('log add: the typed text is kept after the failed save', async () => {
+    it('log add: the typed text is kept after the failed save', async () => {
       renderWith(<DailyLogSection entryId={10} logEntries={[]} />)
       const input = screen.getByPlaceholderText(/What did you just work on/)
       fireEvent.change(input, { target: { value: 'Did a thing' } })

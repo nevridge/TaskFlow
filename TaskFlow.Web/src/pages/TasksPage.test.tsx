@@ -629,6 +629,41 @@ describe('TasksPage', () => {
       expect(payload.data.status).toBe('inProgress')
       expect(payload.data).not.toHaveProperty('isComplete')
     })
+
+    function useRows(rows: unknown[]) {
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data: rows }, isLoading: false, error: null } as never)
+    }
+
+    it('cycling an InProgress task sends status completed', async () => {
+      useRows([{ ...baseTask, id: 71, title: 'Underway', status: 'InProgress', startedAt: '2026-05-01T08:00:00Z' }])
+      renderPage()
+      await userEvent.click(within(rowFor('Underway')).getByRole('button', { name: /Status: In Progress/i }))
+      expect(taskMutations.mutate).toHaveBeenCalledTimes(1)
+      expect(taskMutations.mutate.mock.calls[0][0].data.status).toBe('completed')
+    })
+
+    it('cycling a Draft task sends todo and a Completed task sends draft', async () => {
+      useRows([
+        { ...baseTask, id: 72, title: 'A draft', status: 'Draft' },
+        { ...baseTask, id: 73, title: 'A finished', status: 'Completed' },
+      ])
+      renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
+      await userEvent.click(within(rowFor('A draft')).getByRole('button', { name: /Status: Draft/i }))
+      await userEvent.click(within(rowFor('A finished')).getByRole('button', { name: /Status: Completed/i }))
+      expect(taskMutations.mutate.mock.calls[0][0].data.status).toBe('todo')
+      expect(taskMutations.mutate.mock.calls[1][0].data.status).toBe('draft')
+    })
+
+    it('shows the Set-to-Todo-first message when the start is rejected with TASK_START_NOT_ALLOWED', async () => {
+      taskMutations.mutate.mockImplementation((_data, { onError }: { onError: (e: unknown) => void }) =>
+        onError({ code: 'TASK_START_NOT_ALLOWED' }))
+      renderPage()
+      await userEvent.click(within(rowFor('Parent task')).getByRole('button', { name: /Status: To-do/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Only Todo tasks can be moved to In Progress. Set it to Todo first.',
+      )
+    })
   })
 
   describe('create and edit forms', () => {

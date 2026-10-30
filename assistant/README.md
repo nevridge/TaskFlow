@@ -96,7 +96,7 @@ Tests stub the HTTP layer; a reflection test also guards the tool surface (exact
 
 ### Building features with feature-factory
 
-Open Claude Code in this repo (on `main` it creates a `feature/` branch for you; otherwise use a `feature/` or `bugfix/` branch) and ask it to build a feature, or run `/feature-factory <issue-number>`. It walks the issue through research, story, brief, documentation advisors, build, verification and a PR, with three approval stops (story, brief, final review). A story groomed with `/groom-issue` skips the story stop. An open dependency on another repo's issue or PR (for example a TaskFlow API change) stops the run until you say "proceed anyway".
+Open Claude Code in this repo (on `main` it creates a `feature/` branch for you; otherwise use a `feature/` or `bugfix/` branch) and ask it to build a feature, or run `/feature-factory <issue-number>`. It walks the issue through research, story, brief (with documentation advisor input), build, verification and a PR, with three approval stops (story, brief, final review). A story groomed with `/groom-issue` skips the story stop. An issue that explicitly says it is blocked by, or depends on, an unfinished issue or PR in another repo (for example a TaskFlow API change) stops the run until you say "proceed anyway".
 
 It needs the user-level agents `story-writer`, `codebase-researcher` and `spec-writer` in `~/.claude/agents/`. The skill is `.claude/skills/feature-factory/SKILL.md` and its agents are in `.claude/agents/`.
 

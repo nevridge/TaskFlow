@@ -1,6 +1,6 @@
 ---
 name: feature-factory
-description: "Builds a taskflow-assistant feature (MCP server, plugin or chat content) from a GitHub issue to a pull request through specialist subagents, with three human approval stops (story, brief, final review). Use when asked to build, ship or implement a feature, 'feature factory', or 'run the full chain', optionally with an issue number. Chain: preflight, dependency check, codebase-researcher, story-writer (skipped for groomed issues), spec-writer, documentation advisors, feature-builder, test-verifier, implementation-validator, PR."
+description: "Builds a taskflow-assistant feature (MCP server, plugin or chat content) from a GitHub issue to a pull request through specialist subagents, with three human approval stops (story, brief, final review). Use when asked to build, ship or implement a feature, 'feature factory', or 'run the full chain', optionally with an issue number. Chain: preflight, blocker check, codebase-researcher, story-writer (skipped for groomed issues), spec-writer, documentation advisors, feature-builder, test-verifier, implementation-validator, PR."
 argument-hint: "[issue-number]"
 ---
 
@@ -33,28 +33,16 @@ Never proceed on `main`. All work reaches `main` through a pull request.
 
 ---
 
-### Step 0.5 — Upstream dependency check
+### Step 0.5 — Blocker check
 
-Stories here often depend on a change in another repo (for example the TaskFlow API). If there is no issue number, skip this step. Otherwise scan **only the issue body** (not comments) for references of the form `owner/repo#123` and for full GitHub issue or PR URLs, which the first `sed` rewrites to that form:
-
-```bash
-GH_TOKEN="$(gh auth token --user nevridge)" gh issue view <N> --json body --jq .body \
-  | awk '/^[[:space:]]*```/{f=!f; next} !f' | sed -E 's/`[^`]*`//g' \
-  | sed -E 's,https?://github\.com/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+)/(issues|pull)/([0-9]+),\1/\2#\4,g' \
-  | grep -oE '(^|[^A-Za-z0-9_./-])[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+#[0-9]+' \
-  | sed -E 's/^[^A-Za-z0-9_-]//' | sort -u
-```
-
-This ignores fenced code (indented fences too) and inline code; blockquoted text counts. The owner part cannot contain a dot, and the character before it must not be a letter, digit, `_`, `.`, `/` or `-`. Markdown punctuation such as `**`, `[`, `<`, quotes and commas may precede a reference, but path and domain fragments such as `learn.microsoft.com/foo#1` do not match. The scan can still flag something that merely looks like `owner/repo#N` (for example `src/x.cs#3`); it then shows as an unreachable blocker and the user can clear it with "proceed anyway". A bare `#123` means this repo and is not checked. Drop a reference that points to this issue itself (`nevridge/taskflow-assistant#<N>`, compared case-insensitively). For each remaining reference look up its state with the owner token:
+If there is no issue number, skip this step. Otherwise read the issue body already fetched (not comments) and stop only if it **explicitly states** an unfinished blocker: a statement such as "Blocked by", "Depends on", "Waiting on" or "Requires" that names an `owner/repo#123` reference or a full GitHub issue or PR URL. A reference that is merely mentioned (Out of Scope, background, related links) is not a blocker. For each explicit blocker, look up its state with the owner token:
 
 ```bash
 GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/issues/<num> --jq '{state, state_reason, pr: (.pull_request != null)}'
 GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/pulls/<num> --jq '{state, merged}'   # only when pr is true
 ```
 
-Report every reference with its state. A reference is **clear** only if it is a closed issue (not `not_planned`) or a merged PR. Anything else is **blocking**: open, closed without merging, unreachable (404 or permission error), or unknown.
-
-If any reference is blocking, stop at this step and name each blocker and its state. Continue only if the user replies with an explicit "proceed anyway". That approval covers only the items listed at that moment; a blocker found later stops the run again. No other reply continues it.
+A blocker is **unfinished** if it is an open issue or PR, an issue closed as `not_planned`, or a PR closed without merging. If any blocker is unfinished, stop and name each one with its state; continue only if the user replies with an explicit "proceed anyway", which covers only the items listed at that moment. If a state cannot be looked up, say so and continue.
 
 ---
 
@@ -94,15 +82,9 @@ Present the story.
 
 Invoke `spec-writer` with the approved story (full text including every AC), the researcher findings, and any answers given during Step 3. Capture the brief.
 
-### Step 5 — APPROVAL STOP 2: Brief review
+### Step 4.5 — Documentation Advisors (conditional)
 
-Present the brief. **5a:** handle unanswered items in its **Risks and Open Questions** section as in 3a, re-invoking `spec-writer`. **5b:** same three options as 3b; on rejection the approved story is preserved. The brief must name which of `src/**`, `tests/**`, `plugin/**`, `chat/**` and `README.md` change, and whether any MCP tool name, description or schema changes.
-
----
-
-### Step 5.5 — Documentation Advisors (conditional)
-
-The advisors ground the work in current official documentation. Decide which apply from the brief's file list and content. Skip any advisor whose signal is absent, silently. Skip the whole step if none apply.
+The advisors ground the work in current official documentation. Decide which apply from the draft brief's file list and content. Skip any advisor whose signal is absent, silently. Skip the whole step if none apply.
 
 | Advisor | Signal |
 |---|---|
@@ -110,9 +92,13 @@ The advisors ground the work in current official documentation. Decide which app
 | `claude-plugin-advisor` | the brief changes `plugin/**`, `chat/**`, `.claude/**`, `CLAUDE.md`, or any skill, agent, SKILL.md frontmatter, `plugin.json`, `.mcp.json` or `marketplace.json` |
 | `dotnet-advisor` | the brief changes any `*.cs` or `*.csproj` file |
 
-Invoke the applicable advisors (in parallel when several apply) with the approved brief, the story and the researcher findings. Each returns `Recommendations`, `Conflicts with brief` and `Docs consulted`, and marks guidance `UNVERIFIED` if it could not fetch documentation. Store their combined output as `advisories`.
+Invoke the applicable advisors (in parallel when several apply) with the draft brief, the story and the researcher findings. Each returns `Recommendations`, `Conflicts with brief` and `Docs consulted`, and marks guidance `UNVERIFIED` if it could not fetch documentation. Store their combined output as `advisories`.
 
-Advisors are advisory only. They have no spec-blocker mechanism: never loop back to spec-writer because of them, and never stop the chain because of them. Because they run after Approval Stop 2, the approved brief wins any conflict. Show the user a one-paragraph summary of the advisories, with any conflicts, and continue. If documentation could not be fetched, say so in that summary.
+Then make one revision pass: re-invoke `spec-writer` with the draft brief and the recommendations that do not conflict with it, so they become part of the brief. This pass is not counted in `respec_count`, and it happens only here, before Approval Stop 2. Recommendations that conflict with the brief are left out and passed to Step 5 as they are.
+
+### Step 5 — APPROVAL STOP 2: Brief review
+
+Present the brief together with an **Advisor input** block: what was folded in, each conflict with the brief (the brief wins unless the user asks for the advisor's version under Changes requested), anything marked `UNVERIFIED`, and a note if documentation could not be fetched. **5a:** handle unanswered items in its **Risks and Open Questions** section as in 3a, re-invoking `spec-writer`. **5b:** same three options as 3b; on rejection the approved story is preserved. The brief must name which of `src/**`, `tests/**`, `plugin/**`, `chat/**` and `README.md` change, and whether any MCP tool name, description or schema changes.
 
 ---
 
@@ -213,7 +199,7 @@ Used by Step 12 after an explicit "Yes". Run through Bash and stop at the first 
 
 Used by Step 6 with a cap of 1. A spec blocker is a contradiction or impossibility in the brief that the builder cannot resolve conservatively.
 
-- Blockers present and `respec_count < cap`: tell the user, list the blockers verbatim, re-invoke `spec-writer` with the original Step 4 inputs plus the blockers, and pass the revised brief through the full Step 5 approval stop. Once re-approved, re-run the Documentation Advisors if the file list changed, increment `respec_count`, and re-invoke `feature-builder`.
+- Blockers present and `respec_count < cap`: tell the user, list the blockers verbatim, re-invoke `spec-writer` with the original Step 4 inputs plus the blockers, re-run the Documentation Advisors (Step 4.5) if the file list changed, and pass the revised brief through the full Step 5 approval stop. Once re-approved, increment `respec_count` and re-invoke `feature-builder`.
 - Blockers remain and `respec_count >= cap`: stop and list them. "Manual review required."
 - No blockers: continue.
 
@@ -221,9 +207,9 @@ Used by Step 6 with a cap of 1. A spec blocker is a contradiction or impossibili
 
 - **Never implement anything yourself.** If you are about to edit a file, invoke `feature-builder` instead.
 - **Pass the researcher findings to every agent.**
-- **Exactly three human stops:** story (skipped for groomed issues), brief, final review. Re-approval after a spec blocker repeats the brief stop. The dependency check's "proceed anyway" is a precondition, not a fourth stop.
-- **Spec blockers go to spec-writer, not to builder workarounds.** Advisor output never does.
-- **Advisors never edit files and never block.** Guidance that could not be verified against current documentation is marked `UNVERIFIED`.
+- **Exactly three human stops:** story (skipped for groomed issues), brief, final review. Re-approval after a spec blocker repeats the brief stop. The blocker check's "proceed anyway" is a precondition, not a fourth stop.
+- **Spec blockers go to spec-writer, not to builder workarounds.** Advisor output reaches spec-writer once, in Step 4.5 before the brief stop, and never afterwards.
+- **Advisors never edit files and never block.** The user sees their input at the brief stop, and a conflict is resolved in favor of the brief unless the user asks otherwise. Guidance that could not be verified against current documentation is marked `UNVERIFIED`.
 - **Plugin and chat content stay in sync with tool behavior.** The builder updates all of it in the same change; the validator checks.
 - **No PR while any gate fails.** `build.ps1` is not a gate.
 - **Cap all builder correction cycles at two in total, counted only in the Correction Loop.** The budget is checked before the builder runs.

@@ -28,7 +28,7 @@ Complete every check below before invoking any agent. If a check fails, stop; no
 4. Preflight:
    - **Clean working tree.** Run `git status --short -- . ':(exclude).playwright-mcp'`. If there is any output, stop and ask the user how to proceed. The commit steps below stage everything, so unrelated uncommitted work would be swept into feature commits.
    - **Profile agents present.** Check that `story-writer.md`, `codebase-researcher.md` and `spec-writer.md` exist under `$HOME/.claude/agents/` (fall back to `$USERPROFILE/.claude/agents/`) using `test -f`. If any is missing, stop: "feature-factory needs the user-level agents story-writer, codebase-researcher and spec-writer in ~/.claude/agents/ (missing: X). This repo has no copies. Install them and re-run." Treat an "unknown subagent type" error at first invocation the same way.
-   - **GitHub write access.** Run `GH_TOKEN="$(gh auth token --user nevridge)" gh repo view --json viewerPermission --jq .viewerPermission`. It must return `ADMIN`, `MAINTAIN` or `WRITE`. If it fails, report the exact error and stop. Do not retry, do not try another account, and never run `gh auth switch`.
+   - **GitHub write access.** Run `gh repo view --json viewerPermission --jq .viewerPermission` (this checks the currently active gh account). It must return `ADMIN`, `MAINTAIN` or `WRITE`. If it fails, report the exact error and stop. Do not retry, do not try another account, and never run `gh auth switch`.
 5. If you were on `main` and the preflight passed, run `git checkout -b <branch-name>` and confirm: "Created and switched to branch `<branch-name>`. All implementation will happen here."
 
 Never proceed on `main`. Pushes to `main` trigger a production deployment; all work reaches `main` through a pull request only.
@@ -202,15 +202,15 @@ The gate fires if ANY of these is true:
    ```
 3. **If an issue number is known:** Write the checklist with the Write tool to a temp file outside the repo (for example in the system temp directory), with `<!-- ux-checklist -->` as its first line. Look for an existing marker comment:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh api "repos/{owner}/{repo}/issues/<N>/comments" --jq '.[] | select(.body | startswith("<!-- ux-checklist -->")) | .id'
+   gh api "repos/{owner}/{repo}/issues/<N>/comments" --jq '.[] | select(.body | startswith("<!-- ux-checklist -->")) | .id'
    ```
    If a comment id is returned, update it:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh api -X PATCH "repos/{owner}/{repo}/issues/comments/<id>" -F body=@<file>
+   gh api -X PATCH "repos/{owner}/{repo}/issues/comments/<id>" -F body=@<file>
    ```
    Otherwise create it:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh issue comment <N> --body-file <file>
+   gh issue comment <N> --body-file <file>
    ```
    Delete the temp file afterwards. If any `gh` command fails, report the exact error and stop; do not retry and do not use another account.
    **If no issue number:** output the checklist to the conversation only.
@@ -278,16 +278,16 @@ Used by Step 11 after an explicit "Yes". Run through Bash. Stop at the first fai
 1. Confirm `git branch --show-current` starts with `feature/` or `bugfix/`. Never create a PR from `main`.
 2. Check for an existing PR for this branch:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh pr list --head "<branch>" --state open --json number,url
+   gh pr list --head "<branch>" --state open --json number,url
    ```
    If the result is non-empty, stop and report the existing PR URL. Do not push and do not create a duplicate.
 3. Push the branch: `git push -u origin "<branch>"`. Use the literal branch name. Never push `main`; never force-push.
 4. Write the PR body with the Write tool to a temp file **outside the repo** (so `git add -A` can never capture it). Include: a summary of what was built, the files changed, the test results from the test-verifier report, residual Important/Minor findings, and `Closes #<N>` when an issue number is known. Do not add a "Generated with Claude Code" footer.
 5. Create the PR against `main`:
    ```bash
-   GH_TOKEN="$(gh auth token --user nevridge)" gh pr create --base main --head "<branch>" --title "<conventional title>" --body-file "<temp-file>"
+   gh pr create --base main --head "<branch>" --title "<conventional title>" --body-file "<temp-file>"
    ```
-   Never use inline `--body`. The `GH_TOKEN` prefix applies to that single command only; never run `gh auth switch`.
+   Never use inline `--body`. Never run `gh auth switch`.
 6. Delete the temp file and print the PR URL.
 7. If any `git push` or `gh` command fails: report the exact error and stop. Do not retry and do not try another account.
 
@@ -323,7 +323,7 @@ Used by Steps 6 and 7. Each caller initializes a `respec_count` variable and pro
 - **The frontend-builder never starts the API or runs the client generator.** The backend-builder owns regenerating `TaskFlow.Web/src/api/client/**`; it is committed with the backend commit. Nobody hand-edits it.
 - **Always use `git add -A -- . ':(exclude).playwright-mcp'`, never individual paths.**
 - **All `gh` body arguments must use `--body-file`, never `--body`.** Write the body to a temp file outside the repo with the Write tool, pass `--body-file <path>`, then delete the temp file. Inline bodies and heredocs mangle backticks, angle brackets, pipe characters, and `$`.
-- **GitHub writes use the per-command owner token** (`GH_TOKEN="$(gh auth token --user nevridge)"`). Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
+- **GitHub writes use plain `gh` commands (the active account).** Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
 - **Never commit or push to `main`.** All work reaches `main` through a pull request.
 - **No `Co-Authored-By` trailer on any commit.**
 - **Checklist idempotency.** Step 10.5 never creates a duplicate `<!-- ux-checklist -->` comment: if one already exists on the issue, update it.

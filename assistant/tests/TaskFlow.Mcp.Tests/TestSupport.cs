@@ -157,14 +157,14 @@ internal static class Fixtures
         blockedCount,
     };
 
-    public static object Journal(int id, string date, string? summary = null, object[]? logs = null, int[]? todoTaskItemIds = null) => new
+    public static object Journal(int id, string date, string? summary = null, object[]? logs = null) => new
     {
         id,
         title = $"Journal {date}",
         summary,
         date,
         createdAt = "2026-10-09T00:00:00Z",
-        todoTaskItemIds = todoTaskItemIds ?? [],
+        todoTaskItemIds = Array.Empty<int>(),
         logEntries = logs ?? [],
     };
 

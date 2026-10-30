@@ -435,7 +435,7 @@ public class JournalToolsTests
     }
 
     [Fact]
-    public async Task GetJournal_WithPlannedTasks_ReadsTheClockNoMoreThanWithNone()
+    public async Task GetJournal_WithPlannedTasks_ReadsUtcNowOnceMoreThanWithNone()
     {
         var parent = Fixtures.Task(5, "Ship", status: "Blocked", blockedAt: "2026-10-07T10:00:00Z");
         var planned = JournalWith([parent, Fixtures.Task(6, "B"), Fixtures.Task(7, "C")], [parent, Fixtures.Task(12, "S", parentId: 5)]);
@@ -450,7 +450,7 @@ public class JournalToolsTests
     }
 
     [Fact]
-    public void Task_DetailedByDefault_ShowsSubtaskCount_AndShowChildCountFalseSuppressesIt()
+    public void Task_Detailed_ShowsSubtaskCountByDefault_AndShowChildCountFalseSuppressesIt()
     {
         var dto = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
             System.Text.Json.JsonSerializer.Serialize(Fixtures.Task(5, "Ship", childTaskCount: 2), TaskFlowApiClient.Json), TaskFlowApiClient.Json)!;

@@ -9,7 +9,7 @@ allowed-tools: mcp__plugin_taskflow-assistant_taskflow__get_journal mcp__plugin_
 Plan the user's day in TaskFlow. Optional argument: a date (default today) or a project name: $ARGUMENTS
 
 1. Gather, in parallel where you can:
-   - `get_journal` for the date (what is already planned and logged), and `get_journal` for the previous day to see what was left unfinished. It lists each planned task's open subtasks, so remaining subtask work is visible there and need not be fetched per task. A subtask planned the same day also appears as its own row marked `planned today`; count it once.
+   - `get_journal` for the date (what is already planned and logged), and `get_journal` for the previous day to see what was left unfinished. It lists each planned task's open subtasks, so remaining subtask work is visible there and need not be fetched per task. A subtask planned the same day appears both nested under its parent (marked `planned today`, or `planned this day` for another date) and as its own row; count it once.
    - `list_tasks` with `view=overdue`, then `view=due_soon` (dueWithinDays 3), then `view=stale`, then `view=blocked`.
    - If a project was named, add `project` to those calls.
 2. Propose a focus list of 3-7 tasks, most important first. For each give: `#id title`, and one short reason (overdue Nd, due soon, high priority, unblocks something). Mention anything already planned (count a subtask that is planned today once, whether it shows as its own row or under its parent). Do not add tasks the user did not need to do today just to fill the list. Blocked tasks (flagged `blocked: <reason> (Nd)`) are not suggested for today unless the user asks.

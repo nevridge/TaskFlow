@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { TaskItemEventResponseDto } from '@/api/tasks'
 
 vi.mock('@/hooks/useTasks', () => ({
@@ -29,6 +30,28 @@ describe('TaskHistoryPanel', () => {
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: undefined, isLoading: true } as never)
     render(<TaskHistoryPanel taskId={1} />)
     expect(screen.getByText(/loading history/i)).toBeInTheDocument()
+  })
+
+  it('shows an alert and Retry (not the empty state) when the history fails to load', async () => {
+    const refetch = vi.fn()
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: undefined, isLoading: false, isError: true, isFetching: false, refetch } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load history.')
+    expect(screen.queryByText('No history yet.')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Retry mounted but disabled while refetching, and shows the list once it succeeds', () => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: undefined, isLoading: false, isError: true, isFetching: true, refetch: vi.fn() } as never)
+    const { rerender } = render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeDisabled()
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ changeSummary: 'Recovered' })] }, isLoading: false, isError: false, isFetching: false, refetch: vi.fn(),
+    } as never)
+    rerender(<TaskHistoryPanel taskId={1} />)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByText('Recovered')).toBeInTheDocument()
   })
 
   it('shows default empty text when history is empty', () => {

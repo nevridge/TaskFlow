@@ -22,6 +22,7 @@ import {
 } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
+import { getErrorCode } from '@/lib/task-errors'
 import { todayISO, formatMonthDay } from '@/lib/journal-utils'
 
 const CheckSvg = () => (
@@ -575,10 +576,4 @@ function getTaskActionErrorMessage(error: unknown): string {
   const blockMessage = getBlockErrorMessage(code)
   if (blockMessage) return blockMessage
   return 'Unable to save task changes. Please try again.'
-}
-
-function getErrorCode(error: unknown): string | null {
-  if (!error || typeof error !== 'object') return null
-  const maybeCode = (error as { code?: unknown }).code
-  return typeof maybeCode === 'string' ? maybeCode : null
 }

@@ -131,7 +131,7 @@ Server state (loading, error, data, caching, refetch) is fundamentally different
 - Queries automatically cache and deduplicate requests
 - Mutations can invalidate or remove related queries on success
 - `enabled` flag prevents queries from firing with invalid inputs (e.g. NaN task IDs)
-- `throwOnError: true` (set at client level) ensures errors propagate to React Query's `error` field rather than silently resolving as success
+- `throwOnError` is a runtime flag, set once at app startup by `configureApiClient()` in `src/api/configure-client.ts` (called from `main.tsx`, and from the vitest setup), so non-2xx responses reject and reach React Query's `error` field instead of silently resolving as success. The `true` generic on `client.get<..., true>` is type-only. A caller that needs `{ error, response }` (the undo-delete commits) must pass `throwOnError: false`.
 
 ### hey-api/openapi-ts (Generated API Client)
 
@@ -214,7 +214,7 @@ useCreateTaskMutation()
 useUpdateTaskMutation()
 
 // Delete — UI deletes go through useDeleteTaskUndoable (Undo toast, 10s window).
-// useDeleteTaskMutation remains for direct use with throwOnError; invalidates list, removes detail from cache
+// useDeleteTaskMutation remains for direct use (rejects on HTTP errors by default); invalidates list, removes detail from cache
 useDeleteTaskMutation()
 ```
 
@@ -227,7 +227,7 @@ useNotesQuery(taskId: number)
 // Mutations — all invalidate noteKeys.all(taskId)
 useCreateNoteMutation(taskId: number)
 useUpdateNoteMutation(taskId: number)
-useDeleteNoteMutation(taskId: number) // UI deletes use useDeleteNoteUndoable (Undo toast, 6s window); this remains for direct use with throwOnError
+useDeleteNoteMutation(taskId: number) // UI deletes use useDeleteNoteUndoable (Undo toast, 6s window); this remains for direct use (rejects on HTTP errors by default)
 ```
 
 ## Pages and Components

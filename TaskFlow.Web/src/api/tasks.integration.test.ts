@@ -63,9 +63,9 @@ describe('task and note delete (real client, mocked fetch)', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
   })
 
-  it('the toast commit path (no throwOnError) exposes the status so a 404 can count as success', async () => {
+  it('the toast commit path (throwOnError: false) exposes the status so a 404 can count as success', async () => {
     fetchMock.mockImplementation(() => Promise.resolve(new Response(null, { status: 404 })))
-    const result = await deleteApiV1TaskItemsById({ path: { id: 5 } })
+    const result = await deleteApiV1TaskItemsById({ path: { id: 5 }, throwOnError: false })
     expect(result.response?.status).toBe(404)
     expect(result.response?.ok).toBe(false)
   })
@@ -74,7 +74,7 @@ describe('task and note delete (real client, mocked fetch)', () => {
     fetchMock.mockImplementation(() =>
       Promise.resolve(new Response(JSON.stringify({ code: 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN' }), { status: 422, headers: { 'Content-Type': 'application/json' } })),
     )
-    const result = await deleteApiV1TaskItemsById({ path: { id: 5 } })
+    const result = await deleteApiV1TaskItemsById({ path: { id: 5 }, throwOnError: false })
     expect(result.response?.status).toBe(422)
     expect(result.error).toEqual({ code: 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN' })
   })

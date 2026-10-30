@@ -23,8 +23,9 @@ interface NonThrowingResult {
 
 /**
  * Reads a non-throwing delete result. 2xx and 404 (already gone) are success; the 422 subtask rule becomes a
- * TaskDeleteBlockedError; anything else rejects. The toast commit cannot use throwOnError: an empty 404 body
- * would reject with `{}` and could not be told apart from a real failure.
+ * TaskDeleteBlockedError; anything else rejects. The client throws on errors globally, so the commits pass
+ * `throwOnError: false` explicitly: this function inspects `{ error, response }`, and a throwing call would
+ * reject an empty 404 body with `{}`, indistinguishable from a real failure.
  */
 function assertDeleted({ error, response }: NonThrowingResult) {
   if (!response) {
@@ -58,7 +59,7 @@ export function useDeleteTaskUndoable() {
         errorMessage: getTaskDeleteErrorMessage,
         durationMs: TASK_DELETE_WINDOW_MS,
         commit: async () => {
-          assertDeleted(await deleteApiV1TaskItemsById({ path: { id } }))
+          assertDeleted(await deleteApiV1TaskItemsById({ path: { id }, throwOnError: false }))
           deleted = true
         },
         // Runs after a failed commit too; the task still exists then, so keep its detail cache.
@@ -81,7 +82,7 @@ export function useDeleteNoteUndoable(taskId: number) {
         message: 'Note deleted',
         errorMessage: "Couldn't delete the note. Restored.",
         commit: async () =>
-          assertDeleted(await deleteApiV1TaskItemsByTaskIdNotesById({ path: { taskId, id: noteId } })),
+          assertDeleted(await deleteApiV1TaskItemsByTaskIdNotesById({ path: { taskId, id: noteId }, throwOnError: false })),
         invalidate: () => qc.invalidateQueries({ queryKey: noteKeys.all(taskId) }),
         restoreFocus,
       })

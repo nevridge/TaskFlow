@@ -560,7 +560,7 @@ export function TasksPage() {
   const totalFiltered = priorityGroups.reduce((sum, g) => sum + g.tasks.length, 0)
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks...</p></div></div>
-  if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Failed to load tasks.</p></div></div>
+  if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error" role="alert">Failed to load tasks.</p></div></div>
 
   return (
     <div className="tasks-page t-list-page">

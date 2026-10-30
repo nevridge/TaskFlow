@@ -96,6 +96,8 @@ Two execution tools are available on this Windows machine:
 
 **API client:** `src/api/client/sdk.gen.ts` is auto-generated — do not edit. Hand-written API modules (e.g. `src/api/journal.ts`) use the same `client` singleton from `client.gen.ts` with the pattern `client.get<{ 200: T }, unknown, true>({ url, path?, body?, headers? })`.
 
+**Error handling:** `throwOnError` is a runtime flag, set once at startup by `configureApiClient()` in `src/api/configure-client.ts` (called from `main.tsx` and the vitest setup), so every 4xx/5xx rejects. The `true` generic in `client.get<..., true>` is type-only and does not set it. Callers that want `{ error, response }` (e.g. the undo-delete commits in `useDeleteTaskUndoable`) pass `throwOnError: false`.
+
 **Journal feature** (`/journal/:date`, URL format MM-DD-YYYY):
 - Route auto-redirects `/` to today's journal date
 - Entry is auto-created on first visit via `useEnsureJournalEntry` in `src/hooks/useJournal.ts`
@@ -112,6 +114,7 @@ Two execution tools are available on this Windows machine:
 - **Enum comparisons:** C# enum `.ToString()` produces PascalCase — always compare `status === 'Completed'`, never `'completed'`
 - **CSS specificity in journal:** The `.journal-page button` reset rule has specificity `0-1-1`. Any button needing its own `border` or `background` must be scoped as `.journal-page .classname` (`0-2-0`) to win the cascade
 - **`gen:api` scope:** Only regenerates `src/api/client/` — hand-written modules in `src/api/journal.ts` must be updated manually and will NOT be touched by the generator
+- **`throwOnError` is a runtime flag:** `configureApiClient()` sets it once (`main.tsx`, vitest `setup.ts`); the `true` generic is type-only. Any call that needs `{ error, response }` instead of a rejection (the undo-delete commits) must pass `throwOnError: false` explicitly
 - **Journal carry-forward:** Creating or switching to a journal entry must never move tasks. Incomplete tasks carry forward only into the user's own today, derived from the client's timezone offset with no UTC fallback
 - **`docker-compose.yml` volume mappings:** Do not modify without confirmation
 - **`main` branch:** Direct pushes to `main` trigger an automatic production deployment via Portainer — always work on a `feature/` or `bugfix/` branch and open a PR

@@ -103,7 +103,7 @@ describe('useEnsureJournalEntry', () => {
     vi.mocked(journalApi.createJournalEntry).mockResolvedValue({ data: { id: 2, date: '2026-05-28', title: 'May 28, 2026', todoTaskItemIds: [], logEntries: [], createdAt: '', movedCount: 0, movedTaskItemIds: [] }, response: new Response() } as never)
     renderHook(() => useEnsureJournalEntry('2026-05-28'), { wrapper: makeWrapper() })
     await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ date: '2026-05-28' })
+      expect.objectContaining({ date: '2026-05-28' }), { throwOnError: false }
     ))
     // Non-today date never sends an offset
     const body = vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]
@@ -155,7 +155,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     const { wrapper } = setup()
     renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
     await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ date: TODAY, timezoneOffsetMinutes: -300 })
+      expect.objectContaining({ date: TODAY, timezoneOffsetMinutes: -300 }), { throwOnError: false }
     ))
     await settle()
     expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
@@ -268,7 +268,7 @@ describe('useEnsureJournalEntry carry-forward', () => {
     await act(async () => { resolveEntries(ok([])) })
 
     await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ date: TOMORROW, timezoneOffsetMinutes: -300 })
+      expect.objectContaining({ date: TOMORROW, timezoneOffsetMinutes: -300 }), { throwOnError: false }
     ))
   })
 
@@ -893,5 +893,78 @@ describe('yesterdayOf', () => {
 
   it('crosses month boundary correctly', () => {
     expect(yesterdayOf('2026-06-01')).toBe('2026-05-31')
+  })
+})
+
+describe('useEnsureJournalEntry failure handling (#232)', () => {
+  const TODAY = '2026-06-10'
+  const TOMORROW = '2026-06-11'
+  const mkEntry = (id: number, date: string) =>
+    ({ id, date, title: date, todoTaskItemIds: [], logEntries: [], createdAt: '', summary: null, updatedAt: null, movedCount: 0, movedTaskItemIds: [] as number[] })
+  const settle = () => act(async () => { await new Promise(r => setTimeout(r, 50)) })
+
+  function setup() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children)
+    return { invalidate, wrapper }
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 5, 10, 12, 0, 0))
+    vi.spyOn(Date.prototype, 'getTimezoneOffset').mockReturnValue(300)
+    vi.mocked(journalApi.carryForwardJournalEntry).mockResolvedValue({ data: { movedCount: 0, movedTaskItemIds: [] }, response: new Response() } as never)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('still attempts to create the entry when the lookup fails with a 5xx', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockRejectedValue({ message: 'boom' })
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue({ data: mkEntry(1, TOMORROW), response: new Response() } as never)
+    const { wrapper } = setup()
+    renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+    await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1))
+    await settle()
+    expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a 409 on create as "already exists": carries inline for today and refreshes tasks', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue({ error: { message: 'exists' }, response: { ok: false, status: 409 } } as never)
+    const { wrapper, invalidate } = setup()
+    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
+    expect(vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]).toMatchObject({ date: TODAY, timezoneOffsetMinutes: -300 })
+    expect(vi.mocked(journalApi.createJournalEntry).mock.calls[0][1]).toEqual({ throwOnError: false })
+    await settle()
+    // carriedRef was set, so no separate carry-forward call (no UTC fallback)
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
+  })
+
+  it('409 for a non-today date sends no offset and does not invalidate tasks', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue({ error: { message: 'exists' }, response: { ok: false, status: 409 } } as never)
+    const { wrapper, invalidate } = setup()
+    renderHook(() => useEnsureJournalEntry(TOMORROW), { wrapper })
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    expect(vi.mocked(journalApi.createJournalEntry).mock.calls[0][0]).not.toHaveProperty('timezoneOffsetMinutes')
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+  })
+
+  it('a 500 on create takes the error path: journal refreshed, tasks untouched, no carry marker', async () => {
+    vi.mocked(journalApi.getJournalEntries).mockResolvedValue({ data: [], response: new Response() } as never)
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue({ error: { message: 'boom' }, response: { ok: false, status: 500 } } as never)
+    const { wrapper, invalidate } = setup()
+    const { result } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+    await settle()
+    expect(invalidate).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
+    expect(result.current.error).toEqual({ message: 'boom' })
   })
 })

@@ -94,11 +94,17 @@ export function useEnsureJournalEntry(isoDate: string) {
       // Evaluated at call time (not render) so it stays correct across midnight.
       // Only today's entry carries tasks forward; other dates never send an offset.
       const isToday = date === todayISO()
-      const res = await createJournalEntry({
-        title: formatEntryTitle(date),
-        date,
-        ...(isToday ? { timezoneOffsetMinutes: getTimezoneOffsetMinutes() } : {}),
-      })
+      const res = await createJournalEntry(
+        {
+          title: formatEntryTitle(date),
+          date,
+          ...(isToday ? { timezoneOffsetMinutes: getTimezoneOffsetMinutes() } : {}),
+        },
+        { throwOnError: false },
+      )
+      // 409 means another client created the entry first: treat it like success. The 409 body has no
+      // status field, so the status comes from the response. Other failures reject so onError runs.
+      if (res.response?.status !== 409 && res.error !== undefined) throw res.error
       return { res, date, carriedInline: isToday }
     },
     onSuccess: ({ date, carriedInline }) => {
@@ -125,12 +131,13 @@ export function useEnsureJournalEntry(isoDate: string) {
   })
 
   useEffect(() => {
-    if (entriesQuery.isLoading || entriesQuery.isError) return
+    // A failed lookup still falls through to create: the server answers 409 if the entry exists.
+    if (entriesQuery.isLoading) return
     if (entry) return
     if (attemptedRef.current === isoDate) return
     attemptedRef.current = isoDate
     createEntry(isoDate)
-  }, [entriesQuery.isLoading, entriesQuery.isError, entry, isoDate, createEntry])
+  }, [entriesQuery.isLoading, entry, isoDate, createEntry])
 
   const entryId = entry?.id
   useEffect(() => {

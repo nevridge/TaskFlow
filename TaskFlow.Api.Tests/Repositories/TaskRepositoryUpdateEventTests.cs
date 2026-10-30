@@ -145,6 +145,42 @@ public class TaskRepositoryUpdateEventTests
     }
 
     [Fact]
+    public async Task UpdateAsync_AllFieldsChange_EveryEventHasTaskIdUtcTimestampAndSummary()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem
+        {
+            Id = 7,
+            Title = "Old",
+            Description = "a",
+            Priority = Priority.Low,
+            Status = Status.Todo,
+            DueDate = new DateTime(2026, 1, 15)
+        });
+        task.Title = "New";
+        task.Priority = Priority.High;
+        task.Description = "b";
+        task.DueDate = new DateTime(2026, 2, 1);
+        var before = DateTime.UtcNow.AddSeconds(-5);
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        var events = await GetEventsAsync(context);
+        Assert.Equal(4, events.Count);
+        Assert.All(events, e =>
+        {
+            Assert.Equal(7, e.TaskItemId);
+            Assert.Equal(DateTimeKind.Utc, e.OccurredAtUtc.Kind);
+            Assert.InRange(e.OccurredAtUtc, before, DateTime.UtcNow.AddSeconds(5));
+            Assert.False(string.IsNullOrWhiteSpace(e.ChangeSummary));
+        });
+    }
+
+    [Fact]
     public async Task UpdateAsync_TitleAndStatusChange_WritesFieldEventBeforeStatusEvent()
     {
         // Arrange

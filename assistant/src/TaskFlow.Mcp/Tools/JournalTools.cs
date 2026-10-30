@@ -37,13 +37,23 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
             sb.AppendLine($"Journal {day:yyyy-MM-dd} (entry #{entry.Id}){(day == today ? " - today" : string.Empty)}");
             sb.AppendLine(string.IsNullOrWhiteSpace(entry.Summary) ? "Summary: (none)" : "Summary: " + entry.Summary.Trim());
 
+            var (allTasks, failure) = await allTasksTask;
+            Dictionary<int, TaskItemDto>? tasksById = null;
+            if (allTasks is not null)
+            {
+                tasksById = [];
+                foreach (var t in allTasks)
+                {
+                    tasksById.TryAdd(t.Id, t);
+                }
+            }
+
             var todos = Formatting.OrderByUrgency(await todosTask).ToList();
             sb.AppendLine(todos.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({todos.Count}):");
             if (todos.Count > 0)
             {
                 var nowUtc = time.GetUtcNow();
                 var plannedIds = todos.Select(t => t.Id).ToHashSet();
-                var (allTasks, failure) = await allTasksTask;
                 var subtasks = allTasks is null ? null : Formatting.OpenSubtasksByParent(allTasks);
                 var marker = day == today ? " | planned today" : " | planned this day";
                 foreach (var task in todos)
@@ -90,10 +100,12 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 sb.AppendLine($"Log ({logs.Count}):");
                 foreach (var log in logs)
                 {
-                    var link = log.TaskItemId is { } taskId
-                        ? $" [task #{taskId}{(log.LinkedTaskDeleted ? ", deleted" : string.Empty)}]"
-                        : string.Empty;
-                    sb.AppendLine($"  {LocalTime(log.CreatedAt)} {Formatting.Preview(log.Content, 400)}{link}");
+                    sb.AppendLine($"  {LocalTime(log.CreatedAt)} {Formatting.Preview(log.Content, 400)}{Formatting.LogTaskLink(log, tasksById)}");
+                }
+
+                if (failure is not null && logs.Any(l => l.TaskItemId is not null))
+                {
+                    sb.AppendLine($"Note: task details unavailable for linked log lines ({failure}).");
                 }
             }
 

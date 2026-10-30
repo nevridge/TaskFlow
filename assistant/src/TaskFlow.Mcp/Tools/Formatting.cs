@@ -12,6 +12,38 @@ internal static class Formatting
     public static bool IsDetailed(string? responseFormat) =>
         string.Equals(responseFormat, "detailed", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Link suffix for a journal log line, e.g. " [task #5 | Apollo | High]". Empty when the log has no linked task.</summary>
+    public static string LogTaskLink(LogEntryDto log, IReadOnlyDictionary<int, TaskItemDto>? tasksById)
+    {
+        if (log.TaskItemId is not { } taskId)
+        {
+            return string.Empty;
+        }
+
+        if (log.LinkedTaskDeleted)
+        {
+            return $" [task #{taskId}, deleted]";
+        }
+
+        if (tasksById is null || !tasksById.TryGetValue(taskId, out var task))
+        {
+            return $" [task #{taskId}]";
+        }
+
+        var parts = new List<string> { $"task #{taskId}" };
+        if (!string.IsNullOrWhiteSpace(task.ProjectName))
+        {
+            parts.Add(task.ProjectName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(task.Priority))
+        {
+            parts.Add(task.Priority);
+        }
+
+        return $" [{string.Join(" | ", parts)}]";
+    }
+
     public static string Task(TaskItemDto t, DateOnly today, bool detailed = false, DateTimeOffset? nowUtc = null, bool showChildCount = true)
     {
         var sb = new StringBuilder();

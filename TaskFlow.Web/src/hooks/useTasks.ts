@@ -192,9 +192,10 @@ export function useUpdateTaskMutation() {
 /**
  * Cache cleanup after a task delete committed (or turned out to be already gone). The detail entry is removed
  * FIRST so the refetch of ['tasks'] cannot revive it; the returned promise resolves once the refetches settle.
+ * Pass `removeDetail: false` when the delete failed and the task still exists.
  */
-export function invalidateAfterTaskDelete(qc: QueryClient, id: number): Promise<unknown> {
-  qc.removeQueries({ queryKey: taskKeys.detail(id) })
+export function invalidateAfterTaskDelete(qc: QueryClient, id: number, removeDetail = true): Promise<unknown> {
+  if (removeDetail) qc.removeQueries({ queryKey: taskKeys.detail(id) })
   return Promise.all([
     qc.invalidateQueries({ queryKey: taskKeys.all }),
     qc.invalidateQueries({ queryKey: projectKeys.all }),

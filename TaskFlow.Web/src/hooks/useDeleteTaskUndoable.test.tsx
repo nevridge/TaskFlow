@@ -75,6 +75,15 @@ describe('useDeleteTaskUndoable', () => {
     expect(result.current.toast.pendingKeys.size).toBe(0)
   })
 
+  it('keeps the detail cache when the delete fails, but still refreshes the lists', async () => {
+    vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: res(500) } as never)
+    const { result, invalidate, remove } = setup()
+    act(() => result.current.task({ id: 5, title: 'T' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10100) })
+    expect(remove).not.toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledTimes(3)
+  })
+
   it('note: hides under tasknote:<id>, commits after 6s and invalidates that task notes', async () => {
     vi.mocked(sdk.deleteApiV1TaskItemsByTaskIdNotesById).mockResolvedValue({ response: res(204) } as never)
     const { result, invalidate } = setup()

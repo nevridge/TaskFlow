@@ -51,13 +51,18 @@ export function useDeleteTaskUndoable() {
   return useCallback(
     (task: { id: number; title: string }, restoreFocus?: () => void) => {
       const { id } = task
+      let deleted = false
       requestDelete({
         key: pendingKey('task', id),
         message: `Task deleted: "${task.title}"`,
         errorMessage: getTaskDeleteErrorMessage,
         durationMs: TASK_DELETE_WINDOW_MS,
-        commit: async () => assertDeleted(await deleteApiV1TaskItemsById({ path: { id } })),
-        invalidate: () => invalidateAfterTaskDelete(qc, id),
+        commit: async () => {
+          assertDeleted(await deleteApiV1TaskItemsById({ path: { id } }))
+          deleted = true
+        },
+        // Runs after a failed commit too; the task still exists then, so keep its detail cache.
+        invalidate: () => invalidateAfterTaskDelete(qc, id, deleted),
         restoreFocus,
       })
     },

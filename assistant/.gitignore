@@ -11,6 +11,10 @@ coverage*/
 ## Published MCP server build consumed by the plugin (produced by build.ps1)
 plugin/bin/
 
+## Staging and backup directories used by build.ps1
+.build-staging/
+.build-backup/
+
 ## Packaged Claude Desktop skill (produced by scripts/package-chat-skill.ps1)
 dist/
 

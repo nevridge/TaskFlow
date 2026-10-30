@@ -13,8 +13,8 @@ A Claude Code plugin does **not** load in Chat: Chat ignores a plugin's local MC
 
 Needs the .NET 10 runtime on `PATH`, Claude Desktop, and TaskFlow running with the Projects API.
 
-1. Publish the server: `./build.ps1`
-2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open.
+1. Stop any running TaskFlow server (disable `taskflow` in `/mcp` in Claude Code, and quit Claude Desktop completely), then publish the server: `./build.ps1`. The build stops and lists the blocking processes (PID and parent) if a server is still running, and a failed build leaves the old `plugin/bin` in place.
+2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open. It also stops the server process Claude Desktop started, which would otherwise block the build.
 3. Register the server: `./scripts/install-claude-desktop.ps1` (add `-ApiUrl http://host:port` if TaskFlow is not on `localhost:8081`; `-DryRun` previews, `-Uninstall` removes). It merges a `taskflow` entry into `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other settings and saves a timestamped backup next to it.
 4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 15 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
 5. Package and upload the skill: `./scripts/package-chat-skill.ps1`, then in Claude Desktop go to **Customize > Skills > + > Upload a skill** and choose `dist/taskflow-assistant-skill.zip`.
@@ -52,6 +52,8 @@ Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` 
 claude plugin marketplace add C:\code\taskflow-assistant
 claude plugin install taskflow-assistant@taskflow-assistant   # user scope: every project in Claude Code
 ```
+
+Stop running TaskFlow servers before `./build.ps1`: disable `taskflow` in `/mcp`, or quit Claude Desktop. If one is still running, the build stops and lists each blocking process id and its parent; no files change. A failed build also leaves the old `plugin/bin` in place.
 
 This is for Claude Code only. The Chat part of Claude Desktop does not read it; use the [Chat setup](#claude-desktop-chat).
 

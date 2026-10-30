@@ -97,6 +97,9 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
     {
         var entry = _context.Entry(task);
         TaskItem? persisted = null;
+        // Safety net for callers that pass an untracked (Detached) entity. Production callers in
+        // TaskItemsController pass tracked entities, so the API does not reach this branch today, but it is
+        // covered by the Detached-entity tests in TaskRepositoryTests. Do not remove.
         if (entry.State == EntityState.Detached)
         {
             persisted = await _context.TaskItems
@@ -117,49 +120,26 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
             ? persisted.BlockedReason
             : entry.OriginalValues.GetValue<string?>(nameof(TaskItem.BlockedReason));
 
-        if (!string.Equals(originalTitle, task.Title, StringComparison.Ordinal))
-        {
-            _context.TaskItemEvents.Add(new TaskItemEvent
-            {
-                TaskItemId = task.Id,
-                EventType = "TitleChanged",
-                OccurredAtUtc = DateTime.UtcNow,
-                ChangeSummary = $"Title changed from '{originalTitle}' to '{task.Title}'."
-            });
-        }
-
-        if (originalPriority != task.Priority)
-        {
-            _context.TaskItemEvents.Add(new TaskItemEvent
-            {
-                TaskItemId = task.Id,
-                EventType = "PriorityChanged",
-                OccurredAtUtc = DateTime.UtcNow,
-                ChangeSummary = $"Priority changed from {originalPriority} to {task.Priority}."
-            });
-        }
-
-        if (!string.Equals(originalDescription, task.Description, StringComparison.Ordinal))
-        {
-            _context.TaskItemEvents.Add(new TaskItemEvent
-            {
-                TaskItemId = task.Id,
-                EventType = "DescriptionChanged",
-                OccurredAtUtc = DateTime.UtcNow,
-                ChangeSummary = "Description updated."
-            });
-        }
-
-        if (originalDueDate != task.DueDate)
-        {
-            _context.TaskItemEvents.Add(new TaskItemEvent
-            {
-                TaskItemId = task.Id,
-                EventType = "DueDateChanged",
-                OccurredAtUtc = DateTime.UtcNow,
-                ChangeSummary = $"Due date changed from {FormatDueDate(originalDueDate)} to {FormatDueDate(task.DueDate)}."
-            });
-        }
+        AddFieldChangedEvent(
+            task.Id,
+            !string.Equals(originalTitle, task.Title, StringComparison.Ordinal),
+            "TitleChanged",
+            () => $"Title changed from '{originalTitle}' to '{task.Title}'.");
+        AddFieldChangedEvent(
+            task.Id,
+            originalPriority != task.Priority,
+            "PriorityChanged",
+            () => $"Priority changed from {originalPriority} to {task.Priority}.");
+        AddFieldChangedEvent(
+            task.Id,
+            !string.Equals(originalDescription, task.Description, StringComparison.Ordinal),
+            "DescriptionChanged",
+            () => "Description updated.");
+        AddFieldChangedEvent(
+            task.Id,
+            originalDueDate != task.DueDate,
+            "DueDateChanged",
+            () => $"Due date changed from {FormatDueDate(originalDueDate)} to {FormatDueDate(task.DueDate)}.");
 
         var wasCompleted = IsCompleted(originalStatus);
         var isCompletedNow = IsCompleted(task.Status);
@@ -267,4 +247,20 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
     private static string FormatDueDate(DateTime? value) =>
         value?.ToString("yyyy-MM-dd") ?? "none";
+
+    private void AddFieldChangedEvent(int taskId, bool changed, string eventType, Func<string> summary)
+    {
+        if (!changed)
+        {
+            return;
+        }
+
+        _context.TaskItemEvents.Add(new TaskItemEvent
+        {
+            TaskItemId = taskId,
+            EventType = eventType,
+            OccurredAtUtc = DateTime.UtcNow,
+            ChangeSummary = summary()
+        });
+    }
 }

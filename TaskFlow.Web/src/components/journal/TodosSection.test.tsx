@@ -139,7 +139,7 @@ describe('TodosSection', () => {
     await userEvent.type(editInput, 'Fix bug properly')
     await userEvent.keyboard('{Enter}')
     expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 2, title: 'Fix bug properly' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 2, title: 'Fix bug properly' }, expect.any(Object))
     expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('status')
   })
 
@@ -151,7 +151,7 @@ describe('TodosSection', () => {
     await userEvent.clear(editInput)
     await userEvent.type(editInput, 'Sub B')
     await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub B' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub B' }, expect.any(Object))
     expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('parentTaskItemId')
   })
 
@@ -164,7 +164,7 @@ describe('TodosSection', () => {
     await userEvent.clear(editInput)
     await userEvent.type(editInput, 'Sub C')
     await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub C' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub C' }, expect.any(Object))
   })
 
   it('toggle rejected with TASK_REOPEN_PAST_DAY_NOT_ALLOWED shows the past-days message and task stays completed', async () => {
@@ -305,7 +305,8 @@ describe('TodosSection', () => {
     await userEvent.type(editInput, 'Updated task')
     await userEvent.keyboard('{Enter}')
     expect(editTodoMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 1, title: 'Updated task' })
+      expect.objectContaining({ id: 1, title: 'Updated task' }),
+      expect.any(Object)
     )
   })
 

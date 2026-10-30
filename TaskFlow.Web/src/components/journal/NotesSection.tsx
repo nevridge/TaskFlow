@@ -92,6 +92,10 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
   const [draft, setDraft] = useState('')
   const [draftFocused, setDraftFocused] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
+  const editingIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    editingIdRef.current = editingId
+  })
   const [editingText, setEditingText] = useState('')
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const editRef = useRef<HTMLTextAreaElement>(null)
@@ -175,7 +179,19 @@ export const NotesSection = forwardRef<NotesSectionHandle, Props>(function Notes
     committedRef.current = true
     const text = editingText.trim()
     if (text && text !== original) {
-      updateNote.mutate({ id: noteId, content: text })
+      updateNote.mutate(
+        { id: noteId, content: text },
+        {
+          // The section has no error element, so just re-open the editor with the typed text (unless another
+          // edit has started since); the note keeps its saved content meanwhile.
+          onError: () => {
+            if (editingIdRef.current != null) return
+            committedRef.current = false
+            setEditingId(noteId)
+            setEditingText(text)
+          },
+        },
+      )
     }
     setEditingId(null)
     if (via !== 'blur') requestFocus(noteId)

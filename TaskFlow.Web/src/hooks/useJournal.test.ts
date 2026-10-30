@@ -127,6 +127,9 @@ describe('useEnsureJournalEntry carry-forward', () => {
   const mkEntry = (id: number, date: string) =>
     ({ id, date, title: date, todoTaskItemIds: [], logEntries: [], createdAt: '', summary: null, updatedAt: null, movedCount: 0, movedTaskItemIds: [] as number[] })
   const ok = (data: unknown) => ({ data, response: new Response() }) as never
+  // With throwOnError: false a 409 resolves with the error body and the response (the body has no status field).
+  const conflict409 = () =>
+    ({ error: { type: 'about:blank', title: 'Conflict' }, response: { ok: false, status: 409 } }) as never
 
   function setup() {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -243,17 +246,18 @@ describe('useEnsureJournalEntry carry-forward', () => {
     expect(result.current.entry?.id).toBe(7)
   })
 
-  it('on a 409 create for today, refetches entries and then carries once', async () => {
+  it('a resolved 409 create for today refetches entries, shows the existing entry and creates only once', async () => {
     vi.mocked(journalApi.getJournalEntries)
       .mockResolvedValueOnce(ok([]))
       .mockResolvedValue(ok([mkEntry(9, TODAY)]))
-    vi.mocked(journalApi.createJournalEntry).mockRejectedValue({ type: 'about:blank', title: 'Conflict', status: 409 })
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(conflict409())
     const { wrapper } = setup()
-    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
-    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(9, -300))
+    const { result } = renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
+    await waitFor(() => expect(result.current.entry?.id).toBe(9))
     await settle()
+    expect(result.current.error).toBeFalsy()
     expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1)
-    expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledTimes(1)
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
   })
 
   it('decides "today" at create call time, so a midnight rollover while loading sends the offset', async () => {
@@ -338,40 +342,20 @@ describe('useEnsureJournalEntry carry-forward', () => {
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
   })
 
-  it('on a 409 create, only journal keys are invalidated, then the session carry-forward invalidates task keys when it moves tasks', async () => {
+  it('a resolved 409 create for today invalidates journal and task keys at once and skips the separate carry-forward', async () => {
     vi.mocked(journalApi.getJournalEntries)
       .mockResolvedValueOnce(ok([]))
       .mockResolvedValue(ok([mkEntry(9, TODAY)]))
-    vi.mocked(journalApi.createJournalEntry).mockRejectedValue({ type: 'about:blank', title: 'Conflict', status: 409 })
-    vi.mocked(journalApi.carryForwardJournalEntry).mockResolvedValue(ok({ movedCount: 2, movedTaskItemIds: [4, 5] }))
+    vi.mocked(journalApi.createJournalEntry).mockResolvedValue(conflict409())
     const { queryClient, wrapper } = setup()
     const spy = vi.spyOn(queryClient, 'invalidateQueries')
     renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
     await waitFor(() => expect(journalApi.createJournalEntry).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
-    // Task keys are only invalidated once the carry-forward reports moved tasks
-    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(9, -300))
     await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
-  })
-
-  it('on a 409 create, task keys are not invalidated until the carry-forward response arrives', async () => {
-    vi.mocked(journalApi.getJournalEntries)
-      .mockResolvedValueOnce(ok([]))
-      .mockResolvedValue(ok([mkEntry(9, TODAY)]))
-    vi.mocked(journalApi.createJournalEntry).mockRejectedValue({ type: 'about:blank', title: 'Conflict', status: 409 })
-    let resolveCarry: (v: never) => void = () => {}
-    vi.mocked(journalApi.carryForwardJournalEntry).mockReturnValue(new Promise(r => { resolveCarry = r as never }) as never)
-    const { queryClient, wrapper } = setup()
-    const spy = vi.spyOn(queryClient, 'invalidateQueries')
-    renderHook(() => useEnsureJournalEntry(TODAY), { wrapper })
-    await waitFor(() => expect(journalApi.carryForwardJournalEntry).toHaveBeenCalledWith(9, -300))
-    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
     await settle()
-    // Carry-forward is in flight: the 409 path itself must not have touched task keys
-    expect(spy).not.toHaveBeenCalledWith({ queryKey: taskKeys.all })
-
-    await act(async () => { resolveCarry(ok({ movedCount: 2, movedTaskItemIds: [4, 5] })) })
-    await waitFor(() => expect(spy).toHaveBeenCalledWith({ queryKey: taskKeys.all }))
+    // The inline carry marks today as carried, so no separate carry-forward call (no UTC fallback)
+    expect(journalApi.carryForwardJournalEntry).not.toHaveBeenCalled()
   })
 
   it('an existing today entry with pre-existing todos takes no create path and leaves task keys alone when carry-forward moves nothing', async () => {

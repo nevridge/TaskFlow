@@ -77,7 +77,9 @@ describe('optimistic mutations roll back on HTTP 500', () => {
     qc.setQueryData(journalKeys.all, { data: [entry] })
     const { result } = renderHook(() => useUpdateLogEntryMutation(10), { wrapper })
 
-    act(() => { result.current.mutate({ id: 5, content: 'edited', taskItemId: null }) })
+    const onSuccess = vi.fn()
+    const onError = vi.fn()
+    act(() => { result.current.mutate({ id: 5, content: 'edited', taskItemId: null }, { onSuccess, onError }) })
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     const cached = () => (qc.getQueryData(journalKeys.all) as { data: (typeof entry)[] }).data[0].logEntries[0]
     expect(cached().content).toBe('edited')
@@ -85,6 +87,8 @@ describe('optimistic mutations roll back on HTTP 500', () => {
     await act(async () => { release!() })
     await waitFor(() => expect(result.current.isError).toBe(true))
 
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onSuccess).not.toHaveBeenCalled()
     expect(cached().content).toBe('original')
   })
 })

@@ -133,7 +133,7 @@ describe('TodosSection title tap-to-edit', () => {
     await userEvent.type(input, '  New title {Enter}')
     fireEvent.blur(input)
     expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'New title' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'New title' }, expect.any(Object))
     await waitFor(() => expect(titleButton()).toHaveFocus())
   })
 
@@ -184,7 +184,7 @@ describe('TodosSection title tap-to-edit', () => {
     await userEvent.type(screen.getByDisplayValue('Write tests'), '!')
     await userEvent.click(screen.getByPlaceholderText('Add a TODO and press Enter'))
     expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests!' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests!' }, expect.any(Object))
   })
 
   it('an empty or whitespace title is not saved', async () => {
@@ -205,7 +205,7 @@ describe('TodosSection title tap-to-edit', () => {
     await userEvent.keyboard('{Escape}')
     await userEvent.dblClick(titleButton())
     await userEvent.type(screen.getByDisplayValue('Write tests'), '2{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests2' })
+    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests2' }, expect.any(Object))
   })
 
   it('the edit input asks for a Done key on soft keyboards', async () => {

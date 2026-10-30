@@ -133,6 +133,10 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
+  const editingIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    editingIdRef.current = editingId
+  })
   const [actionError, setActionError] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
@@ -284,7 +288,21 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     const id = editingId
     const text = editingText.trim()
     if (via !== 'escape' && text) {
-      editTodo.mutate({ id, title: text })
+      setActionError(null)
+      editTodo.mutate(
+        { id, title: text },
+        {
+          onError: err => {
+            // Re-open the editor with the typed text so nothing is lost, unless another edit has started since.
+            if (editingIdRef.current == null) {
+              committedRef.current = false
+              setEditingId(id)
+              setEditingText(text)
+            }
+            setActionError(getTaskActionErrorMessage(err))
+          },
+        },
+      )
     }
     setEditingId(null)
     setEditingText('')

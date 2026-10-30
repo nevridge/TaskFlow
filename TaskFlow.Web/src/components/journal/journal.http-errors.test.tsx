@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { client } from '@/api/client/client.gen'
 import type { JournalLogEntryResponseDto, JournalNoteResponseDto } from '@/api/journal'
@@ -98,6 +99,45 @@ describe('journal sections against real HTTP errors (#232)', () => {
       expect(sentMethods()).toContain('DELETE')
       expect(alert).toHaveTextContent("Couldn't remove from day. Restored.")
       expect(screen.getByText('Write tests')).toBeInTheDocument()
+    })
+  })
+
+  describe('edit failures (HTTP 500): typed text is kept or the original restored', () => {
+    it('todo edit: shows the error and re-opens the editor with the typed title', async () => {
+      renderWith(<TodosSection entryId={10} isoDate="2099-01-01" sort="manual" />)
+      await screen.findByText('Write tests')
+      await userEvent.dblClick(screen.getByText('Write tests'))
+      const input = screen.getByDisplayValue('Write tests')
+      fireEvent.change(input, { target: { value: 'Write more tests' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => expect(sentMethods()).toContain('PATCH'))
+      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
+      expect(screen.getByDisplayValue('Write more tests')).toBeInTheDocument()
+    })
+
+    it('note edit: re-opens the editor with the typed text and keeps the saved note', async () => {
+      renderWith(<NotesSection entryId={10} />)
+      await userEvent.dblClick(await screen.findByText('A note'))
+      const input = screen.getByRole('textbox', { name: 'Edit note' })
+      fireEvent.change(input, { target: { value: 'An edited note' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => expect(sentMethods()).toContain('PUT'))
+      await waitFor(() => expect(screen.getByRole('textbox', { name: 'Edit note' })).toHaveValue('An edited note'))
+    })
+
+    it('log edit: the saved entry text is shown again after the failed update', async () => {
+      renderWith(<DailyLogSection entryId={10} logEntries={[log]} />)
+      await userEvent.dblClick(screen.getByText('A log'))
+      const input = screen.getByRole('textbox', { name: 'Edit log entry' })
+      fireEvent.change(input, { target: { value: 'An edited log' } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => expect(sentMethods()).toContain('PUT'))
+      await act(async () => { await new Promise(r => setTimeout(r, 50)) })
+      expect(screen.queryByRole('textbox', { name: 'Edit log entry' })).not.toBeInTheDocument()
+      expect(screen.getByText('A log')).toBeInTheDocument()
     })
   })
 

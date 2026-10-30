@@ -3,11 +3,18 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { client } from '@/api/client/client.gen'
-import { useCreateTodoMutation, useCreateJournalNoteMutation, useAddLogEntryMutation } from './useJournal'
+import {
+  useCreateTodoMutation,
+  useCreateJournalNoteMutation,
+  useAddLogEntryMutation,
+  useEditTodoMutation,
+  useRemoveTodoMutation,
+  useUpdateJournalNoteMutation,
+} from './useJournal'
 import { useCreateNoteMutation } from './useNotes'
 
 // Real client + mocked fetch: a 5xx must run onError, never onSuccess (so typed text is not cleared).
-describe('journal and note create mutations on HTTP 500 (#232)', () => {
+describe('journal and note mutations on HTTP 500 (#232)', () => {
   const fetchMock = vi.fn()
 
   beforeEach(() => {
@@ -31,6 +38,9 @@ describe('journal and note create mutations on HTTP 500 (#232)', () => {
     ['useCreateTodoMutation', () => useCreateTodoMutation(1, '2026-06-10'), 'todo'],
     ['useCreateJournalNoteMutation', () => useCreateJournalNoteMutation(1), 'note'],
     ['useCreateNoteMutation', () => useCreateNoteMutation(1), { content: 'note' }],
+    ['useEditTodoMutation', () => useEditTodoMutation(1), { id: 2, title: 'edited' }],
+    ['useRemoveTodoMutation', () => useRemoveTodoMutation(1), 2],
+    ['useUpdateJournalNoteMutation', () => useUpdateJournalNoteMutation(1), { id: 3, content: 'edited' }],
   ] as const)('%s calls onError and not onSuccess', async (_name, useHook, vars) => {
     const onSuccess = vi.fn()
     const onError = vi.fn()

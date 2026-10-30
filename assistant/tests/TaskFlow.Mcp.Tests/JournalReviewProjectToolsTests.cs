@@ -409,13 +409,78 @@ public class JournalToolsTests
     }
 
     [Fact]
-    public async Task GetJournal_TaskItemsFails_ThrowsMcpException()
+    public async Task GetJournal_TaskItemsFails_ReturnsJournalWithoutSubtasksAndAddsNote()
+    {
+        var parent = Fixtures.Task(5, "Ship", childTaskCount: 2);
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { parent, Fixtures.Task(6, "Other") })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
+
+        var concise = await Tools(handler).GetJournal();
+        var detailed = await Tools(handler).GetJournal(responseFormat: "detailed");
+
+        concise.Should().Contain("Planned tasks (2):")
+            .And.Contain("#5").And.Contain("#6")
+            .And.Contain("Note: open subtasks could not be loaded (")
+            .And.Contain("); call list_tasks to see them.")
+            .And.NotContain("Open subtasks");
+        concise.Split('\n').Count(l => l.StartsWith("Note:", StringComparison.Ordinal)).Should().Be(1);
+        detailed.Should().Contain("2 subtask(s)").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsFails_NoteSitsRightAfterPlannedBlock()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
+            .Get("JournalEntries/3/notes", new[] { new { id = 1, content = "keep me", createdAt = "2026-10-09T15:00:00Z" } })
+            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
+
+        var text = await Tools(handler).GetJournal();
+
+        var lines = text.Split('\n');
+        var planned = Array.FindIndex(lines, l => l.StartsWith("Planned tasks", StringComparison.Ordinal));
+        lines[planned + 2].Should().StartWith("Note: open subtasks could not be loaded");
+        text.Should().Contain("keep me");
+    }
+
+    [Fact]
+    public async Task GetJournal_TokenAlreadyCanceled_ThrowsOperationCanceledException()
+    {
+        var handler = JournalWith([Fixtures.Task(5, "Ship")], [Fixtures.Task(5, "Ship")]);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => Tools(handler).GetJournal(ct: cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task GetJournal_TodosFail_StillThrowsMcpException()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .On(HttpMethod.Get, "JournalEntries/3/todos", status: HttpStatusCode.InternalServerError)
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Get("TaskItems", Array.Empty<object>());
+
+        var act = () => Tools(handler).GetJournal();
+
+        await act.Should().ThrowAsync<McpException>();
+    }
+
+    [Fact]
+    public async Task GetJournal_NotesFail_StillThrowsMcpException()
     {
         var handler = new StubHandler()
             .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
             .Get("JournalEntries/3/todos", Array.Empty<object>())
-            .Get("JournalEntries/3/notes", Array.Empty<object>())
-            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
+            .On(HttpMethod.Get, "JournalEntries/3/notes", status: HttpStatusCode.InternalServerError)
+            .Get("TaskItems", Array.Empty<object>());
 
         var act = () => Tools(handler).GetJournal();
 

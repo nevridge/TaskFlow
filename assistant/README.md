@@ -69,7 +69,7 @@ Fourteen tools, deliberately consolidated around workflows rather than one per e
 |---|---|
 | Projects | `list_projects`, `save_project` (create / rename / archive), `project_status` |
 | Tasks | `list_tasks` (views: open, overdue, due_soon, stale, unassigned, today, blocked, completed, all; paging; concise/detailed), `get_task`, `create_tasks` (batch, partial failures reported), `update_task` (merge, complete/reopen, project move, block/unblock with `blockedReason`), `delete_task`, `add_task_note` |
-| Journal | `get_journal` (creates the day's entry if missing; lists open subtasks under planned tasks), `set_journal_todos`, `add_log_entry`, `update_journal` |
+| Journal | `get_journal` (creates the day's entry if missing; lists open subtasks under planned tasks; others via `list_tasks`), `set_journal_todos`, `add_log_entry`, `update_journal` |
 | Review | `weekly_review` (read-only) |
 
 Behaviors worth knowing:

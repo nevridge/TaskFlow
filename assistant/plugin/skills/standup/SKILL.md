@@ -1,6 +1,6 @@
 ---
 name: standup
-description: Build the weekday stand-up summary ("stand-up", "what did I do yesterday", "daily summary") from TaskFlow: the last working day's completed work (Friday on a Monday or weekend), today's plan and overdue tasks, grouped by project.
+description: Build the weekday stand-up summary ("stand-up", "what did I do yesterday", "daily summary") from TaskFlow - the last working day's completed work (Friday on a Monday or weekend), today's plan and overdue tasks, grouped by project.
 disable-model-invocation: true
 allowed-tools: mcp__plugin_taskflow-assistant_taskflow__list_tasks
 ---
@@ -16,7 +16,7 @@ Build the user's stand-up summary from TaskFlow. This is read-only: it changes n
    Work out D's weekday name (Mon to Sun) for the heading. Weekend completions are not covered. Never pass the word `yesterday` to the Completed filter.
 3. Make three `list_tasks` calls, in parallel where you can, each with `limit=100`:
    - Completed: `view=completed`, `completedFrom=D`, `completedTo=D`.
-   - Today's plan: `view=all`, `plannedDate=` today. This includes tasks planned today that are already done, which are shown as done. Check that the date in its header label matches today.
+   - Today's plan: `view=all`, `plannedDate=` today. This includes tasks planned today that are already done, which are shown as done. Check that the date in its header label matches today. If the dates differ, tell the user, state that the plan used the date in the header label, and continue without silently switching dates.
    - Overdue: `view=overdue`.
    If a result says `Next page: offset=K`, call again with that offset until `Showing a-b` reaches the total N, so that no section is cut short.
 4. Write three sections in this order: `Completed <Ddd> <D>` (for example `Completed Fri 2026-10-23`; on a Saturday or Sunday it still names Friday's date), `Today's plan`, `Overdue`. Group each section by project name, taken unchanged from the `| project: Name` segment of the line (names are free text and may contain `|` or `]`). Tasks with no project segment go under "No project". An empty section says "Nothing"; do not omit it. For each task show `#id`, title, priority, the blocked flag and the due date or `OVERDUE Nd` exactly as the line gives them.

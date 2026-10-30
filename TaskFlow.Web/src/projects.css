@@ -238,6 +238,12 @@
   background: var(--accent-soft);
 }
 
+.projects-page .p-badge--inprogress {
+  color: var(--accent-ink);
+  border: 1px solid var(--accent-ink);
+  background: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+}
+
 .projects-page .p-badge--blocked {
   color: var(--danger-ink);
   border: 1px dashed var(--danger-ink);

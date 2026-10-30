@@ -136,7 +136,7 @@ describe('ProjectDetailPage', () => {
     })
     renderAt('/projects/7')
     expect(screen.getByRole('link', { name: 'Task one' })).toHaveAttribute('href', '/tasks/1')
-    expect(screen.getByText('Todo')).toBeInTheDocument()
+    expect(screen.getByText('To-do')).toBeInTheDocument()
     expect(screen.getByText('Completed')).toHaveClass('p-badge--completed')
     expect(screen.getByText('Draft')).toBeInTheDocument()
     expect(screen.getByText('Priority: High')).toBeInTheDocument()
@@ -241,6 +241,12 @@ describe('ProjectDetailPage', () => {
       expect(screen.queryByText('Draft')).not.toBeInTheDocument()
     })
 
+    it('renders InProgress as "In Progress" with its own badge class', () => {
+      mockTasks({ data: { data: [task({ id: 1, title: 'a', status: 'InProgress' })] } })
+      renderAt('/projects/7')
+      expect(screen.getByText('In Progress')).toHaveClass('p-badge--inprogress')
+    })
+
     it('still renders Draft, Todo and Completed', () => {
       mockTasks({ data: { data: [
         task({ id: 1, title: 'a', status: 'Draft' }),
@@ -249,7 +255,7 @@ describe('ProjectDetailPage', () => {
       ] } })
       renderAt('/projects/7')
       expect(screen.getByText('Draft')).toBeInTheDocument()
-      expect(screen.getByText('Todo')).toBeInTheDocument()
+      expect(screen.getByText('To-do')).toBeInTheDocument()
       expect(screen.getByText('Completed')).toHaveClass('p-badge--completed')
     })
   })

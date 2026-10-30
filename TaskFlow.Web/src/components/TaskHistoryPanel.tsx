@@ -1,6 +1,7 @@
 import { useTaskHistoryQuery } from '@/hooks/useTasks'
 import type { TaskItemEventResponseDto } from '@/api/tasks'
 import { formatShort } from '@/lib/journal-utils'
+import { STATUS_LABELS } from '@/lib/task-status'
 
 interface Props {
   taskId: number
@@ -44,7 +45,8 @@ export function TaskHistoryPanel({ taskId, emptyText = 'No history yet.' }: Prop
 }
 
 function describeEvent(event: TaskItemEventResponseDto): string {
-  if (event.changeSummary) return event.changeSummary
+  // The server summary embeds the raw enum name ("InProgress"); show the display label.
+  if (event.changeSummary) return event.changeSummary.replace(/\bInProgress\b/g, STATUS_LABELS.InProgress)
 
   switch (event.eventType) {
     case 'TaskCreated':

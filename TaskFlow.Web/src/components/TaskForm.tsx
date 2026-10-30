@@ -60,7 +60,9 @@ export function TaskForm({
   const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '')
   const originalStatus = normalizeStatus(task?.status)
   // Blocking is only valid from Todo (or while already Blocked); the server answers 422 otherwise.
-  const canChooseBlocked = originalStatus === 'Todo' || originalStatus === 'Blocked'
+  const canChooseBlocked = originalStatus === 'Todo' || originalStatus === 'InProgress' || originalStatus === 'Blocked'
+  // Only Todo (or Blocked, or an already In Progress task) can move to In Progress; Draft/Completed answer 422.
+  const canChooseInProgress = !task || (originalStatus !== 'Draft' && originalStatus !== 'Completed')
   const [blockedReason, setBlockedReason] = useState(task?.blockedReason ?? '')
   const [parentTaskId, setParentTaskId] = useState<string>(task?.parentTaskItemId ? String(task.parentTaskItemId) : '')
 
@@ -94,7 +96,8 @@ export function TaskForm({
     onSubmit({
       title,
       description: description || null,
-      status: status as RequestStatus,
+      // The form keeps the lowercased key; task-status.ts maps it to the wire value (`inProgress`).
+      status: (normalizeStatus(status) ? toRequestStatus(normalizeStatus(status)!) : status) as RequestStatus,
       priority: priority as 'low' | 'medium' | 'high',
       // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
       dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
@@ -127,6 +130,13 @@ export function TaskForm({
           <select id="status" className="t-input" value={status} onChange={e => setStatus(e.target.value)}>
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
+            <option
+              value="inprogress"
+              disabled={!canChooseInProgress}
+              title={canChooseInProgress ? undefined : 'Set to Todo first'}
+            >
+              {canChooseInProgress ? 'In Progress' : 'In Progress (set to Todo first)'}
+            </option>
             <option value="blocked" disabled={!canChooseBlocked}>Blocked</option>
             <option value="completed">Completed</option>
           </select>

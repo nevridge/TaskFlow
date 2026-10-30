@@ -41,3 +41,10 @@ describe('getTaskMutationErrorMessage', () => {
     expect(getTaskMutationErrorMessage(new Error('boom'))).toBe('Unable to save task changes. Please try again.')
   })
 })
+
+describe('TASK_START_NOT_ALLOWED', () => {
+  it('maps the 422 to the Set-to-Todo-first guidance', () => {
+    expect(getTaskMutationErrorMessage({ code: 'TASK_START_NOT_ALLOWED' }))
+      .toBe('Only Todo tasks can be moved to In Progress. Set it to Todo first.')
+  })
+})

@@ -433,3 +433,21 @@ describe('cleanup (AC39)', () => {
     }
   })
 })
+
+describe('In Progress badge (#239)', () => {
+  const rule = css.match(/\.t-badge-inprogress \{([^}]*)\}/)?.[1] ?? ''
+
+  it('defines .t-badge-inprogress with a border, background and colour like its siblings', () => {
+    expect(rule).toMatch(/border:/)
+    expect(rule).toMatch(/background:/)
+    expect(rule).toMatch(/color: var\(--accent-ink\)/)
+  })
+
+  it('uses themed tokens only, so dark and alternate themes follow index.css', () => {
+    expect(rule).not.toMatch(/#[0-9a-f]{3,8}\b/i)
+  })
+
+  it('has a project-page variant', () => {
+    expect(projectsCss).toMatch(/\.projects-page \.p-badge--inprogress \{/)
+  })
+})

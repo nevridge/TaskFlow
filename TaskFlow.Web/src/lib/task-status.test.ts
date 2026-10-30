@@ -5,6 +5,7 @@ import {
   canBlock,
   formatSubtaskProgress,
   getBlockErrorMessage,
+  getStatusLabel,
   isBlocked,
   isCompleted,
   journalSortTier,
@@ -26,8 +27,15 @@ describe('normalizeStatus', () => {
     ['todo', 'Todo'],
     ['BLOCKED', 'Blocked'],
     ['Completed', 'Completed'],
+    ['InProgress', 'InProgress'],
+    ['inProgress', 'InProgress'],
+    ['inprogress', 'InProgress'],
   ])('maps %s to %s', (raw, expected) => {
     expect(normalizeStatus(raw)).toBe(expected)
+  })
+
+  it('treats response and request casing of In Progress as the same status', () => {
+    expect(normalizeStatus('InProgress')).toBe(normalizeStatus('inProgress'))
   })
 
   it('returns undefined for unknown, empty and missing values', () => {
@@ -39,10 +47,11 @@ describe('normalizeStatus', () => {
 })
 
 describe('ordering, labels and request values', () => {
-  it('orders Draft, Todo, Blocked, Completed', () => {
-    expect(STATUS_ORDER).toEqual(['Draft', 'Todo', 'Blocked', 'Completed'])
+  it('orders Draft, Todo, InProgress, Blocked, Completed', () => {
+    expect(STATUS_ORDER).toEqual(['Draft', 'Todo', 'InProgress', 'Blocked', 'Completed'])
     expect(statusRank('Draft')).toBeLessThan(statusRank('Todo'))
-    expect(statusRank('Todo')).toBeLessThan(statusRank('Blocked'))
+    expect(statusRank('Todo')).toBeLessThan(statusRank('InProgress'))
+    expect(statusRank('InProgress')).toBeLessThan(statusRank('Blocked'))
     expect(statusRank('Blocked')).toBeLessThan(statusRank('Completed'))
     expect(statusRank('Mystery')).toBeGreaterThan(statusRank('Completed'))
   })
@@ -50,11 +59,24 @@ describe('ordering, labels and request values', () => {
   it('has a label for every status', () => {
     expect(STATUS_LABELS.Todo).toBe('To-do')
     expect(STATUS_LABELS.Blocked).toBe('Blocked')
+    expect(STATUS_LABELS.InProgress).toBe('In Progress')
+  })
+
+  it('getStatusLabel accepts any casing and falls back to the raw value', () => {
+    expect(getStatusLabel('InProgress')).toBe('In Progress')
+    expect(getStatusLabel('inprogress')).toBe('In Progress')
+    expect(getStatusLabel('todo')).toBe('To-do')
+    expect(getStatusLabel('Mystery')).toBe('Mystery')
+    expect(getStatusLabel(undefined)).toBe('')
   })
 
   it('lowercases for request bodies', () => {
     expect(toRequestStatus('Blocked')).toBe('blocked')
     expect(toRequestStatus('Completed')).toBe('completed')
+  })
+
+  it('maps InProgress to the camelCase wire value', () => {
+    expect(toRequestStatus('InProgress')).toBe('inProgress')
   })
 })
 
@@ -64,14 +86,16 @@ describe('predicates', () => {
     expect(isCompleted('Blocked')).toBe(false)
   })
 
-  it('only Todo can be blocked', () => {
+  it('only Todo and InProgress can be blocked', () => {
     expect(canBlock('Todo')).toBe(true)
+    expect(canBlock('InProgress')).toBe(true)
     for (const s of ['Draft', 'Completed', 'Blocked', undefined]) expect(canBlock(s)).toBe(false)
   })
 
-  it('cycles Draft, Todo, Completed and skips Blocked and unknown', () => {
+  it('cycles Draft, Todo, InProgress, Completed and skips Blocked and unknown', () => {
     expect(nextCycleStatus('Draft')).toBe('todo')
-    expect(nextCycleStatus('Todo')).toBe('completed')
+    expect(nextCycleStatus('Todo')).toBe('inProgress')
+    expect(nextCycleStatus('InProgress')).toBe('completed')
     expect(nextCycleStatus('Completed')).toBe('draft')
     expect(nextCycleStatus('Blocked')).toBeUndefined()
     expect(nextCycleStatus('Mystery')).toBeUndefined()
@@ -98,8 +122,9 @@ describe('formatSubtaskProgress', () => {
 
 describe('getBlockErrorMessage', () => {
   it('maps the block 422 codes', () => {
-    expect(getBlockErrorMessage('TASK_BLOCK_DRAFT_NOT_ALLOWED')).toBe('Only open Todo tasks can be blocked.')
-    expect(getBlockErrorMessage('TASK_BLOCK_COMPLETED_NOT_ALLOWED')).toBe('Only open Todo tasks can be blocked.')
+    expect(getBlockErrorMessage('TASK_BLOCK_DRAFT_NOT_ALLOWED')).toBe('Only Todo or In Progress tasks can be blocked.')
+    expect(getBlockErrorMessage('TASK_BLOCK_COMPLETED_NOT_ALLOWED')).toBe('Only Todo or In Progress tasks can be blocked.')
+    expect(getBlockErrorMessage('TASK_START_NOT_ALLOWED')).toBe('Only Todo tasks can be moved to In Progress. Set it to Todo first.')
     expect(getBlockErrorMessage('TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS')).toMatch(/blocked task/)
   })
   it('returns null for other codes', () => {
@@ -120,6 +145,14 @@ describe('optimistic transforms', () => {
       const next = withUnblocked({ status: 'Blocked', previousStatus, blockedReason: 'x', blockedAt: 'then' })
       expect(next).toEqual({ status: 'Todo', previousStatus: null, blockedReason: null, blockedAt: null })
     }
+  })
+
+  it('withBlocked and withUnblocked leave startedAt alone and restore InProgress', () => {
+    const started = { status: 'InProgress', startedAt: '2026-01-01T00:00:00Z' } as BlockableFields & { startedAt: string }
+    const blocked = withBlocked(started, null)
+    expect(blocked).toMatchObject({ status: 'Blocked', previousStatus: 'InProgress', startedAt: started.startedAt })
+    const restored = withUnblocked(blocked)
+    expect(restored).toMatchObject({ status: 'InProgress', startedAt: started.startedAt, previousStatus: null })
   })
 
   it('withBlockedCompleted completes and clears the blocked fields', () => {

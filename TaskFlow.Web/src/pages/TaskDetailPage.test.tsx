@@ -185,9 +185,23 @@ describe('TaskDetailPage', () => {
     expect(screen.getByText('Fix login bug')).toBeInTheDocument()
   })
 
-  it('status badge shows lowercased status', () => {
+  it('status badge shows the status label', () => {
     renderPage()
-    expect(screen.getByText('todo')).toBeInTheDocument()
+    expect(screen.getAllByText('To-do')).toHaveLength(2)
+  })
+
+  it('shows the In Progress label and the local start time when startedAt is set', () => {
+    mockTask({ status: 'InProgress', startedAt: '2026-05-01T08:00:00Z' })
+    renderPage()
+    expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0)
+    expect(screen.getByText(/Started:/)).toBeInTheDocument()
+    expect(screen.getByText(/2026/, { selector: 'strong' })).toBeInTheDocument()
+  })
+
+  it('renders nothing for startedAt when it is null', () => {
+    mockTask({ status: 'Completed', startedAt: null })
+    renderPage()
+    expect(screen.queryByText(/Started:/)).not.toBeInTheDocument()
   })
 
   it('priority badge shows lowercased priority', () => {

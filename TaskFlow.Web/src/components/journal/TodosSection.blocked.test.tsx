@@ -193,7 +193,7 @@ describe('TodosSection blocked tasks', () => {
       const input = await screen.findByRole('textbox', { name: 'Blocked reason, optional' })
       expect(input).toHaveValue('Waiting on Sam')
       expect(input).toHaveFocus()
-      expect(screen.getByRole('alert')).toHaveTextContent('Only open Todo tasks can be blocked.')
+      expect(screen.getByRole('alert')).toHaveTextContent('Only Todo or In Progress tasks can be blocked.')
     })
 
     it('announces the result in a persistent polite live region', async () => {

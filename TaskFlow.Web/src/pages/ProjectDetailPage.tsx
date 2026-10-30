@@ -9,7 +9,7 @@ import {
 } from '@/hooks/useProjects'
 import { formatDate } from '@/lib/utils'
 import { formatProjectCounts } from '@/lib/project-counts'
-import { normalizeStatus, STATUS_LABELS } from '@/lib/task-status'
+import { getStatusLabel, normalizeStatus, STATUS_LABELS } from '@/lib/task-status'
 import '@/projects.css'
 
 function NotFound() {
@@ -29,9 +29,8 @@ function StatusBadge({ status }: { status: ProjectTaskDto['status'] }) {
   const known = normalizeStatus(status)
   if (known === 'Completed') return <span className="p-badge p-badge--completed">{STATUS_LABELS.Completed}</span>
   if (known === 'Blocked') return <span className="p-badge p-badge--blocked">{STATUS_LABELS.Blocked}</span>
-  if (known === 'Todo') return <span className="p-badge">Todo</span>
-  if (known === 'Draft') return <span className="p-badge">{STATUS_LABELS.Draft}</span>
-  return <span className="p-badge">{status}</span>
+  if (known === 'InProgress') return <span className="p-badge p-badge--inprogress">{STATUS_LABELS.InProgress}</span>
+  return <span className="p-badge">{getStatusLabel(status)}</span>
 }
 
 function ProjectTasks({ id }: { id: number }) {

@@ -126,13 +126,13 @@ describe('TasksPage acceptance (#317)', () => {
     it('sends the PascalCase-safe request and cycles once per Enter and per Space', async () => {
       renderPage()
       const row = (await screen.findByText('Alpha task')).closest('tr') as HTMLElement
-      const control = within(row).getByRole('button', { name: /^Status: todo/ })
+      const control = within(row).getByRole('button', { name: /^Status: To-do/ })
       control.focus()
       await userEvent.keyboard('{Enter}')
       await waitFor(() => expect(putApiV1TaskItemsById).toHaveBeenCalledTimes(1))
       expect(vi.mocked(putApiV1TaskItemsById).mock.calls[0][0]).toMatchObject({
         path: { id: 1 },
-        body: { title: 'Alpha task', status: 'completed' },
+        body: { title: 'Alpha task', status: 'inProgress' },
       })
       await userEvent.keyboard(' ')
       await waitFor(() => expect(putApiV1TaskItemsById).toHaveBeenCalledTimes(2))
@@ -142,10 +142,10 @@ describe('TasksPage acceptance (#317)', () => {
       vi.mocked(putApiV1TaskItemsById).mockRejectedValue(new Error('network'))
       renderPage()
       const row = (await screen.findByText('Alpha task')).closest('tr') as HTMLElement
-      await userEvent.click(within(row).getByRole('button', { name: /^Status: todo/ }))
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: To-do/ }))
       expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
       const after = (screen.getByText('Alpha task').closest('tr')) as HTMLElement
-      const control = within(after).getByRole('button', { name: /^Status: todo/ })
+      const control = within(after).getByRole('button', { name: /^Status: To-do/ })
       expect(control).toHaveClass('tap-target')
     })
   })

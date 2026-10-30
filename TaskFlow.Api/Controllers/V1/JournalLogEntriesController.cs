@@ -3,6 +3,7 @@ using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
+using TaskFlow.Api.Mappers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 
@@ -34,7 +35,7 @@ public class JournalLogEntriesController(
         }
 
         var logs = await _logRepo.GetAllByEntryIdAsync(entryId);
-        return Ok(logs.Select(ToDto));
+        return Ok(logs.Select(JournalLogEntryMapper.ToDto));
     }
 
     // GET: api/v1/JournalEntries/{entryId}/logs/{id}
@@ -53,7 +54,7 @@ public class JournalLogEntriesController(
             return NotFound();
         }
 
-        return Ok(ToDto(log));
+        return Ok(JournalLogEntryMapper.ToDto(log));
     }
 
     // POST: api/v1/JournalEntries/{entryId}/logs
@@ -81,7 +82,7 @@ public class JournalLogEntriesController(
         }
 
         var created = await _logRepo.AddAsync(log);
-        return CreatedAtRoute(GetLogRouteName, new { version = ApiVersions.V1, entryId, id = created.Id }, ToDto(created));
+        return CreatedAtRoute(GetLogRouteName, new { version = ApiVersions.V1, entryId, id = created.Id }, JournalLogEntryMapper.ToDto(created));
     }
 
     // PUT: api/v1/JournalEntries/{entryId}/logs/{id}
@@ -117,7 +118,7 @@ public class JournalLogEntriesController(
         }
 
         await _logRepo.UpdateAsync(existing);
-        return Ok(ToDto(existing));
+        return Ok(JournalLogEntryMapper.ToDto(existing));
     }
 
     // DELETE: api/v1/JournalEntries/{entryId}/logs/{id}
@@ -159,16 +160,4 @@ public class JournalLogEntriesController(
         }
         return null;
     }
-
-    private static JournalLogEntryResponseDto ToDto(JournalLogEntry l) => new()
-    {
-        Id = l.Id,
-        Content = l.Content,
-        JournalEntryId = l.JournalEntryId,
-        CreatedAt = l.CreatedAt,
-        UpdatedAt = l.UpdatedAt,
-        TaskItemId = l.TaskItemId,
-        LinkedTaskTitle = l.TaskItem?.Title ?? l.LinkedTaskTitleSnapshot,
-        LinkedTaskDeleted = l.TaskItemId is null && l.LinkedTaskTitleSnapshot is not null,
-    };
 }

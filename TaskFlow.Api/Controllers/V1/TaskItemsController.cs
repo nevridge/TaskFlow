@@ -30,6 +30,7 @@ public class TaskItemsController(
     private const string BlockCompletedNotAllowedErrorCode = "TASK_BLOCK_COMPLETED_NOT_ALLOWED";
     private const string BlockedReasonRequiresBlockedStatusErrorCode = "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS";
     private const string CreateBlockedNotAllowedErrorCode = "TASK_CREATE_BLOCKED_NOT_ALLOWED";
+    private const string StartNotAllowedErrorCode = "TASK_START_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -159,7 +160,8 @@ public class TaskItemsController(
             Priority = createDto.Priority,
             DueDate = createDto.DueDate,
             ParentTaskItemId = createDto.ParentTaskItemId,
-            ProjectId = createDto.ProjectId
+            ProjectId = createDto.ProjectId,
+            StartedAt = createDto.Status == Status.InProgress ? DateTime.UtcNow : null
         };
 
         var validationResult = await _validator.ValidateAsync(item);
@@ -320,8 +322,20 @@ public class TaskItemsController(
             return blockedError;
         }
 
-        var wasCompleted = IsCompleted(existing.Status);
         var nextStatus = blocked.Status;
+
+        // Only Todo (or Blocked, which follows the Blocked rules) may move to InProgress.
+        if (nextStatus == Status.InProgress && existing.Status is Status.Draft or Status.Completed)
+        {
+            return UnprocessableEntity(new
+            {
+                code = StartNotAllowedErrorCode,
+                message = "Only Todo tasks can be moved to In Progress.",
+                details = new { status = existing.Status.ToString() }
+            });
+        }
+
+        var wasCompleted = IsCompleted(existing.Status);
         var nowCompleted = IsCompleted(nextStatus);
 
         if (!wasCompleted && nowCompleted && await HasIncompleteChildrenAsync(id))
@@ -364,6 +378,11 @@ public class TaskItemsController(
         existing.BlockedAt = blocked.BlockedAt;
         existing.PreviousStatus = blocked.PreviousStatus;
 
+        if (nextStatus == Status.InProgress)
+        {
+            existing.StartedAt ??= DateTime.UtcNow;
+        }
+
         if (changes.HasPriority && changes.Priority.HasValue)
         {
             existing.Priority = changes.Priority.Value;
@@ -402,11 +421,11 @@ public class TaskItemsController(
 
     private static bool IsCompleted(Status status) => status == Status.Completed;
 
-    // Statuses a task may be blocked from. Add InProgress here when #239 lands.
-    private static bool IsBlockable(Status status) => status == Status.Todo;
+    // Statuses a task may be blocked from.
+    private static bool IsBlockable(Status status) => status is Status.Todo or Status.InProgress;
 
-    // Statuses an unblock may restore. Add InProgress here when #239 lands; anything else restores Todo.
-    private static bool IsRestorable(Status status) => status == Status.Todo;
+    // Statuses an unblock may restore; anything else restores Todo.
+    private static bool IsRestorable(Status status) => status is Status.Todo or Status.InProgress;
 
     private sealed record BlockedState(Status Status, string? Reason, DateTime? BlockedAt, Status? PreviousStatus);
 
@@ -443,7 +462,7 @@ public class TaskItemsController(
                 return (UnprocessableEntity(new
                 {
                     code = BlockDraftNotAllowedErrorCode,
-                    message = "Only open Todo tasks can be blocked.",
+                    message = "Only Todo or In Progress tasks can be blocked.",
                     details = new { status = was.ToString() }
                 }), default!);
             }
@@ -651,7 +670,8 @@ public class TaskItemsController(
             DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate),
             BlockedReason = item.BlockedReason,
             BlockedAt = item.BlockedAt,
-            PreviousStatus = item.PreviousStatus?.ToString()
+            PreviousStatus = item.PreviousStatus?.ToString(),
+            StartedAt = item.StartedAt
         };
     }
 

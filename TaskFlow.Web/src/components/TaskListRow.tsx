@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatDate } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
-import { canBlock, isBlocked as isBlockedStatus } from '@/lib/task-status'
+import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
 type TaskRowModel = TaskItemResponseDto & {
@@ -92,6 +92,9 @@ export function TaskListRow({
   const deleteHintId = `del-hint-${task.id}`
 
   const status = (task.status ?? 'draft').toLowerCase()
+  const statusLabel = getStatusLabel(task.status ?? 'draft')
+  const nextRequest = nextCycleStatus(task.status)
+  const nextLabel = nextRequest ? getStatusLabel(nextRequest) : null
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
   const moveCount = task.moveCount ?? 0
@@ -207,7 +210,7 @@ export function TaskListRow({
             onClick={() => onUnblock?.(task)}
           >
             <BlockIcon size={11} />
-            <span>{status}</span>
+            <span>{statusLabel}</span>
           </button>
         ) : (
           <span
@@ -216,9 +219,9 @@ export function TaskListRow({
             role="button"
             tabIndex={0}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStatusCycle(task) } }}
-            aria-label={`Status: ${status}. Click to change.`}
+            aria-label={nextLabel ? `Status: ${statusLabel}. Click to change to ${nextLabel}.` : `Status: ${statusLabel}. Click to change.`}
           >
-            {status}
+            {statusLabel}
           </span>
         )}
       </td>

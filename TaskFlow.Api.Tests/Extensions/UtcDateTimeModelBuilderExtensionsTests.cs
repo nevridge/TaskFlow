@@ -366,6 +366,30 @@ public class UtcDateTimeModelBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task StartedAt_TaskItem_RoundTripsThroughSqlite_HasUtcKindAndSerializesWithZ()
+    {
+        var (connection, options) = CreateSqlite();
+        using var _ = connection;
+        int id;
+        await using (var writer = new TaskDbContext(options))
+        {
+            var task = new TaskItem { Title = "Started", Status = Status.InProgress, StartedAt = InstantWithTicks };
+            writer.TaskItems.Add(task);
+            await writer.SaveChangesAsync();
+            id = task.Id;
+        }
+
+        await using var reader = new TaskDbContext(options);
+        var loaded = await reader.TaskItems.AsNoTracking().SingleAsync(t => t.Id == id);
+
+        Assert.Equal(Status.InProgress, loaded.Status);
+        Assert.NotNull(loaded.StartedAt);
+        Assert.Equal(DateTimeKind.Utc, loaded.StartedAt!.Value.Kind);
+        Assert.Equal(InstantWithTicks.Ticks, loaded.StartedAt.Value.Ticks);
+        Assert.EndsWith("Z\"", JsonSerializer.Serialize(loaded.StartedAt));
+    }
+
+    [Fact]
     public void AllDateTimeProperties_InModel_AreEitherUtcConvertedOrAllowlisted()
     {
         var (connection, options) = CreateSqlite();

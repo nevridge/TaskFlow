@@ -14,6 +14,9 @@ public class TaskItem
     public string? BlockedReason { get; set; }
     public DateTime? BlockedAt { get; set; }
     public Status? PreviousStatus { get; set; }
+
+    // Server-owned: set the first time the task enters InProgress; never cleared.
+    public DateTime? StartedAt { get; set; }
     public DateOnly? FirstTaggedDate { get; set; }
     public int MoveCount { get; set; }
     public int? ParentTaskItemId { get; set; }

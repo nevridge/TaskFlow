@@ -16,6 +16,7 @@ import { filterPending, pendingKey, usePendingDeleteIds } from '@/hooks/useUndoa
 import { getTimezoneOffsetMinutes } from '@/lib/journal-utils'
 import {
   mapCachedTask,
+  normalizeStatus,
   withBlocked,
   withBlockedReason,
   withUnblocked,
@@ -184,6 +185,14 @@ export function useUpdateTaskMutation() {
         // Per call: the client only rejects on HTTP errors when this is set.
         throwOnError: true,
       }),
+    // Optimistic status so the status cycle reflects instantly; startedAt is never touched.
+    onMutate: ({ id, data }) => {
+      const next = normalizeStatus(data.status)
+      // Blocked also sets blockedAt/previousStatus server-side, so leave it to the response.
+      if (!next || next === 'Blocked') return undefined
+      return applyOptimisticTaskUpdate(qc, [taskKeys.all, taskKeys.detail(id)], id, task => ({ ...task, status: next }))
+    },
+    onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),
     onSuccess: (_result, { id }) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       qc.invalidateQueries({ queryKey: taskKeys.detail(id) })

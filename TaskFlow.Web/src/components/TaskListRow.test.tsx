@@ -151,7 +151,7 @@ describe('TaskListRow', () => {
 
   it('renders status and priority badges', () => {
     renderRow()
-    expect(screen.getByText('todo')).toBeInTheDocument()
+    expect(screen.getByText('To-do')).toBeInTheDocument()
     expect(screen.getByText('high')).toBeInTheDocument()
   })
 
@@ -172,7 +172,7 @@ describe('TaskListRow', () => {
   it('calls onStatusCycle when status badge is clicked', async () => {
     const onStatusCycle = vi.fn()
     renderRow(baseTask, { onStatusCycle })
-    await userEvent.click(screen.getByRole('button', { name: /todo/i }))
+    await userEvent.click(screen.getByRole('button', { name: /to-do/i }))
     expect(onStatusCycle).toHaveBeenCalledWith(baseTask)
   })
 
@@ -191,7 +191,7 @@ describe('TaskListRow', () => {
     const task = { ...baseTask, childTaskCount: 3 }
     renderRow(task)
     expect(screen.getByRole('link', { name: 'Fix login bug' })).toBeInTheDocument()
-    expect(screen.getByText('todo')).toBeInTheDocument()
+    expect(screen.getByText('To-do')).toBeInTheDocument()
 
     // @ts-expect-error childCount was removed from TaskRowModel — this must fail to compile
     // if the field is ever reintroduced, since the component never reads it at runtime.
@@ -359,7 +359,7 @@ describe('TaskListRow', () => {
 
     it('gives the status control the tap-target class (AC13)', () => {
       renderFull(baseTask)
-      expect(screen.getByRole('button', { name: /^Status: todo/ })).toHaveClass('tap-target', 't-status-btn')
+      expect(screen.getByRole('button', { name: /^Status: To-do/ })).toHaveClass('tap-target', 't-status-btn')
     })
 
     it('gives the Blocked unblock button the tap-target class (AC13)', () => {
@@ -369,7 +369,7 @@ describe('TaskListRow', () => {
 
     it('cycles status once on Enter (AC14)', async () => {
       const { onStatusCycle } = renderFull(baseTask)
-      screen.getByRole('button', { name: /^Status: todo/ }).focus()
+      screen.getByRole('button', { name: /^Status: To-do/ }).focus()
       await userEvent.keyboard('{Enter}')
       expect(onStatusCycle).toHaveBeenCalledTimes(1)
       expect(onStatusCycle).toHaveBeenCalledWith(baseTask)
@@ -377,7 +377,7 @@ describe('TaskListRow', () => {
 
     it('cycles status once on Space (AC14)', async () => {
       const { onStatusCycle } = renderFull(baseTask)
-      screen.getByRole('button', { name: /^Status: todo/ }).focus()
+      screen.getByRole('button', { name: /^Status: To-do/ }).focus()
       await userEvent.keyboard(' ')
       expect(onStatusCycle).toHaveBeenCalledTimes(1)
     })

@@ -168,13 +168,14 @@ describe('useToggleTodoMutation on Blocked rows', () => {
     expect(rows(qc)[0]).toMatchObject({ status: 'Blocked', blockedReason: 'Waiting' })
   })
 
-  it('does not touch non-Blocked rows', async () => {
-    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: {} } as never)
+  it('completes a Todo row optimistically', async () => {
+    const d = deferred()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
     const qc = seeded([todo({ id: 1 })])
     const { result } = renderHook(() => useToggleTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
     act(() => { result.current.mutate({ id: 1, done: true }) })
-    expect(rows(qc)[0].status).toBe('Todo')
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    await waitFor(() => expect(rows(qc)[0].status).toBe('Completed'))
+    await act(async () => { d.resolve({ data: {} }); await d.promise })
   })
 })
 

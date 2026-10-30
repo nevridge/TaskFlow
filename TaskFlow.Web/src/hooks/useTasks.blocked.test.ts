@@ -150,3 +150,31 @@ describe('useUpdateTaskMutation blockedReason', () => {
     expect(vi.mocked(sdk.putApiV1TaskItemsById).mock.calls[1][0]?.body).toHaveProperty('blockedReason', '')
   })
 })
+
+describe('useUpdateTaskMutation optimistic status (#239)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  const todoStarted = { ...todoRow, startedAt: null }
+  const payload = (status: string) =>
+    ({ title: 'T', status, priority: 'low' }) as unknown as Parameters<ReturnType<typeof useUpdateTaskMutation>['mutate']>[0]['data']
+
+  it('shows InProgress in the list and detail caches right away and keeps startedAt', async () => {
+    const d = deferred()
+    vi.mocked(sdk.putApiV1TaskItemsById).mockReturnValue(d.promise as never)
+    const qc = seeded(todoStarted)
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper(qc) })
+    act(() => { result.current.mutate({ id: 1, data: payload('inProgress') }) })
+    await waitFor(() => expect(listRow(qc).status).toBe('InProgress'))
+    expect((qc.getQueryData(taskKeys.detail(1)) as { data: { status: string } }).data.status).toBe('InProgress')
+    expect(listRow(qc).startedAt).toBeNull()
+    await act(async () => { d.resolve({ data: {} }); await d.promise })
+  })
+
+  it('reverts the optimistic status when the save fails', async () => {
+    vi.mocked(sdk.putApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_START_NOT_ALLOWED' })
+    const qc = seeded(todoStarted)
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper(qc) })
+    await act(async () => { await result.current.mutateAsync({ id: 1, data: payload('inProgress') }).catch(() => {}) })
+    expect(listRow(qc).status).toBe('Todo')
+  })
+})

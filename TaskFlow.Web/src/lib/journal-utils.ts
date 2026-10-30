@@ -79,6 +79,12 @@ export function formatTime(isoString?: string): string {
   return `${h}:${min} ${ap}`
 }
 
+/** Local-timezone "Mon D, YYYY, h:mm AM" for a UTC ISO timestamp (e.g. a task's startedAt). */
+export function formatStartedAt(isoString: string): string {
+  const d = new Date(isoString)
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}, ${formatTime(isoString)}`
+}
+
 export function formatEntryTitle(s: string): string {
   const d = parseISO(s)
   return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`

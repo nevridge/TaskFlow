@@ -6,7 +6,13 @@ import { removeJournalTodo } from '@/api/journal'
 import type { TaskItemResponseDto } from '@/api/journal'
 import type { SortMode } from '@/lib/prefs'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
-import { formatSubtaskProgress, getBlockErrorMessage, journalSortTier } from '@/lib/task-status'
+import {
+  canBlock as canBlockStatus,
+  formatSubtaskProgress,
+  getBlockErrorMessage,
+  getStatusLabel,
+  journalSortTier,
+} from '@/lib/task-status'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import {
   useJournalTodos,
@@ -23,7 +29,7 @@ import {
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
 import { getErrorCode } from '@/lib/task-errors'
-import { todayISO, formatMonthDay } from '@/lib/journal-utils'
+import { todayISO, formatMonthDay, formatStartedAt } from '@/lib/journal-utils'
 
 const CheckSvg = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
@@ -344,7 +350,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     const id = Number(td.id)
     const isDone = td.status === 'Completed'
     const isBlocked = td.status === 'Blocked'
-    const canBlock = td.status === 'Todo'
+    const isInProgress = td.status === 'InProgress'
+    const canBlock = canBlockStatus(td.status)
     const childIsFuture = isChild && !!td.currentJournalDate && td.currentJournalDate > isoDate
     return (
       <>
@@ -435,6 +442,15 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             )}
 
             <TodoBadges priority={td.priority} projectName={td.projectName} />
+
+            {isInProgress && (
+              <span
+                className="t-badge t-badge-inprogress todo-inprogress-badge"
+                title={td.startedAt ? `Started ${formatStartedAt(td.startedAt)}` : undefined}
+              >
+                {getStatusLabel(td.status)}
+              </span>
+            )}
 
             {isBlocked && (
               <button

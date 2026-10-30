@@ -78,6 +78,19 @@ public class JsonSerializerOptionsProviderTests
         Assert.Equal(expected, patch!.Status);
     }
 
+    [Theory]
+    [InlineData("""{"status":"inProgress"}""")]
+    [InlineData("""{"status":"inprogress"}""")]
+    [InlineData("""{"status":"InProgress"}""")]
+    public void Deserialize_ShouldParseInProgressStatus_InAnyCasing(string json)
+    {
+        var options = CreateRequestOptions();
+
+        Assert.Equal(Status.InProgress, JsonSerializer.Deserialize<UpdateTaskItemDto>(json, options)!.Status);
+        Assert.Equal(Status.InProgress, JsonSerializer.Deserialize<CreateTaskItemDto>(json, options)!.Status);
+        Assert.Equal(Status.InProgress, JsonSerializer.Deserialize<PatchTaskItemDto>(json, options)!.Status);
+    }
+
     [Fact]
     public void PatchDto_ShouldReportNothingPresent_ForEmptyObject()
     {

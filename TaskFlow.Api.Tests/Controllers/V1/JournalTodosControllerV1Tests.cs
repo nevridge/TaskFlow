@@ -91,6 +91,36 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldReturnStartedAt_ForInProgressTodoAndItsChild()
+    {
+        var startedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+        var childStartedAt = new DateTime(2026, 10, 2, 10, 0, 0, DateTimeKind.Utc);
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Started parent",
+            Status = Status.InProgress,
+            StartedAt = startedAt,
+            ChildTaskItems =
+            [
+                new TaskItem { Id = 3, Title = "Started child", Status = Status.InProgress, StartedAt = childStartedAt, ParentTaskItemId = 2 },
+                new TaskItem { Id = 4, Title = "Plain child", Status = Status.Todo, ParentTaskItemId = 2 }
+            ]
+        };
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
+        Assert.Equal("InProgress", dto.Status);
+        Assert.Equal(startedAt, dto.StartedAt);
+        Assert.Equal(childStartedAt, dto.Children!.Single(c => c.Id == 3).StartedAt);
+        Assert.Null(dto.Children!.Single(c => c.Id == 4).StartedAt);
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnBadRequest_WhenTaskIdInvalid()
     {
         var dto = new AddJournalTodoDto { TaskItemId = 0 };

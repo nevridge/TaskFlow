@@ -250,6 +250,26 @@ describe('project handling in task mutations', () => {
     expect(keys()).toContainEqual(projectKeys.all)
   })
 
+  it('update optimistically sets InProgress but leaves the cache alone for Blocked', async () => {
+    let release: (v: unknown) => void = () => {}
+    vi.mocked(sdk.putApiV1TaskItemsById).mockImplementation((() => new Promise(r => { release = r })) as never)
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    qc.setQueryData(['tasks', 2], { data: { id: 2, status: 'Todo' } })
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper(qc) })
+
+    act(() => { result.current.mutate({ id: 2, data: { title: 'U', status: 'blocked' } }) })
+    await waitFor(() => expect(sdk.putApiV1TaskItemsById).toHaveBeenCalled())
+    expect(JSON.stringify(qc.getQueryData(['tasks', 2]))).toContain('"Todo"')
+    release({ data: { id: 2 }, response: new Response() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    vi.mocked(sdk.putApiV1TaskItemsById).mockImplementation((() => new Promise(r => { release = r })) as never)
+    qc.setQueryData(['tasks', 2], { data: { id: 2, status: 'Todo' } })
+    act(() => { result.current.mutate({ id: 2, data: { title: 'U', status: 'inProgress' } }) })
+    await waitFor(() => expect(JSON.stringify(qc.getQueryData(['tasks', 2]))).toContain('"InProgress"'))
+    release({ data: { id: 2 }, response: new Response() })
+  })
+
   it('delete invalidates project keys', async () => {
     vi.mocked(sdk.deleteApiV1TaskItemsById).mockResolvedValue({ response: new Response() } as never)
     const { result, keys } = setup(useDeleteTaskMutation)

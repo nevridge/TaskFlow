@@ -30,6 +30,7 @@ import {
   isBlocked,
   isCompleted,
   nextCycleStatus,
+  normalizeStatus,
   statusRank,
   toRequestStatus,
   type RequestStatus,
@@ -41,7 +42,7 @@ const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = STATUS_ORDE
   value: toRequestStatus(status),
   label: STATUS_LABELS[status],
 }))
-const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'blocked']
+const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'inProgress', 'blocked']
 type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 type ProjectFilter = 'all' | 'none' | number
 
@@ -294,7 +295,11 @@ export function TasksPage() {
   const filtered = useMemo(() => {
     return tasks
       .filter(t => matchesViewFilter(t, viewFilter))
-      .filter(t => statusFilter.size === 0 || statusFilter.has((t.status ?? '').toLowerCase() as StatusValue))
+      .filter(t => {
+        if (statusFilter.size === 0) return true
+        const normalized = normalizeStatus(t.status)
+        return !!normalized && statusFilter.has(toRequestStatus(normalized))
+      })
       .filter(t => {
         if (projectFilter === 'all') return true
         const taskProjectId = normalizeProjectId(t.projectId)

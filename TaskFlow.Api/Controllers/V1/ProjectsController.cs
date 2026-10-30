@@ -70,6 +70,7 @@ public class ProjectsController(
             BlockedReason = t.BlockedReason,
             BlockedAt = t.BlockedAt,
             PreviousStatus = t.PreviousStatus?.ToString(),
+            StartedAt = t.StartedAt,
         }));
     }
 

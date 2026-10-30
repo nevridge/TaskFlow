@@ -300,6 +300,49 @@ describe('TaskForm', () => {
     })
   })
 
+  describe('in progress status', () => {
+    const base = { id: 7, title: 'T', status: 'Todo' as const, priority: 'Medium' as const }
+    const statusSelect = () => screen.getByRole('combobox', { name: 'Status' })
+    const option = () => within(statusSelect()).getByRole('option', { name: /^In Progress/ })
+
+    it.each(['Draft', 'Completed'] as const)('disables In Progress with an explanation when the task is %s', status => {
+      renderForm({ ...base, status })
+      expect(option()).toBeDisabled()
+      expect(option()).toHaveAttribute('title', 'Set to Todo first')
+    })
+
+    it('enables In Progress for Todo, Blocked, InProgress and new tasks', () => {
+      for (const status of ['Todo', 'Blocked', 'InProgress'] as const) {
+        const { unmount } = renderForm({ ...base, status: status as never })
+        expect(option()).toBeEnabled()
+        unmount()
+      }
+      renderForm()
+      expect(option()).toBeEnabled()
+    })
+
+    it('sends the camelCase wire value inProgress', async () => {
+      const onSubmit = vi.fn()
+      renderForm(base, onSubmit)
+      await userEvent.selectOptions(statusSelect(), 'inprogress')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ status: 'inProgress' }))
+    })
+
+    it('pre-selects an InProgress task and resubmits inProgress', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...base, status: 'InProgress' as never }, onSubmit)
+      expect(statusSelect()).toHaveValue('inprogress')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ status: 'inProgress' }))
+    })
+
+    it('enables Blocked for an InProgress task', () => {
+      renderForm({ ...base, status: 'InProgress' as never })
+      expect(within(statusSelect()).getByRole('option', { name: 'Blocked' })).toBeEnabled()
+    })
+  })
+
   describe('blocked status', () => {
     const todoTask = { id: 7, title: 'T', status: 'Todo' as const, priority: 'Medium' as const }
     const statusSelect = () => screen.getByRole('combobox', { name: 'Status' })

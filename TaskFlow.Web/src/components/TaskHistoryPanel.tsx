@@ -1,6 +1,7 @@
 import { useTaskHistoryQuery } from '@/hooks/useTasks'
 import type { TaskItemEventResponseDto } from '@/api/tasks'
 import { formatShort } from '@/lib/journal-utils'
+import { STATUS_LABELS } from '@/lib/task-status'
 
 interface Props {
   taskId: number
@@ -44,7 +45,12 @@ export function TaskHistoryPanel({ taskId, emptyText = 'No history yet.' }: Prop
 }
 
 function describeEvent(event: TaskItemEventResponseDto): string {
-  if (event.changeSummary) return event.changeSummary
+  if (event.changeSummary) {
+    // Only these server-generated summaries embed the raw enum name ("InProgress"); other summaries
+    // (e.g. "Blocked: <reason>.") carry user text, which must not be rewritten.
+    const embedsStatus = event.eventType === 'StatusChanged' || event.eventType === 'Unblocked'
+    return embedsStatus ? event.changeSummary.replace(/\bInProgress\b/g, STATUS_LABELS.InProgress) : event.changeSummary
+  }
 
   switch (event.eventType) {
     case 'TaskCreated':

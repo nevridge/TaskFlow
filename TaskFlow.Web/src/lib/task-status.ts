@@ -6,19 +6,21 @@
  * casing for display code; the journal still compares the PascalCase response value
  * strictly (see CLAUDE.md "Enum comparisons").
  *
- * #239 (InProgress) slots in between Todo and Blocked: add it to TaskStatus,
- * STATUS_ORDER, STATUS_LABELS, REQUEST_STATUS and RESTORABLE_STATUSES.
+ * Internal UI key is the lowercased status (`inprogress`); the wire value for requests is
+ * `inProgress` (see REQUEST_STATUS), the only camelCase value. This file is the single
+ * casing-conversion point.
  */
 
-export type TaskStatus = 'Draft' | 'Todo' | 'Blocked' | 'Completed'
-export type RequestStatus = 'draft' | 'todo' | 'blocked' | 'completed'
+export type TaskStatus = 'Draft' | 'Todo' | 'InProgress' | 'Blocked' | 'Completed'
+export type RequestStatus = 'draft' | 'todo' | 'inProgress' | 'blocked' | 'completed'
 
 /** Display / sort order. Draft sorts first, Completed last. */
-export const STATUS_ORDER: readonly TaskStatus[] = ['Draft', 'Todo', 'Blocked', 'Completed']
+export const STATUS_ORDER: readonly TaskStatus[] = ['Draft', 'Todo', 'InProgress', 'Blocked', 'Completed']
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   Draft: 'Draft',
   Todo: 'To-do',
+  InProgress: 'In Progress',
   Blocked: 'Blocked',
   Completed: 'Completed',
 }
@@ -26,12 +28,19 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 const REQUEST_STATUS: Record<TaskStatus, RequestStatus> = {
   Draft: 'draft',
   Todo: 'todo',
+  InProgress: 'inProgress',
   Blocked: 'blocked',
   Completed: 'completed',
 }
 
-/** Statuses a Blocked task returns to when unblocked. Today only Todo (InProgress joins with #239). */
-const RESTORABLE_STATUSES: readonly TaskStatus[] = ['Todo']
+/** Statuses a Blocked task returns to when unblocked. */
+const RESTORABLE_STATUSES: readonly TaskStatus[] = ['Todo', 'InProgress']
+
+/** Display label for any casing of a status; unknown values fall back to the raw text. */
+export function getStatusLabel(raw: string | null | undefined): string {
+  const status = normalizeStatus(raw)
+  return status ? STATUS_LABELS[status] : (raw ?? '')
+}
 
 /** Case-insensitive. Unknown values return undefined so callers can render the raw value. */
 export function normalizeStatus(raw: string | null | undefined): TaskStatus | undefined {
@@ -59,16 +68,18 @@ export function statusRank(raw: string | null | undefined): number {
   return status ? STATUS_ORDER.indexOf(status) : STATUS_ORDER.length
 }
 
-/** Only an open Todo task can be blocked (InProgress joins with #239). */
+/** Only a Todo or In Progress task can be blocked. */
 export function canBlock(raw: string | null | undefined): boolean {
-  return normalizeStatus(raw) === 'Todo'
+  const status = normalizeStatus(raw)
+  return status === 'Todo' || status === 'InProgress'
 }
 
 /** Status-badge cycle on the tasks page. Blocked is not in the cycle. */
 export function nextCycleStatus(raw: string | null | undefined): RequestStatus | undefined {
   switch (normalizeStatus(raw)) {
     case 'Draft': return 'todo'
-    case 'Todo': return 'completed'
+    case 'Todo': return 'inProgress'
+    case 'InProgress': return 'completed'
     case 'Completed': return 'draft'
     default: return undefined
   }
@@ -92,7 +103,9 @@ export function getBlockErrorMessage(code: string | null): string | null {
     case 'TASK_BLOCK_DRAFT_NOT_ALLOWED':
     case 'TASK_BLOCK_COMPLETED_NOT_ALLOWED':
     case 'TASK_CREATE_BLOCKED_NOT_ALLOWED':
-      return 'Only open Todo tasks can be blocked.'
+      return 'Only Todo or In Progress tasks can be blocked.'
+    case 'TASK_START_NOT_ALLOWED':
+      return 'Only Todo tasks can be moved to In Progress. Set it to Todo first.'
     case 'TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS':
       return 'A blocked reason can only be set on a blocked task.'
     default:

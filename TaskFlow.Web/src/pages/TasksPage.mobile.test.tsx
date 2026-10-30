@@ -509,11 +509,11 @@ describe('TasksPage on mobile (#317)', () => {
 
     it('cycles status on Enter and Space with PascalCase-safe payloads (AC14)', async () => {
       renderPage()
-      const control = within(screen.getByText('Alpha task').closest('tr') as HTMLElement).getByRole('button', { name: /^Status: todo/ })
+      const control = within(screen.getByText('Alpha task').closest('tr') as HTMLElement).getByRole('button', { name: /^Status: To-do/ })
       control.focus()
       await userEvent.keyboard('{Enter}')
       expect(updateMutate).toHaveBeenCalledTimes(1)
-      expect(updateMutate.mock.calls[0][0].data.status).toBe('completed')
+      expect(updateMutate.mock.calls[0][0].data.status).toBe('inProgress')
       await userEvent.keyboard(' ')
       expect(updateMutate).toHaveBeenCalledTimes(2)
     })
@@ -524,9 +524,9 @@ describe('TasksPage on mobile (#317)', () => {
       updateMutate.mockImplementation((_vars, opts: { onError?: (e: unknown) => void }) => opts.onError?.(new Error('x')))
       renderPage()
       const row = screen.getByText('Alpha task').closest('tr') as HTMLElement
-      await userEvent.click(within(row).getByRole('button', { name: /^Status: todo/ }))
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: To-do/ }))
       expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
-      expect(within(row).getByRole('button', { name: /^Status: todo/ })).toHaveClass('tap-target')
+      expect(within(row).getByRole('button', { name: /^Status: To-do/ })).toHaveClass('tap-target')
     })
 
     it('Delete starts an undoable delete without asking for confirmation (AC42)', async () => {

@@ -1082,6 +1082,16 @@
   padding: 1px 7px;
 }
 
+/* The In Progress badge is a sibling of .todo-badges, so it needs the same compact sizing. */
+.journal-page .todo-inprogress-badge {
+  flex: 0 0 auto;
+}
+
+.journal-page .todo-child .todo-inprogress-badge {
+  font-size: 10.5px;
+  padding: 1px 7px;
+}
+
 /* ─── Blocked tasks ────────────────────────────────────────────────────────────
    Colour comes from --danger-ink / --danger-bg (there is no --danger token). State is
    carried by the icon and the "Blocked" text; colour only reinforces it. Every button

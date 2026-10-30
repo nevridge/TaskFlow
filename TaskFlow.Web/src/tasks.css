@@ -409,6 +409,25 @@ html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
 .t-badge-todo     { background: var(--accent-soft); color: var(--accent-ink); }
 .t-badge-completed { background: var(--success-bg); color: var(--success-ink); }
 .t-badge-low       { background: var(--line-soft);  color: var(--muted); }
+/* In Progress: solid accent-ink border + leading dot distinguish it from Todo without relying on colour alone.
+   Uses the themed accent tokens, so every light/dark theme variant is covered by index.css. */
+.t-badge-inprogress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--accent-ink);
+  background: color-mix(in oklab, var(--accent-soft) 70%, transparent);
+  color: var(--accent-ink);
+  font-family: inherit;
+  white-space: nowrap;
+}
+.t-badge-inprogress::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .t-badge-medium    { background: var(--warn-bg);    color: var(--warn-ink); }
 .t-badge-high   { background: var(--danger-bg); color: var(--danger-ink); }
 /* Blocked: dashed border + icon + text carry the state; colour only reinforces it. */

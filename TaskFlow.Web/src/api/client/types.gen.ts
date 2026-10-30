@@ -125,7 +125,7 @@ export type ProjectResponseDto = {
     blockedCount?: number | string;
 };
 
-export type Status = 'draft' | 'todo' | 'completed' | 'blocked';
+export type Status = 'draft' | 'todo' | 'completed' | 'blocked' | 'inProgress';
 
 export type TaskItemEventResponseDto = {
     id?: number | string;
@@ -159,6 +159,7 @@ export type TaskItemResponseDto = {
     blockedReason?: null | string;
     blockedAt?: null | string;
     previousStatus?: null | string;
+    startedAt?: null | string;
     children?: null | Array<TaskItemResponseDto>;
 };
 

@@ -75,6 +75,24 @@ describe('TaskHistoryPanel', () => {
     expect(screen.getByText('Did something')).toBeInTheDocument()
   })
 
+  it('shows the In Progress label in a status-change summary', () => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ changeSummary: 'Status changed from Todo to InProgress.' })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText('Status changed from Todo to In Progress.')).toBeInTheDocument()
+  })
+
+  it('leaves user text containing "InProgress" untouched in a Blocked summary', () => {
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({
+      data: { data: [makeEvent({ eventType: 'Blocked', changeSummary: 'Blocked: waiting on InProgress review.' })] },
+      isLoading: false,
+    } as never)
+    render(<TaskHistoryPanel taskId={1} />)
+    expect(screen.getByText('Blocked: waiting on InProgress review.')).toBeInTheDocument()
+  })
+
   it('renders "Task was created" for TaskCreated event type', () => {
     vi.mocked(useTaskHistoryQuery).mockReturnValue({
       data: { data: [makeEvent({ eventType: 'TaskCreated', changeSummary: null })] },

@@ -235,14 +235,15 @@ export function useToggleTodoMutation(entryId: number) {
         },
         throwOnError: true,
       }),
-    // Completing a Blocked row clears its blocked fields right away; other toggles wait for the server.
+    // Completing a row is optimistic (Blocked rows also clear their blocked fields); startedAt is never touched,
+    // so an InProgress task keeps it. Unticking waits for the server.
     onMutate: ({ id, done }) =>
       done
         ? applyOptimisticTaskUpdate(
             qc,
             [journalKeys.todos(entryId), taskKeys.all],
             id,
-            task => (isBlocked(task.status) ? withBlockedCompleted(task) : task),
+            task => (isBlocked(task.status) ? withBlockedCompleted(task) : { ...task, status: 'Completed' }),
           )
         : undefined,
     onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),

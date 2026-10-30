@@ -23,6 +23,8 @@ export type ProjectTaskDto = {
   /** PascalCase status. Typed as string so an unknown value renders as itself (see normalizeStatus). */
   status: string
   blockedReason?: string | null
+  /** UTC timestamp of the first move to In Progress; null when never started. Never cleared by the server. */
+  startedAt?: string | null
   priority: 'Low' | 'Medium' | 'High'
   parentTaskItemId?: number | null
   projectId?: number | null

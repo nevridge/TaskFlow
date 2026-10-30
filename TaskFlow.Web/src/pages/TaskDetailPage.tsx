@@ -18,8 +18,8 @@ import { usePrefs } from '@/context/usePrefs'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDate } from '@/lib/utils'
-import { formatShort } from '@/lib/journal-utils'
-import { isBlocked } from '@/lib/task-status'
+import { formatShort, formatStartedAt } from '@/lib/journal-utils'
+import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
@@ -203,7 +203,8 @@ export function TaskDetailPage() {
               {deleteBlocked && <p id="task-delete-hint" className="t-detail-hint">{deleteHint}</p>}
               {task.description && <p className="t-detail-desc">{task.description}</p>}
               <div className="t-detail-meta">
-                <span>Status: <strong>{task.status}</strong></span>
+                <span>Status: <strong>{getStatusLabel(task.status)}</strong></span>
+                {task.startedAt && <span>Started: <strong>{formatStartedAt(task.startedAt)}</strong></span>}
                 {isBlocked(task.status) && task.blockedReason && (
                   <span title={task.blockedReason}>Blocked reason: <strong>{task.blockedReason}</strong></span>
                 )}
@@ -238,7 +239,7 @@ export function TaskDetailPage() {
                 {task.dueDate && <span>Due: <strong>{formatDate(task.dueDate)}</strong></span>}
               </div>
               <div className="t-detail-badges">
-                <span className={`t-badge t-badge-${status}`}>{status}</span>
+                <span className={`t-badge t-badge-${status}`}>{getStatusLabel(task.status ?? 'draft')}</span>
                 <span className={`t-badge t-badge-${priority}`}>{priority}</span>
               </div>
             </>

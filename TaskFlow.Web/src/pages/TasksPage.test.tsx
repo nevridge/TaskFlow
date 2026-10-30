@@ -422,13 +422,14 @@ describe('TasksPage', () => {
 
     beforeEach(() => useData(mixed))
 
-    it('defaults to Draft, To-do and Blocked checked, Completed unchecked, in a Status group', () => {
+    it('defaults to Draft, To-do, In Progress and Blocked checked, Completed unchecked, in a Status group', () => {
       renderPage()
       const group = screen.getByRole('group', { name: 'Status' })
       expect(within(group).getAllByRole('checkbox').map(c => (c as HTMLInputElement).labels?.[0].textContent))
-        .toEqual(['Draft', 'To-do', 'Blocked (0)', 'Completed'])
+        .toEqual(['Draft', 'To-do', 'In Progress', 'Blocked (0)', 'Completed'])
       expect(box('Draft')).toBeChecked()
       expect(box('To-do')).toBeChecked()
+      expect(box('In Progress')).toBeChecked()
       expect(box('Blocked (0)')).toBeChecked()
       expect(box('Completed')).not.toBeChecked()
       expect(screen.queryByRole('checkbox', { name: 'All' })).not.toBeInTheDocument()
@@ -491,6 +492,7 @@ describe('TasksPage', () => {
       renderPage()
       await click('Draft')
       await click('To-do')
+      await click('In Progress')
       await click('Blocked (0)')
       for (const t of ['Draft one', 'Todo one', 'Completed one']) expect(screen.getByText(t)).toBeInTheDocument()
       expect(screen.getByText('3 tasks')).toBeInTheDocument()
@@ -564,8 +566,23 @@ describe('TasksPage', () => {
       expect(screen.queryByText('No status')).not.toBeInTheDocument()
       await click('Draft')
       await click('To-do')
+      await click('In Progress')
       await click('Blocked (0)')
       expect(screen.getByText('No status')).toBeInTheDocument()
+    })
+
+    it('shows InProgress tasks (PascalCase response) under the default filter', () => {
+      useData([{ ...baseTask, id: 61, title: 'Underway', status: 'InProgress' }])
+      renderPage()
+      expect(screen.getByText('Underway')).toBeInTheDocument()
+      expect(screen.getByText('In Progress', { selector: '.t-badge-inprogress' })).toBeInTheDocument()
+    })
+
+    it('hides InProgress tasks once the In Progress filter is cleared', async () => {
+      useData([{ ...baseTask, id: 61, title: 'Underway', status: 'InProgress' }, mixed[0]])
+      renderPage()
+      await click('In Progress')
+      expect(screen.queryByText('Underway')).not.toBeInTheDocument()
     })
 
     it('matches status case-insensitively', () => {
@@ -602,15 +619,50 @@ describe('TasksPage', () => {
   })
 
   describe('status cycle', () => {
-    it('cycling a Todo task sends status completed and never an isComplete field', async () => {
+    it('cycling a Todo task sends status inProgress and never an isComplete field', async () => {
       renderPage()
       const row = rowFor('Parent task')
-      await userEvent.click(within(row).getByRole('button', { name: /Status: todo/i }))
+      await userEvent.click(within(row).getByRole('button', { name: /Status: To-do/i }))
       expect(taskMutations.mutate).toHaveBeenCalledTimes(1)
       const payload = taskMutations.mutate.mock.calls[0][0]
       expect(payload.id).toBe(1)
-      expect(payload.data.status).toBe('completed')
+      expect(payload.data.status).toBe('inProgress')
       expect(payload.data).not.toHaveProperty('isComplete')
+    })
+
+    function useRows(rows: unknown[]) {
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data: rows }, isLoading: false, error: null } as never)
+    }
+
+    it('cycling an InProgress task sends status completed', async () => {
+      useRows([{ ...baseTask, id: 71, title: 'Underway', status: 'InProgress', startedAt: '2026-05-01T08:00:00Z' }])
+      renderPage()
+      await userEvent.click(within(rowFor('Underway')).getByRole('button', { name: /Status: In Progress/i }))
+      expect(taskMutations.mutate).toHaveBeenCalledTimes(1)
+      expect(taskMutations.mutate.mock.calls[0][0].data.status).toBe('completed')
+    })
+
+    it('cycling a Draft task sends todo and a Completed task sends draft', async () => {
+      useRows([
+        { ...baseTask, id: 72, title: 'A draft', status: 'Draft' },
+        { ...baseTask, id: 73, title: 'A finished', status: 'Completed' },
+      ])
+      renderPage()
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
+      await userEvent.click(within(rowFor('A draft')).getByRole('button', { name: /Status: Draft/i }))
+      await userEvent.click(within(rowFor('A finished')).getByRole('button', { name: /Status: Completed/i }))
+      expect(taskMutations.mutate.mock.calls[0][0].data.status).toBe('todo')
+      expect(taskMutations.mutate.mock.calls[1][0].data.status).toBe('draft')
+    })
+
+    it('shows the Set-to-Todo-first message when the start is rejected with TASK_START_NOT_ALLOWED', async () => {
+      taskMutations.mutate.mockImplementation((_data, { onError }: { onError: (e: unknown) => void }) =>
+        onError({ code: 'TASK_START_NOT_ALLOWED' }))
+      renderPage()
+      await userEvent.click(within(rowFor('Parent task')).getByRole('button', { name: /Status: To-do/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Only Todo tasks can be moved to In Progress. Set it to Todo first.',
+      )
     })
   })
 
@@ -818,7 +870,7 @@ describe('TasksPage', () => {
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: 'Block task: Todo task' }))
       await userEvent.type(screen.getByRole('textbox', { name: 'Blocked reason, optional' }), 'Waiting{Enter}')
-      expect(await screen.findByRole('alert')).toHaveTextContent('Only open Todo tasks can be blocked.')
+      expect(await screen.findByRole('alert')).toHaveTextContent('Only Todo or In Progress tasks can be blocked.')
       expect(await screen.findByRole('textbox', { name: 'Blocked reason, optional' })).toHaveValue('Waiting')
     })
 
@@ -848,6 +900,7 @@ describe('TasksPage', () => {
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
       expect(taskMutations.mutate).not.toHaveBeenCalled()
+      expect(unblockMutate).toHaveBeenCalledTimes(1)
     })
 
     it('subtask progress reports blocked children only when there are some', () => {
@@ -885,6 +938,7 @@ describe('TasksPage', () => {
       renderPage()
       await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' })) // empty selection shows everything
       await userEvent.click(screen.getByRole('checkbox', { name: 'To-do' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'In Progress' }))
       await userEvent.click(screen.getByRole('checkbox', { name: 'Blocked (0)' }))
       await userEvent.click(within(rowFor('Odd')).getByRole('button', { name: /Status: mystery/i }))
       expect(taskMutations.mutate).not.toHaveBeenCalled()

@@ -453,6 +453,8 @@ describe('TaskDetailPage', () => {
       vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: new Error('gone') } as never)
       expect(() => view.rerender(tree())).not.toThrow()
       expect(screen.getByText(/task not found/i)).toBeInTheDocument()
+      // The focused title input was unmounted; focus must fall back to body, not a stale node.
+      expect(document.body).toHaveFocus()
     })
 
     it('Cancel clears the save error so re-opening shows none', async () => {

@@ -76,7 +76,7 @@ export function TaskDetailPage() {
     setQuickProjectValue(null)
   }
 
-  // Restore focus once the quick-change select is enabled again, and to Edit after the form closes.
+  // Restore focus once the quick-change select is enabled again.
   useEffect(() => {
     if (!changeProject.isPending && refocusProjectSelect.current) {
       refocusProjectSelect.current = false

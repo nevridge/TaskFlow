@@ -900,6 +900,7 @@ describe('TasksPage', () => {
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
       expect(taskMutations.mutate).not.toHaveBeenCalled()
+      expect(unblockMutate).toHaveBeenCalledTimes(1)
     })
 
     it('subtask progress reports blocked children only when there are some', () => {

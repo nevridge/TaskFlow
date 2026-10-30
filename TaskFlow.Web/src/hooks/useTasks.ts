@@ -188,7 +188,8 @@ export function useUpdateTaskMutation() {
     // Optimistic status so the status cycle reflects instantly; startedAt is never touched.
     onMutate: ({ id, data }) => {
       const next = normalizeStatus(data.status)
-      if (!next) return undefined
+      // Blocked also sets blockedAt/previousStatus server-side, so leave it to the response.
+      if (!next || next === 'Blocked') return undefined
       return applyOptimisticTaskUpdate(qc, [taskKeys.all, taskKeys.detail(id)], id, task => ({ ...task, status: next }))
     },
     onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),

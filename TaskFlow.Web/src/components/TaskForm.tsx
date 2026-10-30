@@ -93,11 +93,12 @@ export function TaskForm({
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (isSaving) return
+    const normalized = normalizeStatus(status)
     onSubmit({
       title,
       description: description || null,
       // The form keeps the lowercased key; task-status.ts maps it to the wire value (`inProgress`).
-      status: (normalizeStatus(status) ? toRequestStatus(normalizeStatus(status)!) : status) as RequestStatus,
+      status: (normalized ? toRequestStatus(normalized) : status) as RequestStatus,
       priority: priority as 'low' | 'medium' | 'high',
       // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
       dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,

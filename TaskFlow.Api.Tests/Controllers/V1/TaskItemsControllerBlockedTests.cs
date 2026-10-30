@@ -32,7 +32,10 @@ public class TaskItemsControllerBlockedTests
                 new TaskRepository(Context),
                 new TaskItemValidator(),
                 new JournalEntryRepository(Context),
-                new Mock<IProjectRepository>().Object);
+                new Mock<IProjectRepository>().Object,
+                new CreateTaskItemDtoValidator(),
+                new UpdateTaskItemDtoValidator(),
+                new PatchTaskItemDtoValidator());
         }
 
         public TaskDbContext Context { get; }
@@ -574,7 +577,10 @@ public class TaskItemsControllerBlockedTests
             repo.Object,
             new Mock<FluentValidation.IValidator<TaskItem>>().Object,
             new Mock<IJournalEntryRepository>().Object,
-            new Mock<IProjectRepository>().Object);
+            new Mock<IProjectRepository>().Object,
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
 
         var result = await controller.Create(new CreateTaskItemDto { Title = "T", Status = Status.Blocked });
 
@@ -604,7 +610,14 @@ public class TaskItemsControllerBlockedTests
         repo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync([]);
         var validator = new Mock<FluentValidation.IValidator<TaskItem>>();
         validator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
-        var controller = new TaskItemsController(repo.Object, validator.Object, new Mock<IJournalEntryRepository>().Object, new Mock<IProjectRepository>().Object);
+        var controller = new TaskItemsController(
+            repo.Object,
+            validator.Object,
+            new Mock<IJournalEntryRepository>().Object,
+            new Mock<IProjectRepository>().Object,
+            new CreateTaskItemDtoValidator(),
+            new UpdateTaskItemDtoValidator(),
+            new PatchTaskItemDtoValidator());
 
         var dto = OkDto(await controller.Get(1));
 

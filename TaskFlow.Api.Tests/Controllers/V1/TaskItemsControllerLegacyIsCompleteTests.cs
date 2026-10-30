@@ -49,7 +49,10 @@ public class TaskItemsControllerLegacyIsCompleteTests
                 new TaskRepository(Context),
                 new TaskItemValidator(),
                 new JournalEntryRepository(Context),
-                new Mock<IProjectRepository>().Object);
+                new Mock<IProjectRepository>().Object,
+                new CreateTaskItemDtoValidator(),
+                new UpdateTaskItemDtoValidator(),
+                new PatchTaskItemDtoValidator());
         }
 
         public TaskDbContext Context { get; }

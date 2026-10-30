@@ -15,8 +15,7 @@ public static class ValidationServiceExtensions
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddValidation(this IServiceCollection services)
     {
-        // Register all validators from the assembly containing TaskItemValidator
-        // This automatically includes TaskItemValidator, StatusValidator, and any future validators
+        // Registers all AbstractValidator<T> types found in the assembly containing TaskItemValidator, including any future validators.
         services.AddValidatorsFromAssemblyContaining<TaskItemValidator>();
 
         return services;

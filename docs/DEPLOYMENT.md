@@ -24,6 +24,8 @@ docker compose up
 docker compose -f docker-compose.prod.yml up
 ```
 
+> **Note:** `docker-compose.prod.yml` is a local prod-like harness, not what Portainer runs. The production source of truth is `docker-compose.yml` in nevridge/taskflow-deploy; it differs from this file.
+
 ### Docker Configuration Overview
 
 TaskFlow provides two Docker configurations for different deployment scenarios.
@@ -38,7 +40,7 @@ TaskFlow provides two Docker configurations for different deployment scenarios.
 | Configuration | Use Case | Auto-migrations | Scalar UI |
 |--------------|----------|----------------|-----------|
 | **Development** (`docker-compose.yml`) | Local dev, fast iteration | Enabled | Enabled |
-| **Production** (`docker-compose.prod.yml`) | Production builds | Enabled | Disabled |
+| **Local prod-like** (`docker-compose.prod.yml`) | Production builds | Enabled | Disabled |
 
 ### Development Deployment
 
@@ -64,6 +66,8 @@ docker compose down -v
 > **For detailed instructions, see [DOCKER_CONFIGURATION.md](DOCKER_CONFIGURATION.md)**
 
 ### Production Deployment
+
+These commands run the local harness only; real production deploys via Portainer GitOps from nevridge/taskflow-deploy.
 
 **Quick start:**
 ```bash
@@ -113,6 +117,8 @@ Portainer GitOps detects change and deploys stack
 | Web Frontend | https://taskflow.skalaforge.com | Vite-based React frontend |
 | API | https://taskflow-api.skalaforge.com | .NET API backend |
 | Seq | https://taskflow-seq.skalaforge.com | Structured logging UI |
+
+Services in the local harness may differ from production; see nevridge/taskflow-deploy.
 
 ### How It Works
 
@@ -247,7 +253,7 @@ environment:
   - Database__MigrateOnStartup=true
 ```
 
-**docker-compose.prod.yml (Production compose):**
+**docker-compose.prod.yml (local prod-like harness):**
 ```yaml
 environment:
   - ASPNETCORE_ENVIRONMENT=Production

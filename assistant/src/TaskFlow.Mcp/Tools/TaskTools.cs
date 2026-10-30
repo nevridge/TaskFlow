@@ -66,7 +66,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         [Description("Number of results to skip, for paging. Default 0.")] int offset = 0,
         [Description("concise (default) or detailed.")] string responseFormat = "concise",
         [Description("Only tasks completed on or after this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Only done tasks are checked: a reopened task is not matched. Based on completion history of the 300 highest-id matching done tasks; see the incomplete-results note.")] string? completedFrom = null,
-        [Description("Only tasks completed on or before this day (inclusive, local time). Same formats. Must not be earlier than completedFrom.")] string? completedTo = null,
+        [Description("Only tasks completed on or before this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Must not be earlier than completedFrom.")] string? completedTo = null,
         [Description("Only tasks planned on the journal of this day. yyyy-MM-dd, today, tomorrow or yesterday. Done tasks need view=all.")] string? plannedDate = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>

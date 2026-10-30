@@ -324,7 +324,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         existingByTitle.TryAdd(Formatting.NormalizeTitle(existing.Title), existing);
                     }
                 }
-                catch (Exception ex) when (ex is TaskFlowApiException or McpException or HttpRequestException
+                catch (Exception ex) when ((ex is TaskFlowApiException or McpException or HttpRequestException)
                     || (ex is TaskCanceledException && !ct.IsCancellationRequested))
                 {
                     duplicateCheckSkipped = true;

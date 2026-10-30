@@ -253,7 +253,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 if (combined.Length > MaxSummaryLength)
                 {
                     throw ToolGuard.Invalid(
-                        $"The combined summary would be {combined.Length} characters (existing {existing?.Length ?? 0} + new {addition.Length}); the limit is {MaxSummaryLength}. Nothing was saved. "
+                        $"The combined summary would be {combined.Length} characters (existing {existing?.Length ?? 0} + new {addition.Length}); the limit is {MaxSummaryLength}. Nothing was saved, and any note passed was skipped too. "
                         + "Shorten the new text, or pass append=false to rewrite the whole summary.");
                 }
 

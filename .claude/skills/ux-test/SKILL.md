@@ -1,6 +1,6 @@
 ---
 name: ux-test
-description: "Drives a disposable TaskFlow test stack (docker compose project `taskflow-test`, http://localhost:3200) via Playwright to verify the UI/UX behaviour described in a PR or issue. Reads the PR/issue body with gh, builds the working tree into the test project, seeds uxtest- fixtures through /api/v1, runs a numbered test plan step by step, posts one idempotent pass/fail comment (marker <!-- ux-test-results -->), then removes fixtures, screenshots and temp files and tears the test project down. Invoke: /ux-test PR#228, /ux-test #228, /ux-test PR#250 #228."
+description: "Drives a disposable TaskFlow test stack (docker compose project `taskflow-test`, http://localhost:3200) via Playwright to verify the UI/UX behaviour described in a PR or issue. Reads the PR/issue body with gh, builds the working tree into the test project, seeds uxtest- fixtures through /api/v1, runs a numbered test plan step by step, posts one idempotent pass/fail comment (marker <!-- ux-test-results -->), then removes screenshots and temp files and tears the test project down. Invoke: /ux-test PR#228, /ux-test #228, /ux-test PR#250 #228."
 when_to_use: "Trigger phrases: 'run UX tests', 'test the UI', 'verify the frontend', 'check the UI changes', 'run ux-test', 'test this PR', 'verify UI changes'."
 argument-hint: "[PR#N] [#N]"
 disable-model-invocation: true
@@ -58,7 +58,7 @@ You are the UX test driver for TaskFlow. Your role is to verify UI/UX behavior d
 
 Run `gh`, `docker`, `git` and `curl` only through the Bash tool, never PowerShell. Every `.playwright-mcp/` path below is relative to the repository root. The `Edit(/.playwright-mcp/**)` grant is the only file-write grant and also covers the Write tool for the report file; if Write prompts anyway, a `Write(/.playwright-mcp/**)` entry can be added to the allowed tools.
 
-**Cleanup (Step 11) runs on EVERY exit path**: early stops, failed steps, failed `gh` writes and normal completion. Whenever a step below says "stop", print the stop message, then go to Step 11. No stop condition ever posts a GitHub comment: Step 10 runs only after a completed plan run, and the comment is posted only on success paths (including runs whose steps failed).
+**Cleanup (Step 10) runs on EVERY exit path**: early stops, failed steps, failed `gh` writes and normal completion. Whenever a step below says "stop", print the stop message, then go to Step 10. No stop condition ever posts a GitHub comment: Step 9 runs only after a completed plan run, and the comment is posted only on success paths (including runs whose steps failed).
 
 ---
 
@@ -75,7 +75,6 @@ Keep these identifiers for the whole run. Then:
 1. Generate the run id by running the plain Bash command `date +%Y%m%d%H%M%S`. Form `RUN_ID` as `uxtest-<that value>`, print it, and keep the literal value in your context. Shell variables do not persist between Bash calls, so substitute the literal `RUN_ID` into every later command and file name. Every fixture this run creates is prefixed `<RUN_ID>-`.
 2. Record `git branch --show-current`, `git rev-parse --short HEAD` and `git status --short -- . ':(exclude).playwright-mcp'`. A non-empty status is a dirty-tree note for the report. Do not stop on a dirty tree.
 3. Sweep stale local files from a crashed earlier run, using only these forms: `rm -f .playwright-mcp/ux-test-step*.png` and `rm -f .playwright-mcp/ux-test-results-*.md`.
-4. Live-port guard: the base URL is the fixed literal `http://localhost:3200`. If the URL in use resolves to port 3000, 8080 or 8081 (including `localhost`, `127.0.0.1` and `[::1]` forms), stop with `Refusing to run: base URL targets a live port (3000/8080/8081). Step 5 sweeps all uxtest- data at the base URL.` Then go to Step 11, which skips every `docker` command and deletes only local files. This is a text-level rule, no tool call.
 
 ---
 
@@ -85,9 +84,9 @@ For each identifier:
 - PR: `gh pr view <N> --json title,body,number,headRefName,closingIssuesReferences`
 - Issue: `gh issue view <N> --json title,body,number`
 
-If a PR was given without an issue, `closingIssuesReferences` may link an issue; keep it for Step 10 (the list may be empty or missing, which means no linked issue).
+If a PR was given without an issue, `closingIssuesReferences` may link an issue; keep it for Step 9 (the list may be empty or missing, which means no linked issue).
 
-If any `gh` read errors (404, permission, network), stop with `gh read failed: <exact error>`. Post nothing. Go to Step 11.
+If any `gh` read errors (404, permission, network), stop with `gh read failed: <exact error>`. Post nothing. Go to Step 10.
 
 ---
 
@@ -100,58 +99,34 @@ If any `gh` read errors (404, permission, network), stop with `gh read failed: <
 
 ## Step 3 - Build and start the isolated test project
 
-Every docker command below uses the same compose variant for the WHOLE run, including Step 11. Shell state does not persist, so record the choice in context and write the chosen command out in full each time. Variants (all `docker compose` commands carry `-p taskflow-test`):
+Every `docker` command in this skill, Step 10 included, uses the same compose variant for the whole run. Record the choice in context and write the chosen command out in full each time:
 - **B:** `docker compose -p taskflow-test -f docker-compose.test.yml`
 - **L:** `docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml`
 
-1. Run the plain Bash command `test -f docker-compose.test.local.yml`. Exit 0 means use L; non-zero (file absent) means use B. Record the choice.
-2. Run `<variant> config --volumes`. It prints volume keys. Accept only the exact lines `test-data` and `test-logs`; reject anything else (including `taskflow-data`, `taskflow-logs`, `seq-data`). The check does not depend on any project-name string. On rejection stop with `Volume check failed: <output>`, run no `down`, and go to Step 11 (which also runs no `down`).
+1. Run the plain Bash command `test -f docker-compose.test.local.yml`. Exit 0 means use L; non-zero (file absent) means use B.
+2. Run `<variant> config --volumes`. It prints volume keys; accept only the exact lines `test-data` and `test-logs`. Otherwise stop with `Volume check failed: <output>` and run no `down`. Go to Step 10.
 3. Run `<variant> down -v` to clear a stale test project from a crashed earlier run.
 4. Run `<variant> up -d --build` so the checked-out working tree is what runs, not a stale image. Run it with the Bash `timeout` parameter set to 600000 (10 minutes, the maximum), because a build can exceed the 120s default.
-5. If it fails or times out (build error, Docker daemon not running, etc.), stop with `Docker build/start failed` followed by the command output. Go to Step 11.
-
-Never run `docker compose` without `-p taskflow-test` and the test `-f` file(s) (`-f docker-compose.test.yml`, plus `-f docker-compose.test.local.yml` only when that file exists). Never run `up`, `stop`, `start`, `restart` or `down` against the live stack. Never edit any `docker-compose*.yml`. Never read or depend on `docker-compose.override.yml`. `docker-compose.test.local.yml` is a different, test-only file and is allowed only as the second `-f`.
+5. If it fails or times out (build error, Docker daemon not running, etc.), stop with `Docker build/start failed` followed by the command output. Go to Step 10.
 
 ---
 
 ## Step 4 - Verify reachability
 
 Poll up to 40 times (about 120 seconds). No shell `sleep` or loop is allowed. Each poll is one separate Bash call, and the wait between polls is Playwright `browser_wait_for` with a time of 3 seconds:
-- `curl -s -o /dev/null -w "%{http_code}" http://localhost:3200/api/v1/Projects` until it returns `200`. This goes through the web proxy, so it proves the web container and the API are both up. The web service has no healthcheck, so this 200 is the readiness signal for both.
+- `curl -s -o /dev/null -w "%{http_code}" http://localhost:3200/api/v1/Projects` until it returns `200`. This goes through the web proxy, so it proves the web container and the API are both up.
 - `<variant> ps` to see container status when a poll does not return `200`.
 
 Then call Playwright `browser_navigate` to `http://localhost:3200` and take a `browser_snapshot`.
 
-- If 40 polls pass without `200` (about 120 seconds), stop with `App not reachable at http://localhost:3200 after 120s`, include the last `<variant> ps` output and `<variant> logs --tail 50`. Go to Step 11.
-- If any Playwright tool call fails as not-found or unavailable, stop with `Playwright unavailable. Ensure the Playwright plugin is configured and running.` Go to Step 11.
+- If 40 polls pass without `200` (about 120 seconds), stop with `App not reachable at http://localhost:3200 after 120s`, include the last `<variant> ps` output and `<variant> logs --tail 50`. Go to Step 10.
+- If any Playwright tool call fails as not-found or unavailable, stop with `Playwright unavailable. Ensure the Playwright plugin is configured and running.` Go to Step 10.
 
 There is no login step: TaskFlow has no authentication. Never wait for the user at this point.
 
 ---
 
-## Step 5 - Sweep leftover fixtures
-
-A crashed earlier run may have left `uxtest-` data behind. List everything through the proxy:
-
-```bash
-curl -s http://localhost:3200/api/v1/Projects
-curl -s http://localhost:3200/api/v1/TaskItems
-```
-
-The test DB is fresh; this sweep is a safety net and must never run against a live port (Step 0 guard).
-
-Both list endpoints take no paging, filter or query parameters and return everything: `/Projects` includes archived projects (`isArchived`), and `/TaskItems` includes completed tasks and subtasks (`parentTaskItemId` is non-null for subtasks). No extra parameter is needed.
-
-Delete every project whose `name` and every task whose `title` starts with `uxtest-` (any run id), in this order:
-1. Subtasks (tasks with a `parentTaskItemId`): `curl -s -X DELETE http://localhost:3200/api/v1/TaskItems/<id>`
-2. Parent tasks (same call). Deleting a parent that still has children returns 422 `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`.
-3. Projects: `curl -s -X DELETE http://localhost:3200/api/v1/Projects/<id>`
-
-Report the swept count.
-
----
-
-## Step 6 - Derive the test plan
+## Step 5 - Derive the test plan
 
 Read the PR and/or issue body from Step 1. Generate a numbered test plan from that body ONLY:
 
@@ -180,9 +155,9 @@ Print the plan, the AC map and the fixtures list to the user.
 
 ---
 
-## Step 7 - Seed fixtures
+## Step 6 - Seed fixtures
 
-Seed only what the plan needs, through `curl` to `http://localhost:3200/api/v1/...` ONLY, into the test project. Never use 3000, 8080 or 8081 (live ports).
+Seed only what the plan needs, through `curl` to `http://localhost:3200/api/v1/...` ONLY.
 
 Fixtures (create only those the plan uses):
 - Projects: `<RUN_ID>-active-1`, `<RUN_ID>-active-2`, and `<RUN_ID>-archived`.
@@ -196,13 +171,12 @@ Rules:
 - Do not create a task on a past journal day (`journalDate` before the user's today is rejected with 422).
 - One level of nesting only: a subtask's parent must not itself be a subtask.
 - Quote JSON for `curl -d` with single quotes. Use forward-slash paths.
-- Record every created id so cleanup is exact.
 
 Steps the UI cannot produce (for example deleting a project, which keeps its tasks and clears their project) go through the API and are listed in the report as API-driven.
 
 ---
 
-## Step 8 - Execute the test plan
+## Step 7 - Execute the test plan
 
 Run each step in order. For each step:
 
@@ -221,11 +195,10 @@ State-changing features must be carried through to completion, never dismiss-onl
 
 **API-stopped steps** (testing behaviour when the API is down): run `<variant> stop taskflow-api`, observe the UI, then IMMEDIATELY run `<variant> start taskflow-api` and re-poll the Step 4 check against 3200 (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop) until `200` before any later step runs.
 
-**Native dialogs:** when a step triggers a native `confirm`/`alert` dialog, accept it with `browser_handle_dialog` to carry the state-changing action through to completion. Dismiss only for an explicit cancel-path edge case. Record the dialog text in the step result. Task and task-note deletes on TasksPage and TaskDetailPage no longer show a native confirm: they show an Undo toast and send the DELETE only after the window (10s for tasks, 6s for notes), so wait out the window (or confirm the row is gone after it) to carry the delete through to completion, and use Undo (or Ctrl/Cmd+Z, or `u`) for the cancel path. Cleanup also begins with an ensure-API-running check, so a mid-step crash never leaves the API stopped.
-
+**Native dialogs:** when a step triggers a native `confirm`/`alert` dialog, accept it with `browser_handle_dialog` to carry the state-changing action through to completion. Dismiss only for an explicit cancel-path edge case. Record the dialog text in the step result. Task and task-note deletes on TasksPage and TaskDetailPage no longer show a native confirm: they show an Undo toast and send the DELETE only after the window (10s for tasks, 6s for notes), so wait out the window (or confirm the row is gone after it) to carry the delete through to completion, and use Undo (or Ctrl/Cmd+Z, or `u`) for the cancel path.
 ---
 
-## Step 9 - Compile results
+## Step 8 - Compile results
 
 Produce the report:
 
@@ -276,7 +249,7 @@ Screenshots cannot be embedded in GitHub comments. Refer to steps by number and 
 
 ---
 
-## Step 10 - Post results to GitHub
+## Step 9 - Post results to GitHub
 
 **Target precedence:**
 1. The issue, if one was given, or `closingIssuesReferences[0]` when only a PR was given (handle an empty or missing list).
@@ -302,13 +275,11 @@ If a PR and an issue are both given, post once, to the issue.
 
 Never use inline `--body`.
 
-If any `gh` write fails: print the full report to the conversation, report the exact error, go to Step 11, and stop. Do not retry, do not try another account, never run `gh auth switch`.
+If any `gh` write fails: print the full report to the conversation, report the exact error, go to Step 10, and stop. Do not retry, do not try another account, never run `gh auth switch`.
 
 ---
 
-## Step 11 - Cleanup (every exit path)
-
-Every `docker` command here uses the same variant chosen in Step 3. On the live-port refusal path, skip every `docker` command and every `curl` to 3200 (items 2 and 3) and do only item 1.
+## Step 10 - Cleanup (every exit path)
 
 1. Delete local files, using only these forms:
    ```bash
@@ -318,17 +289,15 @@ Every `docker` command here uses the same variant chosen in Step 3. On the live-
    rm -f .playwright-mcp/console-*.log
    ```
    Missing files are not an error. Assume any `page-*.yml` and `console-*.log` in `.playwright-mcp/` are Playwright output from this run. Never remove the `.playwright-mcp` directory itself.
-2. Teardown: run `<variant> config --volumes` and apply the same check as Step 3 item 2 (exactly `test-data` and `test-logs`), then `<variant> down -v`. Skip this entirely on the live-port refusal path, if the volume check ever failed, or if the variant was never chosen.
-3. Only if teardown failed (or was skipped because the volume check failed) and the test project may still hold this run's fixtures: ensure the API is running (`<variant> ps`, and `<variant> start taskflow-api` if needed), re-poll the Step 4 check (separate `curl` calls with `browser_wait_for` waits, no shell sleep or loop), then delete this run's fixtures by the `<RUN_ID>-` prefix at `http://localhost:3200`: subtasks first, then parent tasks, then projects. Never run this against a live port.
-4. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
+2. Tear down the test project with the Step 3 variant: run `<variant> config --volumes`, and only if it passes the same check as Step 3 item 2, run `<variant> down -v`. Skip this if Step 3 never chose a variant or its volume check failed. This also removes this run's fixtures.
+3. A cleanup error is reported to the user but never hides the results. Finish with `Cleanup complete.` (or the error).
 
 ---
 
 ## Guardrails and Invariants
 
-- **Only target `http://localhost:3200`.** Never `taskflow.skalaforge.com` or any non-localhost URL. Refuse if the base URL maps to live ports 3000, 8080 or 8081.
-- **Never edit any `docker-compose*.yml`.** Never read or depend on `docker-compose.override.yml`. Never run `docker compose` without `-p taskflow-test` and the test `-f` file(s) (the `-f docker-compose.test.local.yml` form only when that file exists). Never run `down` before the `config --volumes` check passes with the same `-f` set used for `up`.
-- **Seed `uxtest-` fixtures only into the test project.**
+- **Only target `http://localhost:3200`** (the test stack). Never the live ports 3000, 8080 or 8081, `taskflow.skalaforge.com` or any other URL.
+- **Never touch the live stack.** Every `docker compose` command carries `-p taskflow-test` and the test `-f` file(s), the local file only as the second `-f` and only when it exists. Never run `down` before the `config --volumes` check passes. Never edit any `docker-compose*.yml`, and never read or depend on `docker-compose.override.yml`.
 - **No login step.** TaskFlow has no authentication; never wait for the user mid-run.
 - **Never run `gh auth switch`.** Run `gh` commands as plain `gh ...` using the already-active account.
 - **Always `--body-file`** (or `-F body=@file` for PATCH). Never inline `--body`.

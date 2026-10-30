@@ -150,6 +150,8 @@ export function useCreateTaskMutation() {
           journalDate: data.journalDate ?? null,
           projectId: data.projectId ?? null,
         } as CreateTaskItemDto,
+        // Per call: the client only rejects on HTTP errors when this is set.
+        throwOnError: true,
       }),
     onSuccess: (_result, variables) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
@@ -179,6 +181,8 @@ export function useUpdateTaskMutation() {
           // Omitted unless the caller sends it, so the stored reason is kept (merge-on-null).
           ...(data.blockedReason != null && { blockedReason: data.blockedReason }),
         } as UpdateTaskItemDto,
+        // Per call: the client only rejects on HTTP errors when this is set.
+        throwOnError: true,
       }),
     onSuccess: (_result, { id }) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })

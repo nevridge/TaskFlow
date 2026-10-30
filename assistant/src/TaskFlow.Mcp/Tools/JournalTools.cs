@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using TaskFlow.Mcp.Api;
@@ -234,14 +235,16 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     // Subtask enrichment is optional: API failures degrade the journal instead of failing it.
-    // Cancellation and McpException are deliberately not caught.
+    // A timeout (TaskCanceledException without caller cancellation) and an unreadable body (JsonException) degrade too.
+    // Caller cancellation and McpException are deliberately not caught.
     private async Task<(List<TaskItemDto>? Tasks, string? Failure)> LoadAllTasksAsync(CancellationToken ct)
     {
         try
         {
             return (await api.GetTasksAsync(ct), null);
         }
-        catch (Exception ex) when (ex is TaskFlowApiException or HttpRequestException)
+        catch (Exception ex) when (ex is TaskFlowApiException or HttpRequestException or JsonException
+            || ex is TaskCanceledException && !ct.IsCancellationRequested)
         {
             return (null, Formatting.CleanReason(ex.Message));
         }

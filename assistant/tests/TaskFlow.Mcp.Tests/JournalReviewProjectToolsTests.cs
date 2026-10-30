@@ -431,6 +431,34 @@ public class JournalToolsTests
     }
 
     [Fact]
+    public async Task GetJournal_TaskItemsTimesOut_ReturnsJournalWithoutSubtasksAndAddsNote()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Fail(HttpMethod.Get, "TaskItems", new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("#5").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsBodyUnreadable_ReturnsJournalWithoutSubtasksAndAddsNote()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Get("TaskItems", "not json");
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("#5").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
+    }
+
+    [Fact]
     public async Task GetJournal_TaskItemsFails_NoteSitsRightAfterPlannedBlock()
     {
         var handler = new StubHandler()

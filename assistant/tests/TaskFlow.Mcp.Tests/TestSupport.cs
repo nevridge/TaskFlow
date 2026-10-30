@@ -34,6 +34,18 @@ internal sealed class StubHandler : HttpMessageHandler
         return this;
     }
 
+    public StubHandler Fail(HttpMethod method, string path, Exception exception)
+    {
+        var key = (method, path);
+        if (!_routes.TryGetValue(key, out var queue))
+        {
+            _routes[key] = queue = new Queue<Func<HttpResponseMessage>>();
+        }
+
+        queue.Enqueue(() => throw exception);
+        return this;
+    }
+
     public StubHandler Get(string path, object? body) => On(HttpMethod.Get, path, body);
 
     public StubHandler Post(string path, object? body = null, HttpStatusCode status = HttpStatusCode.OK) => On(HttpMethod.Post, path, body, status);

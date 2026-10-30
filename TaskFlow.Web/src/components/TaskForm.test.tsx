@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createRef } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TaskForm } from './TaskForm'
@@ -35,6 +36,17 @@ describe('TaskForm', () => {
   it('renders title input', () => {
     renderForm()
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
+  })
+
+  it('does not focus the title on mount without a titleInputRef', () => {
+    renderForm()
+    expect(screen.getByLabelText(/title/i)).not.toHaveFocus()
+  })
+
+  it('attaches a supplied titleInputRef to the title input', () => {
+    const ref = createRef<HTMLInputElement>()
+    renderForm(undefined, vi.fn(), vi.fn(), { titleInputRef: ref })
+    expect(ref.current).toBe(screen.getByLabelText(/title/i))
   })
 
   it('pre-fills fields when editing an existing task', () => {

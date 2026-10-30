@@ -356,6 +356,116 @@ describe('TaskDetailPage', () => {
     expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
   })
 
+  describe('edit focus (#334)', () => {
+    const titleBox = () => screen.getByRole('textbox', { name: /title/i })
+    const editBtn = () => screen.getByRole('button', { name: /edit/i })
+
+    it('does not focus the Edit button on initial load', () => {
+      renderPage()
+      expect(editBtn()).not.toHaveFocus()
+    })
+
+    it('Edit click focuses the title input', async () => {
+      renderPage()
+      await userEvent.click(editBtn())
+      expect(titleBox()).toHaveFocus()
+    })
+
+    it('Cancel closes the form and focuses the Edit button', async () => {
+      renderPage()
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      expect(editBtn()).toHaveFocus()
+    })
+
+    it('a successful Save closes the form and focuses the Edit button', async () => {
+      renderPage()
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument())
+      expect(editBtn()).toHaveFocus()
+    })
+
+    it('re-opening after a Save focuses the title again', async () => {
+      renderPage()
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(editBtn()).toHaveFocus())
+      await userEvent.click(editBtn())
+      expect(titleBox()).toHaveFocus()
+    })
+
+    it('a failed Save keeps the form open and leaves focus where it was', async () => {
+      await saveWithUpdateError({ code: 'UNKNOWN_ERROR' })
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      expect(titleBox()).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
+      expect(titleBox()).not.toHaveFocus()
+    })
+
+    it('a partial failure (update OK, project change fails) keeps the form open without focusing Edit', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      renderPage()
+      await userEvent.click(editBtn())
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await screen.findByRole('alert')
+      expect(titleBox()).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
+    })
+
+    it('does not re-focus the title on rerender while editing', async () => {
+      // A fresh element per call: re-rendering the identical element would be a React no-op.
+      const tree = () => (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/tasks/1']}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+      const view = render(tree())
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByLabelText(/description/i))
+      expect(screen.getByLabelText(/description/i)).toHaveFocus()
+      mockTask({ title: 'Refetched title' })
+      view.rerender(tree())
+      expect(screen.getByLabelText(/description/i)).toHaveFocus()
+      expect(titleBox()).not.toHaveFocus()
+    })
+
+    it('renders "Task not found" without throwing when the task disappears while editing', async () => {
+      const tree = () => (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/tasks/1']}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+      const view = render(tree())
+      await userEvent.click(editBtn())
+      vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: new Error('gone') } as never)
+      expect(() => view.rerender(tree())).not.toThrow()
+      expect(screen.getByText(/task not found/i)).toBeInTheDocument()
+      // The focused title input was unmounted; focus must fall back to body, not a stale node.
+      expect(document.body).toHaveFocus()
+    })
+
+    it('Cancel clears the save error so re-opening shows none', async () => {
+      await saveWithUpdateError({ code: 'UNKNOWN_ERROR' })
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      await userEvent.click(editBtn())
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
   describe('project', () => {
     it('shows the project name of the task', () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })

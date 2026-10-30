@@ -105,7 +105,8 @@ export function useEnsureJournalEntry(isoDate: string) {
       // 409 means another client created the entry first: treat it like success. The 409 body has no
       // status field, so the status comes from the response. Other failures reject so onError runs.
       if (res.response?.status !== 409 && res.error !== undefined) throw res.error
-      return { res, date, carriedInline: isToday }
+      // A 409 returns before the server's carry-forward, so it never counts as an inline carry.
+      return { res, date, carriedInline: isToday && res.response?.status !== 409 }
     },
     onSuccess: ({ date, carriedInline }) => {
       // The server carried inline for today, so no separate carry-forward call is needed.

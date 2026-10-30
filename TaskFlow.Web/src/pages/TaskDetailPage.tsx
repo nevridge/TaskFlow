@@ -55,7 +55,8 @@ export function TaskDetailPage() {
   const addNoteBtnRef = useRef<HTMLButtonElement>(null)
   const editButtonRef = useRef<HTMLButtonElement>(null)
   const refocusProjectSelect = useRef(false)
-  const refocusEditButton = useRef(false)
+  const titleRef = useRef<HTMLInputElement>(null)
+  const wasEditing = useRef(false)
 
   const task = taskData?.data as TaskDetailModel | undefined
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
@@ -75,18 +76,18 @@ export function TaskDetailPage() {
     setQuickProjectValue(null)
   }
 
-  // Restore focus once the quick-change select is enabled again, and to Edit after a full save.
+  // Restore focus once the quick-change select is enabled again, and to Edit after the form closes.
   useEffect(() => {
     if (!changeProject.isPending && refocusProjectSelect.current) {
       refocusProjectSelect.current = false
       projectSelectRef.current?.focus()
     }
   })
+  // Title takes focus when the form opens; Edit (remounted) takes it back when the form closes.
   useEffect(() => {
-    if (!editingTask && refocusEditButton.current) {
-      refocusEditButton.current = false
-      editButtonRef.current?.focus()
-    }
+    if (editingTask) titleRef.current?.focus()
+    else if (wasEditing.current) editButtonRef.current?.focus()
+    wasEditing.current = editingTask
   }, [editingTask])
 
   const parentOptions = allTasks
@@ -101,7 +102,6 @@ export function TaskDetailPage() {
   async function handleUpdateTask(data: TaskFormPayload) {
     const saved = await saveWithProject.save(task!, data, autoCompleteParentWhenChildrenDone)
     if (saved) {
-      refocusEditButton.current = true
       setEditingTask(false)
     }
   }
@@ -173,6 +173,7 @@ export function TaskDetailPage() {
                 task={task}
                 availableParents={parentOptions}
                 projects={projects}
+                titleInputRef={titleRef}
                 projectInvalid={saveWithProject.projectInvalid}
                 onProjectChange={() => saveWithProject.setProjectInvalid(false)}
                 isSaving={saveWithProject.isSaving}

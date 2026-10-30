@@ -99,7 +99,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         TaskItem? persisted = null;
         // Safety net for callers that pass an untracked (Detached) entity. Production callers in
         // TaskItemsController pass tracked entities, so the API does not reach this branch today, but it is
-        // covered by UpdateAsync_ShouldWriteBlockedReasonChangedEvent_WhenDetachedTaskGainsReason. Do not remove.
+        // covered by the Detached-entity tests in TaskRepositoryTests. Do not remove.
         if (entry.State == EntityState.Detached)
         {
             persisted = await _context.TaskItems

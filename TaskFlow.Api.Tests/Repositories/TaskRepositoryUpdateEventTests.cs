@@ -258,6 +258,26 @@ public class TaskRepositoryUpdateEventTests
         Assert.Equal("DescriptionChanged", evt.EventType);
     }
 
+    [Theory]
+    [InlineData("notes", "Notes")]
+    [InlineData("notes", "notes ")]
+    public async Task UpdateAsync_DescriptionOrdinalOnlyDifference_WritesSingleDescriptionChangedEvent(string from, string to)
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem { Id = 1, Title = "T", Description = from, Status = Status.Todo });
+        task.Description = to;
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        var evt = Assert.Single(await GetEventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
     [Fact]
     public async Task UpdateAsync_SamePriorityAndDueDate_WritesNoEvents()
     {
@@ -328,6 +348,7 @@ public class TaskRepositoryUpdateEventTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
+        // Description/DueDate are deliberately held equal to the persisted row so this test does not depend on null-fallback behavior.
         context.TaskItems.Add(new TaskItem { Id = 1, Title = "Old", Description = "d", Status = Status.Todo });
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();

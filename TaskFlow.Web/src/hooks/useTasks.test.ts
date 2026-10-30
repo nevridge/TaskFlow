@@ -113,6 +113,56 @@ describe('useUpdateTaskMutation timezone offset', () => {
   })
 })
 
+/** Mimics the generated client: an HTTP error only rejects when throwOnError is set, otherwise it resolves. */
+function clientLike(error: unknown) {
+  return (opts?: { throwOnError?: boolean }) =>
+    opts?.throwOnError ? Promise.reject(error) : Promise.resolve({ error, response: new Response(null, { status: 500 }) })
+}
+
+describe('task create/update reject on HTTP errors (throwOnError)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('update passes throwOnError: true and rejects when the PUT fails', async () => {
+    const apiError = { code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' }
+    vi.mocked(sdk.putApiV1TaskItemsById).mockImplementation(clientLike(apiError) as never)
+    const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper() })
+
+    await act(async () => {
+      await expect(result.current.mutateAsync({ id: 2, data: { title: 'U' } })).rejects.toBe(apiError)
+    })
+
+    expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({ throwOnError: true }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+  })
+
+  it('create passes throwOnError: true and rejects when the POST fails', async () => {
+    const apiError = { code: 'TASK_PROJECT_NOT_FOUND' }
+    vi.mocked(sdk.postApiV1TaskItems).mockImplementation(clientLike(apiError) as never)
+    const { result } = renderHook(() => useCreateTaskMutation(), { wrapper: makeWrapper() })
+
+    await act(async () => {
+      await expect(result.current.mutateAsync({ title: 'T' })).rejects.toBe(apiError)
+    })
+
+    expect(sdk.postApiV1TaskItems).toHaveBeenCalledWith(expect.objectContaining({ throwOnError: true }))
+  })
+
+  it('a failed create does not invalidate the task list and does not run onSuccess', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockImplementation(clientLike({ code: 'X' }) as never)
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const onSuccess = vi.fn()
+    const onError = vi.fn()
+    const { result } = renderHook(() => useCreateTaskMutation(), { wrapper: makeWrapper(qc) })
+
+    act(() => { result.current.mutate({ title: 'T' }, { onSuccess, onError }) })
+    await waitFor(() => expect(onError).toHaveBeenCalled())
+
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+})
+
 describe('useDeleteTaskMutation', () => {
   beforeEach(() => vi.clearAllMocks())
 

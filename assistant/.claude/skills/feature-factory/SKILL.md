@@ -42,7 +42,7 @@ GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/issues/<
 GH_TOKEN="$(gh auth token --user nevridge)" gh api repos/<owner>/<repo>/pulls/<num> --jq '{state, merged}'   # only when pr is true
 ```
 
-A blocker is **unfinished** if it is an open issue or PR, an issue closed as `not_planned`, or a PR closed without merging. If any blocker is unfinished, stop and name each one with its state; continue only if the user replies with an explicit "proceed anyway", which covers only the items listed at that moment. If a state cannot be looked up, say so and continue.
+A blocker is **unfinished** if it is an open issue or PR, an issue closed as `not_planned`, or a PR closed without merging. If any blocker is unfinished, stop and name each one with its state; continue only if the user replies with an explicit "proceed anyway", which covers only the items listed at that moment. If a state cannot be looked up, treat that blocker as unfinished and name it.
 
 ---
 

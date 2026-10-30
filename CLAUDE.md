@@ -53,6 +53,11 @@ docker compose up -d
 
 # Docker (production)
 docker compose -f docker-compose.prod.yml up
+
+# Docker (isolated test project: 3200 web / 8280 API, beside the live stack; for feature branches and /ux-test)
+docker compose -p taskflow-test -f docker-compose.test.yml up -d --build
+docker compose -p taskflow-test -f docker-compose.test.yml down -v   # -p is mandatory
+# Rebuild the live stack only from `main`. Behind a TLS-inspecting proxy add `-f docker-compose.test.local.yml` (local, gitignored). See docs/DOCKER_CONFIGURATION.md ("Live vs Test Stack Workflow").
 ```
 
 ## Shell & Command Execution

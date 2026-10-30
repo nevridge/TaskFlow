@@ -186,6 +186,7 @@ storybook-static/
 # -----------------------
 .Dockerfile.swp
 docker-compose.override.yml
+docker-compose.test.local.yml
 .env
 .env.*.local
 .claude/settings.local.json

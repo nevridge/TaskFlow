@@ -118,7 +118,7 @@ Portainer GitOps detects change and deploys stack
 | API | https://taskflow-api.skalaforge.com | .NET API backend |
 | Seq | https://taskflow-seq.skalaforge.com | Structured logging UI |
 
-Services in the local harness may differ from production; see nevridge/taskflow-deploy.
+This table describes the production stack; the authoritative service list is `docker-compose.yml` in nevridge/taskflow-deploy. The local `docker-compose.prod.yml` harness may differ.
 
 ### How It Works
 

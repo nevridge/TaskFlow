@@ -30,7 +30,84 @@ public class TaskItemsControllerV1Tests
         _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(It.IsAny<int>())).ReturnsAsync((DateOnly?)null);
         _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync([]);
         _mockRepo.Setup(r => r.GetHistoryAsync(It.IsAny<int>())).ReturnsAsync([]);
+        _mockRepo.Setup(r => r.GetAssignedJournalDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly>());
+        _mockRepo.Setup(r => r.GetLastMovedDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly>());
         _controller = new TaskItemsController(_mockRepo.Object, _mockValidator.Object, _mockJournalRepo.Object, _mockProjectRepo.Object);
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldUseBulkLookupsOnce_WhenManyTasks()
+    {
+        var tasks = Enumerable.Range(1, 5).Select(i => new TaskItem { Id = i, Title = $"T{i}", Status = Status.Todo }).ToList();
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
+
+        var result = await _controller.GetAll();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(5, Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Count());
+        _mockRepo.Verify(r => r.GetAssignedJournalDatesAsync(It.Is<IReadOnlyCollection<int>>(c => c.Count == 5)), Times.Once);
+        _mockRepo.Verify(r => r.GetLastMovedDatesAsync(It.Is<IReadOnlyCollection<int>>(c => c.Count == 5)), Times.Once);
+        _mockRepo.Verify(r => r.GetAssignedJournalDateAsync(It.IsAny<int>()), Times.Never);
+        _mockRepo.Verify(r => r.GetHistoryAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldMapDatesFromLookups_WhenOnlySomeTasksHaveThem()
+    {
+        var tasks = new List<TaskItem>
+        {
+            new() { Id = 1, Title = "Parent", Status = Status.Todo, FirstTaggedDate = new DateOnly(2026, 3, 1) },
+            new() { Id = 2, Title = "Child", Status = Status.Todo, ParentTaskItemId = 1 },
+            new() { Id = 3, Title = "Bare", Status = Status.Todo }
+        };
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
+        _mockRepo.Setup(r => r.GetAssignedJournalDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly> { [1] = new DateOnly(2026, 3, 4) });
+        _mockRepo.Setup(r => r.GetLastMovedDatesAsync(It.IsAny<IReadOnlyCollection<int>>()))
+            .ReturnsAsync(new Dictionary<int, DateOnly> { [1] = new DateOnly(2026, 3, 3), [2] = new DateOnly(2026, 3, 2) });
+
+        var result = await _controller.GetAll();
+
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(Assert.IsType<OkObjectResult>(result.Result).Value).ToDictionary(d => d.Id);
+        Assert.Equal(new DateOnly(2026, 3, 4), dtos[1].CurrentJournalDate);
+        Assert.Equal(DaysTaggedHelper.GetDaysTagged(new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 4)), dtos[1].DaysTagged);
+        Assert.Equal(new DateOnly(2026, 3, 3), dtos[1].LastMovedDate);
+        Assert.Equal(1, dtos[1].ChildTaskCount);
+        Assert.Null(dtos[2].CurrentJournalDate);
+        Assert.Equal(new DateOnly(2026, 3, 2), dtos[2].LastMovedDate);
+        Assert.Null(dtos[3].CurrentJournalDate);
+        Assert.Null(dtos[3].LastMovedDate);
+        Assert.Equal(0, dtos[3].ChildTaskCount);
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldReturnEmptyWithoutBulkCalls_WhenNoTasks()
+    {
+        var result = await _controller.GetAll();
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Empty(Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value));
+        _mockRepo.Verify(r => r.GetAssignedJournalDatesAsync(It.IsAny<IReadOnlyCollection<int>>()), Times.Never);
+        _mockRepo.Verify(r => r.GetLastMovedDatesAsync(It.IsAny<IReadOnlyCollection<int>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Get_ShouldReturnLastMovedDateFromHistory_WhenEventsHaveDates()
+    {
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Todo });
+        _mockRepo.Setup(r => r.GetHistoryAsync(1)).ReturnsAsync(
+        [
+            new TaskItemEvent { Id = 1, TaskItemId = 1, OccurredAtUtc = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc), ToJournalDate = new DateOnly(2026, 3, 1) },
+            new TaskItemEvent { Id = 2, TaskItemId = 1, OccurredAtUtc = new DateTime(2026, 3, 2, 0, 0, 0, DateTimeKind.Utc), FromJournalDate = new DateOnly(2026, 3, 1) }
+        ]);
+
+        var result = await _controller.Get(1);
+
+        var dto = Assert.IsType<TaskItemResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal(new DateOnly(2026, 3, 1), dto.LastMovedDate);
+        _mockRepo.Verify(r => r.GetHistoryAsync(1), Times.Once);
     }
 
     [Fact]

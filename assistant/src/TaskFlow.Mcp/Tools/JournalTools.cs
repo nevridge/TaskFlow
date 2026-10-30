@@ -13,7 +13,8 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "get_journal")]
     [Description(
         "Shows the daily journal for a date: summary, the tasks planned for that day, log entries and notes. Defaults to today. "
-        + "Creates the day's journal entry if it does not exist yet (the journal always has one entry per day), so calling it for today is safe. Use it to start planning a day.")]
+        + "Creates the day's journal entry if it does not exist yet (the journal always has one entry per day), so calling it for today is safe. Use it to start planning a day. "
+        + "Each planned task lists its open subtasks (id, title, status) beneath it; completed subtasks are hidden.")]
     public Task<string> GetJournal(
         [Description("yyyy-MM-dd, today, tomorrow or yesterday. Default today.")] string? date = null,
         [Description("concise (default) or detailed (adds descriptions and journal info to planned tasks).")] string responseFormat = "concise",
@@ -26,18 +27,48 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 
             var todosTask = api.GetJournalTodosAsync(entry.Id, ct);
             var notesTask = api.GetJournalNotesAsync(entry.Id, ct);
-            await Task.WhenAll(todosTask, notesTask);
+            var allTasksTask = api.GetTasksAsync(ct);
+            await Task.WhenAll(todosTask, notesTask, allTasksTask);
 
             var detailed = Formatting.IsDetailed(responseFormat);
             var sb = new StringBuilder();
             sb.AppendLine($"Journal {day:yyyy-MM-dd} (entry #{entry.Id}){(day == today ? " - today" : string.Empty)}");
             sb.AppendLine(string.IsNullOrWhiteSpace(entry.Summary) ? "Summary: (none)" : "Summary: " + entry.Summary.Trim());
 
-            var todos = Formatting.OrderByUrgency(todosTask.Result).ToList();
+            var todos = Formatting.OrderByUrgency(await todosTask).ToList();
             sb.AppendLine(todos.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({todos.Count}):");
-            foreach (var task in todos)
+            if (todos.Count > 0)
             {
-                sb.AppendLine("  " + Formatting.Task(task, today, detailed, time.GetUtcNow()));
+                var nowUtc = time.GetUtcNow();
+                var plannedIds = todos.Select(t => t.Id).ToHashSet();
+                var subtasks = Formatting.OpenSubtasksByParent(await allTasksTask);
+                var marker = day == today ? " | planned today" : " | planned this day";
+                foreach (var task in todos)
+                {
+                    sb.AppendLine("  " + Formatting.Task(task, today, detailed, nowUtc, showChildCount: false));
+                    var open = Formatting.OrderByUrgency(subtasks[task.Id]).ToList();
+                    if (open.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    sb.AppendLine($"    Open subtasks ({open.Count}):");
+                    foreach (var sub in open)
+                    {
+                        sb.Append($"      - #{sub.Id} [{sub.Status}] {sub.Title}");
+                        if (detailed && sub.IsBlocked)
+                        {
+                            sb.Append(" | ").Append(Formatting.BlockedLabel(sub, nowUtc));
+                        }
+
+                        if (plannedIds.Contains(sub.Id))
+                        {
+                            sb.Append(marker);
+                        }
+
+                        sb.AppendLine();
+                    }
+                }
             }
 
             var logs = entry.LogEntries.OrderBy(l => l.CreatedAt).ToList();

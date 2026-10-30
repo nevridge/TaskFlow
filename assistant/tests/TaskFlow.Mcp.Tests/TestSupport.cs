@@ -16,6 +16,8 @@ internal sealed class StubHandler : HttpMessageHandler
 {
     private readonly Dictionary<(HttpMethod, string), Queue<Func<HttpResponseMessage>>> _routes = [];
 
+    private readonly object _gate = new();
+
     public List<RecordedRequest> Requests { get; } = [];
 
     public Exception? Throw { get; set; }
@@ -55,15 +57,18 @@ internal sealed class StubHandler : HttpMessageHandler
 
         var path = request.RequestUri!.AbsolutePath["/api/v1/".Length..];
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
-        Requests.Add(new RecordedRequest(request.Method, path, body));
 
-        if (_routes.TryGetValue((request.Method, path), out var queue))
+        Func<HttpResponseMessage>? next = null;
+        lock (_gate)
         {
-            var next = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
-            return next();
+            Requests.Add(new RecordedRequest(request.Method, path, body));
+            if (_routes.TryGetValue((request.Method, path), out var queue))
+            {
+                next = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
+            }
         }
 
-        return new HttpResponseMessage(HttpStatusCode.NotFound);
+        return next is null ? new HttpResponseMessage(HttpStatusCode.NotFound) : next();
     }
 
     private static HttpResponseMessage Respond(HttpStatusCode status, object? body)
@@ -117,7 +122,8 @@ internal static class Fixtures
         string? description = null,
         string? blockedReason = null,
         string? blockedAt = null,
-        string? previousStatus = null) => new
+        string? previousStatus = null,
+        int childTaskCount = 0) => new
         {
             id,
             title,
@@ -130,7 +136,7 @@ internal static class Fixtures
             projectId,
             projectName,
             currentJournalEntryId = (int?)null,
-            childTaskCount = 0,
+            childTaskCount,
             currentJournalDate = plannedOn,
             moveCount,
             daysTagged,
@@ -151,14 +157,14 @@ internal static class Fixtures
         blockedCount,
     };
 
-    public static object Journal(int id, string date, string? summary = null, object[]? logs = null) => new
+    public static object Journal(int id, string date, string? summary = null, object[]? logs = null, int[]? todoTaskItemIds = null) => new
     {
         id,
         title = $"Journal {date}",
         summary,
         date,
         createdAt = "2026-10-09T00:00:00Z",
-        todoTaskItemIds = Array.Empty<int>(),
+        todoTaskItemIds = todoTaskItemIds ?? [],
         logEntries = logs ?? [],
     };
 

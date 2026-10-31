@@ -22,7 +22,8 @@ public sealed record TaskItemDto(
     int DaysTagged,
     string? BlockedReason = null,
     DateTime? BlockedAt = null,
-    string? PreviousStatus = null)
+    string? PreviousStatus = null,
+    DateTime? StartedAt = null)
 {
     public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
 

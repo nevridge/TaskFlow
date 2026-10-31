@@ -19,7 +19,7 @@ public sealed class NewTask
     [Description("low, medium or high. Default low.")]
     public string? Priority { get; set; }
 
-    [Description("draft or todo (default todo). Tasks cannot be created as blocked: create the task, then call update_task with status=blocked.")]
+    [Description("draft, todo or inprogress (default todo). Tasks cannot be created as blocked: create the task, then call update_task with status=blocked.")]
     public string? Status { get; set; }
 
     [Description("Due date as yyyy-MM-dd, or today/tomorrow.")]
@@ -41,13 +41,15 @@ internal static class UpdateFieldText
     public const string Id = "Task id.";
     public const string Title = "New title (max 100 characters).";
     public const string Description = "New description. Pass an empty string to clear it.";
-    public const string Status = "draft, todo, blocked or completed.";
+    public const string Status = "draft, todo, inprogress, blocked or completed (any casing). inprogress = work has started; only Todo tasks can be started. "
+        + "Only Todo or InProgress tasks can be blocked. status=todo on a Blocked task unblocks it and restores its previous status (Todo or InProgress); on an InProgress task it moves it back to Todo. "
+        + "Completing a Blocked task clears the block.";
     public const string Priority = "low, medium or high.";
     public const string DueDate = "yyyy-MM-dd, today/tomorrow, or 'none' to clear the due date.";
     public const string Project = "Project name or id to assign, or 'none' to remove the task from its project.";
     public const string ParentTaskId = "Parent task id to make this a subtask; 0 removes the parent. Only one subtask level is supported.";
     public const string Complete = "true to mark complete, false to reopen.";
-    public const string BlockedReason = "Reason the task is blocked (max 200 characters). Only valid with status=blocked on a Todo task or a task that is already Blocked. Pass an empty string to clear the reason (the task stays Blocked). Omit to keep the stored reason.";
+    public const string BlockedReason = "Reason the task is blocked (max 200 characters). Only valid with status=blocked on a Todo or InProgress task or a task that is already Blocked. Pass an empty string to clear the reason (the task stays Blocked). Omit to keep the stored reason.";
 }
 
 /// <summary>One task update for update_tasks. Same fields as update_task; only the fields that are set change.</summary>
@@ -108,7 +110,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     public Task<string> ListTasks(
         [Description("open, all, completed, overdue, due_soon, stale, unassigned, today or blocked (Blocked status only). Blocked tasks still appear in the other open views and are flagged. Default open.")] string view = "open",
         [Description("Only tasks in this project (name or id).")] string? project = null,
-        [Description("Only this status: draft, todo, blocked or completed.")] string? status = null,
+        [Description("Only this status: draft, todo, inprogress, blocked or completed.")] string? status = null,
         [Description("Only this priority: low, medium or high.")] string? priority = null,
         [Description("For view=due_soon: how many days ahead to include. Default 7.")] int dueWithinDays = 7,
         [Description("Page size, 1-100. Default 25.")] int limit = 25,
@@ -404,7 +406,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         "Updates a task. Only the fields you pass change; everything else is kept. Use complete=true to finish a task and complete=false to reopen it. "
         + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. "
         + "dueDate accepts yyyy-MM-dd, today/tomorrow, or 'none' to clear. Completed tasks planned on a past day cannot be reopened (the API says so). "
-        + "Only Todo tasks can be blocked (use status=blocked with an optional blockedReason). status=todo unblocks a Blocked task. Completing a Blocked task clears the block.")]
+        + "Start a Todo task with status=inprogress. Only Todo or InProgress tasks can be blocked (use status=blocked with an optional blockedReason). "
+        + "status=todo on a Blocked task unblocks it and restores its previous status (Todo or InProgress); on an InProgress task it moves it back to Todo. Completing a Blocked task clears the block.")]
     public Task<string> UpdateTask(
         [Description(UpdateFieldText.Id)] int id,
         [Description(UpdateFieldText.Title)] string? title = null,
@@ -537,6 +540,11 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             isComplete = newStatus == "completed";
         }
 
+        if (StartBlockedMessage(id, existing.Status, newStatus) is { } startMessage)
+        {
+            throw ToolGuard.Invalid(startMessage);
+        }
+
         var finalBlocked = newStatus == "blocked";
         if (finalBlocked)
         {
@@ -552,7 +560,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         if (!string.IsNullOrEmpty(trimmedReason) && !finalBlocked)
         {
             throw ToolGuard.Invalid(
-                $"blockedReason needs status=blocked. Task #{id} would end as {newStatus}; pass status=blocked with the reason (only Todo tasks can be blocked), or omit blockedReason.");
+                $"blockedReason needs status=blocked. Task #{id} would end as {newStatus}; pass status=blocked with the reason (only Todo or InProgress tasks can be blocked), or omit blockedReason.");
         }
 
         // Omitted keeps the stored reason (null on the PUT); "" clears it and the task stays Blocked.
@@ -576,12 +584,14 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         AddChange(changes, "description", existing.Description != newDescription);
         var blocking = !existing.IsBlocked && finalBlocked;
         var unblocking = existing.IsBlocked && newStatus == "todo";
+        var unblockedIndex = -1;
         if (blocking)
         {
             changes.Add(string.IsNullOrEmpty(trimmedReason) ? "blocked" : $"blocked (reason: \"{Formatting.CleanReason(trimmedReason)}\")");
         }
         else if (unblocking)
         {
+            unblockedIndex = changes.Count;
             changes.Add("unblocked");
         }
         else if (existing.IsBlocked && finalBlocked && trimmedReason is not null
@@ -612,6 +622,12 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
 
         var updated = await api.UpdateTaskAsync(id, request, ct);
 
+        if (unblockedIndex >= 0)
+        {
+            // The API restores the previous status (Todo or InProgress); report what the PUT response says, not a guess.
+            changes[unblockedIndex] = $"unblocked (now {updated.Status})";
+        }
+
         if (!string.IsNullOrWhiteSpace(project))
         {
             if (string.Equals(project.Trim(), "none", StringComparison.OrdinalIgnoreCase))
@@ -636,6 +652,30 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         return new UpdateOutcome(updated, changes);
+    }
+
+    /// <summary>
+    /// The one start rule: only Todo tasks can move to InProgress (the API rejects Draft and Completed; Blocked follows the
+    /// block rules and is forwarded). Returns a recovery message, or null when the start is allowed or not a start.
+    /// </summary>
+    private static string? StartBlockedMessage(int id, string existingStatus, string finalStatus)
+    {
+        if (finalStatus != "inprogress")
+        {
+            return null;
+        }
+
+        if (string.Equals(existingStatus, "Draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Task #{id} is {existingStatus}, so it can't be started. Only Todo tasks can be started. Set status=todo first, then status=inprogress.";
+        }
+
+        if (string.Equals(existingStatus, "Completed", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Task #{id} is {existingStatus}, so it can't be started. Reopen it first (complete=false), then set status=inprogress.";
+        }
+
+        return null;
     }
 
     [McpServerTool(Name = "delete_task", Destructive = true)]

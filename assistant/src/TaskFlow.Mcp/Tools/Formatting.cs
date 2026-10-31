@@ -90,9 +90,14 @@ internal static class Formatting
                 sb.Append(" | tagged ").Append(t.DaysTagged).Append('d');
             }
 
+            if (StartedAtUtc(t) is { } started)
+            {
+                sb.Append(" | Started: ").Append(UtcStamp(started));
+            }
+
             if (t.IsBlocked && BlockedAtUtc(t) is { } since)
             {
-                sb.Append(" | blocked since ").Append(since.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)).Append(" UTC");
+                sb.Append(" | blocked since ").Append(UtcStamp(since));
             }
 
             if (showChildCount && t.ChildTaskCount > 0)
@@ -156,9 +161,14 @@ internal static class Formatting
         return string.Join(' ', sb.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static DateTimeOffset? BlockedAtUtc(TaskItemDto t)
+    private static DateTimeOffset? BlockedAtUtc(TaskItemDto t) => AsUtc(t.BlockedAt);
+
+    private static DateTimeOffset? StartedAtUtc(TaskItemDto t) => AsUtc(t.StartedAt);
+
+    /// <summary>Treats Unspecified and Utc timestamps as UTC and converts Local ones, so raw local time is never shown.</summary>
+    private static DateTimeOffset? AsUtc(DateTime? value)
     {
-        if (t.BlockedAt is not { } at)
+        if (value is not { } at)
         {
             return null;
         }
@@ -166,6 +176,9 @@ internal static class Formatting
         var utc = at.Kind == DateTimeKind.Local ? at.ToUniversalTime() : DateTime.SpecifyKind(at, DateTimeKind.Utc);
         return new DateTimeOffset(utc);
     }
+
+    private static string UtcStamp(DateTimeOffset utc) =>
+        utc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC";
 
     public static string Preview(string text, int max = DescriptionPreviewLength)
     {

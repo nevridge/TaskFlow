@@ -581,6 +581,51 @@ public class ListTasksTests
         text.Should().Contain("blocked since 2026-10-05 10:00 UTC");
     }
 
+    private static readonly object[] WithInProgress =
+    [
+        Fixtures.Task(1, "Todo one"),
+        Fixtures.Task(2, "Working", status: "InProgress", plannedOn: "2026-10-09", startedAt: "2026-10-08T09:15:00Z"),
+        Fixtures.Task(3, "Was working", status: "Blocked", blockedReason: "Waiting", blockedAt: "2026-10-09T10:00:00Z", previousStatus: "InProgress"),
+    ];
+
+    [Theory]
+    [InlineData("inprogress")]
+    [InlineData("InProgress")]
+    public async Task StatusInProgress_FiltersOnlyInProgress_HeaderLowercase_LineAsReturned(string status)
+    {
+        var (tools, _) = Setup(WithInProgress);
+
+        var text = await tools.ListTasks(view: "all", status: status);
+
+        text.Should().StartWith("1 task(s) match (view=all, status=inprogress).").And.Contain("#2 [Low/InProgress] Working").And.NotContain("#1 ").And.NotContain("#3 ");
+    }
+
+    [Fact]
+    public async Task InProgressTask_AppearsInOpenAndToday_NotBlocked_AndBlockedFromInProgressAppearsInBlocked()
+    {
+        var (tools, _) = Setup(WithInProgress);
+
+        var open = await tools.ListTasks();
+        var today = await tools.ListTasks(view: "today");
+        var blocked = await tools.ListTasks(view: "blocked");
+
+        open.Should().Contain("#2 [");
+        today.Should().Contain("#2 [");
+        blocked.Should().Contain("#3 [Low/Blocked]").And.NotContain("#2 ");
+    }
+
+    [Fact]
+    public async Task DetailedFormat_ShowsStartedWhenPresent_ConciseDoesNot()
+    {
+        var (tools, _) = Setup(WithInProgress);
+
+        var detailed = await tools.ListTasks(view: "all", status: "inprogress", responseFormat: "detailed");
+        var concise = await tools.ListTasks(view: "all", status: "inprogress");
+
+        detailed.Should().Contain("Started: 2026-10-08 09:15 UTC");
+        concise.Should().NotContain("Started");
+    }
+
     [Fact]
     public async Task ReasonWithNewlines_StaysOnOneLine()
     {
@@ -699,6 +744,31 @@ public class CreateTasksTests
         body.GetProperty("dueDate").GetString().Should().Be("2026-10-20");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         text.Should().StartWith("Created 1 of 1 task(s).").And.Contain("+ #10 ");
+    }
+
+    [Theory]
+    [InlineData("inprogress")]
+    [InlineData("InProgress")]
+    [InlineData("INPROGRESS")]
+    public async Task InProgressStatus_AnyCasing_IsSentLowercase(string status)
+    {
+        var (tools, handler) = Setup(new StubHandler().Post("TaskItems", Fixtures.Task(10, "T", status: "InProgress"), HttpStatusCode.Created));
+
+        var text = await tools.CreateTasks([new NewTask { Title = "T", Status = status }]);
+
+        handler.BodyOf(HttpMethod.Post, "TaskItems").GetProperty("status").GetString().Should().Be("inprogress");
+        text.Should().Contain("[Low/InProgress]");
+    }
+
+    [Fact]
+    public async Task InvalidStatus_IsReportedPerItem_WithAllowedValues_AndNoPost()
+    {
+        var (tools, handler) = Setup();
+
+        var act = () => tools.CreateTasks([new NewTask { Title = "T", Status = "started" }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Allowed values: draft, todo, inprogress, blocked, completed.");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Post);
     }
 
     [Fact]
@@ -1372,7 +1442,160 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("todo");
         body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
-        text.Should().Contain("Changed unblocked.").And.Contain("[High/Todo]").And.NotContain("blocked:");
+        text.Should().Contain("Changed unblocked (now Todo).").And.Contain("[High/Todo]").And.NotContain("blocked:");
+    }
+
+    [Fact]
+    public async Task StatusTodo_OnTaskBlockedFromInProgress_ReportsNowInProgress_NeverTodo()
+    {
+        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", status: "InProgress", priority: "High", startedAt: "2026-10-06T08:30:00Z"));
+
+        var text = await tools.UpdateTask(5, status: "todo");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        text.Should().Contain("Changed unblocked (now InProgress).").And.Contain("[High/InProgress]").And.NotContain("Todo").And.NotContain("Changed status");
+    }
+
+    [Fact]
+    public async Task Unblock_WithProjectChange_KeepsUnblockTextFromThePutResponse_AndOrder()
+    {
+        var refetched = Fixtures.Task(5, "Original", status: "Todo", priority: "High", projectId: 7, projectName: "Alpha");
+        var (tools, _) = Setup(
+            BlockedTask(),
+            Fixtures.Task(5, "Original", status: "InProgress", priority: "High"),
+            h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+                .Post("Projects/7/tasks", status: HttpStatusCode.NoContent)
+                .Get("TaskItems/5", refetched));
+
+        var text = await tools.UpdateTask(5, status: "todo", priority: "low", project: "Alpha");
+
+        text.Should().Contain("Changed unblocked (now InProgress), priority, project -> Alpha.");
+    }
+
+    [Fact]
+    public async Task StatusInProgress_OnTodoTask_SendsInProgress_AndShowsStarted()
+    {
+        var (tools, handler) = Setup(Existing(), Fixtures.Task(5, "Original", status: "InProgress", priority: "High", startedAt: "2026-10-09T16:45:00Z"));
+
+        var text = await tools.UpdateTask(5, status: "inprogress");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").EnumerateObject().Select(p => p.Name).Should().NotContain("startedAt");
+        text.Should().Contain("Changed status.").And.Contain("[High/InProgress]").And.Contain("Started: 2026-10-09 16:45 UTC");
+    }
+
+    [Fact]
+    public async Task StatusTodo_OnInProgressTask_SendsTodo()
+    {
+        var (tools, handler) = Setup(Existing("InProgress"), Existing());
+
+        var text = await tools.UpdateTask(5, status: "todo");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        text.Should().Contain("Changed status.");
+    }
+
+    [Fact]
+    public async Task StatusInProgress_OnInProgressTask_IsNotRejectedLocally()
+    {
+        var (tools, handler) = Setup(Existing("InProgress"));
+
+        var text = await tools.UpdateTask(5, status: "inprogress", priority: "low");
+
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        text.Should().Contain("Changed priority.").And.NotContain("status");
+    }
+
+    [Fact]
+    public async Task StatusInProgress_OnBlockedTask_IsForwardedToTheApi()
+    {
+        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", status: "InProgress"));
+
+        await tools.UpdateTask(5, status: "inprogress");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
+    }
+
+    [Fact]
+    public async Task BlockingAnInProgressTask_WithReason_Succeeds()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", blockedReason: "Waiting", blockedAt: "2026-10-09T10:00:00Z", previousStatus: "InProgress");
+        var (tools, handler) = Setup(Existing("InProgress"), blocked);
+
+        var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Waiting");
+        text.Should().Contain("Changed blocked (reason: \"Waiting\").");
+    }
+
+    [Theory]
+    [InlineData("Draft", "Task #5 is Draft, so it can't be started.", "status=todo")]
+    [InlineData("Completed", "Task #5 is Completed, so it can't be started.", "complete=false")]
+    public async Task StatusInProgress_OnDraftOrCompleted_IsRejectedLocally_WithRecoverySteps(string existingStatus, string expectedStart, string expectedFix)
+    {
+        var (tools, handler) = Setup(Existing(existingStatus, isComplete: existingStatus == "Completed"));
+
+        var act = () => tools.UpdateTask(5, status: "InProgress");
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().StartWith(expectedStart).And.Contain(expectedFix).And.Contain("status=inprogress").And.NotContain("422").And.NotContain("TASK_START_NOT_ALLOWED");
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task StatusInProgress_WithCompleteFalse_OnCompletedTask_IsRejectedLocally()
+    {
+        var (tools, handler) = Setup(Existing("Completed", isComplete: true));
+
+        var act = () => tools.UpdateTask(5, status: "inprogress", complete: false);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("is Completed");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task StatusInProgress_Api422StartNotAllowed_GetsFallbackGuidance()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing())
+            .Put("TaskItems/5", new { code = "TASK_START_NOT_ALLOWED", message = "Only Todo tasks can be moved to In Progress." }, HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, status: "inprogress");
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("[TASK_START_NOT_ALLOWED]\n").And.Contain("status=inprogress");
+    }
+
+    [Fact]
+    public async Task InvalidStatus_ListsAllStatuses_WithoutAnyPut()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        var act = () => tools.UpdateTask(5, status: "started");
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Allowed values: draft, todo, inprogress, blocked, completed.");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public void ToolDescriptions_NoLongerSayOnlyTodoCanBeBlocked()
+    {
+        var texts = new[]
+        {
+            UpdateFieldText.Status,
+            UpdateFieldText.BlockedReason,
+            typeof(TaskTools).GetMethod(nameof(TaskTools.UpdateTask))!.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+                .Cast<System.ComponentModel.DescriptionAttribute>().Single().Description,
+        };
+
+        foreach (var text in texts)
+        {
+            text.Should().NotContain("Only Todo tasks can be blocked").And.NotContain("status=todo unblocks a Blocked task");
+        }
+
+        UpdateFieldText.Status.Should().Contain("inprogress").And.Contain("Only Todo or InProgress tasks can be blocked");
     }
 
     [Theory]
@@ -1449,6 +1672,9 @@ public class UpdateTaskTests
     [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "make the task todo first", "Make the task Todo first")]
     [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "reopen", "Reopen the task first")]
     [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "needs status", "omit blockedReason")]
+    [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "no drafts", "Only Todo or InProgress tasks can be blocked")]
+    [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "no done", "Only Todo or InProgress tasks can be blocked")]
+    [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "needs status", "on a Todo or InProgress task")]
     public async Task Api422BlockCodes_SurfaceMessageAndOneGuidanceLine(string code, string apiMessage, string guidance)
     {
         var handler = new StubHandler()
@@ -1692,7 +1918,33 @@ public class UpdateTasksTests
 
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked" }, new TaskUpdate { Id = 6, Priority = "low" }]);
 
-        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: ").And.Contain("Only Todo tasks can be blocked");
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: ").And.Contain("Only Todo or InProgress tasks can be blocked").And.NotContain("Only Todo tasks can be blocked");
+    }
+
+    [Fact]
+    public async Task MixedOutcomes_StartRejectedLocally_OthersStillUpdated()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing(5, status: "Draft"))
+            .Get("TaskItems/6", Existing(6))
+            .Put("TaskItems/6", Fixtures.Task(6, "Original", status: "InProgress"));
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "inprogress" }, new TaskUpdate { Id = 6, Status = "INPROGRESS" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: Task #5 is Draft, so it can't be started.").And.Contain("+ #6 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.BodyOf(HttpMethod.Put, "TaskItems/6").GetProperty("status").GetString().Should().Be("inprogress");
+    }
+
+    [Fact]
+    public async Task AllStartsRejected_Throws_WithoutAnyPut()
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Existing(5, status: "Draft"));
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "inprogress" }]);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("Updated 0 of 1 task(s).").And.Contain("x #5: ");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
     }
 
     [Fact]

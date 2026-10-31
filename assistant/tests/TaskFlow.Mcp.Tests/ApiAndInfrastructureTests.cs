@@ -94,6 +94,30 @@ public class ApiClientErrorTests
     }
 
     [Fact]
+    public void TaskItemDto_Deserializes_StartedAt_WhenPresent()
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            Fixtures.Task(1, status: "InProgress", startedAt: "2026-10-06T08:30:00Z"),
+            TaskFlowApiClient.Json);
+
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        task.StartedAt.Should().Be(new DateTime(2026, 10, 6, 8, 30, 0, DateTimeKind.Utc));
+        task.StartedAt!.Value.Kind.Should().Be(DateTimeKind.Utc);
+    }
+
+    [Fact]
+    public void TaskItemDto_Deserializes_StartedAtAsNull_WhenAbsent()
+    {
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
+            """{"id":1,"title":"t","isComplete":false,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            TaskFlowApiClient.Json)!;
+
+        task.StartedAt.Should().BeNull();
+        FluentActions.Invoking(() => Formatting.Task(task, Fixtures.Today, detailed: true)).Should().NotThrow();
+    }
+
+    [Fact]
     public void TaskItemDto_Deserializes_DateOnlyDueDate()
     {
         var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
@@ -211,13 +235,20 @@ public class InputParsingTests
     public void Normalize_RejectsUnknownValues_ListingAllowed()
     {
         FluentActions.Invoking(() => InputParsing.NormalizePriority("urgent")).Should().Throw<McpException>().WithMessage("*low, medium, high*");
-        FluentActions.Invoking(() => InputParsing.NormalizeStatus("done")).Should().Throw<McpException>().WithMessage("*Allowed values: draft, todo, blocked, completed.");
+        FluentActions.Invoking(() => InputParsing.NormalizeStatus("done")).Should().Throw<McpException>().WithMessage("*Allowed values: draft, todo, inprogress, blocked, completed.");
         InputParsing.NormalizePriority(" HIGH ").Should().Be("high");
     }
 
     [Fact]
     public void NormalizeStatus_AcceptsBlocked_CaseInsensitively() =>
         InputParsing.NormalizeStatus(" BLOCKED ").Should().Be("blocked");
+
+    [Theory]
+    [InlineData("inprogress")]
+    [InlineData("InProgress")]
+    [InlineData(" INPROGRESS ")]
+    public void NormalizeStatus_AcceptsInProgress_AnyCasing(string input) =>
+        InputParsing.NormalizeStatus(input).Should().Be("inprogress");
 
     [Fact]
     public void TimeHelpers_UseTheLocalTimeZone()
@@ -309,6 +340,8 @@ public class ToolGuardTests
     [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "Make the task Todo first (status=todo), then block it.")]
     [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "Reopen the task first (complete=false), then block it.")]
     [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "omit blockedReason")]
+    [InlineData("TASK_START_NOT_ALLOWED", "set status=todo first")]
+    [InlineData("TASK_START_NOT_ALLOWED", "reopen it first (complete=false)")]
     public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
     {
         var api = Fixtures.Client(new StubHandler());

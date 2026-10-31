@@ -202,9 +202,11 @@ describe('TaskListRow', () => {
   })
 
   describe('due today / overdue (local calendar)', () => {
+    const originalTz = process.env.TZ
     afterEach(() => {
       vi.useRealTimers()
-      process.env.TZ = 'UTC'
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
     })
 
     it('treats local today as due today and not overdue, even when the UTC date is already tomorrow', () => {

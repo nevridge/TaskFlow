@@ -202,7 +202,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
       regular.sort((a, b) => journalSortTier(a.status) - journalSortTier(b.status))
       return [...regular, ...contextParents]
     }
-    return [...todos]
+    // Other sort modes keep server order for the real rows; context-only parents explicitly follow them.
+    return [...regular, ...contextParents]
   }, [todos, sort])
 
   // Counts are roots only and leave context-only parents out.

@@ -53,6 +53,18 @@ describe('useToggleTodoMutation completion-day move', () => {
     expect(todayList[1].completedAt).toBe(NOW.toISOString())
   })
 
+  it('removes the row from the viewed day without seeding a partial list when today is not cached, then invalidates', async () => {
+    let resolve!: (v: unknown) => void
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(new Promise(r => { resolve = r }) as never)
+    const { qc, hook, list } = setup([task(1), task(2)], undefined)
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    act(() => hook.result.current.mutate({ id: 1, done: true }))
+    await waitFor(() => expect(list(PAST_ID)?.map(t => t.id)).toEqual([2]))
+    expect(list(TODAY_ID)).toBeUndefined()
+    await act(async () => { resolve({ data: {} }) })
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: journalKeys.all }))
+  })
+
   it('keeps the PATCH body keys unchanged', async () => {
     vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: {} } as never)
     const { hook } = setup([task(1)], [])

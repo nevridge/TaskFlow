@@ -253,6 +253,9 @@ function moveCompletedAcrossDays(
   const root = roots.find(t => Number(t.id) === id)
   if (root) {
     qc.setQueryData<TodosCache>(viewedKey, old => (old?.data ? { ...old, data: old.data.filter(t => Number(t.id) !== id) } : old))
+    // When today's list is not cached nothing is inserted: seeding a one-row list would be a wrong partial
+    // list. The row is simply absent from the viewed day; today's list loads (and includes it) on first view,
+    // and the settle invalidation of the ['journal'] prefix refreshes it if it was cached meanwhile.
     if (todayKey && qc.getQueryData<TodosCache>(todayKey)?.data) {
       qc.setQueryData<TodosCache>(todayKey, old => {
         if (!old?.data) return old

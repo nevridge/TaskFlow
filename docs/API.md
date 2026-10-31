@@ -117,7 +117,9 @@ A task with a stored `completedAt` is shown on its completion day whatever its j
 }
 ```
 
-A `journalDate` equal to the current link, or a null/omitted one, is accepted. Completed tasks without a `completedAt` (legacy rows) can still be planned. A single request that reopens a task and also changes its `journalDate` is rejected with this code: reopen first, plan second. When both the reopen rule and this rule would reject a request, the reopen error is returned.
+A `journalDate` equal to the current link, or a null/omitted one, is accepted. Completed tasks without a `completedAt` (legacy rows) can still be planned.
+
+**Completing and planning in one request is rejected.** `PUT`/`PATCH` with `status: "Completed"` together with a `journalDate` on a task that is not yet completed returns `422` `TASK_PLAN_COMPLETED_NOT_ALLOWED` and the whole update is rolled back: the status stays unchanged, `completedAt` stays null, no journal entry or link is created and no history event is written. The completion is stamped before the link is attempted, so the task already counts as completed when the link is refused; `details` is `{ "assignedDate": null, "completedAt": null, "journalDate": "<requested day>" }`. Completing first and planning in a separate request is also rejected once `completedAt` exists (see above). To plan a task, plan it while it is still open. A single request that reopens a task and also changes its `journalDate` is rejected with this code: reopen first, plan second. When both the reopen rule and this rule would reject a request, the reopen error is returned.
 
 ### List All Tasks
 

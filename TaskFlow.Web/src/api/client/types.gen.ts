@@ -146,7 +146,11 @@ export type PatchTaskItemDto = {
      * 422 `TASK_CREATION_PAST_DAY_NOT_ALLOWED` and nothing is changed. Re-sending the day the task is
      * already planned on succeeds, even when that day is in the past. A task that has a completion time
      * (`completedAt`) cannot be planned onto a different day: 422 `TASK_PLAN_COMPLETED_NOT_ALLOWED`
-     * (reopen first, plan second). A missing journal entry is created.
+     * (reopen first, plan second). Completing a not-yet-completed task and planning it in the same request is
+     * rejected the same way (the completion is stamped first, so the task counts as completed) and the whole
+     * update is rolled back: complete and plan in two requests is not possible either, because the second one
+     * is rejected once `completedAt` exists. A legacy Completed task with no `completedAt` can still be planned.
+     * A missing journal entry is created.
      * The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
      * carry-forward of other tasks happens.
      */
@@ -294,7 +298,11 @@ export type UpdateTaskItemDto = {
      * `TASK_CREATION_PAST_DAY_NOT_ALLOWED` and nothing is changed. Re-sending the day the task is
      * already planned on succeeds, even when that day is in the past. A task that has a completion time
      * (`completedAt`) cannot be planned onto a different day: 422 `TASK_PLAN_COMPLETED_NOT_ALLOWED`
-     * (reopen first, plan second). A missing journal entry is created.
+     * (reopen first, plan second). Completing a not-yet-completed task and planning it in the same request is
+     * rejected the same way (the completion is stamped first, so the task counts as completed) and the whole
+     * update is rolled back: complete and plan in two requests is not possible either, because the second one
+     * is rejected once `completedAt` exists. A legacy Completed task with no `completedAt` can still be planned.
+     * A missing journal entry is created.
      * The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
      * carry-forward of other tasks happens.
      */

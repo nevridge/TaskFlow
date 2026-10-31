@@ -212,6 +212,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .Include(t => t.ParentTaskItem).ThenInclude(p => p!.CurrentJournalEntry)
             .Include(t => t.ChildTaskItems).ThenInclude(c => c.Project)
             .Include(t => t.ChildTaskItems).ThenInclude(c => c.CurrentJournalEntry)
+            // Split so the children collection does not multiply the parent rows (and their joined project/entry columns).
+            .AsSplitQuery()
             .Where(JournalDayRule.OnDayPredicate(entryId, startUtc - SqlRangePadding, endUtc + SqlRangePadding))
             .OrderBy(t => t.Id)
             .ToListAsync();

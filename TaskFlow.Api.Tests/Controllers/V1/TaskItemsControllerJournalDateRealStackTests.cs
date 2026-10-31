@@ -151,6 +151,29 @@ public class TaskItemsControllerJournalDateRealStackTests
     private static UpdateTaskItemDto Put(DateOnly? journalDate, string title = "Original", Status? status = null, int? offset = null) =>
         new() { Title = title, Status = status, JournalDate = journalDate, TimezoneOffsetMinutes = offset };
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CompleteAndPlanInOneRequest_OnOpenTask_Returns422AndRollsEverythingBack(bool usePut)
+    {
+        using var stack = new Stack();
+        var task = await stack.SeedTaskAsync();
+        var future = Today.AddDays(2);
+        var eventsBefore = await stack.EventTypesAsync(task.Id);
+
+        var result = usePut
+            ? await stack.Controller.Update(task.Id, Put(future, status: Status.Completed))
+            : await stack.Controller.Patch(task.Id, new PatchTaskItemDto { Status = Status.Completed, JournalDate = future });
+
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", ErrorCode(result));
+        var reloaded = await stack.ReloadAsync(task.Id);
+        Assert.Equal(Status.Todo, reloaded.Status);
+        Assert.Null(reloaded.CompletedAt);
+        Assert.Null(reloaded.CurrentJournalEntryId);
+        Assert.Equal(eventsBefore, await stack.EventTypesAsync(task.Id));
+        Assert.Equal(0, await stack.EntryCountAsync());
+    }
+
     [Fact]
     public async Task Put_FutureDateWithExistingEntry_LinksTaskAndShowsDayInResponse()
     {

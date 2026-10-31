@@ -271,7 +271,8 @@ public class JournalEntryRepositoryCompletionDayTests : IAsyncDisposable
         var day = await _repo.GetTodosForDayAsync(wed.Id, null);
 
         Assert.Equal(6, day!.Tasks.Count);
-        Assert.Equal(2, _counter.Count);
+        // Date lookup + task query + one split query for the children collection: fixed, independent of task count.
+        Assert.Equal(3, _counter.Count);
     }
 
     // ---- AddTodoAsync ----

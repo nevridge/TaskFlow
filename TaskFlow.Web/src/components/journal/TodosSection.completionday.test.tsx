@@ -130,6 +130,14 @@ describe('TodosSection completion-day behaviour', () => {
     expect(titles[1]).toContain('Finished')
   })
 
+  it('places context-only parents after the real rows in non-tier sort modes', () => {
+    const parent = { ...base, id: 9, title: 'Parent', isContextOnly: true, children: [{ ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY }] } as TaskItemResponseDto
+    show([parent, { ...base, id: 11, title: 'Solo' }], TODAY, 'manual')
+    const items = screen.getAllByRole('listitem').filter(li => li.classList.contains('todo') && !li.classList.contains('todo-child'))
+    expect(items[0]).toHaveTextContent('Solo')
+    expect(items[1]).toHaveTextContent('Parent')
+  })
+
   it('counts roots only and leaves context-only parents out', () => {
     const parent = { ...base, id: 9, title: 'Parent', isContextOnly: true, children: [{ ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY }] } as TaskItemResponseDto
     show([parent, { ...base, id: 11, title: 'Solo' }], TODAY)

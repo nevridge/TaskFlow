@@ -427,6 +427,199 @@ public class TaskRepositoryTests
         Assert.Equal("BlockedReasonChanged", evt.EventType);
     }
 
+    private static async Task SeedDetachedAsync(TaskDbContext context, TaskItem seed)
+    {
+        await context.TaskItems.AddAsync(seed);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+    }
+
+    private static async Task UpdateDetachedAsync(TaskDbContext context, TaskItem incoming)
+    {
+        Assert.Equal(EntityState.Detached, context.Entry(incoming).State);
+        await new TaskRepository(context).UpdateAsync(incoming);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDescriptionChangedEvent_WhenDetachedTaskGainsDescriptionFromNull()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = null });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Now described" });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDueDateChangedEvent_WhenDetachedTaskGainsDueDateFromNull()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = null });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = new DateOnly(2026, 1, 15) });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DueDateChanged", evt.EventType);
+        Assert.Equal("Due date changed from none to 2026-01-15.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDescriptionChangedEvent_WhenDetachedTaskClearsDescription()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Old" });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = null });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDueDateChangedEvent_WhenDetachedTaskClearsDueDate()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = new DateOnly(2026, 1, 15) });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = null });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DueDateChanged", evt.EventType);
+        Assert.Equal("Due date changed from 2026-01-15 to none.", evt.ChangeSummary);
+    }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("", null)]
+    public async Task UpdateAsync_ShouldWriteDescriptionChangedEvent_WhenDetachedTaskSwapsNullAndEmptyDescription(string? stored, string? incoming)
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = stored });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = incoming });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteNoEvent_WhenDetachedTaskKeepsIdenticalNonNullDescriptionAndDueDate()
+    {
+        using var context = CreateInMemoryContext();
+        var dueDate = new DateOnly(2026, 1, 15);
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Same", DueDate = dueDate });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Same", DueDate = dueDate });
+
+        Assert.Empty(await EventsAsync(context));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteNoDescriptionOrDueDateEvent_WhenDetachedTaskKeepsBothNull()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo });
+
+        Assert.Empty(await EventsAsync(context));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDescriptionChangedEvent_WhenDetachedTaskChangesDescription()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Old" });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "New" });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteDueDateChangedEvent_WhenDetachedTaskChangesDueDate()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = new DateOnly(2026, 1, 15) });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, DueDate = new DateOnly(2026, 2, 1) });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DueDateChanged", evt.EventType);
+        Assert.Equal("Due date changed from 2026-01-15 to 2026-02-01.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteOneEventPerField_WhenDetachedTaskGainsDescriptionAndDueDateFromNull()
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo });
+
+        await UpdateDetachedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Todo,
+            Description = "Now described",
+            DueDate = new DateOnly(2026, 1, 15)
+        });
+
+        var events = await EventsAsync(context);
+        Assert.Equal(2, events.Count);
+        Assert.Single(events, e => e.EventType == "DescriptionChanged");
+        Assert.Single(events, e => e.EventType == "DueDateChanged");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteEachEventOnce_WhenDetachedBlockedTaskChangesReasonAndGainsDescriptionAndDueDate()
+    {
+        using var context = CreateInMemoryContext();
+        var blockedAt = DateTime.UtcNow;
+        await SeedDetachedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "Old",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo
+        });
+
+        await UpdateDetachedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Task",
+            Status = Status.Blocked,
+            BlockedReason = "New",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo,
+            Description = "Now described",
+            DueDate = new DateOnly(2026, 1, 15)
+        });
+
+        var events = await EventsAsync(context);
+        Assert.Equal(3, events.Count);
+        Assert.Single(events, e => e.EventType == "BlockedReasonChanged");
+        Assert.Single(events, e => e.EventType == "DescriptionChanged");
+        Assert.Single(events, e => e.EventType == "DueDateChanged");
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldThrow_WhenDetachedTaskDoesNotExist()
+    {
+        using var context = CreateInMemoryContext();
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() =>
+            UpdateDetachedAsync(context, new TaskItem { Id = 99, Title = "Ghost", Status = Status.Todo, Description = "x" }));
+    }
+
     [Fact]
     public async Task UpdateAsync_ShouldWriteNoEvent_WhenBlockedReasonUnchangedOrOnlyWhitespaceDiffers()
     {

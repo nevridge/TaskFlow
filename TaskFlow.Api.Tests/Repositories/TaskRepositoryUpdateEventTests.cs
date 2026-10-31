@@ -348,7 +348,7 @@ public class TaskRepositoryUpdateEventTests
         // Arrange
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        // Description/DueDate are deliberately held equal to the persisted row so this test does not depend on null-fallback behavior.
+        // Description is held equal to the persisted row so only the Title change produces an event.
         context.TaskItems.Add(new TaskItem { Id = 1, Title = "Old", Description = "d", Status = Status.Todo });
         await context.SaveChangesAsync();
         context.ChangeTracker.Clear();

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using ModelContextProtocol;
 using TaskFlow.Mcp.Tools;
@@ -1608,6 +1609,28 @@ public class UpdateTasksTests
         handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
         handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
         handler.BodyOf(HttpMethod.Put, "TaskItems/3").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
+    }
+
+    [Theory]
+    [InlineData("tomorrow", "2026-10-10")]
+    [InlineData("2026-11-03", "2026-11-03")]
+    public async Task UpdateTasks_DueDate_SendsDateOnlyValue(string dueDate, string expected)
+    {
+        var handler = HandlerFor(5);
+
+        await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = dueDate }]);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task UpdateTasks_DueDateNone_SendsNullDueDate()
+    {
+        var handler = HandlerFor(5);
+
+        await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = "none" }]);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Fact]

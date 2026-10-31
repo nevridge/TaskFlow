@@ -257,7 +257,6 @@ public class InputParsingTests
 
         InputParsing.Today(time).Should().Be(Today);
     }
-
 }
 
 public class ProjectResolverTests

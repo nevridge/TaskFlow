@@ -74,6 +74,28 @@ public class ListTasksTests
     }
 
     [Fact]
+    public async Task Overdue_ExcludesUndatedTasks()
+    {
+        var (tools, _) = Setup(Sample);
+
+        var text = await tools.ListTasks(view: "overdue");
+
+        text.Should().Contain("#2 ").And.NotContain("#1 ").And.NotContain("#5 ");
+    }
+
+    [Fact]
+    public async Task Open_SortsUndatedTasksLast_WithinTheSamePriority()
+    {
+        var (tools, _) = Setup(
+            Fixtures.Task(1, "Undated", priority: "Medium"),
+            Fixtures.Task(2, "Dated", priority: "Medium", due: "2026-12-01"));
+
+        var text = await tools.ListTasks();
+
+        text.IndexOf("#2 ", StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("#1 ", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Unassigned_ShowsOpenTasksWithoutAProject()
     {
         var (tools, _) = Setup(Sample);
@@ -663,7 +685,7 @@ public class CreateTasksTests
     private static TaskTools Tools(StubHandler handler) => new(Fixtures.Client(handler), Fixtures.Time());
 
     [Fact]
-    public async Task SendsDefaults_TimezoneOffset_AndUtcDueDate()
+    public async Task SendsDefaults_TimezoneOffset_AndDateOnlyDueDate()
     {
         var (tools, handler) = Setup(new StubHandler().Post("TaskItems", Fixtures.Task(10, "Write spec", status: "Todo"), HttpStatusCode.Created));
 
@@ -673,7 +695,7 @@ public class CreateTasksTests
         body.GetProperty("title").GetString().Should().Be("Write spec");
         body.GetProperty("status").GetString().Should().Be("todo");
         body.GetProperty("priority").GetString().Should().Be("low");
-        body.GetProperty("dueDate").GetString().Should().Be("2026-10-20T00:00:00Z");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-20");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         text.Should().StartWith("Created 1 of 1 task(s).").And.Contain("+ #10 ");
     }
@@ -738,7 +760,7 @@ public class CreateTasksTests
         await tools.CreateTasks([new NewTask { Title = "A", DueDate = "today" }]);
 
         var body = handler.BodyOf(HttpMethod.Post, "TaskItems");
-        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10T00:00:00Z");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
     }
 
@@ -1062,10 +1084,31 @@ public class UpdateTaskTests
         body.GetProperty("priority").GetString().Should().Be("low");
         body.GetProperty("status").GetString().Should().Be("todo");
         body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
-        body.GetProperty("dueDate").GetString().Should().StartWith("2026-10-12");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
         body.GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         text.Should().StartWith("Updated #5. Changed priority.");
+    }
+
+    [Fact]
+    public async Task UpdateTask_TitleOnly_ResendsExistingDueDateUnchanged()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        var text = await tools.UpdateTask(5, title: "Renamed");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
+        text.Should().NotContain("dueDate");
+    }
+
+    [Fact]
+    public async Task UpdateTask_PriorityOnly_ResendsExistingDueDateUnchanged()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        await tools.UpdateTask(5, priority: "low");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
     }
 
     [Fact]
@@ -1106,7 +1149,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, dueDate: "today");
 
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10T00:00:00Z");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-10");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
     }
 
@@ -1154,11 +1197,15 @@ public class UpdateTaskTests
     {
         var (tools, handler) = Setup(Existing());
         await tools.UpdateTask(5, dueDate: "tomorrow");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-10T00:00:00Z");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-10");
 
         var (tools2, handler2) = Setup(Existing());
         await tools2.UpdateTask(5, dueDate: "none");
         handler2.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+
+        var (tools3, handler3) = Setup(Existing());
+        await tools3.UpdateTask(5, dueDate: "2026-11-03");
+        handler3.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-11-03");
     }
 
     [Fact]
@@ -1559,6 +1606,8 @@ public class UpdateTasksTests
         clock.UtcReads.Should().Be(1);
         handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
         handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
+        handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/3").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
     }
 
     [Fact]
@@ -1585,7 +1634,7 @@ public class UpdateTasksTests
         body.GetProperty("title").GetString().Should().Be("Task 5");
         body.GetProperty("description").GetString().Should().Be("Keep me");
         body.GetProperty("priority").GetString().Should().Be("high");
-        body.GetProperty("dueDate").GetString().Should().StartWith("2026-10-12");
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
         body.GetProperty("status").GetString().Should().Be("completed");
     }
 

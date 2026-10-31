@@ -94,6 +94,36 @@ public class ApiClientErrorTests
     }
 
     [Fact]
+    public void TaskItemDto_Deserializes_DateOnlyDueDate()
+    {
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
+            """{"id":1,"title":"t","isComplete":false,"dueDate":"2026-10-12","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            TaskFlowApiClient.Json)!;
+
+        task.DueDate.Should().Be(new DateOnly(2026, 10, 12));
+    }
+
+    [Fact]
+    public void TaskItemDto_Deserializes_NullDueDateAsNull()
+    {
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
+            """{"id":1,"title":"t","isComplete":false,"dueDate":null,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            TaskFlowApiClient.Json)!;
+
+        task.DueDate.Should().BeNull();
+    }
+
+    [Fact]
+    public void TaskItemDto_DateTimeDueDate_ThrowsJsonException()
+    {
+        Action act = () => System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
+            """{"id":1,"title":"t","isComplete":false,"dueDate":"2026-10-12T00:00:00Z","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            TaskFlowApiClient.Json);
+
+        act.Should().Throw<System.Text.Json.JsonException>();
+    }
+
+    [Fact]
     public void ProjectDto_Deserializes_BlockedCount_DefaultingToZero()
     {
         var with = System.Text.Json.JsonSerializer.Deserialize<ProjectDto>(
@@ -228,14 +258,6 @@ public class InputParsingTests
         InputParsing.Today(time).Should().Be(Today);
     }
 
-    [Fact]
-    public void ToDueDateTime_IsUtcMidnight()
-    {
-        var due = InputParsing.ToDueDateTime(Today);
-
-        due.Kind.Should().Be(DateTimeKind.Utc);
-        due.TimeOfDay.Should().Be(TimeSpan.Zero);
-    }
 }
 
 public class ProjectResolverTests

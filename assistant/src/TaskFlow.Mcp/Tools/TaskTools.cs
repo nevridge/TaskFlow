@@ -360,7 +360,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         item.Description,
                         InputParsing.NormalizeStatus(item.Status ?? "todo"),
                         InputParsing.NormalizePriority(item.Priority ?? "low"),
-                        string.IsNullOrWhiteSpace(item.DueDate) ? null : InputParsing.ToDueDateTime(InputParsing.ParseDate(item.DueDate, today, "dueDate")),
+                        string.IsNullOrWhiteSpace(item.DueDate) ? null : InputParsing.ParseDate(item.DueDate, today, "dueDate"),
                         string.IsNullOrWhiteSpace(item.JournalDate) ? null : InputParsing.ParseDate(item.JournalDate, today, "journalDate"),
                         item.ParentTaskId,
                         projectId,
@@ -562,12 +562,12 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         var newTitle = string.IsNullOrWhiteSpace(title) ? existing.Title : title.Trim();
         var newDescription = description is null ? existing.Description : (string.IsNullOrWhiteSpace(description) ? null : description);
 
-        DateTime? newDue = existing.DueDate;
+        DateOnly? newDue = existing.DueDate;
         if (!string.IsNullOrWhiteSpace(dueDate))
         {
             newDue = string.Equals(dueDate.Trim(), "none", StringComparison.OrdinalIgnoreCase)
                 ? null
-                : InputParsing.ToDueDateTime(InputParsing.ParseDate(dueDate, today, "dueDate"));
+                : InputParsing.ParseDate(dueDate, today, "dueDate");
         }
 
         var newParent = parentTaskId is null ? existing.ParentTaskItemId : (parentTaskId == 0 ? null : parentTaskId);
@@ -595,7 +595,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         AddChange(changes, "priority", !string.Equals(existing.Priority, newPriority, StringComparison.OrdinalIgnoreCase));
-        AddChange(changes, "dueDate", existing.DueOn != (newDue is { } d ? DateOnly.FromDateTime(d) : null));
+        AddChange(changes, "dueDate", existing.DueDate != newDue);
         AddChange(changes, "parent", existing.ParentTaskItemId != newParent);
 
         var request = new UpdateTaskRequest(
@@ -685,8 +685,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         "blocked" => t.IsBlocked,
         "completed" => t.IsDone,
         "open" => !t.IsDone,
-        "overdue" => !t.IsDone && t.DueOn < today,
-        "due_soon" => !t.IsDone && t.DueOn <= today.AddDays(dueWithinDays),
+        "overdue" => !t.IsDone && t.DueDate < today,
+        "due_soon" => !t.IsDone && t.DueDate <= today.AddDays(dueWithinDays),
         "stale" => !t.IsDone && IsStale(t),
         "unassigned" => !t.IsDone && t.ProjectId is null,
         "today" => !t.IsDone && t.CurrentJournalDate == today,

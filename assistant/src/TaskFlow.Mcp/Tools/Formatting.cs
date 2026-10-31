@@ -54,9 +54,9 @@ internal static class Formatting
             sb.Append(" | ").Append(BlockedLabel(t, nowUtc));
         }
 
-        if (t.DueOn is { } due)
+        if (t.DueDate is { } due)
         {
-            sb.Append(" | due ").Append(due.ToString("yyyy-MM-dd"));
+            sb.Append(" | due ").Append(due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             if (!t.IsDone && due < today)
             {
                 sb.Append(" (OVERDUE ").Append(today.DayNumber - due.DayNumber).Append('d').Append(')');
@@ -182,7 +182,7 @@ internal static class Formatting
 
     public static IOrderedEnumerable<TaskItemDto> OrderByUrgency(IEnumerable<TaskItemDto> tasks) =>
         tasks.OrderBy(t => PriorityRank(t.Priority))
-            .ThenBy(t => t.DueOn ?? DateOnly.MaxValue)
+            .ThenBy(t => t.DueDate ?? DateOnly.MaxValue)
             .ThenBy(t => t.Id);
 
     /// <summary>Open (not done) subtasks grouped by parent id. Group order follows the source; order each group at render time.</summary>
@@ -191,7 +191,7 @@ internal static class Formatting
             .ToLookup(t => t.ParentTaskItemId!.Value);
 
     public static IOrderedEnumerable<TaskItemDto> OrderByDue(IEnumerable<TaskItemDto> tasks) =>
-        tasks.OrderBy(t => t.DueOn ?? DateOnly.MaxValue)
+        tasks.OrderBy(t => t.DueDate ?? DateOnly.MaxValue)
             .ThenBy(t => PriorityRank(t.Priority))
             .ThenBy(t => t.Id);
 }

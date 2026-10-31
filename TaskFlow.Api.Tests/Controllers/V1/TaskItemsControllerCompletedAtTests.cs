@@ -492,6 +492,24 @@ public class TaskItemsControllerCompletedAtTests
         Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", ErrorCode(result));
     }
 
+    // ---- OpenAPI contract ----
+
+    [Theory]
+    [InlineData(nameof(TaskItemsController.Update))]
+    [InlineData(nameof(TaskItemsController.Patch))]
+    public void UpdateAndPatch_ShouldDeclare422ResponseWithRuleErrorBody(string actionName)
+    {
+        var method = typeof(TaskItemsController).GetMethod(actionName)!;
+
+        var attributes = method.GetCustomAttributes(typeof(ProducesResponseTypeAttribute), inherit: true)
+            .Cast<ProducesResponseTypeAttribute>()
+            .Where(a => a.StatusCode == 422)
+            .ToList();
+
+        var declared = Assert.Single(attributes);
+        Assert.Equal(typeof(TaskRuleErrorResponseDto), declared.Type);
+    }
+
     // ---- Read paths ----
 
     [Fact]

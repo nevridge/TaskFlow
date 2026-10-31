@@ -41,7 +41,7 @@ internal static class InputParsing
 
     /// <summary>
     /// Parses the journalDate of an update. Null or blank means "not supplied" (never an un-plan). Accepts today, tomorrow
-    /// or yyyy-MM-dd; everything else, including yesterday, is rejected before any request. A past yyyy-MM-dd is left to the API.
+    /// or yyyy-MM-dd; everything else, including yesterday, is rejected before any write (the PUT). A past yyyy-MM-dd is left to the API.
     /// </summary>
     public static DateOnly? ParsePlanDay(string? value, DateOnly today, string paramName)
     {

@@ -150,6 +150,42 @@ describe('TasksPage acceptance (#317)', () => {
     })
   })
 
+  describe('status cycle due date wire format (#238)', () => {
+    it('sends dueDate null for a task with no due date', async () => {
+      renderPage()
+      const row = (await screen.findByText('Alpha task')).closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: To-do/ }))
+      await waitFor(() => expect(putApiV1TaskItemsById).toHaveBeenCalledTimes(1))
+      const body = vi.mocked(putApiV1TaskItemsById).mock.calls[0][0].body as Record<string, unknown>
+      expect(body).toHaveProperty('dueDate', null)
+    })
+
+    it('sends the unchanged YYYY-MM-DD dueDate for a task with a due date', async () => {
+      vi.mocked(getApiV1TaskItems).mockResolvedValue({
+        data: [{ ...base, id: 5, title: 'Dated task', status: 'Todo', priority: 'High', dueDate: '2026-05-01' }],
+      } as never)
+      renderPage()
+      const row = (await screen.findByText('Dated task')).closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: To-do/ }))
+      await waitFor(() => expect(putApiV1TaskItemsById).toHaveBeenCalledTimes(1))
+      expect(vi.mocked(putApiV1TaskItemsById).mock.calls[0][0]).toMatchObject({
+        path: { id: 5 },
+        body: { dueDate: '2026-05-01' },
+      })
+    })
+
+    it('rolls the row back to its previous status and surfaces the error when the API answers 400', async () => {
+      vi.mocked(putApiV1TaskItemsById).mockRejectedValue({ status: 400, title: 'One or more validation errors occurred.' })
+      renderPage()
+      const row = (await screen.findByText('Alpha task')).closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: To-do/ }))
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      const after = screen.getByText('Alpha task').closest('tr') as HTMLElement
+      expect(within(after).getByRole('button', { name: /^Status: To-do/ })).toBeInTheDocument()
+      expect(within(after).queryByRole('button', { name: /^Status: In Progress/ })).not.toBeInTheDocument()
+    })
+  })
+
   describe('history sheet focus trap edges (AC35-36)', () => {
     it('wraps Tab from the last control to the first and Shift+Tab from the first to the last', async () => {
       renderPage()

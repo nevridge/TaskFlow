@@ -101,6 +101,15 @@ describe('TodosSection', () => {
     expect(screen.getByText('Fix bug')).toBeInTheDocument()
   })
 
+  it('renders todos carrying YYYY-MM-DD due dates alongside undated ones (#238)', () => {
+    const dated: TaskItemResponseDto = { ...openTodo, id: 4, title: 'Dated todo', dueDate: '2026-05-01' }
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [dated, openTodo] }, isLoading: false } as never)
+    renderSection()
+    expect(screen.getByText('Dated todo')).toBeInTheDocument()
+    expect(screen.getByText('Write tests')).toBeInTheDocument()
+    expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(2)
+  })
+
   it('todo with status Completed gets is-done class on li', () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
     renderSection()

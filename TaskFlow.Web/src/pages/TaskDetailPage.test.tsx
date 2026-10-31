@@ -357,7 +357,7 @@ describe('TaskDetailPage', () => {
 
   it('TASK_REOPEN_PAST_DAY_NOT_ALLOWED error shows proper message', async () => {
     await saveWithUpdateError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' })
-    expect(await screen.findByText(/completed tasks assigned to past days cannot be reopened/i)).toBeInTheDocument()
+    expect(await screen.findByText(/tasks completed on a past day cannot be reopened/i)).toBeInTheDocument()
   })
 
   it('TASK_PARENT_CYCLE_NOT_ALLOWED error shows proper message', async () => {

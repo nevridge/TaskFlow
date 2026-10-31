@@ -22,7 +22,7 @@ describe('getErrorCode', () => {
 
 describe('getTaskMutationErrorMessage', () => {
   it.each([
-    ['TASK_REOPEN_PAST_DAY_NOT_ALLOWED', 'Completed tasks assigned to past days cannot be reopened.'],
+    ['TASK_REOPEN_PAST_DAY_NOT_ALLOWED', 'Tasks completed on a past day cannot be reopened.'],
     ['TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN', 'Parent tasks cannot be completed while child tasks are still open.'],
     ['TASK_PARENT_INCOMPLETE_CHILDREN', 'Parent tasks cannot be completed while child tasks are still open.'],
     ['TASK_PARENT_SELF_NOT_ALLOWED', 'A task cannot be set as its own parent.'],
@@ -32,6 +32,7 @@ describe('getTaskMutationErrorMessage', () => {
     ['TASK_PARENT_NOT_FOUND', 'The selected parent task was not found.'],
     ['TASK_CREATION_PAST_DAY_NOT_ALLOWED', 'You cannot create new tasks on a past journal day.'],
     ['TASK_PROJECT_NOT_FOUND', PROJECT_CREATE_NOT_FOUND_MESSAGE],
+    ['TASK_PLAN_COMPLETED_NOT_ALLOWED', 'Completed tasks cannot be moved to another day. Reopen the task first.'],
   ])('maps %s', (code, message) => {
     expect(getTaskMutationErrorMessage({ code })).toBe(message)
   })

@@ -26,6 +26,7 @@ export type ProjectTaskDto = {
   blockedReason?: string | null
   /** UTC timestamp of the first move to In Progress; null when never started. Never cleared by the server. */
   startedAt?: string | null
+  completedAt?: string | null
   priority: 'Low' | 'Medium' | 'High'
   parentTaskItemId?: number | null
   projectId?: number | null

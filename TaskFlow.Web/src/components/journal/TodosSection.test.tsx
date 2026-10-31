@@ -181,7 +181,7 @@ describe('TodosSection', () => {
     toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' }))
     renderSection()
     await userEvent.click(screen.getByRole('button', { name: /mark not done/i }))
-    expect(screen.getByText('Completed tasks assigned to past days cannot be reopened.')).toBeInTheDocument()
+    expect(screen.getByText('Tasks completed on a past day cannot be reopened.')).toBeInTheDocument()
     expect(screen.getByText('Fix bug').closest('li')?.className).toContain('is-done')
   })
 

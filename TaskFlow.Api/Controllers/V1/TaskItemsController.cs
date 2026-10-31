@@ -34,7 +34,6 @@ public class TaskItemsController(
     private const string BlockedReasonRequiresBlockedStatusErrorCode = "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS";
     private const string CreateBlockedNotAllowedErrorCode = "TASK_CREATE_BLOCKED_NOT_ALLOWED";
     private const string StartNotAllowedErrorCode = "TASK_START_NOT_ALLOWED";
-    private const string PlanCompletedNotAllowedErrorCode = "TASK_PLAN_COMPLETED_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -128,6 +127,12 @@ public class TaskItemsController(
                 message = "New tasks cannot be created as Blocked. Create the task first, then block it.",
                 details = new { status = createDto.Status.ToString() }
             });
+        }
+
+        // A completed task is shown on its completion day whatever its link, so planning it would silently do nothing.
+        if (createDto.Status == Status.Completed && createDto.JournalDate.HasValue)
+        {
+            return UnprocessableEntity(TaskRuleErrors.PlanCompletedNotAllowed(null, null, createDto.JournalDate));
         }
 
         if (createDto.JournalDate.HasValue)
@@ -738,6 +743,8 @@ public class TaskItemsController(
             message = "The task was planned on this day by another request."
         }),
         AddTodoResult.TaskNotFound => NotFound(),
+        // The task became Completed in this same request; a completed task is shown on its completion day, not planned.
+        AddTodoResult.TaskCompleted => UnprocessableEntity(TaskRuleErrors.PlanCompletedNotAllowed(null, null, journalDate)),
         _ => throw new InvalidOperationException(
             $"Planning task on journal day {journalDate:yyyy-MM-dd} failed unexpectedly: {result}.")
     };
@@ -762,12 +769,7 @@ public class TaskItemsController(
         // A completed task is shown on its completion day whatever its link, so re-linking it would silently do nothing.
         if (storedCompletedAt is { } completedAt)
         {
-            return (UnprocessableEntity(new
-            {
-                code = PlanCompletedNotAllowedErrorCode,
-                message = "Completed tasks cannot be planned onto a different day.",
-                details = new { assignedDate = currentLink, completedAt, journalDate }
-            }), null);
+            return (UnprocessableEntity(TaskRuleErrors.PlanCompletedNotAllowed(currentLink, completedAt, journalDate)), null);
         }
 
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, changes.TimezoneOffsetMinutes);

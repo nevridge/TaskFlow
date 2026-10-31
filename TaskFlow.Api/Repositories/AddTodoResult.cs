@@ -7,4 +7,5 @@ public enum AddTodoResult
     TaskNotFound,
     AlreadyLinked,
     PastDayNotAllowed,
+    TaskCompleted,
 }

@@ -43,6 +43,10 @@ public class TaskItemsControllerJournalDateRealStackTests
         public Task DeleteAsync(int id) => inner.DeleteAsync(id);
         public Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId) => inner.GetTodosAsync(entryId);
         public Task<bool> TodoExistsAsync(int entryId, int taskItemId) => inner.TodoExistsAsync(entryId, taskItemId);
+        public Task<JournalDayTodos?> GetTodosForDayAsync(int entryId, int? offsetMinutes) => inner.GetTodosForDayAsync(entryId, offsetMinutes);
+        public Task<IReadOnlyDictionary<int, List<int>>> GetTodoTaskItemIdsAsync(IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? offsetMinutes) =>
+            inner.GetTodoTaskItemIdsAsync(entries, offsetMinutes);
+        public Task<PlanCompletedDetails?> GetPlanCompletedDetailsAsync(int entryId, int taskItemId) => inner.GetPlanCompletedDetailsAsync(entryId, taskItemId);
 
         public Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId, int? timezoneOffsetMinutes = null) =>
             AddTodoOverride is null

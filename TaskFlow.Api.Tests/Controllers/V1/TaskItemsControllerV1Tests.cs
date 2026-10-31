@@ -402,6 +402,57 @@ public class TaskItemsControllerV1Tests
         _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id), Times.Once);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(-1)]
+    public async Task Create_ShouldReturnPlanCompletedUnprocessableEntity_AndPersistNothing_WhenCompletedWithJournalDate(int dayDelta)
+    {
+        var journalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(dayDelta));
+        var createDto = new CreateTaskItemDto { Title = "Done already", Status = Status.Completed, JournalDate = journalDate };
+
+        var result = await _controller.Create(createDto);
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
+        using var body = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(unprocessable.Value));
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", body.RootElement.GetProperty("code").GetString());
+        Assert.Equal("Completed tasks cannot be planned onto a different day.", body.RootElement.GetProperty("message").GetString());
+        Assert.Equal(journalDate.ToString("yyyy-MM-dd"), body.RootElement.GetProperty("details").GetProperty("journalDate").GetString());
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
+        _mockJournalRepo.Verify(r => r.AddTodoAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Create_ShouldSucceed_WhenCompletedWithoutJournalDate()
+    {
+        var createdTask = new TaskItem { Id = 90, Title = "Done already", Status = Status.Completed };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(90)).ReturnsAsync(createdTask);
+
+        var result = await _controller.Create(new CreateTaskItemDto { Title = "Done already", Status = Status.Completed });
+
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
+        _mockRepo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Create_ShouldSucceedAndPlan_WhenOpenWithJournalDate()
+    {
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var createdTask = new TaskItem { Id = 91, Title = "Open", Status = Status.Todo };
+        var entry = new JournalEntry { Id = 13, Date = targetDate, Title = "Journal" };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(91)).ReturnsAsync(createdTask);
+        _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync(entry);
+        _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, 91)).ReturnsAsync(AddTodoResult.Success);
+
+        var result = await _controller.Create(new CreateTaskItemDto { Title = "Open", Status = Status.Todo, JournalDate = targetDate });
+
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
+        _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, 91), Times.Once);
+    }
+
     [Fact]
     public async Task Create_ShouldSucceedAndAttachToExistingEntry_WhenJournalDateRaceOccurs()
     {

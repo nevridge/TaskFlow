@@ -425,6 +425,47 @@ curl -X DELETE http://localhost:8080/api/v1/TaskItems/1
 
 ---
 
+## Journal API
+
+### Which day is a task a todo on?
+
+A task is a todo row on **exactly one** journal day (`TaskFlow.Api/Helpers/JournalDayRule.cs`):
+
+- A `Completed` task that has a `completedAt` is a todo on the **local day it was completed**, whatever day it is linked to.
+- Every other task (open, or legacy `Completed` with a null `completedAt`) is a todo on the day it is linked to.
+- Subtasks follow the same per-task rule. A subtask shown on a day whose parent is not shown there comes back under that parent, marked `isContextOnly: true`.
+
+The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewing day `D` covers the UTC range `[D - offset, D + 1 day - offset)`. When the offset is omitted the server uses UTC (unlike carry-forward, which never falls back to UTC).
+
+### List Todos of a Journal Day
+
+**Endpoint:** `GET /api/v1/JournalEntries/{entryId}/todos?timezoneOffsetMinutes={minutes}`
+
+**Parameters:**
+- `entryId` (path, integer, required)
+- `timezoneOffsetMinutes` (query, integer, optional, -720 to 840) - the viewer's UTC offset in minutes (`-300` is UTC-5). Omitted means UTC.
+
+**Response:** `200 OK` - an array of root `TaskItemResponseDto` rows.
+- `currentJournalDate` is the task's **own linked day** (null when it was never linked), not the viewed day; `daysTagged` is derived from it. A task linked Monday and completed Wednesday appears on Wednesday with `currentJournalDate` = Monday.
+- `children` is preview data for a shown parent: all of its subtasks, whichever day each is a todo on.
+- `isContextOnly` is `true` only on a parent returned as context for a subtask that is a todo on this day. Such a parent embeds **only** that day's subtasks in `children`. The property is omitted everywhere else.
+
+**Errors:** `400 Bad Request` when the offset is outside -720..840; `404 Not Found` when the entry does not exist.
+
+### Journal Entries
+
+`GET /api/v1/JournalEntries` and `GET /api/v1/JournalEntries/{id}` accept the same optional `timezoneOffsetMinutes` query parameter (400 outside -720..840). `todoTaskItemIds` lists the **root** tasks that are todos on the entry's day under the rule above (subtasks and context-only parents are not listed), computed in one batched query. For the same day and offset it equals the root rows returned by the todos endpoint (excluding `isContextOnly` rows). `POST` and `PUT` responses, and the `409` `existingEntry`, use the request's offset when it has one and UTC otherwise.
+
+### Add a Todo
+
+**Endpoint:** `POST /api/v1/JournalEntries/{entryId}/todos` with body `{ "taskItemId": 1, "timezoneOffsetMinutes": -300 }`
+
+**Responses:** `204` on success; `404` entry or task missing; `409` already linked; `422` with `{ code, message }`:
+- `TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED` - the entry is before the user's today.
+- `TASK_PLAN_COMPLETED_NOT_ALLOWED` - the task is already completed (has a `completedAt`); body is `{ code, message, details: { assignedDate, completedAt, journalDate } }`, the same shape as on `PUT`/`PATCH /api/v1/TaskItems`. Nothing is linked. `POST /api/v1/TaskItems` returns the same 422 when `status` is `Completed` and `journalDate` is set, and the task is not created.
+
+---
+
 ## Status API
 
 ### List All Statuses

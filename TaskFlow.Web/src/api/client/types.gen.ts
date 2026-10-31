@@ -206,6 +206,11 @@ export type TaskItemResponseDto = {
      * Server-owned UTC instant the task was completed; null when not Completed or for legacy rows.
      */
     completedAt?: null | string;
+    /**
+     * True only on a parent returned by the journal todos endpoint purely as context for a subtask that is a todo
+     * on that day; such a parent embeds only that day's subtasks in `Children`. Omitted everywhere else.
+     */
+    isContextOnly?: null | boolean;
     children?: null | Array<TaskItemResponseDto>;
 };
 
@@ -299,7 +304,9 @@ export type UpdateTaskItemDto = {
 export type GetApiV1JournalEntriesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        timezoneOffsetMinutes?: number | string;
+    };
     url: '/api/v1/JournalEntries';
 };
 
@@ -349,7 +356,9 @@ export type GetJournalEntryV1Data = {
     path: {
         id: number | string;
     };
-    query?: never;
+    query?: {
+        timezoneOffsetMinutes?: number | string;
+    };
     url: '/api/v1/JournalEntries/{id}';
 };
 
@@ -585,7 +594,9 @@ export type GetApiV1JournalEntriesByEntryIdTodosData = {
     path: {
         entryId: number | string;
     };
-    query?: never;
+    query?: {
+        timezoneOffsetMinutes?: number | string;
+    };
     url: '/api/v1/JournalEntries/{entryId}/todos';
 };
 

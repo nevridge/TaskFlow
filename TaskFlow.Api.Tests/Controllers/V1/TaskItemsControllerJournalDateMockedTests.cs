@@ -270,6 +270,7 @@ public class TaskItemsControllerJournalDateMockedTests
     [InlineData(AddTodoResult.AlreadyLinked, 409)]
     [InlineData(AddTodoResult.PastDayNotAllowed, 422)]
     [InlineData(AddTodoResult.TaskNotFound, 404)]
+    [InlineData(AddTodoResult.TaskCompleted, 422)]
     public async Task Update_AddTodoFailure_MapsErrorAndDoesNotCommit(AddTodoResult failure, int status)
     {
         Seed();

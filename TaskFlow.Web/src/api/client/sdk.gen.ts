@@ -99,6 +99,15 @@ export const putApiV1JournalEntriesByEntryIdNotesById = <ThrowOnError extends bo
     }
 });
 
+/**
+ * The todos of a journal day. A completed task with a completion time is a todo on the local day it was
+ * completed (derived with `timezoneOffsetMinutes`, UTC when omitted), not on its linked day; every other
+ * task is a todo on its linked day. Each task is a todo row on exactly one day.
+ *
+ * Returns root tasks. A subtask that is a todo on this day while its parent is not is returned under its parent,
+ * which is then flagged `isContextOnly` and embeds only that day's subtasks. Each row's
+ * `currentJournalDate` is the task's own linked day (null when it was never linked).
+ */
 export const getApiV1JournalEntriesByEntryIdTodos = <ThrowOnError extends boolean = false>(options: Options<GetApiV1JournalEntriesByEntryIdTodosData, ThrowOnError>): RequestResult<GetApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/todos', ...options });
 
 export const postApiV1JournalEntriesByEntryIdTodos = <ThrowOnError extends boolean = false>(options: Options<PostApiV1JournalEntriesByEntryIdTodosData, ThrowOnError>): RequestResult<PostApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError>({

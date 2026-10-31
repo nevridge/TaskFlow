@@ -10,6 +10,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
 {
     private const int SqliteConstraintErrorCode = 19;
     private const int SqliteUniqueConstraintErrorCode = 2067;
+    // SQLITE_CONSTRAINT_PRIMARYKEY: the JournalEntryTaskItem join table has a composite primary key, so a
+    // concurrent duplicate link raises 1555 rather than 2067 (SQLITE_CONSTRAINT_UNIQUE, the JournalEntries.Date index).
     private const int SqlitePrimaryKeyConstraintErrorCode = 1555;
     private readonly TaskDbContext _context = context;
 

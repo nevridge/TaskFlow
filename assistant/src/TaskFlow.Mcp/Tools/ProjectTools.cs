@@ -86,8 +86,8 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
                 .Select(p => $"{p} {open.Count(t => string.Equals(t.Priority, p, StringComparison.OrdinalIgnoreCase))}")));
 
             AppendSection(sb, "Blocked", blocked, today, nowUtc);
-            AppendSection(sb, "Overdue", Formatting.OrderByDue(open.Where(t => t.DueOn < today)), today, nowUtc);
-            AppendSection(sb, $"Due in the next {DueSoonDays} days", Formatting.OrderByDue(open.Where(t => t.DueOn >= today && t.DueOn <= today.AddDays(DueSoonDays))), today, nowUtc);
+            AppendSection(sb, "Overdue", Formatting.OrderByDue(open.Where(t => t.DueDate < today)), today, nowUtc);
+            AppendSection(sb, $"Due in the next {DueSoonDays} days", Formatting.OrderByDue(open.Where(t => t.DueDate >= today && t.DueDate <= today.AddDays(DueSoonDays))), today, nowUtc);
             AppendSection(sb, "Stalled (moved 3+ times or tagged 7+ days)", Formatting.OrderByUrgency(open.Where(t => !t.IsBlocked && TaskTools.IsStale(t))), today, nowUtc);
             AppendSection(sb, "Most urgent open", Formatting.OrderByUrgency(open).Take(5), today, nowUtc);
 

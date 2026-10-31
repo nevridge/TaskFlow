@@ -46,9 +46,6 @@ internal static class InputParsing
 
     public static string NormalizeStatus(string value) => Normalize(value, Statuses, "status");
 
-    public static DateTime ToDueDateTime(DateOnly date) =>
-        DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc);
-
     public static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
 
     private static string Normalize(string value, string[] allowed, string name)

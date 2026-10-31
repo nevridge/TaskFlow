@@ -167,7 +167,7 @@ internal static class Fixtures
             title,
             description,
             isComplete,
-            dueDate = due is null ? null : due + "T00:00:00Z",
+            dueDate = due,
             status,
             priority,
             parentTaskItemId = parentId,

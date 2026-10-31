@@ -7,7 +7,7 @@ public sealed record TaskItemDto(
     string Title,
     string? Description,
     bool IsComplete,
-    DateTime? DueDate,
+    DateOnly? DueDate,
     string Status,
     string Priority,
     int? ParentTaskItemId,
@@ -27,8 +27,6 @@ public sealed record TaskItemDto(
     public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
 
     public bool IsDone => IsComplete || string.Equals(Status, "Completed", StringComparison.OrdinalIgnoreCase);
-
-    public DateOnly? DueOn => DueDate is { } due ? DateOnly.FromDateTime(due) : null;
 }
 
 public sealed record ProjectDto(
@@ -81,7 +79,7 @@ public sealed record CreateTaskRequest(
     string? Description,
     string Status,
     string Priority,
-    DateTime? DueDate,
+    DateOnly? DueDate,
     DateOnly? JournalDate,
     int? ParentTaskItemId,
     int? ProjectId,
@@ -94,7 +92,7 @@ public sealed record UpdateTaskRequest(
     string Status,
     string Priority,
     bool IsComplete,
-    DateTime? DueDate,
+    DateOnly? DueDate,
     int? ParentTaskItemId,
     bool AutoCompleteParentWhenChildrenDone,
     int TimezoneOffsetMinutes,

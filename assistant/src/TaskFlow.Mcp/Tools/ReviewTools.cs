@@ -51,7 +51,7 @@ public sealed class ReviewTools(TaskFlowApiClient api, TimeProvider time)
             }
 
             var open = tasks.Where(t => !t.IsDone).ToList();
-            var overdue = Formatting.OrderByDue(open.Where(t => t.DueOn < today)).ToList();
+            var overdue = Formatting.OrderByDue(open.Where(t => t.DueDate < today)).ToList();
             var stalled = Formatting.OrderByUrgency(open.Where(t => !t.IsBlocked && TaskTools.IsStale(t))).ToList();
 
             // Built from the current task list, so the 300-history cap above does not affect this group.

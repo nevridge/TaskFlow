@@ -519,25 +519,14 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         var changes = new List<string>();
 
         var newStatus = string.IsNullOrWhiteSpace(status) ? existing.Status.ToLowerInvariant() : InputParsing.NormalizeStatus(status);
-        var statusGiven = !string.IsNullOrWhiteSpace(status);
-        var isComplete = existing.IsComplete;
 
         if (complete == true)
         {
-            isComplete = true;
             newStatus = "completed";
         }
-        else if (complete == false)
+        else if (complete == false && newStatus == "completed")
         {
-            isComplete = false;
-            if (newStatus == "completed")
-            {
-                newStatus = "todo";
-            }
-        }
-        else if (statusGiven)
-        {
-            isComplete = newStatus == "completed";
+            newStatus = "todo";
         }
 
         if (StartBlockedMessage(id, existing.Status, newStatus) is { } startMessage)
@@ -546,10 +535,6 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         var finalBlocked = newStatus == "blocked";
-        if (finalBlocked)
-        {
-            isComplete = false;
-        }
 
         var trimmedReason = blockedReason?.Trim();
         if (trimmedReason is { Length: > MaxBlockedReasonLength })
@@ -601,7 +586,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
         else
         {
-            AddChange(changes, "status", !finalBlocked && (!string.Equals(existing.Status, newStatus, StringComparison.OrdinalIgnoreCase) || existing.IsComplete != isComplete));
+            AddChange(changes, "status", !finalBlocked && !string.Equals(existing.Status, newStatus, StringComparison.OrdinalIgnoreCase));
         }
 
         AddChange(changes, "priority", !string.Equals(existing.Priority, newPriority, StringComparison.OrdinalIgnoreCase));
@@ -613,7 +598,6 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             newDescription,
             newStatus,
             newPriority,
-            isComplete,
             newDue,
             newParent,
             AutoCompleteParentWhenChildrenDone: false,

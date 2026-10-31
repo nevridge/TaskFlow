@@ -177,11 +177,13 @@ Data Transfer Objects separate API contracts from domain models:
 public class TaskItem
 {
     public int Id { get; set; }
-    public string Title { get; set; } = string.Empty;
+    public required string Title { get; set; }
     public string? Description { get; set; }
-    public bool IsComplete { get; set; }
-    public DateTime CreatedAt { get; set; }
-    public DateTime? CompletedAt { get; set; }
+    public Priority Priority { get; set; } = Priority.Low;
+    public Status Status { get; set; } = Status.Draft;   // Draft, Todo, Completed, Blocked, InProgress
+    public DateOnly? DueDate { get; set; }
+    public DateTime? StartedAt { get; set; }    // server-owned: first time the task enters InProgress
+    public DateTime? CompletedAt { get; set; }  // server-owned UTC: set on Completed, cleared on reopen
 }
 ```
 
@@ -191,8 +193,11 @@ public class CreateTaskItemDto
 {
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public int? StatusId { get; set; }
-    public bool IsComplete { get; set; }
+    public Status Status { get; set; } = Status.Draft;
+    public Priority Priority { get; set; } = Priority.Low;
+    public DateOnly? DueDate { get; set; }
+    public DateOnly? JournalDate { get; set; }
+    // No StartedAt / CompletedAt: both are server-owned and ignored if a client sends them.
 }
 ```
 
@@ -201,10 +206,14 @@ public class CreateTaskItemDto
 public class TaskItemResponseDto
 {
     public int Id { get; set; }
-    public string Title { get; set; } = string.Empty;
+    public required string Title { get; set; }
     public string? Description { get; set; }
-    public bool IsComplete { get; set; }
-    public string? StatusName { get; set; }
+    public DateOnly? DueDate { get; set; }
+    public string Status { get; set; } = "Draft";    // PascalCase enum name
+    public string Priority { get; set; } = "Low";
+    public DateTime? StartedAt { get; set; }         // UTC, Z suffix
+    public DateTime? CompletedAt { get; set; }       // UTC, Z suffix; null unless Completed
+    // ... plus journal, hierarchy and blocked metadata (see docs/API.md)
 }
 ```
 

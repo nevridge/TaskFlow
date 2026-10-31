@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
+import type { DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdErrors, PatchApiV1TaskItemsByIdResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdErrors, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -188,7 +188,16 @@ export const deleteApiV1TaskItemsById = <ThrowOnError extends boolean = false>(o
 
 export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options<GetTaskV1Data, ThrowOnError>): RequestResult<GetTaskV1Responses, unknown, ThrowOnError> => (options.client ?? client).get<GetTaskV1Responses, unknown, ThrowOnError>({ url: '/api/v1/TaskItems/{id}', ...options });
 
-export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PatchApiV1TaskItemsByIdResponses, unknown, ThrowOnError> => (options.client ?? client).patch<PatchApiV1TaskItemsByIdResponses, unknown, ThrowOnError>({
+/**
+ * Partially updates a task (JSON Merge Patch): absent fields are left unchanged.
+ *
+ * Shares the rules and 422 responses of the full update: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+ * (completion day, or linked day when `completedAt` is null, before the user's today; tasks with neither are
+ * exempt; `details.assignedDate` holds that day) and `TASK_PLAN_COMPLETED_NOT_ALLOWED`
+ * (`journalDate` differs from the link of a task that has a `completedAt`), plus the parent, block,
+ * start and past-day planning codes.
+ */
+export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',
     ...options,
     headers: {
@@ -197,7 +206,25 @@ export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(op
     }
 });
 
-export const putApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PutApiV1TaskItemsByIdResponses, unknown, ThrowOnError> => (options.client ?? client).put<PutApiV1TaskItemsByIdResponses, unknown, ThrowOnError>({
+/**
+ * Updates a task (full update).
+ *
+ *     Returns 422 with a body of `{ code, message, details }` for these business rules:
+ * * TASK_REOPEN_PAST_DAY_NOT_ALLOWED: a Completed task cannot be reopened once its completion day is
+ * before the user's today. The completion day is the local day of the stored completedAt (derived with
+ * timezoneOffsetMinutes, UTC when absent), or the linked journal day when completedAt is null
+ * (legacy rows). Tasks with neither are exempt. details.assignedDate holds that day. The task stays completed.
+ * * TASK_PLAN_COMPLETED_NOT_ALLOWED: a task with a stored completedAt cannot be planned onto a
+ * journalDate that differs from its current link. Re-sending the current link, or omitting
+ * journalDate, is accepted. Nothing is changed. A request that reopens and re-plans in one call is rejected;
+ * reopen first, plan second.
+ * * Other codes: TASK_PARENT_SELF_NOT_ALLOWED, TASK_PARENT_NOT_FOUND,
+ * TASK_PARENT_DEPTH_NOT_ALLOWED, TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN,
+ * TASK_BLOCK_DRAFT_NOT_ALLOWED, TASK_BLOCK_COMPLETED_NOT_ALLOWED,
+ * TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS, TASK_START_NOT_ALLOWED,
+ * TASK_CREATION_PAST_DAY_NOT_ALLOWED.
+ */
+export const putApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',
     ...options,
     headers: {

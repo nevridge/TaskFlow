@@ -282,7 +282,8 @@ When enabled, task update payloads include `autoCompleteParentWhenChildrenDone`,
 Tasks pages map backend business-rule codes to user-friendly inline errors, including:
 
 - `TASK_CREATION_PAST_DAY_NOT_ALLOWED`
-- `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+- `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`: a completed task cannot be reopened once its completion day is before the user's today. The completion day is the local day of the task's `completedAt` (derived with the `timezoneOffsetMinutes` the client sends), or, for legacy tasks with no `completedAt`, the journal day it is linked to. A task with neither is exempt and can always be reopened. `details.assignedDate` holds that day.
+- `TASK_PLAN_COMPLETED_NOT_ALLOWED`: a task with a `completedAt` cannot be planned onto a `journalDate` that differs from its current link, because the journal shows it on its completion day. Sending the current link or no `journalDate` is fine. Reopen first, then plan.
 - `TASK_PARENT_NOT_FOUND`
 - `TASK_PARENT_SELF_NOT_ALLOWED`
 - `TASK_PARENT_DEPTH_NOT_ALLOWED`

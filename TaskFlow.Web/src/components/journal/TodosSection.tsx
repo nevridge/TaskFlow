@@ -602,7 +602,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 function getTaskActionErrorMessage(error: unknown): string {
   const code = getErrorCode(error)
   if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') {
-    return 'Completed tasks assigned to past days cannot be reopened.'
+    return 'Tasks completed on a past day cannot be reopened.'
   }
   if (code === 'TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED') {
     return 'This task cannot be assigned to a past day.'

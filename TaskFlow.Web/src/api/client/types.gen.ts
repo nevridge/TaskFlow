@@ -14,6 +14,9 @@ export type AssignProjectTaskDto = {
 };
 
 export type CarryForwardRequestDto = {
+    /**
+     * Minutes ahead of UTC (e.g. -300 for UTC-5). Null means not supplied.
+     */
     timezoneOffsetMinutes?: null | number | string;
 };
 
@@ -26,6 +29,9 @@ export type CreateJournalEntryDto = {
     title: string;
     summary?: null | string;
     date?: string;
+    /**
+     * Minutes ahead of UTC (e.g. -300 for UTC-5). Null means not supplied; no carry-forward happens.
+     */
     timezoneOffsetMinutes?: null | number | string;
 };
 
@@ -55,7 +61,14 @@ export type CreateTaskItemDto = {
     dueDate?: null | string;
     journalDate?: null | string;
     parentTaskItemId?: null | number | string;
+    /**
+     * Optional project to create the task in. Project changes after creation go through
+     * the Projects assign/unassign endpoints, not the task update endpoint.
+     */
     projectId?: null | number | string;
+    /**
+     * The user's timezone offset in minutes (e.g. -420 for PDT, 0 for UTC). Optional.
+     */
     timezoneOffsetMinutes?: null | number | string;
 };
 
@@ -99,6 +112,17 @@ export type NoteResponseDto = {
     updatedAt?: null | string;
 };
 
+/**
+ *     Partial-update payload for `PATCH /api/v1/TaskItems/{id}` (JSON Merge Patch semantics).
+ * A property that is absent from the JSON body is left unchanged. A property that is present,
+ * including an explicit `null`, is applied. Presence is recorded by the property setters,
+ * which System.Text.Json invokes only for properties that appear in the body.
+ * * string? PatchTaskItemDto.Title: present with null or empty fails validation.
+ * * string? PatchTaskItemDto.Description, DateOnly? PatchTaskItemDto.DueDate, int? PatchTaskItemDto.ParentTaskItemId:
+ * present with null clears the value.
+ * * Status? PatchTaskItemDto.Status, Priority? PatchTaskItemDto.Priority: null is treated as absent.
+ * Completion is expressed only through Status? PatchTaskItemDto.Status. The project cannot be changed here.
+ */
 export type PatchTaskItemDto = {
     title?: null | string;
     description?: null | string;
@@ -106,9 +130,26 @@ export type PatchTaskItemDto = {
     priority?: null | Priority;
     dueDate?: null | string;
     parentTaskItemId?: null | number | string;
+    /**
+     * Optional reason for a blocked task. Absent keeps the stored reason; present with `null` or
+     * `""` clears it; a non-empty value is trimmed and saved. Only meaningful while the task is
+     * (or is becoming) Blocked, otherwise a non-empty value is rejected with 422. Note the asymmetry
+     * with PUT, where `null` keeps the reason.
+     */
     blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
+    /**
+     * Optional journal day to plan the task on. Absent and an explicit `null` both leave the planned
+     * day unchanged; there is no way to un-plan through an update. Only today-or-later (the user's today,
+     * derived from int? PatchTaskItemDto.TimezoneOffsetMinutes, UTC when no offset is sent) is accepted, otherwise
+     * 422 `TASK_CREATION_PAST_DAY_NOT_ALLOWED` and nothing is changed. Re-sending the day the task is
+     * already planned on succeeds, even when that day is in the past. A task that has a completion time
+     * (`completedAt`) cannot be planned onto a different day: 422 `TASK_PLAN_COMPLETED_NOT_ALLOWED`
+     * (reopen first, plan second). A missing journal entry is created.
+     * The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
+     * carry-forward of other tasks happens.
+     */
     journalDate?: null | string;
 };
 
@@ -161,7 +202,33 @@ export type TaskItemResponseDto = {
     blockedAt?: null | string;
     previousStatus?: null | string;
     startedAt?: null | string;
+    /**
+     * Server-owned UTC instant the task was completed; null when not Completed or for legacy rows.
+     */
+    completedAt?: null | string;
     children?: null | Array<TaskItemResponseDto>;
+};
+
+/**
+ * Body of a 422 business-rule rejection on task endpoints, for example
+ * `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` or `TASK_PLAN_COMPLETED_NOT_ALLOWED`.
+ * Contains a machine-readable code, a human-readable message and optional details.
+ */
+export type TaskRuleErrorResponseDto = {
+    /**
+     * Machine-readable error code.
+     */
+    code: string;
+    /**
+     * Human-readable message.
+     */
+    message: string;
+    /**
+     * Optional code-specific details (for example `assignedDate`).
+     */
+    details?: null | {
+        [key: string]: unknown;
+    };
 };
 
 export type UpdateJournalEntryDto = {
@@ -188,6 +255,18 @@ export type UpdateProjectDto = {
     isArchived?: boolean;
 };
 
+/**
+ *     Update payload for `PUT /api/v1/TaskItems/{id}`. Field semantics are mixed:
+ * * Full-replace — string UpdateTaskItemDto.Title, string? UpdateTaskItemDto.Description,
+ * DateOnly? UpdateTaskItemDto.DueDate, and int? UpdateTaskItemDto.ParentTaskItemId always
+ * overwrite the existing value with whatever is sent, including null. Omitting
+ * int? UpdateTaskItemDto.ParentTaskItemId (or sending it as null) clears the task's parent link.
+ * * Merge-on-null — Status? UpdateTaskItemDto.Status and Priority? UpdateTaskItemDto.Priority are
+ * only applied when non-null; a null value leaves the existing stored value unchanged.
+ * Callers must explicitly resend full-replace fields (e.g. `parentTaskItemId`) on every
+ * update or they will be cleared. Completion is expressed only through Status? UpdateTaskItemDto.Status.
+ * Use `PATCH /api/v1/TaskItems/{id}` for partial updates.
+ */
 export type UpdateTaskItemDto = {
     title?: string;
     description?: null | string;
@@ -195,9 +274,25 @@ export type UpdateTaskItemDto = {
     priority?: null | Priority;
     dueDate?: null | string;
     parentTaskItemId?: null | number | string;
+    /**
+     * Optional blocked reason (merge-on-null): `null` keeps the stored reason, `""` clears it,
+     * a non-empty value is trimmed and saved. Note the asymmetry with PATCH, where a present
+     * `null` clears the reason.
+     */
     blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
+    /**
+     * Optional journal day to plan the task on. `null`/absent leaves the planned day unchanged;
+     * there is no way to un-plan through an update. Only today-or-later (the user's today, derived from
+     * int? UpdateTaskItemDto.TimezoneOffsetMinutes, UTC when no offset is sent) is accepted, otherwise 422
+     * `TASK_CREATION_PAST_DAY_NOT_ALLOWED` and nothing is changed. Re-sending the day the task is
+     * already planned on succeeds, even when that day is in the past. A task that has a completion time
+     * (`completedAt`) cannot be planned onto a different day: 422 `TASK_PLAN_COMPLETED_NOT_ALLOWED`
+     * (reopen first, plan second). A missing journal entry is created.
+     * The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
+     * carry-forward of other tasks happens.
+     */
     journalDate?: null | string;
 };
 
@@ -837,6 +932,15 @@ export type PatchApiV1TaskItemsByIdData = {
     url: '/api/v1/TaskItems/{id}';
 };
 
+export type PatchApiV1TaskItemsByIdErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: TaskRuleErrorResponseDto;
+};
+
+export type PatchApiV1TaskItemsByIdError = PatchApiV1TaskItemsByIdErrors[keyof PatchApiV1TaskItemsByIdErrors];
+
 export type PatchApiV1TaskItemsByIdResponses = {
     /**
      * OK
@@ -854,6 +958,15 @@ export type PutApiV1TaskItemsByIdData = {
     query?: never;
     url: '/api/v1/TaskItems/{id}';
 };
+
+export type PutApiV1TaskItemsByIdErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: TaskRuleErrorResponseDto;
+};
+
+export type PutApiV1TaskItemsByIdError = PutApiV1TaskItemsByIdErrors[keyof PutApiV1TaskItemsByIdErrors];
 
 export type PutApiV1TaskItemsByIdResponses = {
     /**

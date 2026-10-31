@@ -40,7 +40,9 @@ public class UpdateTaskItemDto
     /// there is no way to un-plan through an update. Only today-or-later (the user's today, derived from
     /// <see cref="TimezoneOffsetMinutes"/>, UTC when no offset is sent) is accepted, otherwise 422
     /// <c>TASK_CREATION_PAST_DAY_NOT_ALLOWED</c> and nothing is changed. Re-sending the day the task is
-    /// already planned on succeeds, even when that day is in the past. A missing journal entry is created.
+    /// already planned on succeeds, even when that day is in the past. A task that has a completion time
+    /// (<c>completedAt</c>) cannot be planned onto a different day: 422 <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>
+    /// (reopen first, plan second). A missing journal entry is created.
     /// The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
     /// carry-forward of other tasks happens.
     /// </summary>

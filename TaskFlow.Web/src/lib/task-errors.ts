@@ -10,7 +10,7 @@ export function getErrorCode(error: unknown): string | null {
 /** Shared by the Tasks list and the task detail page. The journal keeps its own getTaskActionErrorMessage. */
 export function getTaskMutationErrorMessage(error: unknown): string {
   const code = getErrorCode(error)
-  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') return 'Completed tasks assigned to past days cannot be reopened.'
+  if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') return 'Tasks completed on a past day cannot be reopened.'
   if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN' || code === 'TASK_PARENT_INCOMPLETE_CHILDREN') return 'Parent tasks cannot be completed while child tasks are still open.'
   if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') return 'A task cannot be set as its own parent.'
   if (code === 'TASK_PARENT_CYCLE_NOT_ALLOWED') return 'This parent assignment would create a cycle.'
@@ -19,6 +19,7 @@ export function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_NOT_FOUND') return 'The selected parent task was not found.'
   if (code === 'TASK_CREATION_PAST_DAY_NOT_ALLOWED') return 'You cannot create new tasks on a past journal day.'
   if (code === 'TASK_PROJECT_NOT_FOUND') return PROJECT_CREATE_NOT_FOUND_MESSAGE
+  if (code === 'TASK_PLAN_COMPLETED_NOT_ALLOWED') return 'Completed tasks cannot be moved to another day. Reopen the task first.'
   const blockMessage = getBlockErrorMessage(code)
   if (blockMessage) return blockMessage
   return 'Unable to save task changes. Please try again.'

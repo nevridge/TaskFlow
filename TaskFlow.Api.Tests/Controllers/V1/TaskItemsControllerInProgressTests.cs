@@ -566,6 +566,45 @@ public class TaskItemsControllerInProgressTests
     }
 
     [Fact]
+    public async Task Patch_ShouldAllowReopeningCompletedStartedTask_WhenCompletedToday_EvenOnPastJournalDay()
+    {
+        using var stack = new RealStack();
+        var entry = await SeedPastEntryAsync(stack);
+        var seeded = await stack.SeedAsync(new TaskItem
+        {
+            Title = "T",
+            Status = Status.Completed,
+            StartedAt = Original,
+            CompletedAt = DateTime.UtcNow,
+            CurrentJournalEntryId = entry.Id
+        });
+
+        var dto = OkDto(await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Todo, TimezoneOffsetMinutes = 0 }));
+
+        Assert.Equal("Todo", dto.Status);
+        Assert.Equal(Original, dto.StartedAt);
+        Assert.Null(dto.CompletedAt);
+    }
+
+    [Fact]
+    public async Task Patch_ShouldRejectReopeningCompletedTask_WhenCompletedOnPastDay_EvenWithoutJournalLink()
+    {
+        using var stack = new RealStack();
+        var seeded = await stack.SeedAsync(new TaskItem
+        {
+            Title = "T",
+            Status = Status.Completed,
+            StartedAt = Original,
+            CompletedAt = DateTime.UtcNow.AddDays(-2)
+        });
+
+        var result = await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Todo, TimezoneOffsetMinutes = 0 });
+
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", Prop<string>(ErrorBody(result), "code"));
+        Assert.Equal(Status.Completed, (await stack.ReloadAsync(seeded.Id)).Status);
+    }
+
+    [Fact]
     public async Task Patch_ShouldRejectStartingCompletedTask_OnPastJournalDay_WithStartError()
     {
         using var stack = new RealStack();

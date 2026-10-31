@@ -94,6 +94,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
     public async Task<TaskItem> AddAsync(TaskItem task)
     {
+        // CompletedAt is server-owned: stamped for Completed tasks, otherwise forced null.
+        task.CompletedAt = IsCompleted(task.Status) ? DateTime.UtcNow : null;
         _context.TaskItems.Add(task);
         _context.TaskItemEvents.Add(new TaskItemEvent
         {
@@ -119,6 +121,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
                 .AsNoTracking()
                 .FirstOrDefaultAsync(t => t.Id == task.Id);
 
+            // CompletedAt is server-owned: never accept a caller-supplied value, keep the stored one.
+            task.CompletedAt = persisted?.CompletedAt;
             _context.TaskItems.Update(task);
             entry = _context.Entry(task);
         }
@@ -161,6 +165,16 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
         var wasCompleted = IsCompleted(originalStatus);
         var isCompletedNow = IsCompleted(task.Status);
+        // Central write of the server-owned CompletedAt, outside the Blocked branches so Blocked -> Completed is covered.
+        if (!wasCompleted && isCompletedNow)
+        {
+            task.CompletedAt = DateTime.UtcNow;
+        }
+        else if (wasCompleted && !isCompletedNow)
+        {
+            task.CompletedAt = null;
+        }
+
         var wasBlocked = originalStatus == Status.Blocked;
         var isBlockedNow = task.Status == Status.Blocked;
         if (!wasBlocked && isBlockedNow)

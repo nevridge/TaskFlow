@@ -408,4 +408,252 @@ public class TaskItemsControllerJournalDateMockedTests
         _tx.Verify(t => t.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
         _tx.Verify(t => t.DisposeAsync(), Times.Once);
     }
+
+    // ---- CompletedAt (issue #350): reopen guard definition and planning a completed task ----
+
+    private const string PlanCompletedCode = "TASK_PLAN_COMPLETED_NOT_ALLOWED";
+    private const string ReopenCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
+
+    private TaskItem SeedCompleted(DateTime? completedAt)
+    {
+        var task = new TaskItem { Id = 1, Title = "Task", Status = Status.Completed, Priority = Priority.Low, CompletedAt = completedAt };
+        _repo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(task);
+        return task;
+    }
+
+    private static object Details(ActionResult? result)
+    {
+        var value = ((UnprocessableEntityObjectResult)result!).Value!;
+        return value.GetType().GetProperty("details")!.GetValue(value)!;
+    }
+
+    private static DateTime LocalMidnightUtc(int? offset) =>
+        UserDateHelper.GetUserToday(DateTime.UtcNow, offset).ToDateTime(TimeOnly.MinValue).AddMinutes(-(offset ?? 0));
+
+    [Fact]
+    public async Task Update_CompletedAtTask_DifferentJournalDate_Returns422AndWritesNothing()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Update(1, Put(Today.AddDays(3)));
+
+        Assert.Equal(PlanCompletedCode, Code(result.Result as ActionResult));
+        Assert.Equal(
+            "Completed tasks cannot be planned onto a different day.",
+            ((UnprocessableEntityObjectResult)result.Result!).Value!.GetType().GetProperty("message")!.GetValue(((UnprocessableEntityObjectResult)result.Result!).Value!));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        AssertNoJournalOrTx();
+    }
+
+    [Fact]
+    public async Task Patch_CompletedAtTask_DifferentJournalDate_Returns422AndWritesNothing()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { JournalDate = Today.AddDays(3) });
+
+        Assert.Equal(PlanCompletedCode, Code(result.Result as ActionResult));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        AssertNoJournalOrTx();
+    }
+
+    [Fact]
+    public async Task Update_CompletedAtTask_JournalDateEqualToCurrentLink_IsAcceptedWithoutPlanning()
+    {
+        SeedCompleted(DateTime.UtcNow);
+        var link = Today.AddDays(-3);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(link);
+
+        var result = await _controller.Update(1, Put(link));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+        AssertNoJournalOrTx();
+    }
+
+    [Fact]
+    public async Task Patch_CompletedAtTask_JournalDateEqualToCurrentLink_IsAccepted()
+    {
+        SeedCompleted(DateTime.UtcNow);
+        var link = Today.AddDays(2);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(link);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { JournalDate = link });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        AssertNoJournalOrTx();
+    }
+
+    [Fact]
+    public async Task Update_CompletedAtTask_NullJournalDate_IsAccepted()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Update(1, Put(null));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_CompletedAtTask_AbsentJournalDate_IsAccepted()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { Title = "Renamed" });
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_LegacyCompletedTaskWithNullCompletedAt_CanStillBePlanned()
+    {
+        SeedCompleted(null);
+        SetupAddTodo(AddTodoResult.Success);
+
+        var result = await _controller.Update(1, Put(Today.AddDays(3)));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(["begin", "update", "addTodo", "commit"], _calls);
+    }
+
+    [Fact]
+    public async Task Update_ReopenGuard422WinsOverPlanning422_WhenBothApply()
+    {
+        SeedCompleted(DateTime.UtcNow.AddDays(-2));
+
+        var result = await _controller.Update(1, Put(Today.AddDays(3), status: Status.Todo));
+
+        Assert.Equal(ReopenCode, Code(result.Result as ActionResult));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ReopenAndReplanOnCompletedAtTask_Returns422PlanCompleted()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Update(1, Put(Today.AddDays(3), status: Status.Todo));
+
+        Assert.Equal(PlanCompletedCode, Code(result.Result as ActionResult));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        AssertNoJournalOrTx();
+    }
+
+    [Fact]
+    public async Task Patch_ReopenAndReplanOnCompletedAtTask_Returns422PlanCompleted()
+    {
+        SeedCompleted(DateTime.UtcNow);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { Status = Status.Todo, JournalDate = Today.AddDays(3) });
+
+        Assert.Equal(PlanCompletedCode, Code(result.Result as ActionResult));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_SameDayResendOfPastLinkOnLegacyTask_DoesNotFail()
+    {
+        SeedCompleted(null);
+        var past = Today.AddDays(-4);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(past);
+
+        var result = await _controller.Update(1, Put(past));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_Reopen_CompletedToday_WithPastLink_IsAllowed()
+    {
+        SeedCompleted(DateTime.UtcNow);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(Today.AddDays(-5));
+
+        var result = await _controller.Update(1, Put(null, status: Status.Todo));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_Reopen_CompletedYesterday_IsRejectedWithCompletionDayAsAssignedDate()
+    {
+        var completedAt = DateTime.UtcNow.AddDays(-1);
+        SeedCompleted(completedAt);
+        // The linked day is today: only the completion day is "past".
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(Today);
+
+        var result = await _controller.Update(1, Put(null, status: Status.Todo));
+
+        Assert.Equal(ReopenCode, Code(result.Result as ActionResult));
+        var details = Details(result.Result as ActionResult);
+        Assert.Equal(DateOnly.FromDateTime(completedAt), details.GetType().GetProperty("assignedDate")!.GetValue(details));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-300)]
+    [InlineData(840)]
+    public async Task Update_Reopen_OneMinuteBeforeLocalMidnight_IsRejected(int? offset)
+    {
+        SeedCompleted(LocalMidnightUtc(offset).AddMinutes(-1));
+
+        var result = await _controller.Update(1, Put(null, offset, Status.Todo));
+
+        Assert.Equal(ReopenCode, Code(result.Result as ActionResult));
+        var details = Details(result.Result as ActionResult);
+        Assert.Equal(
+            UserDateHelper.GetUserToday(DateTime.UtcNow, offset).AddDays(-1),
+            details.GetType().GetProperty("assignedDate")!.GetValue(details));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-300)]
+    [InlineData(840)]
+    public async Task Update_Reopen_OneMinuteAfterLocalMidnight_IsAllowed(int? offset)
+    {
+        SeedCompleted(LocalMidnightUtc(offset).AddMinutes(1));
+
+        var result = await _controller.Update(1, Put(null, offset, Status.Todo));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task Update_Reopen_NullCompletedAtWithPastLink_IsRejectedWithLinkedDay()
+    {
+        SeedCompleted(null);
+        var link = Today.AddDays(-2);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(link);
+
+        var result = await _controller.Update(1, Put(null, status: Status.Todo));
+
+        Assert.Equal(ReopenCode, Code(result.Result as ActionResult));
+        var details = Details(result.Result as ActionResult);
+        Assert.Equal(link, details.GetType().GetProperty("assignedDate")!.GetValue(details));
+    }
+
+    [Fact]
+    public async Task Update_Reopen_CompletedAtOnPastDayWithNoLink_IsRejected()
+    {
+        SeedCompleted(DateTime.UtcNow.AddDays(-3));
+
+        var result = await _controller.Update(1, Put(null, status: Status.Todo));
+
+        Assert.Equal(ReopenCode, Code(result.Result as ActionResult));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_Reopen_NullCompletedAtAndNoJournalDay_IsAllowed()
+    {
+        SeedCompleted(null);
+
+        var result = await _controller.Update(1, Put(null, status: Status.Todo));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
 }

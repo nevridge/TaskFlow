@@ -17,6 +17,9 @@ public class TaskItem
 
     // Server-owned: set the first time the task enters InProgress; never cleared.
     public DateTime? StartedAt { get; set; }
+
+    // Server-owned UTC instant of the transition to Completed; cleared on reopen. Written only in TaskRepository.
+    public DateTime? CompletedAt { get; set; }
     public DateOnly? FirstTaggedDate { get; set; }
     public int MoveCount { get; set; }
     public int? ParentTaskItemId { get; set; }

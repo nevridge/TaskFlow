@@ -142,6 +142,26 @@ public class ProjectsControllerV1Tests
     }
 
     [Fact]
+    public async Task GetTasks_ShouldIncludeCompletedAt_ForCompletedTask()
+    {
+        var project = new Project { Id = 1, Name = "Alpha" };
+        var completedAt = new DateTime(2026, 10, 3, 9, 0, 0, DateTimeKind.Utc);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
+        [
+            new TaskItem { Id = 4, Title = "T", ProjectId = 1, Project = project, Status = Status.Completed, CompletedAt = completedAt },
+            new TaskItem { Id = 5, Title = "Plain", ProjectId = 1, Project = project, Status = Status.Todo }
+        ]);
+
+        var result = await _controller.GetTasks(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Equal(completedAt, dtos.Single(d => d.Id == 4).CompletedAt);
+        Assert.Null(dtos.Single(d => d.Id == 5).CompletedAt);
+    }
+
+    [Fact]
     public async Task GetTasks_ShouldIncludeBlockedTasksWithBlockedFields()
     {
         var project = new Project { Id = 1, Name = "Alpha" };

@@ -19,6 +19,7 @@ export type ProjectTaskDto = {
   id: number
   title: string
   description?: string | null
+  /** Calendar date in `YYYY-MM-DD` form (no time, no timezone); null when unset. */
   dueDate?: string | null
   /** PascalCase status. Typed as string so an unknown value renders as itself (see normalizeStatus). */
   status: string

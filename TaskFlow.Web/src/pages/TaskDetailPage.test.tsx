@@ -204,6 +204,18 @@ describe('TaskDetailPage', () => {
     expect(screen.queryByText(/Started:/)).not.toBeInTheDocument()
   })
 
+  it('shows "Due:" followed by an em dash when there is no due date', () => {
+    renderPage()
+    const strong = screen.getByText('—', { selector: 'strong' })
+    expect(strong.parentElement).toHaveTextContent('Due: —')
+  })
+
+  it('shows the due date as the picked calendar day', () => {
+    mockTask({ dueDate: '2026-05-01' })
+    renderPage()
+    expect(screen.getByText('May 1, 2026', { selector: 'strong' })).toBeInTheDocument()
+  })
+
   it('priority badge shows lowercased priority', () => {
     renderPage()
     expect(screen.getByText('low')).toBeInTheDocument()

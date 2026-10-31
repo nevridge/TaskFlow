@@ -7,7 +7,7 @@ public class TaskItemResponseDto
     public int Id { get; set; }
     public required string Title { get; set; }
     public string? Description { get; set; }
-    public DateTime? DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public string Status { get; set; } = "Draft";
     public string Priority { get; set; } = "Low"; // String representation of the priority
     public int? ParentTaskItemId { get; set; }

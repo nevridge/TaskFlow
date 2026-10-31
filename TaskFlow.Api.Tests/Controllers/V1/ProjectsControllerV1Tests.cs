@@ -101,6 +101,25 @@ public class ProjectsControllerV1Tests
     }
 
     [Fact]
+    public async Task GetTasks_ShouldMapDueDateAsCalendarDate()
+    {
+        var project = new Project { Id = 1, Name = "Alpha" };
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(project);
+        _mockRepo.Setup(r => r.GetTasksAsync(1)).ReturnsAsync(
+        [
+            new TaskItem { Id = 4, Title = "Due", ProjectId = 1, Project = project, DueDate = new DateOnly(2026, 5, 1) },
+            new TaskItem { Id = 5, Title = "NoDue", ProjectId = 1, Project = project }
+        ]);
+
+        var result = await _controller.GetTasks(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dtos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
+        Assert.Equal(new DateOnly(2026, 5, 1), dtos.Single(d => d.Id == 4).DueDate);
+        Assert.Null(dtos.Single(d => d.Id == 5).DueDate);
+    }
+
+    [Fact]
     public async Task GetTasks_ShouldIncludeStartedAt_ForInProgressTask()
     {
         var project = new Project { Id = 1, Name = "Alpha" };

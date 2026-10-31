@@ -113,7 +113,7 @@ public class TaskItemsControllerPatchTests
     {
         Title = "Original",
         Description = "Keep me",
-        DueDate = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc),
+        DueDate = new DateOnly(2026, 5, 20),
         Status = Status.Todo,
         Priority = Priority.High
     };
@@ -244,7 +244,7 @@ public class TaskItemsControllerPatchTests
     {
         using var stack = new RealStack();
         var seeded = await stack.SeedAsync(NewRichTask());
-        var newDue = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
+        var newDue = new DateOnly(2026, 6, 1);
 
         var dto = OkDto(await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto
         {

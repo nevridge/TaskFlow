@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { formatDate } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
 import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
@@ -38,12 +38,12 @@ interface Props {
 function isOverdue(dueDate: string | null | undefined, status: string | undefined): boolean {
   if (!dueDate) return false
   if ((status ?? '').toLowerCase() === 'completed') return false
-  return dueDate.slice(0, 10) < todayISO()
+  return dueDate < todayISO()
 }
 
 function isDueToday(dueDate: string | null | undefined): boolean {
   if (!dueDate) return false
-  return dueDate.slice(0, 10) === todayISO()
+  return dueDate === todayISO()
 }
 
 const PlusIcon = () => (
@@ -232,10 +232,10 @@ export function TaskListRow({
         {task.dueDate ? (
           <span
             className={overdue ? 't-overdue' : ''}
-            aria-label={overdue ? `Overdue, ${formatDate(task.dueDate)}` : undefined}
+            aria-label={overdue ? `Overdue, ${formatDateOnly(task.dueDate)}` : undefined}
           >
             {overdue && <span className="t-overdue-icon" aria-hidden="true">!</span>}
-            {formatDate(task.dueDate)}
+            {formatDateOnly(task.dueDate)}
           </span>
         ) : (
           <span className="t-list-empty">{'—'}</span>

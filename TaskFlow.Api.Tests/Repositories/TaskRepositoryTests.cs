@@ -471,7 +471,7 @@ public class TaskRepositoryTests
     {
         using var context = CreateInMemoryContext();
         var repository = new TaskRepository(context);
-        var dueDate = new DateTime(2026, 5, 20, 0, 0, 0, DateTimeKind.Utc);
+        var dueDate = new DateOnly(2026, 5, 20);
         var task = new TaskItem
         {
             Id = 1,

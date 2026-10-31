@@ -20,6 +20,10 @@ Currently, no authentication is required. All endpoints are publicly accessible.
 
 All endpoints accept and return `application/json`.
 
+## Date Wire Format
+
+`dueDate` is a calendar date, `YYYY-MM-DD` (for example `"2026-05-01"`), with no time or timezone. It is read and written as the same day everywhere. `null` means no due date. A datetime string such as `"2026-05-01T00:00:00Z"`, an empty string, or any malformed date (`"05/01/2026"`, `"2026-13-40"`) is rejected with `400 Bad Request`. Other timestamp fields (`createdAt`, `updatedAt`, `blockedAt`, `startedAt`) remain UTC instants. Existing stored due dates were converted to their date part by migration `20261030234403_ConvertTaskItemDueDateToDateOnly`, so any time-of-day part of older values was dropped, with no timezone conversion.
+
 ## Task Items API
 
 ### Current v1 Contract Highlights (May 2026)

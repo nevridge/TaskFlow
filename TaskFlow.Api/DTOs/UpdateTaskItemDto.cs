@@ -22,7 +22,7 @@ public class UpdateTaskItemDto
     public string? Description { get; set; }
     public Status? Status { get; set; }
     public Priority? Priority { get; set; }
-    public DateTime? DueDate { get; set; }
+    public DateOnly? DueDate { get; set; }
     public int? ParentTaskItemId { get; set; }
 
     /// <summary>

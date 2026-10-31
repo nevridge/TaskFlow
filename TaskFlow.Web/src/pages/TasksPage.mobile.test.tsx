@@ -78,7 +78,7 @@ interface TaskRow {
 
 function makeTasks(): TaskRow[] {
   return [
-    { ...base, id: 1, title: 'Bravo task', status: 'Todo', priority: 'High', dueDate: '2030-01-03T00:00:00Z' },
+    { ...base, id: 1, title: 'Bravo task', status: 'Todo', priority: 'High', dueDate: '2030-01-03' },
     { ...base, id: 2, title: 'Alpha task', status: 'Todo', priority: 'High' },
     { ...base, id: 3, title: 'Charlie task', status: 'Todo', priority: 'Medium', projectId: 1, projectName: 'Alpha' },
     { ...base, id: 4, title: 'Delta draft', status: 'Draft', priority: 'Low' },
@@ -170,6 +170,21 @@ describe('TasksPage on mobile (#317)', () => {
       expect(titles()).toEqual(['Alpha task', 'Bravo task', 'Charlie task', 'Delta draft'])
       await userEvent.selectOptions(select, 'dueDate')
       expect(titles().slice(0, 2)).toEqual(['Bravo task', 'Alpha task'])
+    })
+
+    it('sorts Due Date ascending by calendar date with undated tasks last, and reverses for descending (#238 AC12)', async () => {
+      setTasks([
+        { ...base, id: 11, title: 'Undated one', status: 'Todo', priority: 'High' },
+        { ...base, id: 12, title: 'Later task', status: 'Todo', priority: 'High', dueDate: '2030-02-01' },
+        { ...base, id: 13, title: 'Sooner task', status: 'Todo', priority: 'High', dueDate: '2030-01-03' },
+        { ...base, id: 14, title: 'Undated two', status: 'Todo', priority: 'High' },
+      ])
+      renderPage()
+      await userEvent.selectOptions(screen.getByLabelText('Sort by'), 'dueDate')
+      expect(titles().slice(0, 2)).toEqual(['Sooner task', 'Later task'])
+      expect([...titles().slice(2)].sort()).toEqual(['Undated one', 'Undated two'])
+      await userEvent.click(screen.getByRole('button', { name: 'Sort descending' }))
+      expect(titles().slice(2)).toEqual(['Later task', 'Sooner task'])
     })
 
     it('flips the direction label and reverses the order; the header button follows', async () => {

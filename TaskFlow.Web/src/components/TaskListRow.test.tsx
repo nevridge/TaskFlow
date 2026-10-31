@@ -177,9 +177,63 @@ describe('TaskListRow', () => {
   })
 
   it('shows formatted due date when present', () => {
-    const task = { ...baseTask, dueDate: '2026-06-15T12:00:00Z' }
+    const task = { ...baseTask, dueDate: '2026-06-15' }
     renderRow(task)
-    expect(screen.getByText(/Jun 15, 2026/)).toBeInTheDocument()
+    const cell = screen.getByText(/Jun 15, 2026/)
+    expect(cell).toBeInTheDocument()
+    expect(cell.closest('.t-list-cell--due')?.querySelector('.t-list-empty')).toBeNull()
+  })
+
+  describe.each(['America/Los_Angeles', 'UTC', 'Asia/Tokyo'])('due date in %s', tz => {
+    const originalTz = process.env.TZ
+    afterEach(() => {
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    })
+
+    it('renders the picked calendar day regardless of timezone', () => {
+      process.env.TZ = tz
+      const expectedOffset = { 'America/Los_Angeles': 420, UTC: 0, 'Asia/Tokyo': -540 }[tz]
+      // Fails loudly if the platform ignores the runtime TZ change.
+      expect(new Date(2026, 4, 1).getTimezoneOffset()).toBe(expectedOffset)
+      renderRow({ ...baseTask, dueDate: '2026-05-01' })
+      expect(screen.getByText('May 1, 2026')).toBeInTheDocument()
+    })
+  })
+
+  describe('due today / overdue (local calendar)', () => {
+    const originalTz = process.env.TZ
+    afterEach(() => {
+      vi.useRealTimers()
+      if (originalTz === undefined) delete process.env.TZ
+      else process.env.TZ = originalTz
+    })
+
+    it('treats local today as due today and not overdue, even when the UTC date is already tomorrow', () => {
+      process.env.TZ = 'America/Los_Angeles'
+      // 2026-05-02T06:30Z is 2026-05-01 23:30 in Los Angeles
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-02T06:30:00Z'))
+      const { container } = renderRow({ ...baseTask, dueDate: '2026-05-01', priority: 'high' })
+      expect(container.querySelector('.t-title-bold')).not.toBeNull()
+      expect(container.querySelector('.t-overdue')).toBeNull()
+    })
+
+    it('marks an earlier date as overdue and not due today', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-01T12:00:00Z'))
+      const { container } = renderRow({ ...baseTask, dueDate: '2026-04-30', priority: 'high' })
+      expect(container.querySelector('.t-overdue')).not.toBeNull()
+      expect(container.querySelector('.t-title-bold')).toBeNull()
+    })
+
+    it('marks a later date as neither overdue nor due today', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-01T12:00:00Z'))
+      const { container } = renderRow({ ...baseTask, dueDate: '2026-05-02', priority: 'high' })
+      expect(container.querySelector('.t-overdue')).toBeNull()
+      expect(container.querySelector('.t-title-bold')).toBeNull()
+    })
   })
 
   it('shows em dash when no due date', () => {
@@ -200,7 +254,7 @@ describe('TaskListRow', () => {
   })
 
   describe('overdue indicator', () => {
-    const pastDate = '2020-01-01T00:00:00Z'
+    const pastDate = '2020-01-01'
 
     it('marks past-due incomplete tasks as overdue', () => {
       const task = { ...baseTask, dueDate: pastDate, status: 'Todo' }
@@ -215,7 +269,7 @@ describe('TaskListRow', () => {
     })
 
     it('does not mark future tasks as overdue', () => {
-      const task = { ...baseTask, dueDate: '2099-12-31T00:00:00Z', status: 'Todo' }
+      const task = { ...baseTask, dueDate: '2099-12-31', status: 'Todo' }
       renderRow(task)
       expect(screen.queryByText('!', { selector: '.t-overdue-icon' })).not.toBeInTheDocument()
     })

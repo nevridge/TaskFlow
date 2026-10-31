@@ -285,7 +285,7 @@ public class TaskItemsController(
         public bool HasPriority { get; init; }
         public Priority? Priority { get; init; }
         public bool HasDueDate { get; init; }
-        public DateTime? DueDate { get; init; }
+        public DateOnly? DueDate { get; init; }
         public bool HasParent { get; init; }
         public int? ParentTaskItemId { get; init; }
         public bool HasBlockedReason { get; init; }

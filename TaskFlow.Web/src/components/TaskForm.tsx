@@ -57,7 +57,7 @@ export function TaskForm({
   const [description, setDescription] = useState(task?.description ?? '')
   const [status, setStatus] = useState<string>((task?.status ?? 'draft').toLowerCase())
   const [priority, setPriority] = useState<string>((task?.priority ?? 'low').toLowerCase())
-  const [dueDate, setDueDate] = useState(task?.dueDate ? task.dueDate.split('T')[0] : '')
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? '')
   const originalStatus = normalizeStatus(task?.status)
   // Blocking is only valid from Todo (or while already Blocked); the server answers 422 otherwise.
   const canChooseBlocked = originalStatus === 'Todo' || originalStatus === 'InProgress' || originalStatus === 'Blocked'
@@ -100,8 +100,8 @@ export function TaskForm({
       // The form keeps the lowercased key; task-status.ts maps it to the wire value (`inProgress`).
       status: (normalized ? toRequestStatus(normalized) : status) as RequestStatus,
       priority: priority as 'low' | 'medium' | 'high',
-      // dueDate is always YYYY-MM-DD from <input type="date">; append UTC midnight to avoid timezone drift
-      dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null,
+      // dueDate is a YYYY-MM-DD calendar date from <input type="date">; a cleared input sends null, never ""
+      dueDate: dueDate || null,
       parentTaskItemId: parentTaskId ? Number(parentTaskId) : undefined,
       projectId: effectiveProjectId ? Number(effectiveProjectId) : null,
       // A non-empty reason with a non-Blocked status is a 422, so it is only sent while Blocked.

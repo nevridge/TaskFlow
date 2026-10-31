@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRef } from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TaskForm } from './TaskForm'
 
@@ -63,6 +63,41 @@ describe('TaskForm', () => {
     await userEvent.type(screen.getByLabelText(/title/i), 'New task')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'New task' }))
+  })
+
+  describe('due date wire format', () => {
+    it('sends a chosen date as YYYY-MM-DD with no time suffix', async () => {
+      const onSubmit = vi.fn()
+      renderForm(undefined, onSubmit)
+      await userEvent.type(screen.getByLabelText(/title/i), 'Dated task')
+      fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '2026-05-01' } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ dueDate: '2026-05-01' }))
+    })
+
+    it('prefills the date input from the task and resubmits it unchanged', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, dueDate: '2026-05-01' }, onSubmit)
+      expect(screen.getByLabelText('Due Date')).toHaveValue('2026-05-01')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ dueDate: '2026-05-01' }))
+    })
+
+    it('sends null (not an empty string) when the date is cleared or never set', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, dueDate: '2026-05-01' }, onSubmit)
+      fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '' } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit.mock.calls[0][0].dueDate).toBeNull()
+    })
+
+    it('sends null for a task with no due date', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, dueDate: null }, onSubmit)
+      expect(screen.getByLabelText('Due Date')).toHaveValue('')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit.mock.calls[0][0].dueDate).toBeNull()
+    })
   })
 
   it('keeps Cancel before Save in DOM order (mobile wrap must not reorder)', () => {

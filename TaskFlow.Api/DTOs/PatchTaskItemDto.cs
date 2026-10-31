@@ -22,7 +22,7 @@ public class PatchTaskItemDto
     private string? _description;
     private Status? _status;
     private Priority? _priority;
-    private DateTime? _dueDate;
+    private DateOnly? _dueDate;
     private int? _parentTaskItemId;
     private string? _blockedReason;
 
@@ -50,7 +50,7 @@ public class PatchTaskItemDto
         set { _priority = value; _present.Add(nameof(Priority)); }
     }
 
-    public DateTime? DueDate
+    public DateOnly? DueDate
     {
         get => _dueDate;
         set { _dueDate = value; _present.Add(nameof(DueDate)); }

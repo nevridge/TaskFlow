@@ -17,7 +17,7 @@ import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
 import { usePrefs } from '@/context/usePrefs'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
-import { formatDate } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/utils'
 import { formatShort, formatStartedAt } from '@/lib/journal-utils'
 import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
@@ -236,7 +236,7 @@ export function TaskDetailPage() {
                 {task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}
                 <span>Tagged: <strong>{task.daysTagged ?? 0}d</strong></span>
                 <span>Moved: <strong>{task.moveCount ?? 0}</strong></span>
-                {task.dueDate && <span>Due: <strong>{formatDate(task.dueDate)}</strong></span>}
+                <span>Due: <strong>{formatDateOnly(task.dueDate)}</strong></span>
               </div>
               <div className="t-detail-badges">
                 <span className={`t-badge t-badge-${status}`}>{getStatusLabel(task.status ?? 'draft')}</span>

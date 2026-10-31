@@ -95,4 +95,5 @@ public sealed record UpdateTaskRequest(
     int? ParentTaskItemId,
     bool AutoCompleteParentWhenChildrenDone,
     int TimezoneOffsetMinutes,
-    string? BlockedReason = null);
+    string? BlockedReason = null,
+    DateOnly? JournalDate = null);

@@ -1820,6 +1820,259 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("The task is already completed.");
     }
+
+    private static object Plan(string? plannedOn, string status = "Todo", int? projectId = null, int children = 0) =>
+        Fixtures.Task(5, "Original", status: status, priority: "High", due: "2026-10-12", projectId: projectId, description: "Keep me", plannedOn: plannedOn, childTaskCount: children);
+
+    private static StubHandler PutPastDay(StubHandler handler) =>
+        handler.On(HttpMethod.Put, "TaskItems/5", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity);
+
+    [Theory]
+    [InlineData("today", "2026-10-09")]
+    [InlineData("Tomorrow", "2026-10-10")]
+    [InlineData("2026-10-10", "2026-10-10")]
+    [InlineData(" 2026-11-02 ", "2026-11-02")]
+    public async Task JournalDate_PlansTheTaskOnThatDay_AndReportsIt(string input, string expected)
+    {
+        var (tools, handler) = Setup(Plan(null), Plan(expected));
+
+        var text = await tools.UpdateTask(5, journalDate: input, ct: TestContext.Current.CancellationToken);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be(expected);
+        text.Should().StartWith($"Updated #5. Changed planned {expected}.").And.Contain($"planned {expected}");
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task JournalDate_Absent_SendsNull_AndReportsNoPlanning(string? input)
+    {
+        var (tools, handler) = Setup(Plan("2026-10-11"));
+
+        var text = await tools.UpdateTask(5, priority: "low", journalDate: input, ct: TestContext.Current.CancellationToken);
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.TryGetProperty("journalDate", out var property).Should().BeTrue();
+        property.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        text.Split('\n')[0].Should().Be("Updated #5. Changed priority.");
+    }
+
+    [Fact]
+    public async Task JournalDate_SameDayAlreadyPlanned_Succeeds_WithoutAPlannedChange()
+    {
+        var (tools, handler) = Setup(Plan("2026-10-09"));
+
+        var text = await tools.UpdateTask(5, journalDate: "today", ct: TestContext.Current.CancellationToken);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be("2026-10-09");
+        text.Split('\n')[0].Should().Be("Updated #5. No changes needed.");
+    }
+
+    [Fact]
+    public async Task JournalDate_DayWithoutAJournalEntry_NeedsNoJournalRequests()
+    {
+        var (tools, handler) = Setup(Plan(null), Plan("2026-12-24"));
+
+        await tools.UpdateTask(5, journalDate: "2026-12-24", ct: TestContext.Current.CancellationToken);
+
+        handler.Requests.Should().OnlyContain(r => r.Path == "TaskItems/5");
+        handler.Requests.Should().NotContain(r => r.Path.StartsWith("Journal"));
+    }
+
+    [Fact]
+    public async Task JournalDate_OnAParent_MakesOnePut_AndNoSubtaskRequests()
+    {
+        var (tools, handler) = Setup(Plan(null, children: 2), Plan("2026-10-10", children: 2));
+
+        await tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.Requests.Should().OnlyContain(r => r.Path == "TaskItems/5");
+    }
+
+    [Fact]
+    public async Task JournalDate_PutLacksTheDay_FollowUpGetConfirmsIt()
+    {
+        var (tools, handler) = Setup(Plan(null), Plan(null), h => h.Get("TaskItems/5", Plan("2026-10-10")));
+
+        var text = await tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(2);
+        text.Should().Contain("Changed planned 2026-10-10").And.Contain("| planned 2026-10-10");
+    }
+
+    [Fact]
+    public async Task JournalDate_PutReturnsADifferentDay_FollowUpGetDecidesWhatIsReported()
+    {
+        var (tools, handler) = Setup(Plan(null), Plan("2026-10-08"), h => h.Get("TaskItems/5", Plan("2026-10-10")));
+
+        var text = await tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(2);
+        text.Should().Contain("planned 2026-10-10").And.NotContain("2026-10-08");
+    }
+
+    [Fact]
+    public async Task JournalDate_FollowUpGetFails_StillReportsTheUpdate_AndSaysPlanningIsUnconfirmed()
+    {
+        var (tools, handler) = Setup(Plan(null), Plan(null), h => h.On(HttpMethod.Get, "TaskItems/5", new { message = "boom" }, HttpStatusCode.InternalServerError));
+
+        var text = await tools.UpdateTask(5, journalDate: "tomorrow", priority: "low", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(2);
+        text.Should().StartWith("Updated #5. Changed priority.").And.Contain("could not be confirmed");
+        text.Split('\n')[0].Should().NotContain("planned 2026");
+    }
+
+    [Fact]
+    public async Task JournalDate_WithAProjectStep_ReusesTheProjectReread_NeverThreeGets()
+    {
+        var (tools, handler) = Setup(Plan(null), Plan(null), h => h
+            .Get("TaskItems/5", Plan("2026-10-10", projectId: 7))
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+
+        var text = await tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(2);
+        text.Should().Contain("planned 2026-10-10").And.Contain("project -> Alpha");
+    }
+
+    [Fact]
+    public async Task JournalDate_PastDayRejectedByTheApi_GivesGuidance_AndNoSecondPut()
+    {
+        var handler = PutPastDay(new StubHandler().Get("TaskItems/5", Plan(null)));
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, journalDate: "2026-10-01", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("past day").And.Contain("Nothing was changed").And.Contain("today or later");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("yesterday")]
+    [InlineData("none")]
+    [InlineData("next friday")]
+    [InlineData("2026-1-5")]
+    public async Task JournalDate_InvalidValue_IsRejectedLocally_NamingTheAcceptedForms(string input)
+    {
+        var (tools, handler) = Setup(Plan(null));
+
+        var act = () => tools.UpdateTask(5, journalDate: input, ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("journalDate").And.Contain("today, tomorrow, or yyyy-MM-dd").And.Contain("e.g. 2026-10-10").And.Contain("set_journal_todos");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+    }
+
+    [Theory]
+    [InlineData("Completed")]
+    [InlineData("Blocked")]
+    public async Task JournalDate_OnCompletedOrBlockedTask_SurfacesTheRawApiMessage(string status)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null, status: status))
+            .Put("TaskItems/5", new { message = "That task cannot be planned right now." }, HttpStatusCode.BadRequest);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, journalDate: "today", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("That task cannot be planned right now.");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task JournalDate_ProjectAssignmentFails_ReportsPartialSuccess_WithTheOriginalReason()
+    {
+        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { code = "TASK_START_NOT_ALLOWED", message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
+            .And.Contain("assigning it to project 'Alpha' failed")
+            .And.Contain("Project is full.")
+            .And.Contain("Retry only the project change.")
+            .And.NotContain("Nothing was changed");
+        ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
+        Occurrences(ex.Message, "was updated and planned").Should().Be(1);
+        Occurrences(ex.Message, "Only Todo tasks can be started").Should().Be(1);
+    }
+
+    [Fact]
+    public async Task JournalDate_UnknownProject_ReportsPartialSuccess()
+    {
+        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Nope", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("was updated and planned for 2026-10-10").And.Contain("No project matches 'Nope'").And.Contain("Retry only the project change.");
+        ex.InnerException.Should().BeOfType<McpException>();
+    }
+
+    [Fact]
+    public async Task ProjectFailure_WithoutJournalDate_KeepsItsPlainMessage()
+    {
+        var (tools, _) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => tools.UpdateTask(5, project: "Nope", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Nope'");
+    }
+
+    [Fact]
+    public async Task JournalDate_UnreachableApiDuringTheProjectStep_IsNotReportedAsPartialSuccess()
+    {
+        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Fail(HttpMethod.Post, "Projects/7/tasks", new HttpRequestException("refused")));
+
+        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("Cannot reach the TaskFlow API").And.NotContain("was updated and planned");
+        ex.InnerException.Should().BeOfType<HttpRequestException>();
+    }
+
+    [Fact]
+    public async Task JournalDate_TakesOneClockSnapshot()
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Put("TaskItems/5", Plan("2026-10-09"));
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTask(5, journalDate: "today", ct: TestContext.Current.CancellationToken);
+
+        // One LocalNow for the call plus the direct GetUtcNow for the response's current time.
+        clock.UtcReads.Should().Be(2);
+    }
+
+    [Theory]
+    [InlineData("today", "2026-10-10")]
+    [InlineData("tomorrow", "2026-10-11")]
+    public async Task JournalDate_NearLocalMidnight_UsesTheLocalDay_AndMatchingOffset(string input, string expected)
+    {
+        // 20:00Z at +05:30 is 01:30 on 2026-10-10 locally.
+        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Put("TaskItems/5", Plan(expected));
+        var clock = new CountingTimeProvider(offsetMinutes: 330, utc: new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero));
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTask(5, journalDate: input, ct: TestContext.Current.CancellationToken);
+
+        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        body.GetProperty("journalDate").GetString().Should().Be(expected);
+        body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
+    }
+
+    private static int Occurrences(string text, string phrase) =>
+        text.Split(phrase).Length - 1;
 }
 
 public class DeleteAndNoteTests
@@ -2168,4 +2421,89 @@ public class UpdateTasksTests
         handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
     }
 
+    private static object Planned(int id, string? plannedOn) =>
+        Fixtures.Task(id, $"Task {id}", priority: "High", due: "2026-10-12", description: "Keep me", plannedOn: plannedOn);
+
+    [Fact]
+    public async Task UpdateTasks_JournalDate_ReportsPlannedOnlyWhereTheDayChanged()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-10"))
+            .Get("TaskItems/2", Planned(2, "2026-10-10")).Put("TaskItems/2", Planned(2, "2026-10-10"));
+
+        var text = await Tools(handler).UpdateTasks(
+            [new TaskUpdate { Id = 1, JournalDate = "tomorrow" }, new TaskUpdate { Id = 2, JournalDate = "2026-10-10" }],
+            TestContext.Current.CancellationToken);
+
+        var lines = text.Split('\n');
+        lines[1].Should().Be("+ #1 \"Task 1\": Changed planned 2026-10-10");
+        lines[2].Should().Be("+ #2 \"Task 2\": No changes needed");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("journalDate").GetString().Should().Be("2026-10-10");
+    }
+
+    [Fact]
+    public async Task UpdateTasks_JournalDate_PastDayFailure_IsReportedOnThatItemOnly()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Planned(1, null))
+            .On(HttpMethod.Put, "TaskItems/1", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-09"));
+
+        var text = await Tools(handler).UpdateTasks(
+            [new TaskUpdate { Id = 1, JournalDate = "2026-10-01" }, new TaskUpdate { Id = 2, JournalDate = "today" }],
+            TestContext.Current.CancellationToken);
+
+        var lines = text.Split('\n');
+        lines[0].Should().Be("Updated 1 of 2 task(s).");
+        lines[1].Should().StartWith("x #1: ").And.Contain("Nothing was changed").And.Contain("today or later");
+        lines[2].Should().Be("+ #2 \"Task 2\": Changed planned 2026-10-09");
+        lines.Should().HaveCount(3);
+    }
+
+    [Fact]
+    public async Task UpdateTasks_JournalDate_YesterdayIsRejectedLocally_ForThatItemOnly()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, null))
+            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-09"));
+
+        var text = await Tools(handler).UpdateTasks(
+            [new TaskUpdate { Id = 1, JournalDate = "yesterday" }, new TaskUpdate { Id = 2, JournalDate = "today" }],
+            TestContext.Current.CancellationToken);
+
+        text.Should().Contain("x #1: journalDate 'yesterday' is not valid").And.Contain("+ #2 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_JournalDate_TakesOneClockSnapshot_ForTheWholeBatch()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-09"))
+            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-10"));
+        var clock = new CountingTimeProvider();
+        var tools = new TaskTools(Fixtures.Client(handler), clock);
+
+        await tools.UpdateTasks(
+            [new TaskUpdate { Id = 1, JournalDate = "today" }, new TaskUpdate { Id = 2, JournalDate = "tomorrow" }],
+            TestContext.Current.CancellationToken);
+
+        clock.UtcReads.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task UpdateTasks_JournalDate_ProjectFailureAfterPlanning_UsesThePartialSuccessText()
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-10"))
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.BadRequest);
+
+        var act = () => Tools(handler).UpdateTasks(
+            [new TaskUpdate { Id = 1, JournalDate = "tomorrow", Project = "Alpha" }],
+            TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("x #1: Task #1 was updated and planned for 2026-10-10, but assigning it to project 'Alpha' failed: Project is full.");
+    }
 }

@@ -31,13 +31,45 @@ internal static class InputParsing
                 return today.AddDays(-1);
         }
 
-        if (DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+        if (TryParseIso(value, out var date))
         {
             return date;
         }
 
         throw ToolGuard.Invalid($"Invalid {paramName} '{value}'. Use yyyy-MM-dd, 'today', 'tomorrow' or 'yesterday'.");
     }
+
+    /// <summary>
+    /// Parses the journalDate of an update. Null or blank means "not supplied" (never an un-plan). Accepts today, tomorrow
+    /// or yyyy-MM-dd; everything else, including yesterday, is rejected before any request. A past yyyy-MM-dd is left to the API.
+    /// </summary>
+    public static DateOnly? ParsePlanDay(string? value, DateOnly today, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "today":
+                return today;
+            case "tomorrow":
+                return today.AddDays(1);
+        }
+
+        if (TryParseIso(value, out var date))
+        {
+            return date;
+        }
+
+        throw ToolGuard.Invalid(
+            $"{paramName} '{value}' is not valid. Use today, tomorrow, or yyyy-MM-dd (today or later), e.g. {today.AddDays(1):yyyy-MM-dd}. "
+            + "Planning cannot be removed via update; use set_journal_todos.");
+    }
+
+    private static bool TryParseIso(string value, out DateOnly date) =>
+        DateOnly.TryParseExact(value.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date);
 
     public static DateOnly ParseDateOrToday(string? value, DateOnly today, string paramName) =>
         string.IsNullOrWhiteSpace(value) ? today : ParseDate(value, today, paramName);

@@ -100,7 +100,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         TaskItem? persisted = null;
         // Safety net for callers that pass an untracked (Detached) entity. Production callers in
         // TaskItemsController pass tracked entities, so the API does not reach this branch today, but it is
-        // covered by the Detached-entity tests in TaskRepositoryTests. Do not remove.
+        // covered by the Detached-entity tests in TaskRepositoryTests and TaskRepositoryUpdateEventTests. Do not remove.
         if (entry.State == EntityState.Detached)
         {
             persisted = await _context.TaskItems
@@ -112,11 +112,15 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         }
 
         var originalTitle = persisted?.Title ?? entry.OriginalValues.GetValue<string>(nameof(TaskItem.Title));
-        var originalDescription = persisted?.Description ?? entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));
+        // A null stored value is meaningful, so do not fall back to OriginalValues when a persisted row exists.
+        var originalDescription = persisted is not null
+            ? persisted.Description
+            : entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));
         var originalPriority = persisted?.Priority ?? entry.OriginalValues.GetValue<Priority>(nameof(TaskItem.Priority));
         var originalStatus = persisted?.Status ?? entry.OriginalValues.GetValue<Status>(nameof(TaskItem.Status));
-        var originalDueDate = persisted?.DueDate ?? entry.OriginalValues.GetValue<DateOnly?>(nameof(TaskItem.DueDate));
-        // A null stored reason is meaningful, so do not fall back to OriginalValues when a persisted row exists.
+        var originalDueDate = persisted is not null
+            ? persisted.DueDate
+            : entry.OriginalValues.GetValue<DateOnly?>(nameof(TaskItem.DueDate));
         var originalBlockedReason = persisted is not null
             ? persisted.BlockedReason
             : entry.OriginalValues.GetValue<string?>(nameof(TaskItem.BlockedReason));

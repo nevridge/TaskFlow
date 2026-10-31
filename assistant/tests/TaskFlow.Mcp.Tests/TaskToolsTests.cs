@@ -1169,6 +1169,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, title: "Renamed");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().NotContain("dueDate");
     }
 
@@ -1180,6 +1181,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, priority: "low");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1194,6 +1196,7 @@ public class UpdateTaskTests
         // One LocalNow for the call plus the direct GetUtcNow for the response's current time.
         clock.UtcReads.Should().Be(2);
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Theory]
@@ -1208,6 +1211,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, priority: "low");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offset);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1222,6 +1226,7 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("dueDate").GetString().Should().Be("2026-10-10");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1342,14 +1347,17 @@ public class UpdateTaskTests
         var (tools, handler) = Setup(Existing());
         await tools.UpdateTask(5, dueDate: "tomorrow");
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-10");
+        handler.AssertNoIsComplete("TaskItems/5");
 
         var (tools2, handler2) = Setup(Existing());
         await tools2.UpdateTask(5, dueDate: "none");
         handler2.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler2.AssertNoIsComplete("TaskItems/5");
 
         var (tools3, handler3) = Setup(Existing());
         await tools3.UpdateTask(5, dueDate: "2026-11-03");
         handler3.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-11-03");
+        handler3.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1362,6 +1370,7 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("description").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
         body.GetProperty("parentTaskItemId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1459,6 +1468,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "blocked");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked.");
     }
 
@@ -1475,6 +1485,7 @@ public class UpdateTaskTests
         body.GetProperty("status").GetString().Should().Be("blocked");
         body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.String);
         body.GetProperty("blockedReason").GetString().Should().BeEmpty();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("blocked reason (cleared)");
     }
 
@@ -1486,6 +1497,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, blockedReason: "Now waiting on legal");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Now waiting on legal");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked reason.");
     }
 
@@ -1515,6 +1527,7 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("todo");
         body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed unblocked (now Todo).").And.Contain("[High/Todo]").And.NotContain("blocked:");
     }
 
@@ -1526,6 +1539,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "todo");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed unblocked (now InProgress).").And.Contain("[High/InProgress]").And.NotContain("Todo").And.NotContain("Changed status");
     }
 
@@ -1554,6 +1568,7 @@ public class UpdateTaskTests
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").EnumerateObject().Select(p => p.Name).Should().NotContain("startedAt");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.").And.Contain("[High/InProgress]").And.Contain("Started: 2026-10-09 16:45 UTC");
     }
 
@@ -1565,6 +1580,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "todo");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
     }
 
@@ -1576,6 +1592,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "inprogress", priority: "low");
 
         handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed priority.").And.NotContain("status");
     }
 
@@ -1587,6 +1604,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, status: "inprogress");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1598,6 +1616,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Waiting");
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked (reason: \"Waiting\").");
     }
 
@@ -1705,6 +1724,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, status: "blocked", blockedReason: " " + new string('x', 200) + " ");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().HaveLength(200);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Theory]
@@ -1739,6 +1759,7 @@ public class UpdateTaskTests
         await tools.UpdateTask(5, blockedReason: "");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Theory]
@@ -1783,6 +1804,7 @@ public class UpdateTaskTests
         var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().NotContainEquivalentOf("autocomplete");
     }
 
@@ -1868,6 +1890,7 @@ public class UpdateTasksTests
         handler.BodyOf(HttpMethod.Put, "TaskItems/8").GetProperty("priority").GetString().Should().Be("low");
         handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(8);
         handler.BodyOf(HttpMethod.Post, "Projects/7/tasks").GetProperty("taskItemId").GetInt32().Should().Be(8);
+        handler.AssertNoIsComplete("TaskItems/8");
     }
 
     [Theory]
@@ -1887,6 +1910,7 @@ public class UpdateTasksTests
         foreach (var id in ids)
         {
             handler.BodyOf(HttpMethod.Put, $"TaskItems/{id}").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+            handler.AssertNoIsComplete($"TaskItems/{id}");
         }
     }
 
@@ -1908,6 +1932,8 @@ public class UpdateTasksTests
         handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
         handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
         handler.BodyOf(HttpMethod.Put, "TaskItems/3").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
+        handler.AssertNoIsComplete("TaskItems/1");
+        handler.AssertNoIsComplete("TaskItems/3");
     }
 
     [Theory]
@@ -1920,6 +1946,7 @@ public class UpdateTasksTests
         await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = dueDate }]);
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be(expected);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1930,6 +1957,7 @@ public class UpdateTasksTests
         await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = "none" }]);
 
         handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(JsonValueKind.Null);
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -2008,6 +2036,7 @@ public class UpdateTasksTests
         text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: Task #5 is Draft, so it can't be started.").And.Contain("+ #6 ");
         handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
         handler.BodyOf(HttpMethod.Put, "TaskItems/6").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.AssertNoIsComplete("TaskItems/6");
     }
 
     [Fact]

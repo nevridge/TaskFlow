@@ -99,7 +99,7 @@ public class ApiClientErrorTests
     [InlineData("Todo", false)]
     [InlineData("InProgress", false)]
     [InlineData("Blocked", false)]
-    public void TaskItemDto_IsDone_DependsOnlyOnStatus(string status, bool expected)
+    public void TaskItemDto_IsDone_IsTrueOnlyForCompletedStatus(string status, bool expected)
     {
         var json = System.Text.Json.JsonSerializer.Serialize(Fixtures.Task(1, status: status), TaskFlowApiClient.Json);
 

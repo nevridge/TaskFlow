@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
 
@@ -8,6 +9,17 @@ namespace TaskFlow.Api.Repositories;
 public class TaskRepository(TaskDbContext context) : ITaskRepository
 {
     private readonly TaskDbContext _context = context;
+
+    public async Task<IRepositoryTransaction> BeginTransactionAsync() =>
+        new RepositoryTransaction(await _context.Database.BeginTransactionAsync());
+
+    private sealed class RepositoryTransaction(IDbContextTransaction transaction) : IRepositoryTransaction
+    {
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            transaction.CommitAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => transaction.DisposeAsync();
+    }
 
     public async Task<IEnumerable<TaskItem>> GetAllAsync() =>
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.

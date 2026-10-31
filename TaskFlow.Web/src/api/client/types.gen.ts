@@ -109,6 +109,7 @@ export type PatchTaskItemDto = {
     blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
+    journalDate?: null | string;
 };
 
 export type Priority = 'low' | 'medium' | 'high';
@@ -197,6 +198,7 @@ export type UpdateTaskItemDto = {
     blockedReason?: null | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
+    journalDate?: null | string;
 };
 
 export type GetApiV1JournalEntriesData = {

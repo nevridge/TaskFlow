@@ -9,6 +9,10 @@
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- XML doc comments feed the OpenAPI descriptions (Microsoft.AspNetCore.OpenApi source generator).
+         CS1591 (missing comment on public members) is intentionally not enforced. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <UserSecretsId>1ae9a9e2-f9fc-402a-95ed-01ec1cfdf34b</UserSecretsId>
   </PropertyGroup>
 

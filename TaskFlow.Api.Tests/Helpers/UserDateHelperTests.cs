@@ -47,4 +47,19 @@ public class UserDateHelperTests
     {
         Assert.Equal(new DateOnly(2026, 10, 14), UserDateHelper.GetUserToday(LateUtc, null));
     }
+
+    [Theory]
+    [InlineData(-300, 2026, 10, 13)]
+    [InlineData(0, 2026, 10, 14)]
+    [InlineData(840, 2026, 10, 14)]
+    public void GetUserDate_ShouldShiftInstantByOffset(int offset, int year, int month, int day)
+    {
+        Assert.Equal(new DateOnly(year, month, day), UserDateHelper.GetUserDate(LateUtc, offset));
+    }
+
+    [Fact]
+    public void GetUserDate_ShouldReturnUtcDate_WhenOffsetIsNull()
+    {
+        Assert.Equal(new DateOnly(2026, 10, 14), UserDateHelper.GetUserDate(LateUtc, null));
+    }
 }

@@ -142,6 +142,35 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldReturnCompletedAt_ForCompletedTodoAndItsChild()
+    {
+        var completedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+        var childCompletedAt = new DateTime(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
+        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
+        var parent = new TaskItem
+        {
+            Id = 2,
+            Title = "Done parent",
+            Status = Status.Completed,
+            CompletedAt = completedAt,
+            ChildTaskItems =
+            [
+                new TaskItem { Id = 3, Title = "Done child", Status = Status.Completed, CompletedAt = childCompletedAt, ParentTaskItemId = 2 },
+                new TaskItem { Id = 4, Title = "Open child", Status = Status.Todo, ParentTaskItemId = 2 }
+            ]
+        };
+        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+
+        var result = await _controller.GetAll(1);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
+        Assert.Equal(completedAt, dto.CompletedAt);
+        Assert.Equal(childCompletedAt, dto.Children!.Single(c => c.Id == 3).CompletedAt);
+        Assert.Null(dto.Children!.Single(c => c.Id == 4).CompletedAt);
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnBadRequest_WhenTaskIdInvalid()
     {
         var dto = new AddJournalTodoDto { TaskItemId = 0 };

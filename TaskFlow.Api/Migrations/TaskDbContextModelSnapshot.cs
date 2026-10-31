@@ -193,6 +193,9 @@ namespace TaskFlow.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("CurrentJournalEntryId")
                         .HasColumnType("INTEGER");
 

@@ -34,6 +34,7 @@ public class TaskItemsController(
     private const string BlockedReasonRequiresBlockedStatusErrorCode = "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS";
     private const string CreateBlockedNotAllowedErrorCode = "TASK_CREATE_BLOCKED_NOT_ALLOWED";
     private const string StartNotAllowedErrorCode = "TASK_START_NOT_ALLOWED";
+    private const string PlanCompletedNotAllowedErrorCode = "TASK_PLAN_COMPLETED_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -211,6 +212,29 @@ public class TaskItemsController(
         return CreatedAtRoute("GetTaskV1", new { version = ApiVersions.V1, id = createdItem.Id }, responseDto);
     }
 
+    /// <summary>
+    /// Updates a task (full update).
+    /// </summary>
+    /// <remarks>
+    /// Returns 422 with a body of <c>{ code, message, details }</c> for these business rules:
+    /// <list type="bullet">
+    /// <item><c>TASK_REOPEN_PAST_DAY_NOT_ALLOWED</c>: a Completed task cannot be reopened once its completion day is
+    /// before the user's today. The completion day is the local day of the stored <c>completedAt</c> (derived with
+    /// <c>timezoneOffsetMinutes</c>, UTC when absent), or the linked journal day when <c>completedAt</c> is null
+    /// (legacy rows). Tasks with neither are exempt. <c>details.assignedDate</c> holds that day. The task stays completed.</item>
+    /// <item><c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>: a task with a stored <c>completedAt</c> cannot be planned onto a
+    /// <c>journalDate</c> that differs from its current link. Re-sending the current link, or omitting
+    /// <c>journalDate</c>, is accepted. Nothing is changed. A request that reopens and re-plans in one call is rejected;
+    /// reopen first, plan second.</item>
+    /// <item>Other codes: <c>TASK_PARENT_SELF_NOT_ALLOWED</c>, <c>TASK_PARENT_NOT_FOUND</c>,
+    /// <c>TASK_PARENT_DEPTH_NOT_ALLOWED</c>, <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c>,
+    /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
+    /// <c>TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS</c>, <c>TASK_START_NOT_ALLOWED</c>,
+    /// <c>TASK_CREATION_PAST_DAY_NOT_ALLOWED</c>.</item>
+    /// </list>
+    /// </remarks>
+    [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
     // PUT: api/v1/TaskItems/5
     [HttpPut("{id}")]
     public async Task<ActionResult<TaskItemResponseDto>> Update(int id, [FromBody] UpdateTaskItemDto updateDto)
@@ -245,8 +269,19 @@ public class TaskItemsController(
         });
     }
 
+    /// <summary>
+    /// Partially updates a task (JSON Merge Patch): absent fields are left unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Shares the rules and 422 responses of the full update: <c>TASK_REOPEN_PAST_DAY_NOT_ALLOWED</c>
+    /// (completion day, or linked day when <c>completedAt</c> is null, before the user's today; tasks with neither are
+    /// exempt; <c>details.assignedDate</c> holds that day) and <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>
+    /// (<c>journalDate</c> differs from the link of a task that has a <c>completedAt</c>), plus the parent, block,
+    /// start and past-day planning codes.
+    /// </remarks>
+    [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
     // PATCH: api/v1/TaskItems/5
-    // Partial update (JSON Merge Patch): absent fields are left unchanged.
     [HttpPatch("{id}")]
     public async Task<ActionResult<TaskItemResponseDto>> Patch(int id, [FromBody] PatchTaskItemDto patchDto)
     {
@@ -395,15 +430,19 @@ public class TaskItemsController(
 
         if (wasCompleted && !nowCompleted)
         {
-            var assignedDate = await _repo.GetAssignedJournalDateAsync(id);
+            // "Past day" is the local completion day when CompletedAt is stored, otherwise the linked journal day
+            // (legacy rows). A task with neither is exempt. A null offset falls back to UTC.
+            var completionDay = existing.CompletedAt is { } completedAt
+                ? UserDateHelper.GetUserDate(completedAt, changes.TimezoneOffsetMinutes)
+                : await _repo.GetAssignedJournalDateAsync(id);
             var today = UserDateHelper.GetUserToday(DateTime.UtcNow, changes.TimezoneOffsetMinutes);
-            if (assignedDate.HasValue && assignedDate.Value < today)
+            if (completionDay.HasValue && completionDay.Value < today)
             {
                 return UnprocessableEntity(new
                 {
                     code = ReopenPastDayErrorCode,
                     message = "Completed tasks assigned to past days cannot be reopened.",
-                    details = new { assignedDate }
+                    details = new { assignedDate = completionDay }
                 });
             }
         }
@@ -452,7 +491,7 @@ public class TaskItemsController(
 
         // Journal planning (optional journalDate). The pre-check saves nothing, so a rejection here
         // leaves storage untouched; the mutated tracked entity is discarded with the scoped context.
-        var (planningError, planOn) = await CheckJournalPlanningAsync(id, changes);
+        var (planningError, planOn) = await CheckJournalPlanningAsync(id, changes, existing.CompletedAt);
         if (planningError is not null)
         {
             return planningError;
@@ -705,7 +744,8 @@ public class TaskItemsController(
 
     // Journal planning pre-check for PUT/PATCH. Read-only: nothing has been saved yet.
     // Returns an error to short-circuit, or the day to plan on (null when no planning is needed).
-    private async Task<(ActionResult? Error, DateOnly? PlanOn)> CheckJournalPlanningAsync(int id, TaskChanges changes)
+    private async Task<(ActionResult? Error, DateOnly? PlanOn)> CheckJournalPlanningAsync(
+        int id, TaskChanges changes, DateTime? storedCompletedAt)
     {
         if (!changes.HasJournalDate || changes.JournalDate is not { } journalDate)
         {
@@ -713,9 +753,21 @@ public class TaskItemsController(
         }
 
         // Re-sending the current planned day is a no-op for planning, even when that day is in the past.
-        if (await _repo.GetAssignedJournalDateAsync(id) == journalDate)
+        var currentLink = await _repo.GetAssignedJournalDateAsync(id);
+        if (currentLink == journalDate)
         {
             return (null, null);
+        }
+
+        // A completed task is shown on its completion day whatever its link, so re-linking it would silently do nothing.
+        if (storedCompletedAt is { } completedAt)
+        {
+            return (UnprocessableEntity(new
+            {
+                code = PlanCompletedNotAllowedErrorCode,
+                message = "Completed tasks cannot be planned onto a different day.",
+                details = new { assignedDate = currentLink, completedAt, journalDate }
+            }), null);
         }
 
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, changes.TimezoneOffsetMinutes);
@@ -758,7 +810,8 @@ public class TaskItemsController(
             BlockedReason = item.BlockedReason,
             BlockedAt = item.BlockedAt,
             PreviousStatus = item.PreviousStatus?.ToString(),
-            StartedAt = item.StartedAt
+            StartedAt = item.StartedAt,
+            CompletedAt = item.CompletedAt
         };
     }
 

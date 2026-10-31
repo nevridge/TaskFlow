@@ -22,7 +22,7 @@ All endpoints accept and return `application/json`.
 
 ## Date Wire Format
 
-`dueDate` is a calendar date, `YYYY-MM-DD` (for example `"2026-05-01"`), with no time or timezone. It is read and written as the same day everywhere. `null` means no due date. A datetime string such as `"2026-05-01T00:00:00Z"`, an empty string, or any malformed date (`"05/01/2026"`, `"2026-13-40"`) is rejected with `400 Bad Request`. Other timestamp fields (`createdAt`, `updatedAt`, `blockedAt`, `startedAt`) remain UTC instants. Existing stored due dates were converted to their date part by migration `20261030234403_ConvertTaskItemDueDateToDateOnly`, so any time-of-day part of older values was dropped, with no timezone conversion.
+`dueDate` is a calendar date, `YYYY-MM-DD` (for example `"2026-05-01"`), with no time or timezone. It is read and written as the same day everywhere. `null` means no due date. A datetime string such as `"2026-05-01T00:00:00Z"`, an empty string, or any malformed date (`"05/01/2026"`, `"2026-13-40"`) is rejected with `400 Bad Request`. Other timestamp fields (`createdAt`, `updatedAt`, `blockedAt`, `startedAt`, `completedAt`) remain UTC instants. Existing stored due dates were converted to their date part by migration `20261030234403_ConvertTaskItemDueDateToDateOnly`, so any time-of-day part of older values was dropped, with no timezone conversion.
 
 ## Task Items API
 
@@ -42,6 +42,12 @@ The snippets below describe the currently implemented contract additions used by
 - `moveCount: number`
 - `parentTaskItemId: number | null`
 - `childTaskCount: number`
+- `blockedReason: string | null`
+- `blockedAt: string | null` (UTC instant)
+- `startedAt: string | null` (UTC instant; set the first time the task enters `InProgress`, never cleared)
+- `completedAt: string | null` (UTC instant, `Z` suffix; server-owned, see below)
+
+`completedAt` is set to the current UTC time when a task moves to `Completed` by any path (`PUT`, `PATCH`, Blocked to Completed, create with `status: Completed`, or parent auto-complete) and is cleared to `null` when the task is reopened. Completing again sets a new value. It is returned on every task read (task list/detail, project tasks, journal todos including child todos). A `completedAt` sent in a create, `PUT` or `PATCH` body is ignored. It is `null` for tasks that were completed before this field existed unless a genuine `Completed` history event could be found by the migration `AddTaskItemCompletedAt` (the latest `Completed` event after the latest `Reopened` event; synthetic events from the `IsComplete` merge are ignored). No date is invented for the rest.
 
 #### Create task with optional journal assignment
 
@@ -74,10 +80,44 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
+- `TASK_PLAN_COMPLETED_NOT_ALLOWED`
 
 #### Reopen past-day guard and `timezoneOffsetMinutes`
 
-`PUT /api/v1/TaskItems/{id}` accepts optional `timezoneOffsetMinutes` (minutes to add to UTC to get the user's local time; negative west of UTC, e.g. `-300` for US Central CDT). When a completed task is reopened, the offset is used to compute the user's local today for the past-day guard. A task assigned to the user's local today can be reopened; an earlier assigned date returns `422` `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` (the response `details` include the task's `assignedDate`). If `timezoneOffsetMinutes` is omitted, the guard falls back to the UTC date. The same offset-derived "today" is used for the `journalDate` past-day check on update.
+`PUT` and `PATCH /api/v1/TaskItems/{id}` accept optional `timezoneOffsetMinutes` (minutes to add to UTC to get the user's local time; negative west of UTC, e.g. `-300` for US Central CDT). When a completed task is reopened, the offset is used to compute the user's local today for the past-day guard.
+
+The rule: a Completed task cannot be reopened once its **completion day** is before the user's today. The completion day is:
+
+- the user's local day of the stored `completedAt` when it is set (so a task completed today can be reopened even if it is linked to a past journal day, and a task completed yesterday cannot, even if it is linked to today); otherwise
+- the journal day the task is linked to (legacy rows with no `completedAt`).
+
+A task with neither a `completedAt` nor a journal day is exempt and can always be reopened.
+
+A rejected reopen returns `422` with the unchanged code and message, and the task stays completed:
+
+```json
+{
+  "code": "TASK_REOPEN_PAST_DAY_NOT_ALLOWED",
+  "message": "Completed tasks assigned to past days cannot be reopened.",
+  "details": { "assignedDate": "2026-05-01" }
+}
+```
+
+`details.assignedDate` holds the completion day (or the linked day when `completedAt` is null). If `timezoneOffsetMinutes` is omitted, the guard uses the UTC date. The same offset-derived "today" is used for the `journalDate` past-day check on update.
+
+#### Planning a completed task
+
+A task with a stored `completedAt` is shown on its completion day whatever its journal link, so `PUT`/`PATCH` with a `journalDate` that differs from its current link returns `422` `TASK_PLAN_COMPLETED_NOT_ALLOWED` and changes nothing:
+
+```json
+{
+  "code": "TASK_PLAN_COMPLETED_NOT_ALLOWED",
+  "message": "Completed tasks cannot be planned onto a different day.",
+  "details": { "assignedDate": "2026-05-20", "completedAt": "2026-05-20T15:04:05Z", "journalDate": "2026-05-22" }
+}
+```
+
+A `journalDate` equal to the current link, or a null/omitted one, is accepted. Completed tasks without a `completedAt` (legacy rows) can still be planned. A single request that reopens a task and also changes its `journalDate` is rejected with this code: reopen first, plan second. When both the reopen rule and this rule would reject a request, the reopen error is returned.
 
 ### List All Tasks
 
@@ -290,6 +330,26 @@ Updates an existing task item, including status assignment and optional journal 
 }
 ```
 
+`422 Unprocessable Entity` - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`: the task is Completed and its completion day (local day of `completedAt`, or the linked journal day when `completedAt` is null) is before the user's today; tasks with neither are exempt; the task stays completed
+```json
+{
+  "code": "TASK_REOPEN_PAST_DAY_NOT_ALLOWED",
+  "message": "Completed tasks assigned to past days cannot be reopened.",
+  "details": { "assignedDate": "2026-05-01" }
+}
+```
+
+`422 Unprocessable Entity` - `TASK_PLAN_COMPLETED_NOT_ALLOWED`: the task has a `completedAt` and `journalDate` differs from its current link; nothing is changed
+```json
+{
+  "code": "TASK_PLAN_COMPLETED_NOT_ALLOWED",
+  "message": "Completed tasks cannot be planned onto a different day.",
+  "details": { "assignedDate": "2026-05-20", "completedAt": "2026-05-20T15:04:05Z", "journalDate": "2026-05-22" }
+}
+```
+
+Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
+
 `409 Conflict` - another request planned the task on that day at the same time; nothing is changed
 ```json
 {
@@ -325,7 +385,8 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 - `journalDate` plans the task on a journal day exactly as on `PUT` (see Update Task); an explicit `null` or omitting it leaves the planned day unchanged.
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
-- Completion is set only through `status` (`Completed`); `isComplete` is not part of the contract and is ignored if sent.
+- Completion is set only through `status` (`Completed`); `isComplete` and `completedAt` are not part of the request contract and are ignored if sent.
+- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), plus the parent, block, start and past-day planning codes.
 
 **Example:**
 ```bash
@@ -712,6 +773,7 @@ curl http://localhost:8080/health/live
 | `204 No Content` | Success with no body | PUT, DELETE successful |
 | `400 Bad Request` | Validation error | Invalid input data |
 | `404 Not Found` | Resource not found | Requested item doesn't exist |
+| `422 Unprocessable Entity` | Business rule violated | Task update/create rejected with a `{ code, message, details }` body (for example `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`, `TASK_PLAN_COMPLETED_NOT_ALLOWED`) |
 | `500 Internal Server Error` | Server error | Unexpected server-side error |
 | `503 Service Unavailable` | Service unhealthy | Health check failure |
 

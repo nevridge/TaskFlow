@@ -71,6 +71,7 @@ public class ProjectsController(
             BlockedAt = t.BlockedAt,
             PreviousStatus = t.PreviousStatus?.ToString(),
             StartedAt = t.StartedAt,
+            CompletedAt = t.CompletedAt,
         }));
     }
 

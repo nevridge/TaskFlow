@@ -82,6 +82,8 @@ public class ConvertTaskItemDueDateToDateOnlyMigrationTests : IDisposable
         InsertTask(2, null);
 
         MigrateTo(TargetMigration);
+        // The DbContext model includes later columns (CompletedAt), so read through the latest schema.
+        _context.Database.Migrate();
 
         var tasks = await _context.TaskItems.AsNoTracking().OrderBy(t => t.Id).ToListAsync();
         Assert.Equal(new DateOnly(2026, 5, 1), tasks[0].DueDate);

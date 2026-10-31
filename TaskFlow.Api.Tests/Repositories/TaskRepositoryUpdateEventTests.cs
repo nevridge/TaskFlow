@@ -384,4 +384,254 @@ public class TaskRepositoryUpdateEventTests
         Assert.Equal("PriorityChanged", evt.EventType);
         Assert.Equal("Priority changed from Low to High.", evt.ChangeSummary);
     }
+
+    [Theory]
+    [InlineData(Status.Todo)]
+    [InlineData(Status.InProgress)]
+    [InlineData(Status.Draft)]
+    public async Task UpdateAsync_CompletingTask_SetsCompletedAtToNow(Status from)
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem { Id = 1, Title = "T", Status = from });
+        task.Status = Status.Completed;
+        var before = DateTime.UtcNow.AddSeconds(-5);
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        var stored = await context.TaskItems.AsNoTracking().SingleAsync();
+        Assert.NotNull(stored.CompletedAt);
+        Assert.Equal(DateTimeKind.Utc, stored.CompletedAt!.Value.Kind);
+        Assert.InRange(stored.CompletedAt.Value, before, DateTime.UtcNow.AddSeconds(5));
+        Assert.Equal("Completed", Assert.Single(await GetEventsAsync(context)).EventType);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_BlockedToCompleted_SetsCompletedAtAndWritesSingleCompletedEvent()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "T",
+            Status = Status.Blocked,
+            PreviousStatus = Status.Todo,
+            BlockedAt = DateTime.UtcNow.AddHours(-1)
+        });
+        task.Status = Status.Completed;
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        var stored = await context.TaskItems.AsNoTracking().SingleAsync();
+        Assert.NotNull(stored.CompletedAt);
+        var evt = Assert.Single(await GetEventsAsync(context));
+        Assert.Equal("Completed", evt.EventType);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ReopeningCompletedTask_ClearsCompletedAtAndWritesReopenedEvent()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "T",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow.AddHours(-1)
+        });
+        task.Status = Status.Todo;
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        Assert.Null((await context.TaskItems.AsNoTracking().SingleAsync()).CompletedAt);
+        Assert.Equal("Reopened", Assert.Single(await GetEventsAsync(context)).EventType);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_RecompletingAfterReopen_SetsLaterCompletedAtAndKeepsBothEvents()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var firstCompletion = DateTime.UtcNow.AddDays(-1);
+        var task = await SeedTrackedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "T",
+            Status = Status.Completed,
+            CompletedAt = firstCompletion
+        });
+        task.Status = Status.Todo;
+        await repository.UpdateAsync(task);
+
+        // Act
+        task.Status = Status.Completed;
+        await repository.UpdateAsync(task);
+
+        // Assert
+        var stored = await context.TaskItems.AsNoTracking().SingleAsync();
+        Assert.True(stored.CompletedAt > firstCompletion);
+        var types = (await GetEventsAsync(context)).Select(e => e.EventType).ToList();
+        Assert.Equal(["Reopened", "Completed"], types);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_CompletedTaskStaysCompleted_KeepsStoredCompletedAt()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var completedAt = new DateTime(2026, 6, 1, 10, 0, 0, DateTimeKind.Utc);
+        var task = await SeedTrackedAsync(context, new TaskItem
+        {
+            Id = 1,
+            Title = "Old",
+            Status = Status.Completed,
+            CompletedAt = completedAt
+        });
+        task.Title = "New";
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        Assert.Equal(completedAt, (await context.TaskItems.AsNoTracking().SingleAsync()).CompletedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LegacyCompletedTaskWithNullCompletedAt_StaysNullWhenOtherFieldChanges()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var task = await SeedTrackedAsync(context, new TaskItem { Id = 1, Title = "Old", Status = Status.Completed });
+        task.Title = "New";
+
+        // Act
+        await repository.UpdateAsync(task);
+
+        // Assert
+        Assert.Null((await context.TaskItems.AsNoTracking().SingleAsync()).CompletedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DetachedTaskIgnoresCallerSuppliedCompletedAt_WhenNotCompleting()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        context.TaskItems.Add(new TaskItem { Id = 1, Title = "T", Description = "d", Status = Status.Todo });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var detached = new TaskItem
+        {
+            Id = 1,
+            Title = "T",
+            Description = "d",
+            Status = Status.Todo,
+            CompletedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        };
+
+        // Act
+        await repository.UpdateAsync(detached);
+
+        // Assert
+        Assert.Null((await context.TaskItems.AsNoTracking().SingleAsync()).CompletedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DetachedTaskIgnoresCallerSuppliedCompletedAt_WhenCompleting()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        context.TaskItems.Add(new TaskItem { Id = 1, Title = "T", Description = "d", Status = Status.Todo });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var forged = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var detached = new TaskItem { Id = 1, Title = "T", Description = "d", Status = Status.Completed, CompletedAt = forged };
+
+        // Act
+        await repository.UpdateAsync(detached);
+
+        // Assert
+        var stored = await context.TaskItems.AsNoTracking().SingleAsync();
+        Assert.NotEqual(forged, stored.CompletedAt);
+        Assert.InRange(stored.CompletedAt!.Value, DateTime.UtcNow.AddSeconds(-5), DateTime.UtcNow.AddSeconds(5));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DetachedCompletedTaskKeepsPersistedCompletedAt_WhenCallerSendsDifferentValue()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        var persisted = new DateTime(2026, 6, 1, 10, 0, 0, DateTimeKind.Utc);
+        context.TaskItems.Add(new TaskItem { Id = 1, Title = "T", Description = "d", Status = Status.Completed, CompletedAt = persisted });
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var detached = new TaskItem
+        {
+            Id = 1,
+            Title = "T2",
+            Description = "d",
+            Status = Status.Completed,
+            CompletedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        };
+
+        // Act
+        await repository.UpdateAsync(detached);
+
+        // Assert
+        Assert.Equal(persisted, (await context.TaskItems.AsNoTracking().SingleAsync()).CompletedAt);
+    }
+
+    [Fact]
+    public async Task AddAsync_CompletedTask_SetsCompletedAtAndWritesNoCompletedEvent()
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        // Act
+        var created = await repository.AddAsync(new TaskItem { Title = "T", Status = Status.Completed });
+
+        // Assert
+        Assert.NotNull(created.CompletedAt);
+        Assert.InRange(created.CompletedAt!.Value, DateTime.UtcNow.AddSeconds(-5), DateTime.UtcNow.AddSeconds(5));
+        Assert.Equal("TaskCreated", Assert.Single(await GetEventsAsync(context)).EventType);
+    }
+
+    [Theory]
+    [InlineData(Status.Draft)]
+    [InlineData(Status.Todo)]
+    [InlineData(Status.InProgress)]
+    public async Task AddAsync_NonCompletedTask_LeavesCompletedAtNull_EvenWhenCallerSetsIt(Status status)
+    {
+        // Arrange
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+
+        // Act
+        var created = await repository.AddAsync(new TaskItem
+        {
+            Title = "T",
+            Status = status,
+            CompletedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        // Assert
+        Assert.Null(created.CompletedAt);
+    }
 }

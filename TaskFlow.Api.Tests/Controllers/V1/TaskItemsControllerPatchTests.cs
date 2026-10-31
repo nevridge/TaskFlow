@@ -534,6 +534,35 @@ public class TaskItemsControllerPatchTests
     }
 
     [Fact]
+    public async Task Patch_ShouldAllowReopening_WhenCompletedTodayAndLinkedToPastDay()
+    {
+        var existing = new TaskItem { Id = 1, Title = "T", Status = Status.Completed, CompletedAt = DateTime.UtcNow };
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(existing);
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-3));
+
+        var result = await _mockedController.Patch(1, new PatchTaskItemDto { Status = Status.Todo, TimezoneOffsetMinutes = 0 });
+
+        Assert.Equal("Todo", OkDto(result).Status);
+        _mockRepo.Verify(r => r.UpdateAsync(existing), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_ShouldRejectReopening_WhenCompletedYesterdayAndReportCompletionDay()
+    {
+        var completedAt = DateTime.UtcNow.AddDays(-1);
+        _mockRepo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new TaskItem { Id = 1, Title = "T", Status = Status.Completed, CompletedAt = completedAt });
+        _mockRepo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(DateOnly.FromDateTime(DateTime.UtcNow));
+
+        var result = await _mockedController.Patch(1, new PatchTaskItemDto { Status = Status.Todo, TimezoneOffsetMinutes = 0 });
+
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", ErrorCode(result));
+        var value = Assert.IsType<UnprocessableEntityObjectResult>(result.Result).Value!;
+        var details = value.GetType().GetProperty("details")!.GetValue(value)!;
+        Assert.Equal(DateOnly.FromDateTime(completedAt), details.GetType().GetProperty("assignedDate")!.GetValue(details));
+        _mockRepo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Patch_ShouldUseRequestTimezoneOffset_ForReopenGuard()
     {
         const int offset = 1440;

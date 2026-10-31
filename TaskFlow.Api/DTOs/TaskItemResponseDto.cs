@@ -25,6 +25,9 @@ public class TaskItemResponseDto
     public string? PreviousStatus { get; set; }
     public DateTime? StartedAt { get; set; }
 
+    /// <summary>Server-owned UTC instant the task was completed; null when not Completed or for legacy rows.</summary>
+    public DateTime? CompletedAt { get; set; }
+
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ICollection<TaskItemResponseDto>? Children { get; set; }
 }

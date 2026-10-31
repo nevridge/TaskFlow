@@ -66,6 +66,7 @@ describe('useJournalEntries', () => {
     const { result } = renderHook(() => useJournalEntries(), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
     expect(journalApi.getJournalEntries).toHaveBeenCalledOnce()
+    expect(journalApi.getJournalEntries).toHaveBeenCalledWith(getTimezoneOffsetMinutes())
   })
 })
 

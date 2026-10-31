@@ -12,6 +12,8 @@ vi.mock('./client/client.gen', () => ({
 
 import { client } from './client/client.gen'
 import {
+  getJournalEntries,
+  getJournalTodos,
   carryForwardJournalEntry,
   createJournalEntry,
   updateLogEntry,
@@ -82,6 +84,50 @@ describe('journal api carry-forward (mocked client)', () => {
         body: { title: 't', date: '2026-06-10', timezoneOffsetMinutes: -300 },
       }),
     )
+  })
+})
+
+describe('journal api day-attribution offset query (mocked client)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('getJournalTodos sends timezoneOffsetMinutes as a query param', () => {
+    getJournalTodos(7, -300)
+
+    expect(client.get).toHaveBeenCalledWith({
+      url: '/api/v1/JournalEntries/{entryId}/todos',
+      path: { entryId: 7 },
+      query: { timezoneOffsetMinutes: -300 },
+    })
+  })
+
+  it('getJournalTodos sends a zero offset rather than omitting it', () => {
+    getJournalTodos(7, 0)
+
+    const arg = vi.mocked(client.get).mock.calls[0][0] as { query?: unknown }
+    expect(arg.query).toEqual({ timezoneOffsetMinutes: 0 })
+  })
+
+  it('getJournalTodos omits the query when no offset is supplied', () => {
+    getJournalTodos(7)
+
+    const arg = vi.mocked(client.get).mock.calls[0][0] as { query?: unknown }
+    expect(arg.query).toBeUndefined()
+  })
+
+  it('getJournalEntries sends timezoneOffsetMinutes as a query param', () => {
+    getJournalEntries(840)
+
+    expect(client.get).toHaveBeenCalledWith({
+      url: '/api/v1/JournalEntries',
+      query: { timezoneOffsetMinutes: 840 },
+    })
+  })
+
+  it('getJournalEntries omits the query when no offset is supplied', () => {
+    getJournalEntries()
+
+    const arg = vi.mocked(client.get).mock.calls[0][0] as { query?: unknown }
+    expect(arg.query).toBeUndefined()
   })
 })
 

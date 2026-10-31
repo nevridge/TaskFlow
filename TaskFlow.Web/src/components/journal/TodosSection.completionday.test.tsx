@@ -170,6 +170,14 @@ describe('TodosSection completion-day behaviour', () => {
     expect(screen.getByRole('status')).toHaveTextContent('')
   })
 
+  it('shows a role=alert and clears the move announcement when completing from a past day fails', async () => {
+    toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError(new Error('boom')))
+    show([{ ...base, id: 1, title: 'First' }], PAST)
+    await userEvent.setup({ advanceTimers: () => {} }).click(screen.getByRole('button', { name: 'Mark done' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Unable to save task changes. Please try again.')
+    expect(screen.getByRole('status')).toHaveTextContent('')
+  })
+
   it('shows the inline error when the server rejects a reopen (stale view)', async () => {
     toggleTodoMutate.mockImplementation((_vars, opts) =>
       opts.onError({ response: { status: 422 }, error: { code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' } }),

@@ -628,17 +628,12 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         // The project step runs after the PUT. When it fails after the PUT already planned the task, say so.
-        var refreshed = false;
+        var projectChanged = false;
         if (!string.IsNullOrWhiteSpace(project))
         {
             try
             {
-                var reloaded = await ApplyProjectAsync(project, existing, id, changes, ct);
-                if (reloaded is not null)
-                {
-                    updated = reloaded;
-                    refreshed = true;
-                }
+                projectChanged = await ApplyProjectAsync(project, existing, id, changes, ct);
             }
             catch (Exception ex) when (planDay is not null && (ex is TaskFlowApiException or McpException))
             {
@@ -650,6 +645,13 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                     $"Task #{id} was updated and planned for {planDay:yyyy-MM-dd}, but {action} failed: {reason}. Retry only the project change.",
                     ex);
             }
+        }
+
+        var refreshed = false;
+        if (projectChanged)
+        {
+            updated = await api.GetTaskAsync(id, ct);
+            refreshed = true;
         }
 
         string? note = null;
@@ -684,8 +686,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         return new UpdateOutcome(updated, changes, note);
     }
 
-    // Returns the re-read task when the project changed, otherwise null.
-    private async Task<TaskItemDto?> ApplyProjectAsync(string project, TaskItemDto existing, int id, List<string> changes, CancellationToken ct)
+    // Returns true when the project changed; the caller re-reads the task outside the partial-success handling.
+    private async Task<bool> ApplyProjectAsync(string project, TaskItemDto existing, int id, List<string> changes, CancellationToken ct)
     {
         if (string.Equals(project.Trim(), "none", StringComparison.OrdinalIgnoreCase))
         {
@@ -693,10 +695,10 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             {
                 await api.UnassignTaskFromProjectAsync(current, id, ct);
                 changes.Add("project (removed)");
-                return await api.GetTaskAsync(id, ct);
+                return true;
             }
 
-            return null;
+            return false;
         }
 
         var target = await ProjectResolver.ResolveAsync(api, project, ct);
@@ -704,10 +706,10 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         {
             await AssignAsync(target.Id, id, ct);
             changes.Add($"project -> {target.Name}");
-            return await api.GetTaskAsync(id, ct);
+            return true;
         }
 
-        return null;
+        return false;
     }
 
     /// <summary>

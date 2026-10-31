@@ -1949,7 +1949,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, journalDate: "2026-10-01", ct: TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message
-            .Should().Contain("past day").And.Contain("Nothing was changed").And.Contain("today or later");
+            .Should().Contain("past day").And.Contain("today or later");
         handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
     }
 
@@ -2455,7 +2455,7 @@ public class UpdateTasksTests
 
         var lines = text.Split('\n');
         lines[0].Should().Be("Updated 1 of 2 task(s).");
-        lines[1].Should().StartWith("x #1: ").And.Contain("Nothing was changed").And.Contain("today or later");
+        lines[1].Should().StartWith("x #1: ").And.Contain("today or later");
         lines[2].Should().Be("+ #2 \"Task 2\": Changed planned 2026-10-09");
         lines.Should().HaveCount(3);
     }

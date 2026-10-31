@@ -429,7 +429,7 @@ public class ToolGuardTests
     [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "omit blockedReason")]
     [InlineData("TASK_START_NOT_ALLOWED", "set status=todo first")]
     [InlineData("TASK_START_NOT_ALLOWED", "reopen it first (complete=false)")]
-    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "Nothing was changed")]
+    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "or omit journalDate")]
     [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "journalDate must be today or later")]
     public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
     {

@@ -50,8 +50,8 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
     {
         project.UpdatedAt = DateTime.UtcNow;
 
-        // Tracked entities (loaded via GetByIdAsync) already carry their changes; calling
-        // Update would also mark every loaded task as modified.
+        // Tracked entities (loaded via GetByIdAsync) need no Update call because change detection
+        // picks up their edits; Update is only required to attach a Detached entity.
         if (_context.Entry(project).State == EntityState.Detached)
         {
             _context.Projects.Update(project);

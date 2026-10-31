@@ -174,9 +174,10 @@ public sealed class JournalLogEntriesControllerRealStackTests : IDisposable
 
         await UpdateAsync(entryId, logId, newId);
 
-        // The newly linked task comes from an untracked lookup, so it must never be written.
-        // (The previously Included old task may be marked Modified by UpdateAsync as before this change; values are identical.)
+        // The newly linked task comes from an untracked lookup, and the previously Included old task is
+        // already tracked (Update only marks untracked entities), so neither task may be written.
         Assert.DoesNotContain(_interceptor.Saved, s => s.EntityType == nameof(TaskItem) && s.Id == newId);
+        Assert.DoesNotContain(_interceptor.Saved, s => s.EntityType == nameof(TaskItem) && s.Id == oldId);
         Assert.Contains(_interceptor.Saved, s => s.EntityType == nameof(JournalLogEntry) && s.Id == logId && s.State == EntityState.Modified);
 
         await using var ctx = NewContext();

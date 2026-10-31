@@ -3,7 +3,7 @@ namespace TaskFlow.Api.DTOs;
 /// <summary>
 /// Body of a 422 business-rule rejection on task endpoints, for example
 /// <c>TASK_REOPEN_PAST_DAY_NOT_ALLOWED</c> or <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>.
-/// Documents the shape only; the controller serializes an equivalent anonymous object.
+/// Contains a machine-readable code, a human-readable message and optional details.
 /// </summary>
 public class TaskRuleErrorResponseDto
 {

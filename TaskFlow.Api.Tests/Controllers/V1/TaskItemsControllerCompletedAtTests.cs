@@ -20,8 +20,6 @@ namespace TaskFlow.Api.Tests.Controllers.V1;
 /// </summary>
 public class TaskItemsControllerCompletedAtTests
 {
-    private static readonly DateTime Forged = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
 
     private sealed class RealStack : IDisposable
@@ -325,12 +323,13 @@ public class TaskItemsControllerCompletedAtTests
         using var stack = new RealStack();
         var seeded = await stack.SeedAsync(new TaskItem { Title = "T", Status = Status.Todo });
         var updateDto = JsonSerializer.Deserialize<UpdateTaskItemDto>(
-            """{"title":"Renamed","completedAt":"2020-01-01T00:00:00Z"}""",
+            """{"title":"Renamed","status":"completed","completedAt":"2020-01-01T00:00:00Z"}""",
             JsonSerializerOptionsProvider.Default)!;
 
         var dto = OkDto(await stack.Controller.Update(seeded.Id, updateDto));
 
-        Assert.Null(dto.CompletedAt);
+        AssertJustNow(dto.CompletedAt);
+        AssertJustNow((await stack.ReloadAsync(seeded.Id)).CompletedAt);
     }
 
     [Fact]
@@ -344,7 +343,6 @@ public class TaskItemsControllerCompletedAtTests
 
         var dto = OkDto(await stack.Controller.Patch(seeded.Id, patchDto));
 
-        Assert.NotEqual(Forged, dto.CompletedAt);
         AssertJustNow(dto.CompletedAt);
     }
 

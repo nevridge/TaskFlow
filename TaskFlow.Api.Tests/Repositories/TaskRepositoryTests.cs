@@ -492,6 +492,33 @@ public class TaskRepositoryTests
         Assert.Equal("Due date changed from 2026-01-15 to none.", evt.ChangeSummary);
     }
 
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("", null)]
+    public async Task UpdateAsync_ShouldWriteDescriptionChangedEvent_WhenDetachedTaskSwapsNullAndEmptyDescription(string? stored, string? incoming)
+    {
+        using var context = CreateInMemoryContext();
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = stored });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = incoming });
+
+        var evt = Assert.Single(await EventsAsync(context));
+        Assert.Equal("DescriptionChanged", evt.EventType);
+        Assert.Equal("Description updated.", evt.ChangeSummary);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldWriteNoEvent_WhenDetachedTaskKeepsIdenticalNonNullDescriptionAndDueDate()
+    {
+        using var context = CreateInMemoryContext();
+        var dueDate = new DateOnly(2026, 1, 15);
+        await SeedDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Same", DueDate = dueDate });
+
+        await UpdateDetachedAsync(context, new TaskItem { Id = 1, Title = "Task", Status = Status.Todo, Description = "Same", DueDate = dueDate });
+
+        Assert.Empty(await EventsAsync(context));
+    }
+
     [Fact]
     public async Task UpdateAsync_ShouldWriteNoDescriptionOrDueDateEvent_WhenDetachedTaskKeepsBothNull()
     {

@@ -112,7 +112,8 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         }
 
         var originalTitle = persisted?.Title ?? entry.OriginalValues.GetValue<string>(nameof(TaskItem.Title));
-        // A null stored value is meaningful, so do not fall back to OriginalValues when a persisted row exists.
+        // For Description, DueDate and BlockedReason a null stored value is meaningful, so do not fall back to
+        // OriginalValues when a persisted row exists.
         var originalDescription = persisted is not null
             ? persisted.Description
             : entry.OriginalValues.GetValue<string?>(nameof(TaskItem.Description));

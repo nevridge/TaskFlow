@@ -48,9 +48,10 @@ internal static class ToolGuard
 
         var guidance = ex.Code switch
         {
-            "TASK_BLOCK_DRAFT_NOT_ALLOWED" => "Only Todo tasks can be blocked. Make the task Todo first (status=todo), then block it.",
-            "TASK_BLOCK_COMPLETED_NOT_ALLOWED" => "Only Todo tasks can be blocked. Reopen the task first (complete=false), then block it.",
-            "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS" => "A blockedReason needs status=blocked on a Todo task; pass status=blocked with it, or omit blockedReason.",
+            "TASK_BLOCK_DRAFT_NOT_ALLOWED" => "Only Todo or InProgress tasks can be blocked. Make the task Todo first (status=todo), then block it.",
+            "TASK_BLOCK_COMPLETED_NOT_ALLOWED" => "Only Todo or InProgress tasks can be blocked. Reopen the task first (complete=false), then block it.",
+            "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS" => "A blockedReason needs status=blocked on a Todo or InProgress task; pass status=blocked with it, or omit blockedReason.",
+            "TASK_START_NOT_ALLOWED" => "Only Todo tasks can be started. If the task is Draft, set status=todo first; if it is Completed, reopen it first (complete=false); then set status=inprogress.",
             _ => null,
         };
 

@@ -6,7 +6,7 @@ Goal: summarize a period from real data and draft a status update in the user's 
 2. For each project that has overdue or stalled work, or that the user named, call `project_status`.
 3. Draft the update with these sections, omitting empty ones:
    - **Done**: completed work grouped by project.
-   - **In progress / next**: the most urgent open tasks per project.
+   - **Next up**: the most urgent open tasks per project. Tasks with status InProgress (work has started) may appear here.
    - **Blocked**: currently Blocked tasks with their reasons and how long they have been blocked. Do not suggest them as work for today unless asked, and do not report what was blocked or unblocked during the period (the review does not show it). If the user says a task is waiting on someone or something, propose `update_task status=blocked` with `blockedReason` (their words, max 200 characters), wait for a yes, and do not log it with `add_log_entry`.
    - **At risk**: overdue and stalled tasks, each with a one-line suggestion (re-date, split, drop, escalate).
    - **Notes**: anything notable from the journal summaries and logs.

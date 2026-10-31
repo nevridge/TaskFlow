@@ -78,7 +78,7 @@ interface TaskRow {
 
 function makeTasks(): TaskRow[] {
   return [
-    { ...base, id: 1, title: 'Bravo task', status: 'Todo', priority: 'High', dueDate: '2030-01-03T00:00:00Z' },
+    { ...base, id: 1, title: 'Bravo task', status: 'Todo', priority: 'High', dueDate: '2030-01-03' },
     { ...base, id: 2, title: 'Alpha task', status: 'Todo', priority: 'High' },
     { ...base, id: 3, title: 'Charlie task', status: 'Todo', priority: 'Medium', projectId: 1, projectName: 'Alpha' },
     { ...base, id: 4, title: 'Delta draft', status: 'Draft', priority: 'Low' },

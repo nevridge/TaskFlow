@@ -7,7 +7,7 @@ import {
   useProjectTasksQuery,
   useUpdateProjectMutation,
 } from '@/hooks/useProjects'
-import { formatDate } from '@/lib/utils'
+import { formatDateOnly } from '@/lib/utils'
 import { formatProjectCounts } from '@/lib/project-counts'
 import { getStatusLabel, normalizeStatus, STATUS_LABELS } from '@/lib/task-status'
 import '@/projects.css'
@@ -58,7 +58,7 @@ function ProjectTasks({ id }: { id: number }) {
                 )}
                 <div className="p-task-meta">
                   <span>Priority: {task.priority}</span>
-                  {task.dueDate && <span>Due {formatDate(task.dueDate)}</span>}
+                  <span>Due {formatDateOnly(task.dueDate)}</span>
                 </div>
               </div>
             </li>

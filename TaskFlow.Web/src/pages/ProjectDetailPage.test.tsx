@@ -128,7 +128,7 @@ describe('ProjectDetailPage', () => {
     mockTasks({
       data: {
         data: [
-          task({ id: 1, title: 'Task one', status: 'Todo', priority: 'High', dueDate: '2026-03-05T00:00:00Z' }),
+          task({ id: 1, title: 'Task one', status: 'Todo', priority: 'High', dueDate: '2026-03-05' }),
           task({ id: 2, title: 'Task two', status: 'Completed', priority: 'Low' }),
           task({ id: 3, title: 'Task three', status: 'Draft', priority: 'Medium' }),
         ],
@@ -141,6 +141,12 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByText('Draft')).toBeInTheDocument()
     expect(screen.getByText('Priority: High')).toBeInTheDocument()
     expect(screen.getByText(/Due Mar 5, 2026/)).toBeInTheDocument()
+  })
+
+  it('shows "Due —" for a task with no due date', () => {
+    mockTasks({ data: { data: [task({ id: 2, title: 'Task two', status: 'Todo', priority: 'Low', dueDate: null })] } })
+    renderAt('/projects/7')
+    expect(screen.getByText('Due —')).toBeInTheDocument()
   })
 
   it('shows the empty tasks copy exactly', () => {

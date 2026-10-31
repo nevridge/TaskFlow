@@ -84,13 +84,41 @@ public class ApiClientErrorTests
     public void TaskItemDto_Deserializes_BlockedFieldsAsNull_WhenAbsent()
     {
         var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
-            """{"id":1,"title":"t","isComplete":false,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            """{"id":1,"title":"t","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
             TaskFlowApiClient.Json)!;
 
         task.BlockedReason.Should().BeNull();
         task.BlockedAt.Should().BeNull();
         task.PreviousStatus.Should().BeNull();
         task.IsBlocked.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Completed", true)]
+    [InlineData("COMPLETED", true)]
+    [InlineData("Todo", false)]
+    [InlineData("InProgress", false)]
+    [InlineData("Blocked", false)]
+    public void TaskItemDto_IsDone_DependsOnlyOnStatus(string status, bool expected)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(Fixtures.Task(1, status: status), TaskFlowApiClient.Json);
+
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        task.IsDone.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("true", "Todo", false)]
+    [InlineData("false", "Completed", true)]
+    public void TaskItemDto_Deserializes_IgnoringALeftoverIsCompleteField(string isComplete, string status, bool expectedDone)
+    {
+        var json = $$"""{"id":1,"title":"t","isComplete":{{isComplete}},"status":"{{status}}","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""";
+
+        var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        task.Status.Should().Be(status);
+        task.IsDone.Should().Be(expectedDone);
     }
 
     [Fact]
@@ -110,7 +138,7 @@ public class ApiClientErrorTests
     public void TaskItemDto_Deserializes_StartedAtAsNull_WhenAbsent()
     {
         var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
-            """{"id":1,"title":"t","isComplete":false,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            """{"id":1,"title":"t","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
             TaskFlowApiClient.Json)!;
 
         task.StartedAt.Should().BeNull();
@@ -121,7 +149,7 @@ public class ApiClientErrorTests
     public void TaskItemDto_Deserializes_DateOnlyDueDate()
     {
         var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
-            """{"id":1,"title":"t","isComplete":false,"dueDate":"2026-10-12","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            """{"id":1,"title":"t","dueDate":"2026-10-12","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
             TaskFlowApiClient.Json)!;
 
         task.DueDate.Should().Be(new DateOnly(2026, 10, 12));
@@ -131,7 +159,7 @@ public class ApiClientErrorTests
     public void TaskItemDto_Deserializes_NullDueDateAsNull()
     {
         var task = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
-            """{"id":1,"title":"t","isComplete":false,"dueDate":null,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            """{"id":1,"title":"t","dueDate":null,"status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
             TaskFlowApiClient.Json)!;
 
         task.DueDate.Should().BeNull();
@@ -141,7 +169,7 @@ public class ApiClientErrorTests
     public void TaskItemDto_DateTimeDueDate_ThrowsJsonException()
     {
         Action act = () => System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(
-            """{"id":1,"title":"t","isComplete":false,"dueDate":"2026-10-12T00:00:00Z","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
+            """{"id":1,"title":"t","dueDate":"2026-10-12T00:00:00Z","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""",
             TaskFlowApiClient.Json);
 
         act.Should().Throw<System.Text.Json.JsonException>();

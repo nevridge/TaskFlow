@@ -6,7 +6,6 @@ public sealed record TaskItemDto(
     int Id,
     string Title,
     string? Description,
-    bool IsComplete,
     DateOnly? DueDate,
     string Status,
     string Priority,
@@ -27,7 +26,7 @@ public sealed record TaskItemDto(
 {
     public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
 
-    public bool IsDone => IsComplete || string.Equals(Status, "Completed", StringComparison.OrdinalIgnoreCase);
+    public bool IsDone => string.Equals(Status, "Completed", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record ProjectDto(
@@ -92,7 +91,6 @@ public sealed record UpdateTaskRequest(
     string? Description,
     string Status,
     string Priority,
-    bool IsComplete,
     DateOnly? DueDate,
     int? ParentTaskItemId,
     bool AutoCompleteParentWhenChildrenDone,

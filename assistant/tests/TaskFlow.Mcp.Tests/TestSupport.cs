@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using FluentAssertions;
 using Microsoft.Extensions.Time.Testing;
 using TaskFlow.Mcp.Api;
 
@@ -96,6 +97,18 @@ internal sealed class StubHandler : HttpMessageHandler
     }
 }
 
+internal static class RequestAssertions
+{
+    /// <summary>The retired isComplete key must never be sent on a PUT, in any casing.</summary>
+    public static void AssertNoIsComplete(this StubHandler handler, string path)
+    {
+        var body = handler.BodyOf(HttpMethod.Put, path);
+        body.ValueKind.Should().Be(JsonValueKind.Object);
+        body.TryGetProperty("isComplete", out _).Should().BeFalse();
+        handler.Sent(HttpMethod.Put, path).Last().Body.Should().NotContainEquivalentOf("isComplete");
+    }
+}
+
 /// <summary>
 /// Fixed-instant clock that counts reads. GetLocalNow is non-virtual and calls GetUtcNow, so we count GetUtcNow.
 /// </summary>
@@ -153,7 +166,6 @@ internal static class Fixtures
         int? projectId = null,
         string? projectName = null,
         int? parentId = null,
-        bool isComplete = false,
         int moveCount = 0,
         int daysTagged = 0,
         string? plannedOn = null,
@@ -167,7 +179,6 @@ internal static class Fixtures
             id,
             title,
             description,
-            isComplete,
             dueDate = due,
             status,
             priority,

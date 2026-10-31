@@ -429,7 +429,7 @@ public class JournalToolsTests
     {
         var handler = JournalWith(
             [Fixtures.Task(5, "Ship", childTaskCount: 2)],
-            [Fixtures.Task(5, "Ship", childTaskCount: 2), Fixtures.Task(12, "Done", status: "Completed", parentId: 5), Fixtures.Task(13, "Done2", isComplete: true, parentId: 5)]);
+            [Fixtures.Task(5, "Ship", childTaskCount: 2), Fixtures.Task(12, "Done", status: "Completed", parentId: 5), Fixtures.Task(13, "Done2", status: "Completed", parentId: 5)]);
 
         var text = await Tools(handler).GetJournal(responseFormat: "detailed");
 
@@ -974,7 +974,7 @@ public class ProjectToolsTests
                 Fixtures.Task(1, "Late", priority: "High", due: "2026-10-01", projectId: 1, projectName: "Alpha"),
                 Fixtures.Task(2, "Soon", priority: "Medium", due: "2026-10-12", projectId: 1, projectName: "Alpha"),
                 Fixtures.Task(3, "Stuck", moveCount: 5, projectId: 1, projectName: "Alpha"),
-                Fixtures.Task(4, "Done", status: "Completed", isComplete: true, projectId: 1, projectName: "Alpha"),
+                Fixtures.Task(4, "Done", status: "Completed", projectId: 1, projectName: "Alpha"),
                 Fixtures.Task(5, "Elsewhere", projectId: 2, projectName: "Beta"),
             });
 
@@ -998,9 +998,9 @@ public class ProjectToolsTests
                 Fixtures.Task(1, "Waiting", status: "Blocked", priority: "High", moveCount: 5, projectId: 1, projectName: "Alpha", blockedReason: "On vendor", blockedAt: "2026-10-05T10:00:00Z"),
                 Fixtures.Task(2, "No reason", status: "Blocked", projectId: 1, projectName: "Alpha", blockedAt: "2026-10-09T10:00:00Z"),
                 Fixtures.Task(3, "Open", projectId: 1, projectName: "Alpha"),
-                Fixtures.Task(4, "Done 1", status: "Completed", isComplete: true, projectId: 1),
-                Fixtures.Task(5, "Done 2", status: "Completed", isComplete: true, projectId: 1),
-                Fixtures.Task(6, "Done 3", status: "Completed", isComplete: true, projectId: 1),
+                Fixtures.Task(4, "Done 1", status: "Completed", projectId: 1),
+                Fixtures.Task(5, "Done 2", status: "Completed", projectId: 1),
+                Fixtures.Task(6, "Done 3", status: "Completed", projectId: 1),
             });
 
         var text = await Tools(handler).ProjectStatus("Alpha");
@@ -1032,8 +1032,8 @@ public class WeeklyReviewTests
         var handler = new StubHandler()
             .Get("TaskItems", new[]
             {
-                Fixtures.Task(1, "Finished this week", status: "Completed", isComplete: true, projectId: 7, projectName: "Alpha"),
-                Fixtures.Task(2, "Finished last month", status: "Completed", isComplete: true),
+                Fixtures.Task(1, "Finished this week", status: "Completed", projectId: 7, projectName: "Alpha"),
+                Fixtures.Task(2, "Finished last month", status: "Completed"),
                 Fixtures.Task(3, "Overdue open", due: "2026-10-01", priority: "High"),
             })
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha", open: 0, done: 1) })
@@ -1062,7 +1062,7 @@ public class WeeklyReviewTests
     {
         // 2026-10-10T03:00Z is still Oct 9 at UTC-7, so it belongs in a review ending Oct 9.
         var handler = new StubHandler()
-            .Get("TaskItems", new[] { Fixtures.Task(1, "Late finisher", status: "Completed", isComplete: true) })
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Late finisher", status: "Completed") })
             .Get("Projects", Array.Empty<object>())
             .Get("JournalEntries", Array.Empty<object>())
             .Get("TaskItems/1/history", new[] { Fixtures.Event(1, "Completed", "2026-10-10T03:00:00Z") });

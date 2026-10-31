@@ -19,7 +19,7 @@ public class ListTasksTests
         Fixtures.Task(1, "Low open", priority: "Low"),
         Fixtures.Task(2, "High overdue", priority: "High", due: "2026-10-01", projectId: 7, projectName: "Alpha"),
         Fixtures.Task(3, "Medium due soon", priority: "Medium", due: "2026-10-12", projectId: 7, projectName: "Alpha"),
-        Fixtures.Task(4, "Done", status: "Completed", isComplete: true, due: "2026-09-01"),
+        Fixtures.Task(4, "Done", status: "Completed", due: "2026-09-01"),
         Fixtures.Task(5, "Stale", moveCount: 4, projectId: 8, projectName: "Beta"),
         Fixtures.Task(6, "Planned today", plannedOn: "2026-10-09"),
         Fixtures.Task(7, "Long tagged", daysTagged: 9),
@@ -189,7 +189,7 @@ public class ListTasksTests
     }
 
     private static object DoneTask(int id, string title = "Done", int? projectId = null, string? projectName = null, string? plannedOn = null) =>
-        Fixtures.Task(id, title, status: "Completed", isComplete: true, projectId: projectId, projectName: projectName, plannedOn: plannedOn);
+        Fixtures.Task(id, title, status: "Completed", projectId: projectId, projectName: projectName, plannedOn: plannedOn);
 
     private static StubHandler WithHistory(StubHandler handler, int id, params object[] events) =>
         handler.Get($"TaskItems/{id}/history", events);
@@ -510,7 +510,7 @@ public class ListTasksTests
         Fixtures.Task(1, "Plain"),
         Fixtures.Task(2, "Waiting", status: "Blocked", priority: "High", due: "2026-10-01", blockedReason: "Waiting on vendor", blockedAt: "2026-10-05T10:00:00Z", moveCount: 4),
         Fixtures.Task(3, "No reason", status: "Blocked", blockedAt: "2026-10-09T10:00:00Z", plannedOn: "2026-10-09", projectId: null),
-        Fixtures.Task(4, "Done", status: "Completed", isComplete: true),
+        Fixtures.Task(4, "Done", status: "Completed"),
     ];
 
     [Fact]
@@ -641,7 +641,7 @@ public class ListTasksTests
 public class FormattingBlockedTests
 {
     private static TaskFlow.Mcp.Api.TaskItemDto Blocked(DateTime? at, string? reason = "r") =>
-        new(1, "T", null, false, null, "Blocked", "Low", null, null, null, null, null, null, 0, null, 0, 0, reason, at);
+        new(1, "T", null, null, "Blocked", "Low", null, null, null, null, null, null, 0, null, 0, 0, reason, at);
 
     private static readonly DateTimeOffset Now = new(2026, 10, 9, 17, 0, 0, TimeSpan.Zero);
 
@@ -911,7 +911,7 @@ public class CreateTasksTests
     public async Task ExistingDoneTask_WithSameTitle_WarnsWithDoneStatus()
     {
         var handler = new StubHandler()
-            .Get("TaskItems", new[] { Fixtures.Task(12, "Buy milk", status: "Completed", isComplete: true) })
+            .Get("TaskItems", new[] { Fixtures.Task(12, "Buy milk", status: "Completed") })
             .Post("TaskItems", Fixtures.Task(20, "Buy milk"), HttpStatusCode.Created);
 
         var text = await Tools(handler).CreateTasks([new NewTask { Title = "Buy milk" }]);
@@ -1130,8 +1130,8 @@ public class CreateTasksTests
 
 public class UpdateTaskTests
 {
-    private static object Existing(string status = "Todo", bool isComplete = false, int? projectId = null, string? projectName = null) =>
-        Fixtures.Task(5, "Original", status: status, priority: "High", due: "2026-10-12", isComplete: isComplete, projectId: projectId, projectName: projectName, description: "Keep me");
+    private static object Existing(string status = "Todo", int? projectId = null, string? projectName = null) =>
+        Fixtures.Task(5, "Original", status: status, priority: "High", due: "2026-10-12", projectId: projectId, projectName: projectName, description: "Keep me");
 
     private static (TaskTools Tools, StubHandler Handler) Setup(object existing, object? updated = null, Action<StubHandler>? configure = null)
     {
@@ -1154,7 +1154,7 @@ public class UpdateTaskTests
         body.GetProperty("description").GetString().Should().Be("Keep me");
         body.GetProperty("priority").GetString().Should().Be("low");
         body.GetProperty("status").GetString().Should().Be("todo");
-        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        handler.AssertNoIsComplete("TaskItems/5");
         body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
         body.GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
@@ -1225,7 +1225,7 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task CompleteTrue_SetsCompletedStatusAndFlag()
+    public async Task CompleteTrue_SetsCompletedStatus()
     {
         var (tools, handler) = Setup(Existing());
 
@@ -1233,34 +1233,107 @@ public class UpdateTaskTests
 
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("completed");
-        body.GetProperty("isComplete").GetBoolean().Should().BeTrue();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
     }
 
     [Fact]
     public async Task CompleteFalse_ReopensToTodo()
     {
-        var (tools, handler) = Setup(Existing(status: "Completed", isComplete: true));
+        var (tools, handler) = Setup(Existing(status: "Completed"));
 
-        await tools.UpdateTask(5, complete: false);
+        var text = await tools.UpdateTask(5, complete: false);
 
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("todo");
-        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        handler.AssertNoIsComplete("TaskItems/5");
+        text.Should().Contain("Changed status.");
     }
 
     [Fact]
-    public async Task SettingStatusToCompleted_AlsoSetsTheFlag_AndOtherStatusesReopen()
+    public async Task CompleteTrue_OnCompletedTask_ReportsNoChanges()
+    {
+        var (tools, handler) = Setup(Existing(status: "Completed"));
+
+        var text = await tools.UpdateTask(5, complete: true);
+
+        text.Should().Contain("No changes needed");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertNoIsComplete("TaskItems/5");
+    }
+
+    [Fact]
+    public async Task CompleteFalse_OnTodoTask_ReportsNoChanges()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        var text = await tools.UpdateTask(5, complete: false);
+
+        text.Should().Contain("No changes needed");
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.AssertNoIsComplete("TaskItems/5");
+    }
+
+    [Theory]
+    [InlineData("InProgress", "inprogress")]
+    [InlineData("Blocked", "blocked")]
+    public async Task CompleteFalse_OnNonCompletedStatus_LeavesStatusAlone(string existingStatus, string expected)
+    {
+        var (tools, handler) = Setup(Existing(existingStatus));
+
+        await tools.UpdateTask(5, complete: false);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be(expected);
+        handler.AssertNoIsComplete("TaskItems/5");
+    }
+
+    [Fact]
+    public async Task CompleteTrue_BeatsStatusInTheSameCall()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        await tools.UpdateTask(5, complete: true, status: "draft");
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertNoIsComplete("TaskItems/5");
+    }
+
+    [Fact]
+    public async Task CompleteFalse_WithStatusCompleted_ReopensToTodo()
+    {
+        var (tools, handler) = Setup(Existing());
+
+        await tools.UpdateTask(5, status: "completed", complete: false);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.AssertNoIsComplete("TaskItems/5");
+    }
+
+    [Fact]
+    public async Task CompleteTrue_OnBlockedTask_SendsCompletedWithoutLocalRejection()
+    {
+        var (tools, handler) = Setup(Existing(status: "Blocked"));
+
+        var text = await tools.UpdateTask(5, complete: true);
+
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertNoIsComplete("TaskItems/5");
+        text.Should().Contain("Changed status.");
+    }
+
+    [Fact]
+    public async Task SettingStatus_SendsThatStatus_AndNeverTheRetiredFlag()
     {
         var (tools, handler) = Setup(Existing());
         await tools.UpdateTask(5, status: "completed");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("isComplete").GetBoolean().Should().BeTrue();
+        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertNoIsComplete("TaskItems/5");
 
-        var (tools2, handler2) = Setup(Existing(status: "Completed", isComplete: true));
+        var (tools2, handler2) = Setup(Existing(status: "Completed"));
         await tools2.UpdateTask(5, status: "draft");
         var body = handler2.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("draft");
-        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        handler2.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
@@ -1373,7 +1446,7 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("blocked");
         body.GetProperty("blockedReason").GetString().Should().Be("Waiting on vendor");
-        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked (reason: \"Waiting on vendor\").").And.NotContain("status")
             .And.Contain("[High/Blocked]").And.Contain("blocked: Waiting on vendor (4d)").And.Contain("blocked since 2026-10-05 10:00 UTC");
     }
@@ -1428,7 +1501,7 @@ public class UpdateTaskTests
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("blocked");
         body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
-        body.GetProperty("isComplete").GetBoolean().Should().BeFalse();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("[High/Blocked]").And.Contain("blocked: Waiting on vendor").And.NotContain("Changed status").And.NotContain("blocked reason");
     }
 
@@ -1533,7 +1606,7 @@ public class UpdateTaskTests
     [InlineData("Completed", "Task #5 is Completed, so it can't be started.", "complete=false")]
     public async Task StatusInProgress_OnDraftOrCompleted_IsRejectedLocally_WithRecoverySteps(string existingStatus, string expectedStart, string expectedFix)
     {
-        var (tools, handler) = Setup(Existing(existingStatus, isComplete: existingStatus == "Completed"));
+        var (tools, handler) = Setup(Existing(existingStatus));
 
         var act = () => tools.UpdateTask(5, status: "InProgress");
 
@@ -1546,7 +1619,7 @@ public class UpdateTaskTests
     [Fact]
     public async Task StatusInProgress_WithCompleteFalse_OnCompletedTask_IsRejectedLocally()
     {
-        var (tools, handler) = Setup(Existing("Completed", isComplete: true));
+        var (tools, handler) = Setup(Existing("Completed"));
 
         var act = () => tools.UpdateTask(5, status: "inprogress", complete: false);
 
@@ -1603,13 +1676,13 @@ public class UpdateTaskTests
     [InlineData(false)]
     public async Task CompletingABlockedTask_CompletesIt(bool useComplete)
     {
-        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", status: "Completed", isComplete: true));
+        var (tools, handler) = Setup(BlockedTask(), Fixtures.Task(5, "Original", status: "Completed"));
 
         var text = useComplete ? await tools.UpdateTask(5, complete: true) : await tools.UpdateTask(5, status: "completed");
 
         var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("completed");
-        body.GetProperty("isComplete").GetBoolean().Should().BeTrue();
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.").And.NotContain("blocked");
     }
 
@@ -1885,6 +1958,7 @@ public class UpdateTasksTests
         body.GetProperty("priority").GetString().Should().Be("high");
         body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
         body.GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]

@@ -91,10 +91,15 @@ public sealed class RepositoryUpdateWritesOnlyRootTests : IDisposable
             var log = await repo.GetByIdAsync(entryId, logId);
             Assert.NotNull(log);
             Assert.Equal(oldId, log.TaskItem?.Id);
+            Assert.Equal(EntityState.Unchanged, ctx.Entry(log.TaskItem!).State);
 
             // Mirrors JournalLogEntriesController.ApplyTaskLinkAsync: only FK and snapshot change.
             log.TaskItemId = newId;
             log.LinkedTaskTitleSnapshot = "New";
+
+            // Stale-navigation edge case: the navigation still points at the old tracked task while the FK is the new id.
+            Assert.Equal(oldId, log.TaskItem?.Id);
+            Assert.Equal(newId, log.TaskItemId);
 
             _interceptor.Saved.Clear();
             await repo.UpdateAsync(log);
@@ -128,6 +133,7 @@ public sealed class RepositoryUpdateWritesOnlyRootTests : IDisposable
             var task = await repo.GetByIdAsync(taskId);
             Assert.NotNull(task);
             Assert.Equal(projectId, task.Project?.Id);
+            Assert.Equal(EntityState.Unchanged, ctx.Entry(task.Project!).State);
 
             task.Title = "Edited";
 

@@ -29,7 +29,17 @@ import {
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
 import { getErrorCode } from '@/lib/task-errors'
-import { todayISO, formatMonthDay, formatStartedAt } from '@/lib/journal-utils'
+import {
+  todayISO,
+  formatMonthDay,
+  formatStartedAt,
+  getTimezoneOffsetMinutes,
+  completionDayOf,
+  isCompletedHere,
+  isReopenBlocked,
+} from '@/lib/journal-utils'
+
+const REOPEN_BLOCKED_TEXT = 'Completed tasks on past days cannot be reopened'
 
 const CheckSvg = () => (
   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
@@ -101,7 +111,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }, [todosData, isHidden, entryId])
 
   const createTodo = useCreateTodoMutation(entryId, isoDate)
-  const toggleTodo = useToggleTodoMutation(entryId)
+  const toggleTodo = useToggleTodoMutation(entryId, isoDate)
   const editTodo = useEditTodoMutation(entryId)
   const blockTodo = useBlockTodoMutation(entryId)
   const unblockTodo = useUnblockTodoMutation(entryId)
@@ -181,18 +191,38 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   const today = todayISO()
   const isPastDay = isoDate < today
 
+  const offset = getTimezoneOffsetMinutes()
+
   const sorted = useMemo(() => {
-    const arr = [...todos]
+    // Context-only parents are not todos: they stay out of the tier ordering and follow the todo rows.
+    const regular = todos.filter(t => !t.isContextOnly)
+    const contextParents = todos.filter(t => t.isContextOnly)
     if (sort === 'open first' || sort === 'done last') {
-      // Tiers: open, blocked, completed. Array.sort is stable, so order within a tier is kept.
-      arr.sort((a, b) => journalSortTier(a.status) - journalSortTier(b.status))
+      // Tiers: open, blocked, completed (completion-day rows included). Array.sort is stable.
+      regular.sort((a, b) => journalSortTier(a.status) - journalSortTier(b.status))
+      return [...regular, ...contextParents]
     }
-    return arr
+    return [...todos]
   }, [todos, sort])
 
+  // Counts are roots only and leave context-only parents out.
   const remaining = openTodoCount(todos)
   const blockedCount = blockedTodoCount(todos)
-  const total = todos.length
+  const total = todos.filter(t => !t.isContextOnly).length
+
+  /** Whether a nested child is a todo row of the viewed day: completed ones by completion day (all under a context-only parent). */
+  function isChildTodoHere(child: TaskItemResponseDto, strict: boolean): boolean {
+    const day = completionDayOf(child, offset)
+    if (strict || (child.status === 'Completed' && child.completedAt)) return day === isoDate
+    // Open subtasks under a normal parent stay visible whatever their linked day (future ones get a badge).
+    return true
+  }
+  const visibleChildren = (td: TaskItemResponseDto) =>
+    (td.children ?? []).filter(c => isChildTodoHere(c, !!td.isContextOnly))
+
+  const anyReopenBlocked = sorted.some(
+    t => (!t.isContextOnly && isReopenBlocked(t, offset)) || visibleChildren(t).some(c => isReopenBlocked(c, offset)),
+  )
 
   function addTodo(e: React.FormEvent) {
     e.preventDefault()
@@ -211,9 +241,20 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }
 
   function toggle(todo: TaskItemResponseDto) {
+    // The server would answer 422; a blocked reopen sends nothing and explains itself.
+    if (isReopenBlocked(todo, offset)) {
+      setLiveMessage(`${REOPEN_BLOCKED_TEXT}.`)
+      return
+    }
     setActionError(null)
     const isDone = todo.status === 'Completed'
     const isChild = todo.parentTaskItemId != null
+    // Completing from a past day moves the row to today: keep focus on a surviving row and announce it.
+    const leavesDay = !isDone && isoDate !== todayISO()
+    if (leavesDay) {
+      moveFocusAwayFrom(Number(todo.id))
+      setLiveMessage('Completed. Moved to today.')
+    }
     toggleTodo.mutate(
       {
         id: Number(todo.id),
@@ -221,8 +262,29 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
         // Subtask completion must never auto-complete the parent in the journal UI
         ...(isChild && { autoCompleteParentWhenChildrenDone: false }),
       },
-      { onError: err => setActionError(getTaskActionErrorMessage(err)) }
+      {
+        onError: err => {
+          if (leavesDay) setLiveMessage('')
+          setActionError(getTaskActionErrorMessage(err))
+        },
+      }
     )
+  }
+
+  /** If the row's check button has focus, hands it to the next row's check (previous, else the add input). */
+  function moveFocusAwayFrom(id: number) {
+    const section = sectionRef.current
+    const button = section?.querySelector<HTMLElement>(`[data-todo-check="${id}"]`)
+    if (!section || !button || document.activeElement !== button) return
+    const row = button.closest('li')
+    const checks = Array.from(section.querySelectorAll<HTMLElement>('[data-todo-check]'))
+    const at = checks.indexOf(button)
+    const usable = (el: HTMLElement) => !(el as HTMLButtonElement).disabled && !row?.contains(el)
+    const target =
+      checks.slice(at + 1).find(usable) ??
+      [...checks.slice(0, at)].reverse().find(usable) ??
+      (draftInputRef.current && !draftInputRef.current.disabled ? draftInputRef.current : section)
+    target.focus()
   }
 
   function openBlock(todo: TaskItemResponseDto) {
@@ -353,6 +415,12 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     const isInProgress = td.status === 'InProgress'
     const canBlock = canBlockStatus(td.status)
     const childIsFuture = isChild && !!td.currentJournalDate && td.currentJournalDate > isoDate
+    const reopenBlocked = isReopenBlocked(td, offset)
+    const completedHere = isCompletedHere(td, isoDate, offset)
+    // A completion-day row can be linked to another day: show that day (the viewed day is implied).
+    const showLinkedDay =
+      isDone && !!td.completedAt && !childIsFuture && !!td.currentJournalDate && td.currentJournalDate !== isoDate
+    const reopenHintId = `todo-reopen-hint-${id}`
     return (
       <>
         <button
@@ -360,10 +428,20 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           data-todo-check={id}
           onClick={() => toggle(td)}
           aria-label={isDone ? 'Mark not done' : isBlocked ? 'Mark done (blocked)' : 'Mark done'}
+          {...(reopenBlocked
+            ? {
+                role: 'checkbox',
+                'aria-checked': true,
+                'aria-describedby': reopenHintId,
+                title: REOPEN_BLOCKED_TEXT,
+                disabled: true,
+              }
+            : {})}
         >
           {isDone && <CheckSvg />}
           {isBlocked && <BlockIcon size={isChild ? 9 : 11} />}
         </button>
+        {reopenBlocked && <span id={reopenHintId} className="sr-only">{REOPEN_BLOCKED_TEXT}</span>}
 
         {td.id !== undefined && td.id !== null && (
           <span className="todo-id" aria-label={`Task ${td.id}`} role="img">#{td.id}</span>
@@ -413,7 +491,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
               </button>
             )}
 
-            {!(isChild && childIsFuture) && (
+            {/* A completed row with a completion time is history for its day: it cannot be removed from it. */}
+            {!(isChild && childIsFuture) && !(isDone && td.completedAt) && (
               <button
                 className="todo-x"
                 data-todo-x={id}
@@ -427,7 +506,13 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           </div>
 
           <div className="todo-subline-meta">
-            {childIsFuture && td.currentJournalDate && (
+            {completedHere && (
+              <span className="todo-meta-label todo-completed-here">
+                <span aria-hidden="true"><CheckSvg /></span> Completed here
+              </span>
+            )}
+
+            {(childIsFuture || showLinkedDay) && td.currentJournalDate && (
               <span className="todo-future-badge">{formatMonthDay(td.currentJournalDate)}</span>
             )}
 
@@ -495,6 +580,34 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     )
   }
 
+  /** A parent shown only for context (its subtask is the todo): inert glyph, no check/remove/block/edit. */
+  function renderContextParent(td: TaskItemResponseDto) {
+    return (
+      <>
+        <span className="todo-context-glyph" aria-hidden="true" />
+        {td.id != null && <span className="todo-id" aria-label={`Task ${td.id}`} role="img">#{td.id}</span>}
+        <span className="todo-text todo-title">
+          <span className="sr-only">{`${getStatusLabel(td.status)}: `}</span>
+          {td.title ?? ''}
+        </span>
+        <div className="todo-subline">
+          <div className="todo-subline-actions">
+            <button
+              className="todo-history"
+              onClick={() => setHistoryTask(td)}
+              aria-label="History"
+            >
+              <HistorySvg />
+            </button>
+          </div>
+          <div className="todo-subline-meta">
+            <span className="todo-meta-label">Parent task</span>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <section
       className="card todos"
@@ -526,13 +639,22 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           {sorted.map(td => {
             const isDone = td.status === 'Completed'
             const isBlocked = td.status === 'Blocked'
+            const kids = visibleChildren(td)
             return (
-              <li key={td.id} className={'todo' + (isDone ? ' is-done' : '') + (isBlocked ? ' is-blocked' : '')}>
-                {renderRow(td, false, sorted)}
+              <li
+                key={td.id}
+                className={
+                  'todo' +
+                  (td.isContextOnly ? ' todo-context-parent' : '') +
+                  (isDone && !td.isContextOnly ? ' is-done' : '') +
+                  (isBlocked && !td.isContextOnly ? ' is-blocked' : '')
+                }
+              >
+                {td.isContextOnly ? renderContextParent(td) : renderRow(td, false, sorted)}
 
-                {td.children && td.children.length > 0 && (
+                {kids.length > 0 && (
                   <ul className="todo-child-list">
-                    {td.children.map(child => {
+                    {kids.map(child => {
                       const childDone = child.status === 'Completed'
                       const childBlocked = child.status === 'Blocked'
                       const childIsFuture =
@@ -547,7 +669,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                             (childIsFuture ? ' is-future' : '')
                           }
                         >
-                          {renderRow(child, true, td.children ?? [])}
+                          {renderRow(child, true, kids)}
                         </li>
                       )
                     })}
@@ -561,8 +683,15 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 
       {actionError && <p className="todo-error" role="alert">{actionError}</p>}
 
-      {isPastDay && (
-        <p className="todo-helper">Cannot add tasks to past days. Completed tasks remain as history for this date.</p>
+      {(isPastDay || anyReopenBlocked) && (
+        <p className="todo-helper">
+          {[
+            isPastDay && 'Cannot add tasks to past days. Completed tasks remain as history for this date.',
+            anyReopenBlocked && "Completed tasks on past days can't be reopened.",
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
       )}
 
       <form className="add-row" onSubmit={addTodo}>

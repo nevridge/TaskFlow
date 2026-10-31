@@ -43,6 +43,7 @@ export type TaskItemResponseDto = Omit<
   ClientTaskItemResponseDto,
   'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children'
 > & {
+  // isContextOnly / completedAt come from the generated type (nullable); no override needed.
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number
@@ -56,9 +57,12 @@ const J = { 'Content-Type': 'application/json' }
 // rejection to restore the item and show the error toast).
 const THROW = { throwOnError: true } as const
 
-export const getJournalEntries = () =>
+const offsetQuery = (timezoneOffsetMinutes?: number) =>
+  timezoneOffsetMinutes === undefined ? {} : { query: { timezoneOffsetMinutes } }
+
+export const getJournalEntries = (timezoneOffsetMinutes?: number) =>
   client.get<{ 200: JournalEntryResponseDto[] }, unknown, true>(
-    { url: '/api/v1/JournalEntries' },
+    { url: '/api/v1/JournalEntries', ...offsetQuery(timezoneOffsetMinutes) },
   )
 
 export const createJournalEntry = <T extends boolean = true>(body: CreateJournalEntryDto, opts?: { throwOnError?: T }) =>
@@ -76,9 +80,9 @@ export const updateJournalEntry = (id: number, body: UpdateJournalEntryDto) =>
     { url: '/api/v1/JournalEntries/{id}', path: { id }, body, headers: J },
   )
 
-export const getJournalTodos = (entryId: number) =>
+export const getJournalTodos = (entryId: number, timezoneOffsetMinutes?: number) =>
   client.get<{ 200: TaskItemResponseDto[] }, unknown, true>(
-    { url: '/api/v1/JournalEntries/{entryId}/todos', path: { entryId } },
+    { url: '/api/v1/JournalEntries/{entryId}/todos', path: { entryId }, ...offsetQuery(timezoneOffsetMinutes) },
   )
 
 export const addJournalTodo = (entryId: number, taskItemId: number) =>

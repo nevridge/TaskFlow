@@ -28,12 +28,12 @@ import {
   useBlockTaskMutation,
   useUnblockTaskMutation,
   useEditBlockedReasonMutation,
-  applyOptimisticTaskUpdate,
   rollbackTaskCache,
 } from '@/hooks/useTasks'
 import { journalKeys } from '@/hooks/journalKeys'
 import { filterPending, pendingKey, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
-import { isBlocked, withBlockedCompleted } from '@/lib/task-status'
+import { isBlocked, mapCachedTask, withBlockedCompleted } from '@/lib/task-status'
+import type { BlockableFields } from '@/lib/task-status'
 import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
 import { usePrefs } from '@/context/usePrefs'
 
@@ -45,7 +45,7 @@ export { journalKeys }
 export function useJournalEntries() {
   return useQuery({
     queryKey: journalKeys.all,
-    queryFn: () => getJournalEntries(),
+    queryFn: () => getJournalEntries(getTimezoneOffsetMinutes()),
     staleTime: 30_000,
   })
 }
@@ -68,7 +68,8 @@ export function useJournalTodos(entryId: number | undefined) {
   )
   return useQuery({
     queryKey: journalKeys.todos(entryId ?? 0),
-    queryFn: () => getJournalTodos(entryId!),
+    // The offset is not part of the key: invalidation relies on the ['journal', id, 'todos'] prefix.
+    queryFn: () => getJournalTodos(entryId!, getTimezoneOffsetMinutes()),
     enabled: entryId != null,
     select,
   })
@@ -221,7 +222,64 @@ export function useCreateTodoMutation(entryId: number, isoDate: string) {
   })
 }
 
-export function useToggleTodoMutation(entryId: number) {
+type TodosCache = { data?: TaskItemResponseDto[] } | undefined
+type CacheSnapshot = Array<[QueryKey, unknown]>
+
+/** The cached journal entries list (the entries query lives under the `['journal']` prefix). */
+function entriesCacheList(qc: QueryClient): JournalEntryResponseDto[] {
+  const hits = qc.getQueriesData<JournalEntriesCache>({ queryKey: journalKeys.all })
+  for (const [, cache] of hits) {
+    const list = cache?.data
+    if (Array.isArray(list) && list.length > 0 && 'todoTaskItemIds' in list[0]) return list
+  }
+  return []
+}
+
+/**
+ * Moves a just-completed task between the cached day lists: a task completed from another day than today is
+ * attributed to today (its completion day), so it leaves the viewed day and joins today's completed tier.
+ * Children stay in their parent (the server sends all subtasks) and are filtered at render time.
+ */
+function moveCompletedAcrossDays(
+  qc: QueryClient,
+  viewedKey: QueryKey,
+  todayKey: QueryKey | null,
+  id: number,
+  complete: (task: TaskItemResponseDto) => TaskItemResponseDto,
+) {
+  const viewed = qc.getQueryData<TodosCache>(viewedKey)
+  const roots = viewed?.data
+  if (!Array.isArray(roots)) return
+  const root = roots.find(t => Number(t.id) === id)
+  if (root) {
+    qc.setQueryData<TodosCache>(viewedKey, old => (old?.data ? { ...old, data: old.data.filter(t => Number(t.id) !== id) } : old))
+    if (todayKey && qc.getQueryData<TodosCache>(todayKey)?.data) {
+      qc.setQueryData<TodosCache>(todayKey, old => {
+        if (!old?.data) return old
+        const exists = old.data.some(t => Number(t.id) === id)
+        return { ...old, data: exists ? old.data.map(t => (Number(t.id) === id ? complete(t) : t)) : [...old.data, complete(root)] }
+      })
+    }
+    return
+  }
+  // A subtask: update it inside its parent in both lists; the render filter hides it from the viewed day.
+  const inParent = (list: TodosCache) => (list?.data ?? []).some(t => t.children?.some(c => Number(c.id) === id))
+  const patch = (old: TodosCache): TodosCache =>
+    old?.data
+      ? {
+          ...old,
+          data: old.data.map(t =>
+            t.children?.some(c => Number(c.id) === id)
+              ? { ...t, children: t.children.map(c => (Number(c.id) === id ? complete(c) : c)) }
+              : t,
+          ),
+        }
+      : old
+  if (inParent(viewed)) qc.setQueryData<TodosCache>(viewedKey, patch)
+  if (todayKey && inParent(qc.getQueryData<TodosCache>(todayKey))) qc.setQueryData<TodosCache>(todayKey, patch)
+}
+
+export function useToggleTodoMutation(entryId: number, isoDate?: string) {
   const qc = useQueryClient()
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
   return useMutation({
@@ -235,20 +293,38 @@ export function useToggleTodoMutation(entryId: number) {
         },
         throwOnError: true,
       }),
-    // Completing a row is optimistic (Blocked rows also clear their blocked fields); startedAt is never touched,
-    // so an InProgress task keeps it. Unticking waits for the server.
-    onMutate: ({ id, done }) =>
-      done
-        ? applyOptimisticTaskUpdate(
-            qc,
-            [journalKeys.todos(entryId), taskKeys.all],
-            id,
-            task => (isBlocked(task.status) ? withBlockedCompleted(task) : { ...task, status: 'Completed' }),
-          )
-        : undefined,
+    // Completing a row is optimistic (Blocked rows also clear their blocked fields, completedAt is set locally);
+    // startedAt is never touched, so an InProgress task keeps it. Unticking waits for the server.
+    // From a past day the row also leaves that day and joins today's completed tier (its completion day).
+    onMutate: async ({ id, done }): Promise<CacheSnapshot | undefined> => {
+      if (!done) return undefined
+      const viewedKey = journalKeys.todos(entryId)
+      const entries = entriesCacheList(qc)
+      const viewedDay = isoDate ?? entries.find(e => e.id === entryId)?.date
+      const today = todayISO()
+      const todayEntryId = entries.find(e => e.date === today)?.id
+      const leavesDay = viewedDay !== undefined && viewedDay !== today
+      const todayKey = leavesDay && todayEntryId != null && todayEntryId !== entryId ? journalKeys.todos(todayEntryId) : null
+      const keys: QueryKey[] = [viewedKey, ...(todayKey ? [todayKey] : []), taskKeys.all]
+      await Promise.all(keys.map(queryKey => qc.cancelQueries({ queryKey })))
+      const snapshot: CacheSnapshot = keys.map(key => [key, qc.getQueryData(key)])
+      const completedAt = new Date().toISOString()
+      const complete = <T extends BlockableFields>(task: T): T =>
+        ({ ...(isBlocked(task.status) ? withBlockedCompleted(task) : { ...task, status: 'Completed' }), completedAt })
+      if (leavesDay) {
+        moveCompletedAcrossDays(qc, viewedKey, todayKey, id, complete)
+      } else if (qc.getQueryData(viewedKey) !== undefined) {
+        qc.setQueryData(viewedKey, (old: unknown) => mapCachedTask(old, id, complete))
+      }
+      if (qc.getQueryData(taskKeys.all) !== undefined) {
+        qc.setQueryData(taskKeys.all, (old: unknown) => mapCachedTask(old, id, complete))
+      }
+      return snapshot
+    },
     onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: journalKeys.todos(entryId) })
+    // The ['journal'] prefix covers the viewed day, today's list and the entries list.
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: journalKeys.all })
       qc.invalidateQueries({ queryKey: taskKeys.all })
     },
   })
@@ -390,15 +466,15 @@ export function useDeleteLogEntryMutation(entryId: number) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Count open todos in a journal entry's todos list. */
+/** Count open todos in a journal entry's todos list (roots only; context-only parents are not todos here). */
 export function openTodoCount(todos: TaskItemResponseDto[]): number {
   // Blocked counts as open (not done).
-  return todos.filter(t => t.status !== 'Completed').length
+  return todos.filter(t => !t.isContextOnly && t.status !== 'Completed').length
 }
 
 /** Count blocked todos in a journal entry's todos list. */
 export function blockedTodoCount(todos: TaskItemResponseDto[]): number {
-  return todos.filter(t => t.status === 'Blocked').length
+  return todos.filter(t => !t.isContextOnly && t.status === 'Blocked').length
 }
 
 /** ISO date of yesterday relative to a given ISO date. */

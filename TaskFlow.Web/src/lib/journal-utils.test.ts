@@ -1,5 +1,55 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay, getTimezoneOffsetMinutes } from './journal-utils'
+import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay, getTimezoneOffsetMinutes, isReopenBlocked, isCompletedHere, userDayOf, parseApiTimestamp } from './journal-utils'
+
+describe('isReopenBlocked / isCompletedHere (#350 mirror)', () => {
+  const NOW = Date.parse('2026-06-05T15:00:00Z')
+  const done = (completedAt: string | null, currentJournalDate: string | null = null) => ({ status: 'Completed', completedAt, currentJournalDate })
+
+  it('is false for tasks that are not Completed', () => {
+    expect(isReopenBlocked({ status: 'Todo', completedAt: '2026-06-01T12:00:00Z' }, 0, NOW)).toBe(false)
+  })
+
+  it('is true when the completion day is before today', () => {
+    expect(isReopenBlocked(done('2026-06-04T12:00:00Z'), 0, NOW)).toBe(true)
+  })
+
+  it('is false when the completion day is today', () => {
+    expect(isReopenBlocked(done('2026-06-05T01:00:00Z'), 0, NOW)).toBe(false)
+  })
+
+  it('adds the offset like the server: late evening at UTC-5 is the next UTC day but still the same user day', () => {
+    // 2026-06-05 23:30 local at UTC-5 is 2026-06-06T04:30Z; the user's day is 06-05
+    const completedAt = '2026-06-06T04:30:00Z'
+    expect(isReopenBlocked(done(completedAt), -300, Date.parse('2026-06-06T04:59:00Z'))).toBe(false)
+    expect(isReopenBlocked(done(completedAt), -300, Date.parse('2026-06-06T05:00:00Z'))).toBe(true)
+  })
+
+  it('falls back to the linked day when completedAt is null', () => {
+    expect(isReopenBlocked(done(null, '2026-06-01'), 0, NOW)).toBe(true)
+    expect(isReopenBlocked(done(null, '2026-06-05'), 0, NOW)).toBe(false)
+  })
+
+  it('is false with no day at all', () => {
+    expect(isReopenBlocked(done(null, null), 0, NOW)).toBe(false)
+  })
+
+  it('treats a timestamp without a zone suffix as UTC', () => {
+    expect(parseApiTimestamp('2026-06-04T12:00:00')).toBe(Date.parse('2026-06-04T12:00:00Z'))
+    expect(isReopenBlocked(done('2026-06-04T12:00:00'), 0, NOW)).toBe(true)
+  })
+
+  it('userDayOf adds the offset', () => {
+    expect(userDayOf(Date.parse('2026-06-06T02:00:00Z'), -300)).toBe('2026-06-05')
+    expect(userDayOf(Date.parse('2026-06-05T23:00:00Z'), 120)).toBe('2026-06-06')
+  })
+
+  it('isCompletedHere needs a completion time on the viewed day', () => {
+    expect(isCompletedHere(done('2026-06-06T02:00:00Z'), '2026-06-05', -300)).toBe(true)
+    expect(isCompletedHere(done('2026-06-06T02:00:00Z'), '2026-06-06', -300)).toBe(false)
+    expect(isCompletedHere(done(null, '2026-06-05'), '2026-06-05', 0)).toBe(false)
+    expect(isCompletedHere({ status: 'Todo', completedAt: '2026-06-05T12:00:00Z' }, '2026-06-05', 0)).toBe(false)
+  })
+})
 
 describe('journal-utils date parsing', () => {
   it('rejects invalid URL dates and falls back to today', () => {

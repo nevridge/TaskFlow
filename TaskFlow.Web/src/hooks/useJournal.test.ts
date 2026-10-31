@@ -22,6 +22,7 @@ import {
   journalKeys,
 } from './useJournal'
 import { taskKeys } from './useTasks'
+import { getTimezoneOffsetMinutes } from '@/lib/journal-utils'
 
 vi.mock('@/api/journal', () => ({
   getJournalEntries: vi.fn(),
@@ -75,7 +76,7 @@ describe('useJournalTodos', () => {
     vi.mocked(journalApi.getJournalTodos).mockResolvedValue({ data: [], response: new Response() } as never)
     const { result } = renderHook(() => useJournalTodos(42), { wrapper: makeWrapper() })
     await waitFor(() => expect(result.current.isSuccess || result.current.isError).toBe(true))
-    expect(journalApi.getJournalTodos).toHaveBeenCalledWith(42)
+    expect(journalApi.getJournalTodos).toHaveBeenCalledWith(42, getTimezoneOffsetMinutes())
   })
 
   it('does not call getJournalTodos when entryId is undefined', async () => {

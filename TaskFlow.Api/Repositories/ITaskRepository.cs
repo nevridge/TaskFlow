@@ -15,4 +15,10 @@ public interface ITaskRepository
     Task<TaskItem> AddAsync(TaskItem task);
     Task UpdateAsync(TaskItem task);
     Task DeleteAsync(int id);
+
+    /// <summary>
+    /// Starts a database transaction on the shared scoped context. Every save made through any repository
+    /// on that context until commit is rolled back if the returned transaction is disposed uncommitted.
+    /// </summary>
+    Task<IRepositoryTransaction> BeginTransactionAsync();
 }

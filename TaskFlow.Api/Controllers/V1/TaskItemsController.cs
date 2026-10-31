@@ -22,6 +22,7 @@ public class TaskItemsController(
 {
     private const string ProjectNotFoundErrorCode = "TASK_PROJECT_NOT_FOUND";
     private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
+    private const string JournalAssignmentConflictErrorCode = "TASK_JOURNAL_ASSIGNMENT_CONFLICT";
     private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
     private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
     private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
@@ -199,7 +200,9 @@ public class TaskItemsController(
 
         if (createDto.JournalDate.HasValue)
         {
-            await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value, createDto.TimezoneOffsetMinutes);
+            // The task is already committed, so a planning failure must not turn the 201 into an error;
+            // the result is deliberately ignored and the response reflects what was actually stored.
+            _ = await AssignToJournalDateAsync(createdItem.Id, createDto.JournalDate.Value, createDto.TimezoneOffsetMinutes);
         }
 
         var refreshed = await _repo.GetByIdNoTrackingAsync(createdItem.Id) ?? createdItem;
@@ -236,7 +239,9 @@ public class TaskItemsController(
             HasBlockedReason = updateDto.BlockedReason != null,
             BlockedReason = updateDto.BlockedReason,
             AutoCompleteParentWhenChildrenDone = updateDto.AutoCompleteParentWhenChildrenDone,
-            TimezoneOffsetMinutes = updateDto.TimezoneOffsetMinutes
+            TimezoneOffsetMinutes = updateDto.TimezoneOffsetMinutes,
+            HasJournalDate = updateDto.JournalDate.HasValue,
+            JournalDate = updateDto.JournalDate
         });
     }
 
@@ -270,7 +275,10 @@ public class TaskItemsController(
             HasBlockedReason = patchDto.IsPresent(nameof(PatchTaskItemDto.BlockedReason)),
             BlockedReason = patchDto.BlockedReason,
             AutoCompleteParentWhenChildrenDone = patchDto.AutoCompleteParentWhenChildrenDone,
-            TimezoneOffsetMinutes = patchDto.TimezoneOffsetMinutes
+            TimezoneOffsetMinutes = patchDto.TimezoneOffsetMinutes,
+            // Explicit null and absent both mean "unchanged".
+            HasJournalDate = patchDto.JournalDate.HasValue,
+            JournalDate = patchDto.JournalDate
         });
     }
 
@@ -292,6 +300,8 @@ public class TaskItemsController(
         public string? BlockedReason { get; init; }
         public bool AutoCompleteParentWhenChildrenDone { get; init; }
         public int? TimezoneOffsetMinutes { get; init; }
+        public bool HasJournalDate { get; init; }
+        public DateOnly? JournalDate { get; init; }
     }
 
     private async Task<ActionResult<TaskItemResponseDto>> ApplyUpdateAsync(int id, TaskChanges changes)
@@ -440,7 +450,34 @@ public class TaskItemsController(
             return BadRequest(validationResult.Errors);
         }
 
-        await _repo.UpdateAsync(existing);
+        // Journal planning (optional journalDate). The pre-check saves nothing, so a rejection here
+        // leaves storage untouched; the mutated tracked entity is discarded with the scoped context.
+        var (planningError, planOn) = await CheckJournalPlanningAsync(id, changes);
+        if (planningError is not null)
+        {
+            return planningError;
+        }
+
+        if (planOn is { } journalDate)
+        {
+            // Atomic write: task update + events + journal entry/link commit together or not at all.
+            // Leaving the scope without CommitAsync rolls everything back.
+            await using var tx = await _repo.BeginTransactionAsync();
+            await _repo.UpdateAsync(existing);
+            var planningFailure = MapPlanningFailure(
+                await AssignToJournalDateAsync(id, journalDate, changes.TimezoneOffsetMinutes),
+                journalDate);
+            if (planningFailure is not null)
+            {
+                return planningFailure;
+            }
+
+            await tx.CommitAsync();
+        }
+        else
+        {
+            await _repo.UpdateAsync(existing);
+        }
 
         if (changes.AutoCompleteParentWhenChildrenDone &&
             !wasCompleted &&
@@ -451,7 +488,9 @@ public class TaskItemsController(
         }
 
         // The update never changes this task's children, so a list already fetched is valid here.
-        var responseDto = await MapTaskItemResponseAsync(existing, knownChildCount: children?.Count);
+        // Re-read from storage so the response reflects journal planning (CurrentJournalEntryId, MoveCount, ...).
+        var refreshed = await _repo.GetByIdNoTrackingAsync(id) ?? existing;
+        var responseDto = await MapTaskItemResponseAsync(refreshed, knownChildCount: children?.Count);
 
         return Ok(responseDto); // Return 200 OK with the updated resource
     }
@@ -604,7 +643,7 @@ public class TaskItemsController(
         return NoContent();
     }
 
-    private async Task AssignToJournalDateAsync(int taskId, DateOnly journalDate, int? timezoneOffsetMinutes = null)
+    private async Task<AddTodoResult> AssignToJournalDateAsync(int taskId, DateOnly journalDate, int? timezoneOffsetMinutes = null)
     {
         JournalEntry entry;
         try
@@ -629,13 +668,63 @@ public class TaskItemsController(
                 // Should not happen: the exception only fires on a unique
                 // constraint violation, meaning a row for this date was just
                 // committed by the concurrent request. Defensive guard only.
-                return;
+                return AddTodoResult.EntryNotFound;
             }
 
             entry = existing;
         }
 
-        await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
+        return await _journalRepo.AddTodoAsync(entry.Id, taskId, timezoneOffsetMinutes);
+    }
+
+    private ActionResult PastDayPlanningError(DateOnly journalDate) =>
+        UnprocessableEntity(new
+        {
+            code = TaskCreationPastDayErrorCode,
+            message = "You cannot plan a task on a past journal day.",
+            details = new { journalDate }
+        });
+
+    /// <summary>
+    /// Maps a failed planning result on the update path to an error response, or null on success.
+    /// Callers hold an open transaction, so returning an error rolls the whole update back.
+    /// </summary>
+    private ActionResult? MapPlanningFailure(AddTodoResult result, DateOnly journalDate) => result switch
+    {
+        AddTodoResult.Success => null,
+        AddTodoResult.PastDayNotAllowed => PastDayPlanningError(journalDate),
+        AddTodoResult.AlreadyLinked => Conflict(new
+        {
+            code = JournalAssignmentConflictErrorCode,
+            message = "The task was planned on this day by another request."
+        }),
+        AddTodoResult.TaskNotFound => NotFound(),
+        _ => throw new InvalidOperationException(
+            $"Planning task on journal day {journalDate:yyyy-MM-dd} failed unexpectedly: {result}.")
+    };
+
+    // Journal planning pre-check for PUT/PATCH. Read-only: nothing has been saved yet.
+    // Returns an error to short-circuit, or the day to plan on (null when no planning is needed).
+    private async Task<(ActionResult? Error, DateOnly? PlanOn)> CheckJournalPlanningAsync(int id, TaskChanges changes)
+    {
+        if (!changes.HasJournalDate || changes.JournalDate is not { } journalDate)
+        {
+            return (null, null);
+        }
+
+        // Re-sending the current planned day is a no-op for planning, even when that day is in the past.
+        if (await _repo.GetAssignedJournalDateAsync(id) == journalDate)
+        {
+            return (null, null);
+        }
+
+        var today = UserDateHelper.GetUserToday(DateTime.UtcNow, changes.TimezoneOffsetMinutes);
+        if (journalDate < today)
+        {
+            return (PastDayPlanningError(journalDate), null);
+        }
+
+        return (null, journalDate);
     }
 
     private async Task<TaskItemResponseDto> MapTaskItemResponseAsync(TaskItem item, int? knownChildCount = null)

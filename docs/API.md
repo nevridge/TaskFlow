@@ -57,7 +57,7 @@ The snippets below describe the currently implemented contract additions used by
 
 Behavior:
 
-- If `journalDate` is in the past, returns `422` with `TASK_CREATION_PAST_DAY_NOT_ALLOWED`.
+- If `journalDate` is in the past, returns `422` with `TASK_CREATION_PAST_DAY_NOT_ALLOWED` (the same code is returned by `PUT`/`PATCH` when planning on a past day). "Today" comes from `timezoneOffsetMinutes`, falling back to the UTC date when omitted.
 - If `journalDate` is today/future, the task is automatically assigned to that journal day.
 
 #### Task history endpoint
@@ -77,7 +77,7 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 
 #### Reopen past-day guard and `timezoneOffsetMinutes`
 
-`PUT /api/v1/TaskItems/{id}` accepts optional `timezoneOffsetMinutes` (minutes to add to UTC to get the user's local time; negative west of UTC, e.g. `-300` for US Central CDT). When a completed task is reopened, the offset is used to compute the user's local today for the past-day guard. A task assigned to the user's local today can be reopened; an earlier assigned date returns `422` `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` (the response `details` include the task's `assignedDate`). If `timezoneOffsetMinutes` is omitted, the guard falls back to the UTC date.
+`PUT /api/v1/TaskItems/{id}` accepts optional `timezoneOffsetMinutes` (minutes to add to UTC to get the user's local time; negative west of UTC, e.g. `-300` for US Central CDT). When a completed task is reopened, the offset is used to compute the user's local today for the past-day guard. A task assigned to the user's local today can be reopened; an earlier assigned date returns `422` `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` (the response `details` include the task's `assignedDate`). If `timezoneOffsetMinutes` is omitted, the guard falls back to the UTC date. The same offset-derived "today" is used for the `journalDate` past-day check on update.
 
 ### List All Tasks
 
@@ -210,7 +210,7 @@ curl -X POST http://localhost:8080/api/v1/TaskItems \
 
 ### Update Task
 
-Updates an existing task item, including status assignment.
+Updates an existing task item, including status assignment and optional journal planning.
 
 **Endpoint:** `PUT /api/v1/TaskItems/{id}`
 
@@ -223,14 +223,17 @@ Updates an existing task item, including status assignment.
 {
   "title": "Updated task title",
   "description": "Updated description",
-  "statusId": 2
+  "status": "InProgress",
+  "journalDate": "2026-05-20"
 }
 ```
 
 **Fields:**
 - `title` (string, required, max 100 chars) - Task title
 - `description` (string, optional) - Task description
-- `statusId` (integer, required) - Status ID to assign
+- `status` (string, optional) - Status name (`Draft`, `Todo`, `InProgress`, `Blocked`, `Completed`); omitted/`null` leaves it unchanged
+- `journalDate` (string, ISO date, optional) - Journal day to plan the task on; see semantics below
+- `timezoneOffsetMinutes` (integer, optional, -720..840) - Used to derive the user's today
 
 **Response:** `200 OK`
 
@@ -239,9 +242,21 @@ Updates an existing task item, including status assignment.
   "id": 1,
   "title": "Updated task title",
   "description": "Updated description",
-  "statusName": "In Progress"
+  "status": "InProgress",
+  "currentJournalDate": "2026-05-20"
 }
 ```
+
+**`journalDate` semantics (optional, also accepted by `PATCH`):**
+
+- `null` or omitted leaves the planned day unchanged. There is no way to un-plan a task through an update.
+- Only today or later is accepted. "Today" is derived from `timezoneOffsetMinutes` (same offset as the reopen guard); without an offset it falls back to the UTC date. A missing journal entry for the date is created.
+- Sending the day the task is already planned on succeeds and applies the other changes, even when that day is in the past (this check runs before the past-day check).
+- Planning a task already on another day moves it: the old link is removed, `moveCount` increases and a `ReassignedToJournalDay` event is recorded; `firstTaggedDate` is kept. The first assignment is not a move (`moveCount` stays 0).
+- Planning is allowed for any status, and `status` may change in the same request.
+- The field update and the planning are atomic: if planning fails nothing is saved.
+- Planning a parent does not plan its subtasks, and no carry-forward of other tasks happens (API-only clients planning for today do not trigger carry-forward).
+- The response is re-read from storage and shows the planned day in `currentJournalDate`.
 
 **Error Responses:**
 
@@ -254,7 +269,7 @@ Updates an existing task item, including status assignment.
 }
 ```
 
-`400 Bad Request` - Validation failure
+`400 Bad Request` - Validation failure (including `timezoneOffsetMinutes` outside -720..840)
 ```json
 {
   "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
@@ -266,6 +281,23 @@ Updates an existing task item, including status assignment.
 }
 ```
 
+`422 Unprocessable Entity` - `journalDate` before the user's today; nothing is changed
+```json
+{
+  "code": "TASK_CREATION_PAST_DAY_NOT_ALLOWED",
+  "message": "You cannot plan a task on a past journal day.",
+  "details": { "journalDate": "2026-05-01" }
+}
+```
+
+`409 Conflict` - another request planned the task on that day at the same time; nothing is changed
+```json
+{
+  "code": "TASK_JOURNAL_ASSIGNMENT_CONFLICT",
+  "message": "The task was planned on this day by another request."
+}
+```
+
 **Example:**
 ```bash
 curl -X PUT http://localhost:8080/api/v1/TaskItems/1 \
@@ -273,7 +305,8 @@ curl -X PUT http://localhost:8080/api/v1/TaskItems/1 \
   -d '{
     "title": "Updated Title",
     "description": "Updated description",
-    "statusId": 2
+    "status": "InProgress",
+    "journalDate": "2026-05-20"
   }'
 ```
 
@@ -285,10 +318,11 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 
 **Endpoint:** `PATCH /api/v1/TaskItems/{id}`
 
-**Request Body:** any subset of `title`, `description`, `status`, `priority`, `dueDate`, `parentTaskItemId`, `autoCompleteParentWhenChildrenDone`, `timezoneOffsetMinutes`.
+**Request Body:** any subset of `title`, `description`, `status`, `priority`, `dueDate`, `parentTaskItemId`, `autoCompleteParentWhenChildrenDone`, `timezoneOffsetMinutes`, `journalDate`.
 
 - An omitted field is left unchanged and writes no history event.
 - An explicit `null` clears `description`, `dueDate` or `parentTaskItemId`.
+- `journalDate` plans the task on a journal day exactly as on `PUT` (see Update Task); an explicit `null` or omitting it leaves the planned day unchanged.
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
 - Completion is set only through `status` (`Completed`); `isComplete` is not part of the contract and is ignored if sent.

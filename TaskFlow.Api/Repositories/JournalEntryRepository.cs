@@ -10,6 +10,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
 {
     private const int SqliteConstraintErrorCode = 19;
     private const int SqliteUniqueConstraintErrorCode = 2067;
+    private const int SqlitePrimaryKeyConstraintErrorCode = 1555;
     private readonly TaskDbContext _context = context;
 
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
@@ -56,6 +57,9 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
+            // The failed insert would otherwise stay tracked as Added and be re-attempted by the next
+            // SaveChangesAsync on this scoped context.
+            _context.Entry(entry).State = EntityState.Detached;
             throw new DuplicateJournalDateException(entry.Date);
         }
 
@@ -251,9 +255,10 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             await _context.SaveChangesAsync();
             return AddTodoResult.Success;
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
             // Race condition: another request linked the same task between our check and save.
+            // Other database errors propagate rather than being reported as a link conflict.
             return AddTodoResult.AlreadyLinked;
         }
     }
@@ -295,6 +300,6 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         (ex.InnerException is SqliteException sqliteEx
             && sqliteEx.SqliteErrorCode == SqliteConstraintErrorCode
-            && sqliteEx.SqliteExtendedErrorCode == SqliteUniqueConstraintErrorCode)
+            && sqliteEx.SqliteExtendedErrorCode is SqliteUniqueConstraintErrorCode or SqlitePrimaryKeyConstraintErrorCode)
         || ex.InnerException?.Message.Contains("JournalEntries.Date", StringComparison.OrdinalIgnoreCase) == true;
 }

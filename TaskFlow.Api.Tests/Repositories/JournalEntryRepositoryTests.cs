@@ -846,6 +846,108 @@ public class JournalEntryRepositoryTests
         Assert.Equal(0, (await verify.TaskItemEvents.CountAsync()));
     }
 
+    [Fact]
+    public async Task AddTodoAsync_ShouldReturnPastDayNotAllowed_WhenEntryIsInThePast()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "Past", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-2)) });
+        var task = new TaskItem { Title = "Task 1", Status = Status.Todo };
+        context.TaskItems.Add(task);
+        await context.SaveChangesAsync();
+
+        var result = await repo.AddTodoAsync(entry.Id, task.Id);
+
+        Assert.Equal(AddTodoResult.PastDayNotAllowed, result);
+        Assert.Null(task.CurrentJournalEntryId);
+    }
+
+    [Fact]
+    public async Task AddAsync_ShouldDetachFailedEntry_SoLaterSaveDoesNotReinsertIt()
+    {
+        var (context, connection) = CreateSqliteContext();
+        await using var _ = connection;
+        await using var __ = context;
+        var repo = new JournalEntryRepository(context);
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        await repo.AddAsync(new JournalEntry { Title = "First", Date = date });
+        var duplicate = new JournalEntry { Title = "Dup", Date = date };
+
+        await Assert.ThrowsAsync<DuplicateJournalDateException>(() => repo.AddAsync(duplicate));
+
+        Assert.Equal(EntityState.Detached, context.Entry(duplicate).State);
+        var task = new TaskItem { Title = "T", Status = Status.Todo };
+        context.TaskItems.Add(task);
+        await context.SaveChangesAsync();
+        Assert.Equal(1, await context.JournalEntries.CountAsync());
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldReturnAlreadyLinked_WhenJoinRowInsertedConcurrently()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var seedOptions = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).Options;
+        int entryId;
+        int taskId;
+        await using (var seed = new TaskDbContext(seedOptions))
+        {
+            seed.Database.EnsureCreated();
+            entryId = (await new JournalEntryRepository(seed).AddAsync(new JournalEntry { Title = "E", Date = date })).Id;
+            var task = new TaskItem { Title = "T", Status = Status.Todo };
+            seed.TaskItems.Add(task);
+            await seed.SaveChangesAsync();
+            taskId = task.Id;
+        }
+
+        var interceptor = new InsertJoinRowInterceptor(entryId, taskId);
+        var options = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).AddInterceptors(interceptor).Options;
+        await using var context = new TaskDbContext(options);
+
+        var result = await new JournalEntryRepository(context).AddTodoAsync(entryId, taskId);
+
+        Assert.True(interceptor.Fired);
+        Assert.Equal(AddTodoResult.AlreadyLinked, result);
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldPropagate_WhenDbUpdateExceptionIsNotAUniqueViolation()
+    {
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        await using var _ = connection;
+        var date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        int entryId;
+        int taskId;
+        // Seed with a context that does not carry the throwing interceptor.
+        await using (var seed = new TaskDbContext(new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection).Options))
+        {
+            seed.Database.EnsureCreated();
+            var entry = new JournalEntry { Title = "E", Date = date };
+            var task = new TaskItem { Title = "T", Status = Status.Todo };
+            seed.JournalEntries.Add(entry);
+            seed.TaskItems.Add(task);
+            await seed.SaveChangesAsync();
+            entryId = entry.Id;
+            taskId = task.Id;
+        }
+
+        var options = new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(connection)
+            .AddInterceptors(new ThrowOnSaveInterceptor()).Options;
+        await using var context = new TaskDbContext(options);
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => new JournalEntryRepository(context).AddTodoAsync(entryId, taskId));
+    }
+
+    private sealed class ThrowOnSaveInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default) =>
+            throw new DbUpdateException("disk I/O error", new InvalidOperationException("not a constraint"));
+    }
+
     private sealed class InsertJoinRowInterceptor(int entryId, int taskId) : SaveChangesInterceptor
     {
         public bool Fired { get; private set; }

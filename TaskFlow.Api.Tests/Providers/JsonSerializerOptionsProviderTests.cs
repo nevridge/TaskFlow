@@ -120,6 +120,19 @@ public class JsonSerializerOptionsProviderTests
     }
 
     [Fact]
+    public void PatchDto_ShouldBindJournalDateAndTrackPresence()
+    {
+        var withDate = JsonSerializer.Deserialize<PatchTaskItemDto>("""{"journalDate":"2030-01-02"}""", CreateRequestOptions())!;
+        var withNull = JsonSerializer.Deserialize<PatchTaskItemDto>("""{"journalDate":null}""", CreateRequestOptions())!;
+        var absent = JsonSerializer.Deserialize<PatchTaskItemDto>("""{"title":"t"}""", CreateRequestOptions())!;
+
+        Assert.Equal(new DateOnly(2030, 1, 2), withDate.JournalDate);
+        Assert.True(withNull.IsPresent("JournalDate"));
+        Assert.Null(withNull.JournalDate);
+        Assert.False(absent.IsPresent("JournalDate"));
+    }
+
+    [Fact]
     public void PatchDto_ShouldOnlyReportSuppliedFieldsAsPresent()
     {
         var patch = JsonSerializer.Deserialize<PatchTaskItemDto>("""{"title":"t"}""", CreateRequestOptions())!;
@@ -137,7 +150,7 @@ public class JsonSerializerOptionsProviderTests
         using var document = JsonDocument.Parse(json);
         var names = document.RootElement.EnumerateObject().Select(p => p.Name).Order().ToList();
         Assert.Equal(
-            ["autoCompleteParentWhenChildrenDone", "blockedReason", "description", "dueDate", "parentTaskItemId", "priority", "status", "timezoneOffsetMinutes", "title"],
+            ["autoCompleteParentWhenChildrenDone", "blockedReason", "description", "dueDate", "journalDate", "parentTaskItemId", "priority", "status", "timezoneOffsetMinutes", "title"],
             names);
     }
 

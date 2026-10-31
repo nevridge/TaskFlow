@@ -25,6 +25,7 @@ public class PatchTaskItemDto
     private DateOnly? _dueDate;
     private int? _parentTaskItemId;
     private string? _blockedReason;
+    private DateOnly? _journalDate;
 
     public string? Title
     {
@@ -77,6 +78,21 @@ public class PatchTaskItemDto
     public bool AutoCompleteParentWhenChildrenDone { get; set; }
 
     public int? TimezoneOffsetMinutes { get; set; }
+
+    /// <summary>
+    /// Optional journal day to plan the task on. Absent and an explicit <c>null</c> both leave the planned
+    /// day unchanged; there is no way to un-plan through an update. Only today-or-later (the user's today,
+    /// derived from <see cref="TimezoneOffsetMinutes"/>, UTC when no offset is sent) is accepted, otherwise
+    /// 422 <c>TASK_CREATION_PAST_DAY_NOT_ALLOWED</c> and nothing is changed. Re-sending the day the task is
+    /// already planned on succeeds, even when that day is in the past. A missing journal entry is created.
+    /// The field update and the planning are atomic. Planning a parent does not plan its subtasks, and no
+    /// carry-forward of other tasks happens.
+    /// </summary>
+    public DateOnly? JournalDate
+    {
+        get => _journalDate;
+        set { _journalDate = value; _present.Add(nameof(JournalDate)); }
+    }
 
     /// <summary>Returns true when the named property was supplied in the request body (case-insensitive).</summary>
     public bool IsPresent(string propertyName) => _present.Contains(propertyName);

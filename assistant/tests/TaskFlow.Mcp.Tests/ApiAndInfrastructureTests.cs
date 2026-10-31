@@ -255,6 +255,38 @@ public class InputParsingTests
         FluentActions.Invoking(() => InputParsing.ParseDate(input, Today, "dueDate"))
             .Should().Throw<McpException>().WithMessage("*dueDate*yyyy-MM-dd*");
 
+    [Theory]
+    [InlineData("2026-10-09", "2026-10-09")]
+    [InlineData(" 2026-10-09 ", "2026-10-09")]
+    [InlineData("2026-09-01", "2026-09-01")]
+    [InlineData("Today", "2026-10-09")]
+    [InlineData("today", "2026-10-09")]
+    [InlineData("TOMORROW", "2026-10-10")]
+    [InlineData("tomorrow", "2026-10-10")]
+    public void ParsePlanDay_AcceptsTodayTomorrowAndIso(string input, string expected) =>
+        InputParsing.ParsePlanDay(input, Today, "journalDate").Should().Be(DateOnly.Parse(expected));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ParsePlanDay_NullOrBlank_IsAbsent(string? input) =>
+        InputParsing.ParsePlanDay(input, Today, "journalDate").Should().BeNull();
+
+    [Theory]
+    [InlineData("yesterday")]
+    [InlineData("none")]
+    [InlineData("2026-1-5")]
+    [InlineData("26-10-09")]
+    [InlineData("2026/10/09")]
+    [InlineData("20261009")]
+    [InlineData("2026-10-09T00:00:00")]
+    [InlineData("2026-02-30")]
+    public void ParsePlanDay_RejectsEverythingElse_WithTheAcceptedForms(string input) =>
+        FluentActions.Invoking(() => InputParsing.ParsePlanDay(input, Today, "journalDate"))
+            .Should().Throw<McpException>()
+            .WithMessage($"journalDate '{input}' is not valid. Use today, tomorrow, or yyyy-MM-dd (today or later), e.g. 2026-10-10.*set_journal_todos*");
+
     [Fact]
     public void ParseDateOrToday_DefaultsToToday() =>
         InputParsing.ParseDateOrToday(null, Today, "d").Should().Be(Today);
@@ -318,6 +350,33 @@ public class InputParsingTests
     }
 }
 
+public class JournalDateSerializationTests
+{
+    [Fact]
+    public void UpdateTaskRequest_SerializesJournalDate_LikeCreateTaskRequest()
+    {
+        var day = new DateOnly(2026, 10, 10);
+        var create = new CreateTaskRequest("t", null, "todo", "low", null, day, null, null, 0);
+        var update = new UpdateTaskRequest("t", null, "todo", "low", null, null, false, 0, JournalDate: day);
+
+        var created = System.Text.Json.JsonSerializer.SerializeToElement(create, TaskFlowApiClient.Json);
+        var updated = System.Text.Json.JsonSerializer.SerializeToElement(update, TaskFlowApiClient.Json);
+
+        updated.GetProperty("journalDate").GetString().Should().Be("2026-10-10").And.Be(created.GetProperty("journalDate").GetString());
+    }
+
+    [Fact]
+    public void UpdateTaskRequest_WithoutJournalDate_SendsAnExplicitNull()
+    {
+        var update = new UpdateTaskRequest("t", null, "todo", "low", null, null, false, 0);
+
+        var json = System.Text.Json.JsonSerializer.SerializeToElement(update, TaskFlowApiClient.Json);
+
+        json.TryGetProperty("journalDate", out var property).Should().BeTrue();
+        property.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+    }
+}
+
 public class ProjectResolverTests
 {
     private static readonly IReadOnlyList<ProjectDto> Projects =
@@ -370,6 +429,8 @@ public class ToolGuardTests
     [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "omit blockedReason")]
     [InlineData("TASK_START_NOT_ALLOWED", "set status=todo first")]
     [InlineData("TASK_START_NOT_ALLOWED", "reopen it first (complete=false)")]
+    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "or omit journalDate")]
+    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "journalDate must be today or later")]
     public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
     {
         var api = Fixtures.Client(new StubHandler());
@@ -479,6 +540,48 @@ public class ToolSurfaceTests
         update.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
         Tools().Single(t => t.Attribute.Name == "list_tasks").Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("Blocked");
     }
+
+    [Fact]
+    public void UpdateTask_DocumentsJournalDate_AsAnOptionalParameterBeforeTheCancellationToken()
+    {
+        var update = Tools().Single(t => t.Attribute.Name == "update_task").Method;
+        var parameters = update.GetParameters().Select(p => p.Name).ToList();
+
+        var journalDate = update.GetParameters().SingleOrDefault(p => p.Name == "journalDate");
+        journalDate.Should().NotBeNull("update_task must expose journalDate");
+        journalDate!.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().NotBeNullOrWhiteSpace().And.Contain("dueDate");
+        journalDate.HasDefaultValue.Should().BeTrue();
+        parameters.IndexOf("journalDate").Should().Be(parameters.IndexOf("blockedReason") + 1);
+        parameters.IndexOf("journalDate").Should().Be(parameters.IndexOf("ct") - 1);
+
+        var property = typeof(TaskUpdate).GetProperty("JournalDate");
+        property.Should().NotBeNull("TaskUpdate must expose JournalDate");
+        property!.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void UpdateTools_DescribeJournalDate_AndKeepItOptionalInTheSchema()
+    {
+        var updateTask = Tools().Single(t => t.Attribute.Name == "update_task").Method;
+        var updateTasks = Tools().Single(t => t.Attribute.Name == "update_tasks").Method;
+
+        updateTask.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("journalDate").And.Contain("dueDate");
+        updateTasks.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("journalDate");
+
+        var singleSchema = McpServerTool.Create(updateTask, new TaskTools(Fixtures.Client(new StubHandler()), Fixtures.Time())).ProtocolTool.InputSchema;
+        singleSchema.GetProperty("properties").TryGetProperty("journalDate", out _).Should().BeTrue();
+        RequiredNames(singleSchema).Should().NotContain("journalDate").And.Contain("id");
+
+        var batchSchema = McpServerTool.Create(updateTasks, new TaskTools(Fixtures.Client(new StubHandler()), Fixtures.Time())).ProtocolTool.InputSchema;
+        var item = batchSchema.GetProperty("properties").GetProperty("tasks").GetProperty("items");
+        item.GetProperty("properties").TryGetProperty("journalDate", out _).Should().BeTrue();
+        RequiredNames(item).Should().NotContain("journalDate");
+    }
+
+    private static List<string> RequiredNames(System.Text.Json.JsonElement schema) =>
+        schema.TryGetProperty("required", out var required)
+            ? required.EnumerateArray().Select(e => e.GetString()!).ToList()
+            : [];
 
     [Fact]
     public void UpdateTasks_DocumentsEveryItemProperty_AndLimits()

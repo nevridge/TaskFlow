@@ -43,6 +43,10 @@ public class TaskItemsControllerJournalDateRealStackTests
         public Task DeleteAsync(int id) => inner.DeleteAsync(id);
         public Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId) => inner.GetTodosAsync(entryId);
         public Task<bool> TodoExistsAsync(int entryId, int taskItemId) => inner.TodoExistsAsync(entryId, taskItemId);
+        public Task<JournalDayTodos?> GetTodosForDayAsync(int entryId, int? offsetMinutes) => inner.GetTodosForDayAsync(entryId, offsetMinutes);
+        public Task<IReadOnlyDictionary<int, List<int>>> GetTodoTaskItemIdsAsync(IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? offsetMinutes) =>
+            inner.GetTodoTaskItemIdsAsync(entries, offsetMinutes);
+        public Task<PlanCompletedDetails?> GetPlanCompletedDetailsAsync(int entryId, int taskItemId) => inner.GetPlanCompletedDetailsAsync(entryId, taskItemId);
 
         public Task<AddTodoResult> AddTodoAsync(int entryId, int taskItemId, int? timezoneOffsetMinutes = null) =>
             AddTodoOverride is null
@@ -146,6 +150,29 @@ public class TaskItemsControllerJournalDateRealStackTests
 
     private static UpdateTaskItemDto Put(DateOnly? journalDate, string title = "Original", Status? status = null, int? offset = null) =>
         new() { Title = title, Status = status, JournalDate = journalDate, TimezoneOffsetMinutes = offset };
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CompleteAndPlanInOneRequest_OnOpenTask_Returns422AndRollsEverythingBack(bool usePut)
+    {
+        using var stack = new Stack();
+        var task = await stack.SeedTaskAsync();
+        var future = Today.AddDays(2);
+        var eventsBefore = await stack.EventTypesAsync(task.Id);
+
+        var result = usePut
+            ? await stack.Controller.Update(task.Id, Put(future, status: Status.Completed))
+            : await stack.Controller.Patch(task.Id, new PatchTaskItemDto { Status = Status.Completed, JournalDate = future });
+
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", ErrorCode(result));
+        var reloaded = await stack.ReloadAsync(task.Id);
+        Assert.Equal(Status.Todo, reloaded.Status);
+        Assert.Null(reloaded.CompletedAt);
+        Assert.Null(reloaded.CurrentJournalEntryId);
+        Assert.Equal(eventsBefore, await stack.EventTypesAsync(task.Id));
+        Assert.Equal(0, await stack.EntryCountAsync());
+    }
 
     [Fact]
     public async Task Put_FutureDateWithExistingEntry_LinksTaskAndShowsDayInResponse()

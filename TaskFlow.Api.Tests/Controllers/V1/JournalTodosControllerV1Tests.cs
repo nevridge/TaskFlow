@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.AspNetCore.Mvc;
@@ -6,11 +7,14 @@ using TaskFlow.Api.Controllers.V1;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Api.Validators;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 
 public class JournalTodosControllerV1Tests
 {
+    private static readonly DateOnly Day = new(2026, 5, 10);
+
     private readonly Mock<IJournalEntryRepository> _journalRepo = new();
     private readonly Mock<IValidator<AddJournalTodoDto>> _mockValidator = new();
     private readonly JournalTodosController _controller;
@@ -20,15 +24,25 @@ public class JournalTodosControllerV1Tests
         _mockValidator
             .Setup(v => v.ValidateAsync(It.IsAny<AddJournalTodoDto>(), default))
             .ReturnsAsync(new ValidationResult());
-        _controller = new JournalTodosController(_journalRepo.Object, _mockValidator.Object);
+        _controller = new JournalTodosController(_journalRepo.Object, _mockValidator.Object, new JournalDayQueryDtoValidator());
+    }
+
+    private void SetupDay(DateOnly date, params TaskItem[] tasks) =>
+        _journalRepo.Setup(s => s.GetTodosForDayAsync(1, It.IsAny<int?>())).ReturnsAsync(new JournalDayTodos(date, tasks));
+
+    private async Task<List<TaskItemResponseDto>> GetRowsAsync(int? offset = null)
+    {
+        var result = await _controller.GetAll(1, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        return Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
     }
 
     [Fact]
     public async Task GetAll_ShouldReturnNotFound_WhenEntryMissing()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync((JournalEntry?)null);
+        _journalRepo.Setup(s => s.GetTodosForDayAsync(1, It.IsAny<int?>())).ReturnsAsync((JournalDayTodos?)null);
 
-        var result = await _controller.GetAll(1);
+        var result = await _controller.GetAll(1, new JournalDayQueryDto());
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -36,25 +50,43 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task GetAll_ShouldReturnOk_WhenEntryExists()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "May 10", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync(
-        [
-            new TaskItem { Id = 2, Title = "Task", Status = Status.Todo, Priority = Priority.Low }
-        ]);
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Task", Status = Status.Todo, Priority = Priority.Low });
 
-        var result = await _controller.GetAll(1);
+        var todos = await GetRowsAsync();
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value);
         Assert.Single(todos, t => t.Id == 2 && t.Status == "Todo");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-300)]
+    [InlineData(-720)]
+    [InlineData(840)]
+    public async Task GetAll_ShouldPassOffsetThroughToRepository(int? offset)
+    {
+        SetupDay(Day);
+
+        await GetRowsAsync(offset);
+
+        _journalRepo.Verify(s => s.GetTodosForDayAsync(1, offset), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(-721)]
+    [InlineData(841)]
+    public async Task GetAll_ShouldReturnBadRequest_WhenOffsetOutOfRange(int offset)
+    {
+        var result = await _controller.GetAll(1, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+
+        TimezoneOffsetTestHelpers.AssertOffsetBadRequest(result.Result);
+        _journalRepo.Verify(s => s.GetTodosForDayAsync(It.IsAny<int>(), It.IsAny<int?>()), Times.Never);
     }
 
     [Fact]
     public async Task GetAll_ShouldReturnBlockedFields_ForBlockedTodoAndItsChild()
     {
         var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
-        var parent = new TaskItem
+        SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
             Title = "Blocked parent",
@@ -75,13 +107,10 @@ public class JournalTodosControllerV1Tests
                     ParentTaskItemId = 2
                 }
             ]
-        };
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        });
 
-        var result = await _controller.GetAll(1);
+        var dto = (await GetRowsAsync()).Single();
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
         Assert.Equal("Waiting on Sam", dto.BlockedReason);
         Assert.Equal(blockedAt, dto.BlockedAt);
         Assert.Equal("Todo", dto.PreviousStatus);
@@ -93,20 +122,16 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task GetAll_ShouldMapDueDateAsCalendarDate_ForTodoAndItsChild()
     {
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 1) });
-        var parent = new TaskItem
+        SetupDay(new DateOnly(2026, 5, 1), new TaskItem
         {
             Id = 2,
             Title = "Parent",
             DueDate = new DateOnly(2026, 5, 1),
             ChildTaskItems = [new TaskItem { Id = 3, Title = "Child", ParentTaskItemId = 2 }]
-        };
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        });
 
-        var result = await _controller.GetAll(1);
+        var dto = (await GetRowsAsync()).Single();
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
         Assert.Equal(new DateOnly(2026, 5, 1), dto.DueDate);
         Assert.Null(dto.Children!.Single().DueDate);
     }
@@ -116,8 +141,7 @@ public class JournalTodosControllerV1Tests
     {
         var startedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
         var childStartedAt = new DateTime(2026, 10, 2, 10, 0, 0, DateTimeKind.Utc);
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
-        var parent = new TaskItem
+        SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
             Title = "Started parent",
@@ -128,13 +152,10 @@ public class JournalTodosControllerV1Tests
                 new TaskItem { Id = 3, Title = "Started child", Status = Status.InProgress, StartedAt = childStartedAt, ParentTaskItemId = 2 },
                 new TaskItem { Id = 4, Title = "Plain child", Status = Status.Todo, ParentTaskItemId = 2 }
             ]
-        };
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        });
 
-        var result = await _controller.GetAll(1);
+        var dto = (await GetRowsAsync()).Single();
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
         Assert.Equal("InProgress", dto.Status);
         Assert.Equal(startedAt, dto.StartedAt);
         Assert.Equal(childStartedAt, dto.Children!.Single(c => c.Id == 3).StartedAt);
@@ -146,8 +167,7 @@ public class JournalTodosControllerV1Tests
     {
         var completedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
         var childCompletedAt = new DateTime(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 10, 2) });
-        var parent = new TaskItem
+        SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
             Title = "Done parent",
@@ -158,13 +178,10 @@ public class JournalTodosControllerV1Tests
                 new TaskItem { Id = 3, Title = "Done child", Status = Status.Completed, CompletedAt = childCompletedAt, ParentTaskItemId = 2 },
                 new TaskItem { Id = 4, Title = "Open child", Status = Status.Todo, ParentTaskItemId = 2 }
             ]
-        };
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        });
 
-        var result = await _controller.GetAll(1);
+        var dto = (await GetRowsAsync()).Single();
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var dto = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).Single();
         Assert.Equal(completedAt, dto.CompletedAt);
         Assert.Equal(childCompletedAt, dto.Children!.Single(c => c.Id == 3).CompletedAt);
         Assert.Null(dto.Children!.Single(c => c.Id == 4).CompletedAt);
@@ -224,6 +241,41 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
+    public async Task AddTodo_ShouldReturnPlanCompletedUnprocessableEntity_WhenTaskIsCompleted()
+    {
+        var completedAt = new DateTime(2026, 5, 9, 15, 30, 0, DateTimeKind.Utc);
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.TaskCompleted);
+        _journalRepo.Setup(s => s.GetPlanCompletedDetailsAsync(1, 4))
+            .ReturnsAsync(new PlanCompletedDetails(new DateOnly(2026, 5, 8), completedAt, Day));
+
+        var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        using var body = JsonDocument.Parse(JsonSerializer.Serialize(unprocessable.Value));
+        var root = body.RootElement;
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", root.GetProperty("code").GetString());
+        Assert.Equal("Completed tasks cannot be planned onto a different day.", root.GetProperty("message").GetString());
+        var details = root.GetProperty("details");
+        Assert.Equal("2026-05-08", details.GetProperty("assignedDate").GetString());
+        Assert.Equal(completedAt, details.GetProperty("completedAt").GetDateTime().ToUniversalTime());
+        Assert.Equal("2026-05-10", details.GetProperty("journalDate").GetString());
+    }
+
+    [Fact]
+    public async Task AddTodo_ShouldReturnPlanCompletedBodyWithNullDetails_WhenDetailsUnavailable()
+    {
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.TaskCompleted);
+        _journalRepo.Setup(s => s.GetPlanCompletedDetailsAsync(1, 4)).ReturnsAsync((PlanCompletedDetails?)null);
+
+        var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        using var body = JsonDocument.Parse(JsonSerializer.Serialize(unprocessable.Value));
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", body.RootElement.GetProperty("code").GetString());
+        Assert.Equal(JsonValueKind.Null, body.RootElement.GetProperty("details").GetProperty("journalDate").ValueKind);
+    }
+
+    [Fact]
     public async Task AddTodo_ShouldReturnNoContent_WhenValid()
     {
         _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.Success);
@@ -261,92 +313,136 @@ public class JournalTodosControllerV1Tests
     public async Task GetAll_ShouldReturnChildren_WhenParentHasSubtasks()
     {
         var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [child]
-        };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         Assert.Single(todos, t => t.Id == 2);
         Assert.Single(todos[0].Children!, c => c.Id == 10);
+        Assert.Null(todos[0].IsContextOnly);
     }
 
     [Fact]
     public async Task GetAll_ShouldExcludeChildFromTopLevel_WhenParentAlsoPresent()
     {
         var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
+        var parent = new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] };
+        SetupDay(Day, parent, child);
+
+        var todos = await GetRowsAsync();
+
+        Assert.Single(todos, t => t.Id == 2);
+        Assert.DoesNotContain(todos, t => t.Id == 10);
+        Assert.Single(todos[0].Children!, c => c.Id == 10);
+        Assert.Null(todos[0].IsContextOnly);
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldExcludeOrphanedSubtask_WhenParentNotLoaded()
+    {
+        // No ParentTaskItem to show as context: the orphan cannot be placed, so it is not returned.
+        var orphan = new TaskItem { Id = 10, Title = "Orphan", ParentTaskItemId = 99, ChildTaskItems = [] };
+        SetupDay(Day, orphan);
+
+        Assert.Empty(await GetRowsAsync());
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldEmitParentAsContextOnly_WhenSubtaskIsTodoButParentIsNot()
+    {
+        var wed = new DateOnly(2026, 6, 3);
+        var monEntry = new JournalEntry { Id = 5, Title = "Mon", Date = new DateOnly(2026, 6, 1) };
+        var otherDaySibling = new TaskItem { Id = 11, Title = "Sibling", ParentTaskItemId = 2, Status = Status.Todo };
+        var doneChild = new TaskItem
+        {
+            Id = 10,
+            Title = "Done on Wed",
+            ParentTaskItemId = 2,
+            Status = Status.Completed,
+            CompletedAt = new DateTime(2026, 6, 3, 10, 0, 0, DateTimeKind.Utc),
+        };
         var parent = new TaskItem
         {
             Id = 2,
             Title = "Parent",
             Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [child]
+            CurrentJournalEntryId = 5,
+            CurrentJournalEntry = monEntry,
+            FirstTaggedDate = new DateOnly(2026, 5, 30),
+            ChildTaskItems = [doneChild, otherDaySibling],
         };
+        doneChild.ParentTaskItem = parent;
+        SetupDay(wed, doneChild);
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent, child]);
+        var rows = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        Assert.Single(todos, t => t.Id == 2);
-        Assert.Single(todos[0].Children!, c => c.Id == 10);
+        var context = Assert.Single(rows);
+        Assert.Equal(2, context.Id);
+        Assert.True(context.IsContextOnly);
+        Assert.Equal(new DateOnly(2026, 6, 1), context.CurrentJournalDate);
+        Assert.Equal(3, context.DaysTagged);
+        var child = Assert.Single(context.Children!);
+        Assert.Equal(10, child.Id);
+        Assert.Equal(1, context.ChildTaskCount);
+        Assert.Null(child.IsContextOnly);
+        Assert.NotNull(child.CompletedAt);
     }
 
     [Fact]
-    public async Task GetAll_ShouldExcludeOrphanedSubtask_WhenParentNotInEntry()
+    public async Task GetAll_ShouldEmitOneContextParent_ForSeveralSubtasksOfTheSameParent()
     {
-        var orphan = new TaskItem
+        var parent = new TaskItem { Id = 2, Title = "Parent" };
+        var c1 = new TaskItem { Id = 10, Title = "C1", ParentTaskItemId = 2, ParentTaskItem = parent };
+        var c2 = new TaskItem { Id = 11, Title = "C2", ParentTaskItemId = 2, ParentTaskItem = parent };
+        SetupDay(Day, c2, c1);
+
+        var rows = await GetRowsAsync();
+
+        var context = Assert.Single(rows);
+        Assert.True(context.IsContextOnly);
+        Assert.Equal([10, 11], context.Children!.Select(c => c.Id));
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldReportOwnLinkedDay_AndNullForNeverLinkedCompletedTask()
+    {
+        var mon = new DateOnly(2026, 6, 1);
+        var linkedThenDone = new TaskItem
         {
-            Id = 10,
-            Title = "Orphan",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ParentTaskItemId = 99, // parent NOT in the list
-            ChildTaskItems = []
+            Id = 2,
+            Title = "Mon then done",
+            Status = Status.Completed,
+            CompletedAt = new DateTime(2026, 6, 3, 10, 0, 0, DateTimeKind.Utc),
+            FirstTaggedDate = mon,
+            CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Mon", Date = mon },
         };
+        var neverLinked = new TaskItem
+        {
+            Id = 3,
+            Title = "Never linked",
+            Status = Status.Completed,
+            CompletedAt = new DateTime(2026, 6, 3, 11, 0, 0, DateTimeKind.Utc),
+        };
+        SetupDay(new DateOnly(2026, 6, 3), linkedThenDone, neverLinked);
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([orphan]);
+        var rows = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        Assert.Empty(todos);
+        var first = rows.Single(r => r.Id == 2);
+        Assert.Equal(mon, first.CurrentJournalDate);
+        Assert.Equal(1, first.DaysTagged);
+        var second = rows.Single(r => r.Id == 3);
+        Assert.Null(second.CurrentJournalDate);
+        Assert.Equal(0, second.DaysTagged);
+        Assert.All(rows, r => Assert.NotNull(r.CompletedAt));
     }
 
     [Fact]
     public async Task GetAll_ShouldOmitChildrenField_WhenParentHasNoSubtasks()
     {
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = []
-        };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         Assert.Single(todos);
         Assert.Null(todos[0].Children);
     }
@@ -355,108 +451,50 @@ public class JournalTodosControllerV1Tests
     public async Task GetAll_ShouldSetCurrentJournalDate_OnChildDto()
     {
         var childJournalDate = new DateOnly(2026, 5, 8);
-        var childEntry = new JournalEntry { Id = 5, Title = "Another Day", Date = childJournalDate };
         var child = new TaskItem
         {
             Id = 10,
             Title = "Child",
-            Status = Status.Todo,
-            Priority = Priority.Low,
             ParentTaskItemId = 2,
             ChildTaskItems = [],
-            CurrentJournalEntry = childEntry
+            CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Another Day", Date = childJournalDate }
         };
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [child]
-        };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        var childDto = todos[0].Children!.Single();
-        Assert.Equal(childJournalDate, childDto.CurrentJournalDate);
+        Assert.Equal(childJournalDate, todos[0].Children!.Single().CurrentJournalDate);
     }
 
     [Fact]
     public async Task GetAll_ShouldComputeDaysTagged_ForChildIndependently()
     {
-        var childJournalDate = new DateOnly(2026, 5, 10);
-        var childFirstTaggedDate = new DateOnly(2026, 5, 8);
-        var childEntry = new JournalEntry { Id = 5, Title = "Day", Date = childJournalDate };
         var child = new TaskItem
         {
             Id = 10,
             Title = "Child",
-            Status = Status.Todo,
-            Priority = Priority.Low,
             ParentTaskItemId = 2,
             ChildTaskItems = [],
-            FirstTaggedDate = childFirstTaggedDate,
-            CurrentJournalEntry = childEntry
+            FirstTaggedDate = new DateOnly(2026, 5, 8),
+            CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Day", Date = new DateOnly(2026, 5, 10) }
         };
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [child]
-        };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        var childDto = todos[0].Children!.Single();
         // DaysTagged = childJournalDate.DayNumber - childFirstTaggedDate.DayNumber + 1 = 3
-        Assert.Equal(3, childDto.DaysTagged);
+        Assert.Equal(3, todos[0].Children!.Single().DaysTagged);
     }
 
     [Fact]
     public async Task GetAll_ShouldNotIncludeOrphanedSubtask_InAnyChildList()
     {
-        // A child whose ParentTaskItemId does not match the parent's Id — misconfigured relationship.
-        // The child appears in ChildTaskItems of the parent object, but its ParentTaskItemId points elsewhere.
-        var misconfiguredChild = new TaskItem
-        {
-            Id = 10,
-            Title = "Misconfigured",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ParentTaskItemId = 99, // does NOT match parent.Id (2)
-            ChildTaskItems = []
-        };
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [misconfiguredChild]
-        };
+        // A child whose ParentTaskItemId does not match the parent's Id - misconfigured relationship.
+        var misconfiguredChild = new TaskItem { Id = 10, Title = "Misconfigured", ParentTaskItemId = 99, ChildTaskItems = [] };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [misconfiguredChild] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        // Parent is a root item, but its misconfigured child should still appear mapped under Children
-        // because MapTodo iterates ChildTaskItems directly from the EF nav property.
-        // The important assertion: the child does NOT appear in the root list.
         Assert.Single(todos, t => t.Id == 2);
         Assert.DoesNotContain(todos, t => t.Id == 10);
     }
@@ -495,48 +533,32 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task GetAll_MapTodo_ReturnsCorrectChildTaskCount()
     {
-        var child1 = new TaskItem { Id = 10, Title = "Child 1", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
-        var child2 = new TaskItem { Id = 11, Title = "Child 2", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
-        var parent = new TaskItem
-        {
-            Id = 2,
-            Title = "Parent",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = [child1, child2]
-        };
+        var child1 = new TaskItem { Id = 10, Title = "Child 1", ParentTaskItemId = 2, ChildTaskItems = [] };
+        var child2 = new TaskItem { Id = 11, Title = "Child 2", ParentTaskItemId = 2, ChildTaskItems = [] };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child1, child2] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent]);
+        var todos = await GetRowsAsync();
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
         Assert.Equal(2, todos.Single(t => t.Id == 2).ChildTaskCount);
     }
 
     [Fact]
     public async Task GetAll_MapTodo_LeafTodoHasZeroChildTaskCount()
     {
-        var leaf = new TaskItem
-        {
-            Id = 2,
-            Title = "Leaf",
-            Status = Status.Todo,
-            Priority = Priority.Low,
-            ChildTaskItems = []
-        };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Leaf", ChildTaskItems = [] });
 
-        _journalRepo.Setup(s => s.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "Day", Date = new DateOnly(2026, 5, 10) });
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([leaf]);
+        var dto = (await GetRowsAsync()).Single(t => t.Id == 2);
 
-        var result = await _controller.GetAll(1);
-
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var todos = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(ok.Value).ToList();
-        var dto = todos.Single(t => t.Id == 2);
         Assert.Equal(0, dto.ChildTaskCount);
         Assert.Null(dto.Children);
+    }
+
+    [Fact]
+    public void IsContextOnly_ShouldBeOmittedFromJson_WhenNull()
+    {
+        var json = JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t" });
+
+        Assert.DoesNotContain("IsContextOnly", json);
+        Assert.Contains("\"IsContextOnly\":true", JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t", IsContextOnly = true }));
     }
 }

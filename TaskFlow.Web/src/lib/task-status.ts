@@ -120,6 +120,7 @@ export interface BlockableFields {
   blockedReason?: string | null
   blockedAt?: string | null
   previousStatus?: string | null
+  completedAt?: string | null
 }
 
 export function withBlocked<T extends BlockableFields>(task: T, reason: string | null): T {

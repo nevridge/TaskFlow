@@ -15,6 +15,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     private const int SqlitePrimaryKeyConstraintErrorCode = 1555;
     private readonly TaskDbContext _context = context;
 
+    // NOTE: Entry.Todos is still loaded below but is no longer the source of TodoTaskItemIds: which tasks are todos
+    // on a day depends on the viewer's offset and on completion times (GetTodoTaskItemIdsAsync / GetTodosForDayAsync).
     public async Task<IEnumerable<JournalEntry>> GetAllAsync() =>
         // Read-only query: AsNoTracking prevents identity map collisions on ChildTaskItems
         // when both a parent and its child are linked to the same JournalEntry.
@@ -180,6 +182,121 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         return entry?.Todos.Where(t => t.CurrentJournalEntryId == entryId) ?? [];
     }
 
+    // CompletedAt is TEXT in SQLite and its stored format is not uniform (EF writes 7 fractional digits, the
+    // backfill migration wrote 3, older rows may have none), so a raw text comparison at an exact boundary can
+    // misorder ("...:00" sorts before "...:00.0000000"). The SQL range is therefore widened by a minute on each
+    // side as a coarse prefilter, and the exact decision is taken in memory on the parsed DateTime.
+    private static readonly TimeSpan SqlRangePadding = TimeSpan.FromMinutes(1);
+
+    public async Task<JournalDayTodos?> GetTodosForDayAsync(int entryId, int? offsetMinutes)
+    {
+        var entryDate = await _context.JournalEntries
+            .AsNoTracking()
+            .Where(e => e.Id == entryId)
+            .Select(e => (DateOnly?)e.Date)
+            .FirstOrDefaultAsync();
+        if (entryDate is null)
+        {
+            return null;
+        }
+
+        var (startUtc, endUtc) = JournalDayRule.GetUtcRange(entryDate.Value, offsetMinutes);
+
+        // Read-only query: AsNoTracking prevents identity map collisions when a parent and its child are both
+        // rows of the same day (the parent's ChildTaskItems would otherwise clash with the child row itself).
+        var candidates = await _context.TaskItems
+            .AsNoTracking()
+            .Include(t => t.Project)
+            .Include(t => t.CurrentJournalEntry)
+            .Include(t => t.ParentTaskItem).ThenInclude(p => p!.Project)
+            .Include(t => t.ParentTaskItem).ThenInclude(p => p!.CurrentJournalEntry)
+            .Include(t => t.ChildTaskItems).ThenInclude(c => c.Project)
+            .Include(t => t.ChildTaskItems).ThenInclude(c => c.CurrentJournalEntry)
+            // Split so the children collection does not multiply the parent rows (and their joined project/entry columns).
+            .AsSplitQuery()
+            .Where(JournalDayRule.OnDayPredicate(entryId, startUtc - SqlRangePadding, endUtc + SqlRangePadding))
+            .OrderBy(t => t.Id)
+            .ToListAsync();
+
+        var tasks = candidates
+            .Where(t => JournalDayRule.GetAttributedDay(t, t.CurrentJournalEntry?.Date, offsetMinutes) == entryDate)
+            .ToList();
+        return new JournalDayTodos(entryDate.Value, tasks);
+    }
+
+    public async Task<IReadOnlyDictionary<int, List<int>>> GetTodoTaskItemIdsAsync(
+        IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? offsetMinutes)
+    {
+        var result = new Dictionary<int, List<int>>();
+        var entryIdByDate = new Dictionary<DateOnly, int>();
+        var dateByEntryId = new Dictionary<int, DateOnly>();
+        foreach (var (entryId, date) in entries)
+        {
+            result[entryId] = [];
+            entryIdByDate.TryAdd(date, entryId);
+            dateByEntryId[entryId] = date;
+        }
+
+        if (entries.Count == 0)
+        {
+            return result;
+        }
+
+        var ids = dateByEntryId.Keys.ToList();
+        var ranges = dateByEntryId.Values.Select(d => JournalDayRule.GetUtcRange(d, offsetMinutes)).ToList();
+        // Distinct days have disjoint ranges, so one spanning range covers them all; the exact day is decided below.
+        var lo = ranges.Min(r => r.StartUtc) - SqlRangePadding;
+        var hi = ranges.Max(r => r.EndUtc) + SqlRangePadding;
+
+        // One query for the linked branch and the completed branch together. Roots only: subtasks are never ids here.
+        var rows = await _context.TaskItems
+            .AsNoTracking()
+            .Where(t => t.ParentTaskItemId == null
+                && ((t.CurrentJournalEntryId != null && ids.Contains(t.CurrentJournalEntryId.Value)
+                        && !(t.Status == Status.Completed && t.CompletedAt != null))
+                    || (t.Status == Status.Completed && t.CompletedAt != null && t.CompletedAt >= lo && t.CompletedAt < hi)))
+            .OrderBy(t => t.Id)
+            .ToListAsync();
+
+        foreach (var task in rows)
+        {
+            DateOnly? linkedDate = task.CurrentJournalEntryId is { } linkedId && dateByEntryId.TryGetValue(linkedId, out var d)
+                ? d
+                : null;
+            var day = JournalDayRule.GetAttributedDay(task, linkedDate, offsetMinutes);
+            if (day is { } attributed && entryIdByDate.TryGetValue(attributed, out var targetEntryId))
+            {
+                result[targetEntryId].Add(task.Id);
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<PlanCompletedDetails?> GetPlanCompletedDetailsAsync(int entryId, int taskItemId)
+    {
+        var entryDate = await _context.JournalEntries
+            .AsNoTracking()
+            .Where(e => e.Id == entryId)
+            .Select(e => (DateOnly?)e.Date)
+            .FirstOrDefaultAsync();
+        if (entryDate is null)
+        {
+            return null;
+        }
+
+        var task = await _context.TaskItems
+            .AsNoTracking()
+            .Where(t => t.Id == taskItemId)
+            .Select(t => new
+            {
+                t.CompletedAt,
+                AssignedDate = t.CurrentJournalEntry == null ? (DateOnly?)null : t.CurrentJournalEntry.Date
+            })
+            .FirstOrDefaultAsync();
+        return task is null ? null : new PlanCompletedDetails(task.AssignedDate, task.CompletedAt, entryDate.Value);
+    }
+
     public async Task<bool> TodoExistsAsync(int entryId, int taskItemId)
     {
         var entry = await _context.JournalEntries
@@ -202,6 +319,13 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         if (task is null)
         {
             return AddTodoResult.TaskNotFound;
+        }
+
+        // A completed task with a completion time is shown on its completion day whatever its link, so linking it
+        // would silently do nothing. A legacy Completed task without CompletedAt is still shown on its linked day.
+        if (JournalDayRule.IsCompletionDayRow(task))
+        {
+            return AddTodoResult.TaskCompleted;
         }
 
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, timezoneOffsetMinutes);

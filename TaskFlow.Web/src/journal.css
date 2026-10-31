@@ -328,6 +328,25 @@
   transition: background .12s, border-color .12s, color .12s;
 }
 .journal-page .todo-check:hover { border-color: var(--accent); }
+/* Reopen-blocked completed rows: keep the done fill, dim only, and no hover accent. */
+.journal-page .todo-check:disabled { cursor: not-allowed; opacity: .6; }
+.journal-page .todo-check:disabled:hover { border-color: var(--accent); }
+.journal-page .todo-meta-label {
+  color: var(--muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.journal-page .todo-completed-here svg { width: 9px; height: 9px; }
+/* Inert stand-in for the check on a context-only parent: same box so titles align. */
+.journal-page .todo-context-glyph {
+  flex: 0 0 auto;
+  width: var(--todo-check);
+  height: var(--todo-check);
+}
+.journal-page .todo-context-parent .todo-text { color: var(--muted); cursor: default; }
 .todo.is-done .todo-check {
   background: var(--accent);
   border-color: var(--accent);

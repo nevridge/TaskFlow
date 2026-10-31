@@ -23,8 +23,20 @@ public class JournalEntriesControllerV1Tests
     public JournalEntriesControllerV1Tests()
     {
         _controller = new JournalEntriesController(
-            _repo.Object, _validator.Object, new CreateJournalEntryDtoValidator(), new CarryForwardRequestDtoValidator());
+            _repo.Object, _validator.Object, new CreateJournalEntryDtoValidator(), new CarryForwardRequestDtoValidator(),
+            new JournalDayQueryDtoValidator());
+        // Default: no todos for any requested entry (every requested entry has a key, as the real repository guarantees).
+        _repo.Setup(r => r.GetTodoTaskItemIdsAsync(It.IsAny<IReadOnlyCollection<(int EntryId, DateOnly Date)>>(), It.IsAny<int?>()))
+            .ReturnsAsync((IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? _) =>
+                (IReadOnlyDictionary<int, List<int>>)entries.ToDictionary(e => e.EntryId, _ => new List<int>()));
     }
+
+    private void SetupTodoIds(int entryId, int? offset, params int[] ids) =>
+        _repo.Setup(r => r.GetTodoTaskItemIdsAsync(
+                It.Is<IReadOnlyCollection<(int EntryId, DateOnly Date)>>(e => e.Any(x => x.EntryId == entryId)), offset))
+            .ReturnsAsync((IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? _) =>
+                (IReadOnlyDictionary<int, List<int>>)entries.ToDictionary(
+                    e => e.EntryId, e => e.EntryId == entryId ? ids.ToList() : []));
 
     private void SetupCreate(DateOnly date, int id = 9)
     {
@@ -82,13 +94,8 @@ public class JournalEntriesControllerV1Tests
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
         SetupCreate(today, id: 21);
         _repo.Setup(r => r.CarryForwardIncompleteTasksAsync(21, today)).ReturnsAsync([3, 5]);
-        _repo.Setup(r => r.GetByIdAsync(21)).ReturnsAsync(new JournalEntry
-        {
-            Id = 21,
-            Title = "t",
-            Date = today,
-            Todos = [new TaskItem { Id = 5, Title = "a" }, new TaskItem { Id = 6, Title = "b" }]
-        });
+        _repo.Setup(r => r.GetByIdAsync(21)).ReturnsAsync(new JournalEntry { Id = 21, Title = "t", Date = today });
+        SetupTodoIds(21, offset, 5, 6);
 
         var result = await _controller.Create(new CreateJournalEntryDto { Title = "t", Date = today, TimezoneOffsetMinutes = offset });
 
@@ -105,7 +112,8 @@ public class JournalEntriesControllerV1Tests
     {
         const int offset = 0;
         var today = UserDateHelper.GetUserToday(DateTime.UtcNow, offset);
-        // The entry returned by AddAsync still carries unsaved moves, as after a lost carry-forward race.
+        // The entry returned by AddAsync still carries unsaved moves in its Todos, as after a lost carry-forward race;
+        // the response must come from the repository's persisted ids, never from that raw join.
         _repo.Setup(r => r.GetByDateAsync(today)).ReturnsAsync((JournalEntry?)null);
         _validator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default)).ReturnsAsync(new ValidationResult());
         _repo.Setup(r => r.AddAsync(It.IsAny<JournalEntry>()))
@@ -288,7 +296,7 @@ public class JournalEntriesControllerV1Tests
         };
         _repo.Setup(r => r.GetAllAsync()).ReturnsAsync(entries);
 
-        var result = await _controller.GetAll();
+        var result = await _controller.GetAll(new JournalDayQueryDto());
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var dtos = Assert.IsAssignableFrom<IEnumerable<JournalEntryResponseDto>>(ok.Value);
@@ -296,11 +304,96 @@ public class JournalEntriesControllerV1Tests
     }
 
     [Fact]
+    public async Task GetAll_ShouldResolveAllEntriesTodoIdsInOneBatchedCall_WithOffset()
+    {
+        var d1 = new DateOnly(2026, 5, 10);
+        var d2 = new DateOnly(2026, 5, 11);
+        _repo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<JournalEntry>
+        {
+            new() { Id = 2, Title = "b", Date = d2 },
+            new() { Id = 1, Title = "a", Date = d1 },
+        });
+        _repo.Setup(r => r.GetTodoTaskItemIdsAsync(
+                It.Is<IReadOnlyCollection<(int EntryId, DateOnly Date)>>(e => e.Count == 2), -300))
+            .ReturnsAsync(new Dictionary<int, List<int>> { [1] = [7], [2] = [8, 9] });
+
+        var result = await _controller.GetAll(new JournalDayQueryDto { TimezoneOffsetMinutes = -300 });
+
+        var dtos = Assert.IsAssignableFrom<IEnumerable<JournalEntryResponseDto>>(Assert.IsType<OkObjectResult>(result.Result).Value).ToList();
+        Assert.Equal([8, 9], dtos.Single(d => d.Id == 2).TodoTaskItemIds);
+        Assert.Equal([7], dtos.Single(d => d.Id == 1).TodoTaskItemIds);
+        _repo.Verify(r => r.GetTodoTaskItemIdsAsync(It.IsAny<IReadOnlyCollection<(int EntryId, DateOnly Date)>>(), It.IsAny<int?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Get_ShouldPassOffsetAndReturnTodoIds()
+    {
+        var date = new DateOnly(2026, 5, 10);
+        _repo.Setup(r => r.GetByIdAsync(4)).ReturnsAsync(new JournalEntry { Id = 4, Title = "t", Date = date });
+        SetupTodoIds(4, 840, 3, 4);
+
+        var result = await _controller.Get(4, new JournalDayQueryDto { TimezoneOffsetMinutes = 840 });
+
+        var dto = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal([3, 4], dto.TodoTaskItemIds);
+    }
+
+    [Fact]
+    public async Task Get_ShouldUseUtcOffset_WhenQueryHasNone()
+    {
+        _repo.Setup(r => r.GetByIdAsync(4)).ReturnsAsync(new JournalEntry { Id = 4, Title = "t", Date = new DateOnly(2026, 5, 10) });
+
+        await _controller.Get(4, new JournalDayQueryDto());
+
+        _repo.Verify(r => r.GetTodoTaskItemIdsAsync(It.IsAny<IReadOnlyCollection<(int EntryId, DateOnly Date)>>(), null), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(-721)]
+    [InlineData(841)]
+    public async Task GetAndGetAll_ShouldReturnBadRequest_WhenOffsetOutOfRange(int offset)
+    {
+        var query = new JournalDayQueryDto { TimezoneOffsetMinutes = offset };
+
+        TimezoneOffsetTestHelpers.AssertOffsetBadRequest((await _controller.Get(1, query)).Result);
+        TimezoneOffsetTestHelpers.AssertOffsetBadRequest((await _controller.GetAll(query)).Result);
+        _repo.Verify(r => r.GetByIdAsync(It.IsAny<int>()), Times.Never);
+        _repo.Verify(r => r.GetAllAsync(), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(-720)]
+    [InlineData(840)]
+    public async Task GetAndGetAll_ShouldAcceptBoundaryOffsets(int offset)
+    {
+        _repo.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new JournalEntry { Id = 1, Title = "t", Date = new DateOnly(2026, 5, 10) });
+        _repo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<JournalEntry>());
+        var query = new JournalDayQueryDto { TimezoneOffsetMinutes = offset };
+
+        Assert.IsType<OkObjectResult>((await _controller.Get(1, query)).Result);
+        Assert.IsType<OkObjectResult>((await _controller.GetAll(query)).Result);
+    }
+
+    [Fact]
+    public async Task Update_ShouldReturnTodoIdsFromRepository_UsingUtcOffset()
+    {
+        var date = new DateOnly(2026, 5, 10);
+        _repo.Setup(r => r.GetByIdAsync(6)).ReturnsAsync(new JournalEntry { Id = 6, Title = "t", Date = date });
+        _validator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default)).ReturnsAsync(new ValidationResult());
+        SetupTodoIds(6, null, 11);
+
+        var result = await _controller.Update(6, new UpdateJournalEntryDto { Title = "x", Summary = "s" });
+
+        var dto = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Equal([11], dto.TodoTaskItemIds);
+    }
+
+    [Fact]
     public async Task Get_ShouldReturnNotFound_WhenMissing()
     {
         _repo.Setup(r => r.GetByIdAsync(123)).ReturnsAsync((JournalEntry?)null);
 
-        var result = await _controller.Get(123);
+        var result = await _controller.Get(123, new JournalDayQueryDto());
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -322,7 +415,7 @@ public class JournalEntriesControllerV1Tests
             ],
         });
 
-        var result = await _controller.Get(60);
+        var result = await _controller.Get(60, new JournalDayQueryDto());
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var dto = Assert.IsType<JournalEntryResponseDto>(ok.Value);
@@ -429,8 +522,13 @@ public class JournalEntriesControllerV1Tests
             var entryValidator = new Mock<IValidator<JournalEntry>>();
             entryValidator.Setup(v => v.ValidateAsync(It.IsAny<JournalEntry>(), default)).ReturnsAsync(new ValidationResult());
             Controller = new JournalEntriesController(
-                Repo, entryValidator.Object, new CreateJournalEntryDtoValidator(), new CarryForwardRequestDtoValidator());
+                Repo, entryValidator.Object, new CreateJournalEntryDtoValidator(), new CarryForwardRequestDtoValidator(),
+                new JournalDayQueryDtoValidator());
+            TodosController = new JournalTodosController(
+                Repo, new AddJournalTodoDtoValidator(), new JournalDayQueryDtoValidator());
         }
+
+        public JournalTodosController TodosController { get; }
 
         public async Task<(JournalEntry entry, TaskItem open, TaskItem done)> SeedOldEntryAsync(DateOnly date)
         {
@@ -631,5 +729,57 @@ public class JournalEntriesControllerV1Tests
         }
 
         Assert.Equal(0, (await h.Context.TaskItems.AsNoTracking().SingleAsync(t => t.Id == open.Id)).MoveCount);
+    }
+
+    // ---- AC9: the todos endpoint and the entry response agree for the same day and offset ----
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-300)]
+    [InlineData(600)]
+    public async Task GetEntry_AndTodosEndpoint_EndToEnd_ShouldAgreeOnTodoRows(int? offset)
+    {
+        await using var h = new RealRepoHarness();
+        var mon = new DateOnly(2026, 6, 1);
+        var wed = new DateOnly(2026, 6, 3);
+        var monEntry = new JournalEntry { Title = "Mon", Date = mon, CreatedAt = DateTime.UtcNow };
+        var wedEntry = new JournalEntry { Title = "Wed", Date = wed, CreatedAt = DateTime.UtcNow };
+        // 12:00 UTC on Wednesday is still Wednesday locally for each offset in the theory (07:00 at -300, 22:00 at +600).
+        var completedAt = new DateTime(2026, 6, 3, 12, 0, 0, DateTimeKind.Utc);
+        var linkedThenDone = new TaskItem { Title = "Mon then done Wed", Status = Status.Completed, CompletedAt = completedAt };
+        var openOnWed = new TaskItem { Title = "Open Wed", Status = Status.Todo };
+        var neverLinkedDone = new TaskItem { Title = "Never linked", Status = Status.Completed, CompletedAt = completedAt };
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        h.Context.JournalEntries.AddRange(monEntry, wedEntry);
+        h.Context.TaskItems.AddRange(linkedThenDone, openOnWed, neverLinkedDone, parent);
+        await h.Context.SaveChangesAsync();
+        var child = new TaskItem { Title = "Child done Wed", Status = Status.Completed, CompletedAt = completedAt, ParentTaskItemId = parent.Id };
+        h.Context.TaskItems.Add(child);
+        linkedThenDone.CurrentJournalEntryId = monEntry.Id;
+        parent.CurrentJournalEntryId = monEntry.Id;
+        openOnWed.CurrentJournalEntryId = wedEntry.Id;
+        await h.Context.SaveChangesAsync();
+        h.Context.ChangeTracker.Clear();
+
+        foreach (var entry in new[] { monEntry, wedEntry })
+        {
+            var todos = await h.TodosController.GetAll(entry.Id, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+            var rows = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(Assert.IsType<OkObjectResult>(todos.Result).Value).ToList();
+            var response = await h.Controller.Get(entry.Id, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+            var dto = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<OkObjectResult>(response.Result).Value);
+
+            Assert.Equal(
+                rows.Where(r => r.IsContextOnly != true).Select(r => r.Id).Order(),
+                dto.TodoTaskItemIds.Order());
+        }
+
+        var wedRows = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(
+            Assert.IsType<OkObjectResult>((await h.TodosController.GetAll(wedEntry.Id, new JournalDayQueryDto { TimezoneOffsetMinutes = offset })).Result).Value).ToList();
+        Assert.Contains(wedRows, r => r.Id == linkedThenDone.Id && r.CurrentJournalDate == mon);
+        Assert.Contains(wedRows, r => r.Id == neverLinkedDone.Id && r.CurrentJournalDate is null);
+        var context = Assert.Single(wedRows, r => r.IsContextOnly == true);
+        Assert.Equal(parent.Id, context.Id);
+        Assert.Equal(child.Id, Assert.Single(context.Children!).Id);
+        Assert.DoesNotContain(wedRows, r => r.Id == child.Id);
     }
 }

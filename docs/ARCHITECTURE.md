@@ -375,6 +375,10 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
 }
 ```
 
+### Journal Day Attribution
+
+Which day a task is a todo on is derived at read time and never stored (no schema change). `Helpers/JournalDayRule.cs` is the single rule: a `Completed` task with a `CompletedAt` belongs to the local day it was completed (UTC `CompletedAt` shifted by the viewer's offset, UTC when omitted); every other task belongs to its linked journal entry's day. The todos endpoint (`GetTodosForDayAsync`) and the entry `TodoTaskItemIds` (`GetTodoTaskItemIdsAsync`, one batched query for any number of entries) both use it, so they cannot disagree. Because SQLite stores `CompletedAt` as TEXT in mixed fractional formats, the SQL range is widened by one minute on each side as a coarse prefilter and the exact range test runs in memory on the parsed `DateTime`.
+
 ### Migration Strategy
 
 **Development:**

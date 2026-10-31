@@ -16,8 +16,10 @@ public class JournalEntriesController(
     IJournalEntryRepository journalRepo,
     IValidator<JournalEntry> validator,
     IValidator<CreateJournalEntryDto> createValidator,
-    IValidator<CarryForwardRequestDto> carryForwardValidator) : ControllerBase
+    IValidator<CarryForwardRequestDto> carryForwardValidator,
+    IValidator<JournalDayQueryDto> queryValidator) : ControllerBase
 {
+    private readonly IValidator<JournalDayQueryDto> _queryValidator = queryValidator;
     private readonly IValidator<CreateJournalEntryDto> _createValidator = createValidator;
     private readonly IValidator<CarryForwardRequestDto> _carryForwardValidator = carryForwardValidator;
     private const string GetRouteEntryName = "GetJournalEntryV1";
@@ -25,24 +27,38 @@ public class JournalEntriesController(
     private readonly IValidator<JournalEntry> _validator = validator;
 
     // GET: api/v1/JournalEntries
+    // TodoTaskItemIds are the root tasks that are todos on each entry's day (see JournalDayRule); the optional
+    // timezoneOffsetMinutes turns completion instants into local days (UTC when omitted).
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<JournalEntryResponseDto>>> GetAll()
+    public async Task<ActionResult<IEnumerable<JournalEntryResponseDto>>> GetAll([FromQuery] JournalDayQueryDto query)
     {
-        var entries = await _journalRepo.GetAllAsync();
-        return Ok(entries.Select(ToDto));
+        var queryValidation = await _queryValidator.ValidateAsync(query);
+        if (!queryValidation.IsValid)
+        {
+            return BadRequest(queryValidation.Errors);
+        }
+
+        var entries = (await _journalRepo.GetAllAsync()).ToList();
+        return Ok(await ToDtosAsync(entries, query.TimezoneOffsetMinutes));
     }
 
     // GET: api/v1/JournalEntries/5
     [HttpGet("{id}", Name = GetRouteEntryName)]
-    public async Task<ActionResult<JournalEntryResponseDto>> Get(int id)
+    public async Task<ActionResult<JournalEntryResponseDto>> Get(int id, [FromQuery] JournalDayQueryDto query)
     {
+        var queryValidation = await _queryValidator.ValidateAsync(query);
+        if (!queryValidation.IsValid)
+        {
+            return BadRequest(queryValidation.Errors);
+        }
+
         var entry = await _journalRepo.GetByIdAsync(id);
         if (entry is null)
         {
             return NotFound();
         }
 
-        return Ok(ToDto(entry));
+        return Ok(await ToDtoAsync(entry, query.TimezoneOffsetMinutes));
     }
 
     // POST: api/v1/JournalEntries
@@ -61,7 +77,7 @@ public class JournalEntriesController(
             return Conflict(new
             {
                 message = "A journal entry already exists for this date.",
-                existingEntry = ToDto(existingByDate)
+                existingEntry = await ToDtoAsync(existingByDate, dto.TimezoneOffsetMinutes)
             });
         }
 
@@ -88,7 +104,7 @@ public class JournalEntriesController(
                 created = await _journalRepo.GetByIdAsync(created.Id) ?? created;
             }
 
-            var response = ToDto(created);
+            var response = await ToDtoAsync(created, dto.TimezoneOffsetMinutes);
             response.MovedCount = moved.Count;
             response.MovedTaskItemIds = moved;
             return CreatedAtRoute(GetRouteEntryName, new { version = ApiVersions.V1, id = created.Id }, response);
@@ -99,7 +115,7 @@ public class JournalEntriesController(
             return Conflict(new
             {
                 message = "A journal entry for this date was created by another request.",
-                existingEntry = existing is null ? null : ToDto(existing),
+                existingEntry = existing is null ? null : await ToDtoAsync(existing, dto.TimezoneOffsetMinutes),
             });
         }
     }
@@ -157,7 +173,8 @@ public class JournalEntriesController(
         }
 
         await _journalRepo.UpdateAsync(existing);
-        return Ok(ToDto(existing));
+        // The update request carries no offset, so todo ids are attributed to UTC days.
+        return Ok(await ToDtoAsync(existing, null));
     }
 
     // DELETE: api/v1/JournalEntries/5
@@ -174,7 +191,20 @@ public class JournalEntriesController(
         return NoContent();
     }
 
-    private static JournalEntryResponseDto ToDto(JournalEntry e) => new()
+    private async Task<JournalEntryResponseDto> ToDtoAsync(JournalEntry entry, int? offsetMinutes) =>
+        (await ToDtosAsync([entry], offsetMinutes)).Single();
+
+    // Every entry's todo ids come from one batched repository query, never from the raw Todos join.
+    private async Task<List<JournalEntryResponseDto>> ToDtosAsync(IReadOnlyCollection<JournalEntry> entries, int? offsetMinutes)
+    {
+        var todoIds = await _journalRepo.GetTodoTaskItemIdsAsync(
+            entries.Select(e => (e.Id, e.Date)).ToList(), offsetMinutes);
+        return entries
+            .Select(e => ToDto(e, todoIds.TryGetValue(e.Id, out var ids) ? ids : []))
+            .ToList();
+    }
+
+    private static JournalEntryResponseDto ToDto(JournalEntry e, IReadOnlyCollection<int> todoIds) => new()
     {
         Id = e.Id,
         Title = e.Title,
@@ -182,7 +212,7 @@ public class JournalEntriesController(
         Date = e.Date,
         CreatedAt = e.CreatedAt,
         UpdatedAt = e.UpdatedAt,
-        TodoTaskItemIds = e.Todos.Select(t => t.Id),
+        TodoTaskItemIds = todoIds,
         LogEntries = e.LogEntries.OrderBy(l => l.CreatedAt).Select(JournalLogEntryMapper.ToDto),
     };
 }

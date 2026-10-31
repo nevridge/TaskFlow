@@ -414,8 +414,8 @@ public class JournalEntryRepositoryTests
         Assert.Equal(entry.Id, events[1].FromJournalEntryId);
     }
 
-    // Verifies the GetAllAsync include chain specifically — the controller path uses GetTodosAsync,
-    // which is covered by GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry.
+    // Verifies the GetAllAsync include chain specifically. The todos endpoint uses GetTodosForDayAsync and the
+    // entry responses use GetTodoTaskItemIdsAsync; the loaded Todos join is no longer the source of TodoTaskItemIds.
     [Fact]
     public async Task GetAllAsync_ShouldIncludeChildTaskItems_OnTodos()
     {
@@ -437,32 +437,6 @@ public class JournalEntryRepositoryTests
 
         var foundEntry = all.First(e => e.Id == entry.Id);
         var parentTodo = foundEntry.Todos.First(t => t.Id == parent.Id);
-        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
-    }
-
-    [Fact]
-    public async Task GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry()
-    {
-        var (context, connection) = CreateSqliteContext();
-        await using var _ = connection;
-        await using var __ = context;
-
-        var repo = new JournalEntryRepository(context);
-
-        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
-        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
-        context.TaskItems.Add(parent);
-        await context.SaveChangesAsync();
-
-        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
-        context.TaskItems.Add(child);
-        await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(entry.Id, parent.Id);
-
-        var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
-
-        var parentTodo = todos.First(t => t.Id == parent.Id);
         Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 
@@ -512,6 +486,63 @@ public class JournalEntryRepositoryTests
 
         Assert.NotNull(found);
         var parentTodo = found.Todos.First(t => t.Id == parent.Id);
+        Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
+    }
+
+    [Fact]
+    public async Task GetTodosForDayAsync_ShouldIncludeChildTaskItemsAndProject_ForParentOnTheDay()
+    {
+        var (context, connection) = CreateSqliteContext();
+        await using var _ = connection;
+        await using var __ = context;
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var project = new Project { Name = "Proj" };
+        context.Projects.Add(project);
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo, Project = project };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id, ProjectId = project.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+        context.ChangeTracker.Clear();
+
+        var day = await repo.GetTodosForDayAsync(entry.Id, null);
+
+        Assert.NotNull(day);
+        var parentTodo = Assert.Single(day.Tasks);
+        Assert.Equal(parent.Id, parentTodo.Id);
+        Assert.Equal("Proj", parentTodo.Project?.Name);
+        var childItem = Assert.Single(parentTodo.ChildTaskItems);
+        Assert.Equal(child.Id, childItem.Id);
+        Assert.Equal("Proj", childItem.Project?.Name);
+    }
+
+    [Fact]
+    public async Task GetTodosAsync_ShouldIncludeChildTaskItems_WhenParentIsInEntry()
+    {
+        var (context, connection) = CreateSqliteContext();
+        await using var _ = connection;
+        await using var __ = context;
+
+        var repo = new JournalEntryRepository(context);
+
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+
+        var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
+        context.TaskItems.Add(child);
+        await context.SaveChangesAsync();
+
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
+
+        var parentTodo = todos.First(t => t.Id == parent.Id);
         Assert.Single(parentTodo.ChildTaskItems, c => c.Id == child.Id);
     }
 

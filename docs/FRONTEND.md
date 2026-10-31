@@ -269,6 +269,14 @@ Recent UX additions that are now part of the app flow:
 - History modals support keyboard close (`Escape`) and focus the close action on open.
 - Journal todo creation uses `journalDate` in task create payloads (instead of a manual create-then-link flow).
 
+#### Completion-day attribution in the journal (#367)
+
+- A task completed on a day shows on that day's journal as a completed row labelled "Completed here". Journal reads (entries and todos) send `timezoneOffsetMinutes` so the server attributes the day in the user's timezone; the todos query key stays `['journal', entryId, 'todos']` (the offset is not in the key).
+- Completing a task from a past day is optimistic: the row leaves the viewed day, joins the completed tier of today's cached list, and `completedAt` is set locally. Failure restores both caches; `['journal']` is invalidated on settle.
+- A completed row with `completedAt` has no "Remove from day" control (history). One without `completedAt` keeps it.
+- `isReopenBlocked` (`src/lib/journal-utils.ts`) mirrors the server's reopen rule (#350): a completed task whose completion day (from `completedAt`, else the linked day) is before the user's today. Its checkbox is a disabled `role="checkbox"` with an accessible explanation; a stale view that still reopens gets the server's 422 and the existing inline error.
+- A context-only parent (`isContextOnly`) renders as an inert "Parent task" row above its attributed subtask and is excluded from counts and sort tiers.
+
 #### Settings-driven hierarchy behavior
 
 The settings drawer now includes:

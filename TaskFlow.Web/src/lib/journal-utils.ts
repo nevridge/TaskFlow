@@ -41,6 +41,59 @@ export function getTimezoneOffsetMinutes(): number {
   return -new Date().getTimezoneOffset() || 0
 }
 
+/**
+ * The user's calendar day (YYYY-MM-DD) for an instant. Mirrors the server's UserDateHelper.GetUserDate:
+ * the offset (minutes ahead of UTC, e.g. -300 for UTC-5) is ADDED to the UTC instant. Uses UTC getters
+ * only, so it does not depend on the machine's own timezone.
+ */
+export function userDayOf(ms: number, offsetMinutes: number): string {
+  return new Date(ms + offsetMinutes * 60_000).toISOString().slice(0, 10)
+}
+
+/** Parses an API timestamp as UTC even when the server omitted the Z / offset suffix. NaN when invalid. */
+export function parseApiTimestamp(s: string): number {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s)
+  return Date.parse(hasZone ? s : `${s}Z`)
+}
+
+interface CompletionFields {
+  status?: string | null
+  completedAt?: string | null
+  currentJournalDate?: string | null
+}
+
+/** The user's day a task's completion is attributed to: completedAt's day, else the linked day, else null. */
+export function completionDayOf(task: CompletionFields, offsetMinutes = getTimezoneOffsetMinutes()): string | null {
+  if (task.completedAt) {
+    const ms = parseApiTimestamp(task.completedAt)
+    if (!Number.isNaN(ms)) return userDayOf(ms, offsetMinutes)
+  }
+  return task.currentJournalDate ?? null
+}
+
+/** Exact mirror of the server's reopen guard (#350): a Completed task whose completion day is before today. */
+export function isReopenBlocked(
+  task: CompletionFields,
+  offsetMinutes = getTimezoneOffsetMinutes(),
+  nowMs = Date.now(),
+): boolean {
+  if (task.status !== 'Completed') return false
+  const day = completionDayOf(task, offsetMinutes)
+  if (!day) return false
+  return day < userDayOf(nowMs, offsetMinutes)
+}
+
+/** A Completed task with a completion time whose completion day is the viewed day. */
+export function isCompletedHere(
+  task: CompletionFields,
+  viewedISO: string,
+  offsetMinutes = getTimezoneOffsetMinutes(),
+): boolean {
+  if (task.status !== 'Completed' || !task.completedAt) return false
+  const ms = parseApiTimestamp(task.completedAt)
+  return !Number.isNaN(ms) && userDayOf(ms, offsetMinutes) === viewedISO
+}
+
 export function addDays(s: string, n: number): string {
   const d = parseISO(s)
   d.setDate(d.getDate() + n)

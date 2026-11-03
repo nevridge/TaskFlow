@@ -108,6 +108,8 @@ export function getBlockErrorMessage(code: string | null): string | null {
       return 'Only Todo tasks can be moved to In Progress. Set it to Todo first.'
     case 'TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS':
       return 'A blocked reason can only be set on a blocked task.'
+    case 'TASK_PARENT_STATUS_DERIVED':
+      return "This task's status follows its open subtasks. Complete or remove them to change it."
     default:
       return null
   }

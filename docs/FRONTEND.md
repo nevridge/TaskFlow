@@ -298,6 +298,17 @@ Tasks pages map backend business-rule codes to user-friendly inline errors, incl
 - `TASK_PARENT_CYCLE_NOT_ALLOWED`
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
+- `TASK_PARENT_STATUS_DERIVED`: mapped by `getBlockErrorMessage` to "This task's status follows its open subtasks. Complete or remove them to change it." Only reachable on a race with stale data; the optimistic change rolls back and the task queries are invalidated.
+
+### Derived parent status (Tasks page and task detail page)
+
+A parent with at least one open subtask (stored status not Completed) displays a status derived from its open subtasks: any In Progress gives In Progress; all Blocked gives Blocked; all Draft gives Draft; otherwise To-do. Inner parents use their own derived status, so it recurses through every level. A parent whose subtasks are all Completed, or that has none, shows its stored status and is editable.
+
+- `src/lib/task-derived-status.ts` (`deriveTaskStatuses`) computes it in render with `useMemo` over the full, unfiltered task list. It is never written to the query cache and the stored status is never changed, so an optimistic child change updates the parent at once and rolls back with the cache. Sections, the status filter, sorting, the Blocked count and the view filter all use the derived status.
+- While locked, the row badge is a non-interactive dashed `<span>` (class `t-badge-derived`), Block/Unblock are hidden, the TaskForm status select is disabled (with a helper line) and the page handlers return early. The stored blocked reason is hidden, not deleted; it shows again once every subtask is Completed and the stored status is Blocked.
+- `TaskForm` always receives the stored task. When `statusLocked` it displays `displayStatus`, submits the stored status unchanged and omits `blockedReason`.
+- The context header shows direct-subtask progress (`getParentProgressLabel`), e.g. "1 of 4 done · 1 in progress" (total includes Completed; the suffix appears only when at least one is In Progress).
+- The journal is unchanged and keeps using the stored status.
 
 ### TaskCard
 

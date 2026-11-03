@@ -20,6 +20,7 @@ import { NoteForm } from '@/components/NoteForm'
 import { formatDateOnly } from '@/lib/utils'
 import { formatShort, formatStartedAt } from '@/lib/journal-utils'
 import { getStatusLabel, isBlocked } from '@/lib/task-status'
+import { deriveTaskStatuses, getDerivedStatusTitle } from '@/lib/task-derived-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
 import '@/tasks.css'
 
@@ -60,7 +61,12 @@ export function TaskDetailPage() {
 
   const task = taskData?.data as TaskDetailModel | undefined
   const notes: NoteResponseDto[] = (notesData?.data as NoteResponseDto[] | undefined) ?? []
-  const allTasks: TaskDetailModel[] = (allTasksData?.data as TaskDetailModel[] | undefined) ?? []
+  const allTasks: TaskDetailModel[] = useMemo(
+    () => (allTasksData?.data as TaskDetailModel[] | undefined) ?? [],
+    [allTasksData],
+  )
+  // Render-only: derived from the full task list, never written to the cache.
+  const derivedInfo = useMemo(() => deriveTaskStatuses(allTasks).get(taskId), [allTasks, taskId])
   const projects: ProjectOption[] = useMemo(
     () => (projectsData?.data ?? []).map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived })),
     [projectsData],
@@ -152,7 +158,9 @@ export function TaskDetailPage() {
   const deleteBlocked = childCount > 0
   const deleteHint = `Delete subtasks first (${childCount})`
 
-  const status = String(task.status ?? 'draft').toLowerCase()
+  const statusLocked = derivedInfo?.isDerived === true
+  const shownStatus = statusLocked ? derivedInfo?.displayStatus : task.status
+  const status = String(shownStatus ?? 'draft').toLowerCase()
   const priority = String(task.priority ?? 'low').toLowerCase()
   const projectOptions = buildProjectOptions(task, projects)
   const selectValue = quickProjectValue ?? (serverProjectId !== null ? String(serverProjectId) : '')
@@ -171,6 +179,8 @@ export function TaskDetailPage() {
               {saveWithProject.error && <p className="t-inline-error" role="alert">{saveWithProject.error}</p>}
               <TaskForm
                 task={task}
+                statusLocked={statusLocked}
+                displayStatus={shownStatus}
                 availableParents={parentOptions}
                 projects={projects}
                 titleInputRef={titleRef}
@@ -203,9 +213,12 @@ export function TaskDetailPage() {
               {deleteBlocked && <p id="task-delete-hint" className="t-detail-hint">{deleteHint}</p>}
               {task.description && <p className="t-detail-desc">{task.description}</p>}
               <div className="t-detail-meta">
-                <span>Status: <strong>{getStatusLabel(task.status)}</strong></span>
+                <span>
+                  Status: <strong>{getStatusLabel(shownStatus)}</strong>
+                  {statusLocked && <span className="ml-1 text-xs text-(--muted)">Follows open subtasks</span>}
+                </span>
                 {task.startedAt && <span>Started: <strong>{formatStartedAt(task.startedAt)}</strong></span>}
-                {isBlocked(task.status) && task.blockedReason && (
+                {!statusLocked && isBlocked(task.status) && task.blockedReason && (
                   <span title={task.blockedReason}>Blocked reason: <strong>{task.blockedReason}</strong></span>
                 )}
                 <span>Priority: <strong>{task.priority}</strong></span>
@@ -239,7 +252,13 @@ export function TaskDetailPage() {
                 <span>Due: <strong>{formatDateOnly(task.dueDate)}</strong></span>
               </div>
               <div className="t-detail-badges">
-                <span className={`t-badge t-badge-${status}`}>{getStatusLabel(task.status ?? 'draft')}</span>
+                <span
+                  className={`t-badge t-badge-${status}${statusLocked ? ' t-badge-derived' : ''}`}
+                  title={statusLocked ? getDerivedStatusTitle(derivedInfo?.openChildCount ?? 0) : undefined}
+                >
+                  {getStatusLabel(shownStatus ?? 'draft')}
+                  {statusLocked && <span className="sr-only"> (derived from open subtasks)</span>}
+                </span>
                 <span className={`t-badge t-badge-${priority}`}>{priority}</span>
               </div>
             </>

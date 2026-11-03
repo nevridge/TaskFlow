@@ -271,3 +271,19 @@ describe('matchesSearchWithAncestors', () => {
     expect(matchesSearchWithAncestors(t(9, 'Orphan', 'Todo', 'High', 77), byId, 'trip')).toBe(false)
   })
 })
+
+describe('buildTaskSections with a derived status', () => {
+  it('places a parent whose open subtasks are filtered out by its derived status', () => {
+    const parent = t(1, 'Parent', 'Todo', 'Low')
+    const child = t(2, 'Child', 'InProgress', 'Low', 1)
+    const statusOf = (task: T) => (task.id === 1 ? 'InProgress' : task.status)
+    const sections = buildTaskSections({ allTasks: [parent, child], visibleTasks: [parent], compare: byTitle, statusOf })
+    expect(sections.map(s => s.key)).toEqual(['inProgress'])
+    expect(rowTitles(sections, 'inProgress')).toEqual(['Parent'])
+  })
+
+  it('falls back to the stored status without statusOf', () => {
+    const sections = buildTaskSections({ allTasks: [t(1, 'P', 'Draft', 'Low')], visibleTasks: [t(1, 'P', 'Draft', 'Low')], compare: byTitle })
+    expect(sections.map(s => s.key)).toEqual(['draft'])
+  })
+})

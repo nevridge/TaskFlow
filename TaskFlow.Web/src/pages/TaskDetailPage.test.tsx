@@ -892,3 +892,63 @@ describe('TaskDetailPage on mobile (#320)', () => {
     expect(projectName(container)).toHaveTextContent('Alpha')
   })
 })
+
+describe('TaskDetailPage derived status (#385)', () => {
+  const child = (status: string) => ({ ...task, id: 9, title: 'Child', status, parentTaskItemId: 1 })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    updateAsync.mockReset().mockResolvedValue({})
+    changeAsync.mockReset().mockResolvedValue(undefined)
+    changeMutate.mockReset()
+    vi.mocked(usePrefs).mockReturnValue(makePrefs())
+    vi.mocked(useProjectsQuery).mockReturnValue({ data: { data: projects }, isSuccess: true } as never)
+    mockChange()
+    vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
+    vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
+    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
+    vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
+    vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
+    vi.mocked(useDeleteNoteUndoable).mockReturnValue(deleteNote)
+  })
+
+  function withChildren(stored: Record<string, unknown>, children: unknown[]) {
+    const parent = { ...task, ...stored }
+    vi.mocked(useTaskQuery).mockReturnValue({ data: { data: parent }, isLoading: false, error: null } as never)
+    vi.mocked(useTasksQuery).mockReturnValue({ data: { data: [parent, ...children] }, isLoading: false } as never)
+  }
+
+  it('shows the derived status, a dashed badge and a note, and hides the stored reason', () => {
+    withChildren({ status: 'Blocked', blockedReason: 'Waiting on Sam' }, [child('InProgress')])
+    renderPage()
+    expect(screen.getAllByText('In Progress').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Blocked')).not.toBeInTheDocument()
+    expect(screen.queryByText('Waiting on Sam')).not.toBeInTheDocument()
+    expect(screen.getByText('Follows open subtasks')).toBeInTheDocument()
+    const badge = document.querySelector('.t-badge-derived')
+    expect(badge).toHaveAttribute('title', expect.stringContaining('1 open subtask.'))
+  })
+
+  it('shows the stored status and reason when all subtasks are Completed', () => {
+    withChildren({ status: 'Blocked', blockedReason: 'Waiting on Sam' }, [child('Completed')])
+    renderPage()
+    expect(screen.getByText('Waiting on Sam')).toBeInTheDocument()
+    expect(document.querySelector('.t-badge-derived')).toBeNull()
+  })
+
+  it('edit form has a disabled status select and submits the stored status without a reason', async () => {
+    withChildren({ status: 'Blocked', blockedReason: 'Waiting on Sam' }, [child('InProgress')])
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    const select = screen.getByRole('combobox', { name: 'Status' })
+    expect(select).toBeDisabled()
+    expect(select).toHaveValue('inprogress')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(updateAsync).toHaveBeenCalled())
+    const sent = updateAsync.mock.calls[0][0].data
+    expect(sent.status).toBe('blocked')
+    expect(sent).not.toHaveProperty('blockedReason')
+  })
+})

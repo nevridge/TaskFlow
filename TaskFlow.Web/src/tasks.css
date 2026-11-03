@@ -425,6 +425,12 @@ html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
   font-family: inherit;
 }
 button.t-badge-blocked { cursor: pointer; }
+/* Derived (read-only) status: a dashed border in the badge colour marks it as following open subtasks.
+   Two classes so it beats the single-class solid borders above. */
+.t-badge.t-badge-derived {
+  border: 1px dashed currentColor;
+  cursor: default;
+}
 .t-badge-scheduled {
   margin-top: 4px;
   display: inline-flex;
@@ -813,6 +819,16 @@ html.is-dark .t-input option { background: var(--paper); }
 .t-context-link:hover { text-decoration: underline; }
 
 .t-context-header .t-context-add { flex: 0 0 auto; }
+
+/* Direct-subtask progress after the path; the path shrinks first. */
+.t-context-path { flex: 0 1 auto; }
+.t-context-progress {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
 
 .t-group-count {
   font-weight: 400;

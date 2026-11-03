@@ -127,6 +127,11 @@ describe('getBlockErrorMessage', () => {
     expect(getBlockErrorMessage('TASK_START_NOT_ALLOWED')).toBe('Only Todo tasks can be moved to In Progress. Set it to Todo first.')
     expect(getBlockErrorMessage('TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS')).toMatch(/blocked task/)
   })
+  it('maps TASK_PARENT_STATUS_DERIVED to a plain-language message', () => {
+    const message = getBlockErrorMessage('TASK_PARENT_STATUS_DERIVED')
+    expect(message).toBe("This task's status follows its open subtasks. Complete or remove them to change it.")
+    expect(message).not.toMatch(/TASK_/)
+  })
   it('returns null for other codes', () => {
     expect(getBlockErrorMessage('OTHER')).toBeNull()
     expect(getBlockErrorMessage(null)).toBeNull()

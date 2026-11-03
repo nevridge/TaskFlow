@@ -10,10 +10,12 @@ interface Props {
   sectionLabel: string
   isAdding: boolean
   onAddChild: () => void
+  /** Direct-subtask progress, e.g. "1 of 4 done · 1 in progress". Omitted when the parent has no subtasks. */
+  progressLabel?: string
 }
 
 /** Context row above subtasks: the path to the nearest parent, a link to it and an Add subtask button. */
-export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAdding, onAddChild }: Props) {
+export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAdding, onAddChild, progressLabel }: Props) {
   const upper = path.slice(0, -1)
   const nearest = path[path.length - 1]
   const nearestTitle = nearest?.title ?? ''
@@ -31,6 +33,7 @@ export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAddi
             ))}
             <Link to={`/tasks/${parentId}`} className="t-context-link">{nearestTitle}</Link>
           </span>
+          {progressLabel && <span className="t-context-progress">{progressLabel}</span>}
           <button
             type="button"
             className={`t-btn-icon t-context-add${isAdding ? ' is-active' : ''}`}

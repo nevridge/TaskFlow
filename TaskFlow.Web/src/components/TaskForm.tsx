@@ -39,6 +39,10 @@ interface Props {
   onCancel: () => void
   /** Lets a parent focus the title field (e.g. the Tasks page after scrolling the panel into view). */
   titleInputRef?: Ref<HTMLInputElement>
+  /** Open subtasks drive the status: the select is read-only and shows `displayStatus`; the stored status is submitted unchanged. */
+  statusLocked?: boolean
+  /** Derived status shown while locked (display only, never submitted). */
+  displayStatus?: string | null
 }
 
 export function TaskForm({
@@ -52,6 +56,8 @@ export function TaskForm({
   onSubmit,
   onCancel,
   titleInputRef,
+  statusLocked = false,
+  displayStatus,
 }: Props) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -105,7 +111,8 @@ export function TaskForm({
       parentTaskItemId: parentTaskId ? Number(parentTaskId) : undefined,
       projectId: effectiveProjectId ? Number(effectiveProjectId) : null,
       // A non-empty reason with a non-Blocked status is a 422, so it is only sent while Blocked.
-      ...(status === toRequestStatus('Blocked') && { blockedReason: blockedReason.trim() }),
+      // Never while locked: the stored reason is left alone.
+      ...(!statusLocked && status === toRequestStatus('Blocked') && { blockedReason: blockedReason.trim() }),
     })
   }
 
@@ -128,19 +135,31 @@ export function TaskForm({
       <div className="t-form-row">
         <div className="t-field">
           <label htmlFor="status" className="t-label">Status</label>
-          <select id="status" className="t-input" value={status} onChange={e => setStatus(e.target.value)}>
+          <select
+            id="status"
+            className="t-input"
+            value={statusLocked ? (normalizeStatus(displayStatus ?? task?.status)?.toLowerCase() ?? status) : status}
+            disabled={statusLocked}
+            aria-describedby={statusLocked ? 'status-locked-hint' : undefined}
+            onChange={e => setStatus(e.target.value)}
+          >
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
             <option
               value="inprogress"
-              disabled={!canChooseInProgress}
+              disabled={!statusLocked && !canChooseInProgress}
               title={canChooseInProgress ? undefined : 'Set to Todo first'}
             >
-              {canChooseInProgress ? 'In Progress' : 'In Progress (set to Todo first)'}
+              {canChooseInProgress || statusLocked ? 'In Progress' : 'In Progress (set to Todo first)'}
             </option>
-            <option value="blocked" disabled={!canChooseBlocked}>Blocked</option>
+            <option value="blocked" disabled={!statusLocked && !canChooseBlocked}>Blocked</option>
             <option value="completed">Completed</option>
           </select>
+          {statusLocked && (
+            <p id="status-locked-hint" className="t-detail-hint">
+              Follows open subtasks. Complete or remove them to change it.
+            </p>
+          )}
         </div>
         <div className="t-field">
           <label htmlFor="priority" className="t-label">Priority</label>
@@ -151,7 +170,7 @@ export function TaskForm({
           </select>
         </div>
       </div>
-      {status === 'blocked' && (
+      {!statusLocked && status === 'blocked' && (
         <div className="t-field">
           <label htmlFor="blockedReason" className="t-label">Blocked reason (optional)</label>
           <input

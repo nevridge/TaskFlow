@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
+import { getDerivedStatusTitle } from '@/lib/task-derived-status'
 import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
 
@@ -19,6 +20,12 @@ interface Props {
   task: TaskRowModel
   depth?: number
   childProgress?: string | null
+  /** Status to show; defaults to the stored status. The Tasks page passes the status derived from open subtasks. */
+  displayStatus?: string | null
+  /** True while open subtasks drive the status: the badge is read-only and Block/Unblock are hidden. */
+  statusLocked?: boolean
+  /** Open direct subtasks; used for the locked badge's title. */
+  openChildCount?: number
   onAddChild?: (task: TaskRowModel) => void
   isAddingChild?: boolean
   onEdit: (task: TaskRowModel) => void
@@ -63,6 +70,9 @@ export function TaskListRow({
   task,
   depth = 0,
   childProgress,
+  displayStatus,
+  statusLocked = false,
+  openChildCount = 0,
   onAddChild,
   isAddingChild = false,
   onEdit,
@@ -82,8 +92,9 @@ export function TaskListRow({
   const blockBtnRef = useRef<HTMLButtonElement>(null)
   const titleLinkRef = useRef<HTMLAnchorElement>(null)
   const reasonBtnRef = useRef<HTMLButtonElement>(null)
-  const blocked = isBlockedStatus(task.status)
-  const blockable = canBlock(task.status) && !!onBlock
+  const shownStatus = displayStatus ?? task.status
+  const blocked = isBlockedStatus(shownStatus)
+  const blockable = canBlock(shownStatus) && !!onBlock && !statusLocked
   // childTaskCount already excludes subtasks whose delete is pending.
   const childCount = Number(task.childTaskCount ?? 0)
   const deleteBlocked = childCount > 0
@@ -105,9 +116,19 @@ export function TaskListRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blockRetryReason])
 
-  const status = (task.status ?? 'draft').toLowerCase()
-  const statusLabel = getStatusLabel(task.status ?? 'draft')
-  const nextRequest = nextCycleStatus(task.status)
+  // When a lock engages, the badge that held focus is replaced by a non-focusable span; keep focus in the row.
+  const wasLockedRef = useRef(statusLocked)
+  useEffect(() => {
+    if (statusLocked && !wasLockedRef.current) {
+      const active = document.activeElement
+      if (!active || active === document.body || !active.isConnected) titleLinkRef.current?.focus()
+    }
+    wasLockedRef.current = statusLocked
+  }, [statusLocked])
+
+  const status = (shownStatus ?? 'draft').toLowerCase()
+  const statusLabel = getStatusLabel(shownStatus ?? 'draft')
+  const nextRequest = nextCycleStatus(shownStatus)
   const nextLabel = nextRequest ? getStatusLabel(nextRequest) : null
   const priority = (task.priority ?? 'low').toLowerCase()
   const overdue = isOverdue(task.dueDate, task.status)
@@ -179,7 +200,7 @@ export function TaskListRow({
               </Link>
             </div>
             {childProgress && <div className="t-deferral-line">{childProgress}</div>}
-            {blocked && !reasonEditing && (
+            {blocked && !statusLocked && !reasonEditing && (
               <BlockedReasonText
                 ref={reasonBtnRef}
                 className="t-blocked-reason"
@@ -204,7 +225,15 @@ export function TaskListRow({
         </div>
       </td>
       <td role="cell" className="t-list-cell t-list-cell--status">
-        {blocked ? (
+        {statusLocked ? (
+          <span
+            className={`t-badge t-badge-${status} t-badge-derived t-status-btn`}
+            title={getDerivedStatusTitle(openChildCount)}
+          >
+            {statusLabel}
+            <span className="sr-only"> (derived from open subtasks)</span>
+          </span>
+        ) : blocked ? (
           <button
             type="button"
             data-task-status-id={task.id}

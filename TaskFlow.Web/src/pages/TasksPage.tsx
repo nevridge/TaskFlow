@@ -25,6 +25,7 @@ import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
+import { deriveTaskStatuses, getParentProgressLabel } from '@/lib/task-derived-status'
 import {
   buildTaskSections,
   findSectionOfTask,
@@ -202,6 +203,13 @@ export function TasksPage() {
     () => (data?.data as TaskListModel[] | undefined) ?? [],
     [data],
   )
+  // Derived from the full, unfiltered list so a filtered-out subtask still counts. Render-only: never cached.
+  const derived = useMemo(() => deriveTaskStatuses(tasks), [tasks])
+  const statusOf = useCallback(
+    (t: TaskListModel): string | undefined => derived.get(Number(t.id))?.displayStatus ?? t.status,
+    [derived],
+  )
+  const isLocked = useCallback((t: TaskListModel) => derived.get(Number(t.id))?.isDerived === true, [derived])
   useEffect(() => {
     const prev = prevPanelKindRef.current
     prevPanelKindRef.current = panelKind
@@ -310,10 +318,10 @@ export function TasksPage() {
   const visibleTasks = useMemo(() => {
     const allStatusesChecked = STATUS_OPTIONS.every(o => statusFilter.has(o.value))
     return tasks
-      .filter(t => matchesViewFilter(t, viewFilter))
+      .filter(t => matchesViewFilter(t, viewFilter, statusOf(t)))
       .filter(t => {
         if (statusFilter.size === 0) return true
-        const normalized = normalizeStatus(t.status)
+        const normalized = normalizeStatus(statusOf(t))
         // An unrecognized status passes only when no status is excluded.
         if (!normalized) return allStatusesChecked
         return statusFilter.has(toRequestStatus(normalized))
@@ -324,7 +332,7 @@ export function TasksPage() {
         return projectFilter === 'none' ? taskProjectId === null : taskProjectId === projectFilter
       })
       .filter(t => !debouncedSearch || matchesSearchWithAncestors(t, allById, debouncedSearch))
-  }, [tasks, allById, viewFilter, statusFilter, projectFilter, debouncedSearch])
+  }, [tasks, allById, statusOf, viewFilter, statusFilter, projectFilter, debouncedSearch])
 
   const compareWithinGroup = useCallback((a: TaskListModel, b: TaskListModel): number => {
     const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
@@ -335,7 +343,7 @@ export function TasksPage() {
     if (taskSortKey === 'title') {
       cmp = a.title.localeCompare(b.title)
     } else if (taskSortKey === 'status') {
-      cmp = statusRank(a.status) - statusRank(b.status)
+      cmp = statusRank(statusOf(a)) - statusRank(statusOf(b))
     } else if (taskSortKey === 'priority') {
       // A missing or unrecognized priority sorts as High, matching the section fallback.
       const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 0
@@ -349,7 +357,7 @@ export function TasksPage() {
     }
 
     return taskSortDir === 'asc' ? cmp : -cmp
-  }, [taskSortKey, taskSortDir])
+  }, [taskSortKey, taskSortDir, statusOf])
 
   const childStatsByParentId = useMemo(() => {
     const stats = new Map<number, { done: number; total: number }>()
@@ -364,8 +372,8 @@ export function TasksPage() {
   }, [tasks])
 
   const sections = useMemo(
-    () => buildTaskSections({ allTasks: tasks, visibleTasks, compare: compareWithinGroup }),
-    [tasks, visibleTasks, compareWithinGroup],
+    () => buildTaskSections({ allTasks: tasks, visibleTasks, compare: compareWithinGroup, statusOf }),
+    [tasks, visibleTasks, compareWithinGroup, statusOf],
   )
 
   // After a row changes section it remounts and loses focus: put it back on its status control, or on the
@@ -442,6 +450,8 @@ export function TasksPage() {
   }
 
   function handleStatusCycle(task: TaskListModel) {
+    // A parent whose status follows its open subtasks is read-only (the UI already hides the control).
+    if (isLocked(task)) return
     // Unknown and Blocked statuses are not in the cycle (Blocked is unblocked via its badge).
     const nextStatus = nextCycleStatus(task.status)
     if (!nextStatus) return
@@ -474,6 +484,7 @@ export function TasksPage() {
   }
 
   async function handleBlock(task: TaskListModel, reason: string) {
+    if (isLocked(task)) return
     setMutationError(null)
     setBlockRetry(null)
     const id = Number(task.id)
@@ -494,6 +505,7 @@ export function TasksPage() {
   }
 
   function handleUnblock(task: TaskListModel) {
+    if (isLocked(task)) return
     setMutationError(null)
     const id = Number(task.id)
     pendingStatusFocusRef.current = { id, settled: false, announced: false }
@@ -583,7 +595,7 @@ export function TasksPage() {
   }
 
   const formError = mutationError ?? saveWithProject.error
-  const blockedTotal = tasks.filter(t => isBlocked(t.status)).length
+  const blockedTotal = tasks.filter(t => isBlocked(statusOf(t))).length
   const activeFilterCount = countActiveFilters(statusFilter, projectFilter)
   const totalFiltered = sections.reduce((sum, section) => sum + section.workRowCount, 0)
 
@@ -629,7 +641,10 @@ export function TasksPage() {
             <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
             {formError && <p className="t-inline-error" role="alert">{formError}</p>}
             <TaskForm
+              // The stored task: the form must never submit a derived status.
               task={editingTask ?? undefined}
+              statusLocked={editingTask ? isLocked(editingTask) : false}
+              displayStatus={editingTask ? statusOf(editingTask) : undefined}
               availableParents={parentOptions}
               projects={projects}
               // Preselect the filtered project when creating a task.
@@ -796,6 +811,7 @@ export function TasksPage() {
                         if (header) {
                           const anchor = `ctx:${section.key}`
                           const addingHeader = addingChild?.anchor === anchor && addingChild.parentId === header.parentId
+                          const headerInfo = derived.get(header.parentId)
                           items.push(
                             <TaskContextHeader
                               key={`${section.key}:ctx:${header.parentId}`}
@@ -805,6 +821,7 @@ export function TasksPage() {
                               sectionLabel={section.label}
                               isAdding={addingHeader}
                               onAddChild={() => beginAddChild(header.parentId, anchor)}
+                              progressLabel={headerInfo && headerInfo.directTotal > 0 ? getParentProgressLabel(headerInfo) : undefined}
                             />,
                           )
                           if (addingHeader) items.push(renderChildEditor(`${section.key}:ctx-editor:${header.parentId}`))
@@ -822,6 +839,9 @@ export function TasksPage() {
                                 task={task}
                                 depth={header ? 1 : 0}
                                 childProgress={childProgress}
+                                displayStatus={statusOf(task)}
+                                statusLocked={isLocked(task)}
+                                openChildCount={derived.get(taskId)?.openChildCount ?? 0}
                                 onAddChild={t => beginAddChild(Number(t.id), 'row')}
                                 isAddingChild={addingHere}
                                 onEdit={openEdit}
@@ -829,7 +849,7 @@ export function TasksPage() {
                                 onDelete={handleDelete}
                                 onStatusCycle={handleStatusCycle}
                                 onBlock={handleBlock}
-                                blockRetryReason={blockRetry?.id === taskId && !isBlocked(task.status) ? blockRetry.reason : null}
+                                blockRetryReason={blockRetry?.id === taskId && !isBlocked(statusOf(task)) ? blockRetry.reason : null}
                                 onBlockRetryShown={() => setBlockRetry(null)}
                                 onUnblock={handleUnblock}
                                 onEditBlockedReason={handleEditBlockedReason}
@@ -852,10 +872,10 @@ export function TasksPage() {
   )
 }
 
-function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter): boolean {
+function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter, status: string | undefined): boolean {
   const assignedDate = task.currentJournalDate ?? null
   // Blocked counts as not completed.
-  const completed = isCompleted(task.status)
+  const completed = isCompleted(status)
   switch (viewFilter) {
     case 'activeToday': return assignedDate === todayISO() && !completed
     case 'scheduledFuture': return assignedDate != null && assignedDate > todayISO()

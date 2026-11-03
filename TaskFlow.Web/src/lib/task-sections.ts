@@ -74,8 +74,8 @@ function prioritySection(priority: string | null | undefined): SectionKey {
   return 'high'
 }
 
-function sectionFor(task: SectionTaskLike): SectionKey {
-  switch (normalizeStatus(task.status)) {
+function sectionFor(task: SectionTaskLike, status: string | null | undefined): SectionKey {
+  switch (normalizeStatus(status)) {
     case 'InProgress': return 'inProgress'
     case 'Blocked': return 'blocked'
     case 'Draft': return 'draft'
@@ -132,6 +132,8 @@ interface BuildArgs<T extends SectionTaskLike> {
   allTasks: readonly T[]
   visibleTasks: readonly T[]
   compare: (a: T, b: T) => number
+  /** Status used for placement; defaults to the stored status. The Tasks page passes the derived status. */
+  statusOf?: (task: T) => string | null | undefined
 }
 
 /**
@@ -144,6 +146,7 @@ export function buildTaskSections<T extends SectionTaskLike>({
   allTasks,
   visibleTasks,
   compare,
+  statusOf = t => t.status,
 }: BuildArgs<T>): TaskSection<T>[] {
   const byId = indexTasksById(allTasks)
   const openParentIds = new Set<number>()
@@ -159,7 +162,7 @@ export function buildTaskSections<T extends SectionTaskLike>({
   visibleTasks.forEach(t => {
     const id = toId(t.id)
     if (id !== null && openParentIds.has(id)) return
-    const key = sectionFor(t)
+    const key = sectionFor(t, statusOf(t))
     const list = buckets.get(key) ?? []
     list.push(t)
     buckets.set(key, list)

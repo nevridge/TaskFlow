@@ -181,7 +181,9 @@ describe('TasksPage sections and context headers (#384)', () => {
         header.querySelector('[data-task-status-id], [data-task-edit-id], [data-task-delete-id], [aria-expanded]'),
       ).toBeNull()
     }
-    expect(screen.getAllByRole('button', { name: 'Add subtask to Goal' })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^Add subtask to Goal/ })).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add subtask to Goal in Low Priority' })).toBeInTheDocument()
     expect(document.querySelector('[data-task-edit-id="1"]')).toBeNull()
   })
 
@@ -201,7 +203,7 @@ describe('TasksPage sections and context headers (#384)', () => {
   it('opens one editor directly under the clicked header; Escape and Cancel return focus to that button', async () => {
     useData(family)
     renderPage()
-    const buttons = screen.getAllByRole('button', { name: 'Add subtask to Goal' })
+    const buttons = [screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' }), screen.getByRole('button', { name: 'Add subtask to Goal in Low Priority' })]
     await userEvent.click(buttons[1])
     const inputs = screen.getAllByPlaceholderText('Enter subtask title')
     expect(inputs).toHaveLength(1)
@@ -237,7 +239,7 @@ describe('TasksPage sections and context headers (#384)', () => {
     taskMutations.mutate.mockImplementation((_data, { onError }: { onError: (e: unknown) => void }) =>
       onError({ message: 'x' }))
     renderPage()
-    await userEvent.click(screen.getAllByRole('button', { name: 'Add subtask to Goal' })[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' }))
     await userEvent.type(screen.getByPlaceholderText('Enter subtask title'), 'New one{Enter}')
     expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
     expect(screen.getByPlaceholderText('Enter subtask title')).toHaveValue('New one')
@@ -247,13 +249,35 @@ describe('TasksPage sections and context headers (#384)', () => {
     useData(family)
     succeedWith(99)
     const { rerender } = renderPage()
-    await userEvent.click(screen.getAllByRole('button', { name: 'Add subtask to Goal' })[0])
+    await userEvent.click(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' }))
     await userEvent.type(screen.getByPlaceholderText('Enter subtask title'), 'Fresh{Enter}')
     expect(screen.queryByPlaceholderText('Enter subtask title')).not.toBeInTheDocument()
     useData([...family, { ...baseTask, id: 99, title: 'Fresh', status: 'Todo', priority: 'Medium', parentTaskItemId: 1 }])
     rerender(page())
     expect(screen.getByRole('status')).toHaveTextContent('Subtask added under Goal in Medium Priority')
-    expect(screen.getAllByRole('button', { name: 'Add subtask to Goal' })[0]).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' })).toHaveFocus()
+  })
+
+  it('announces the add without a section when a filter hides the new subtask', async () => {
+    useData(family)
+    succeedWith(99)
+    const { rerender } = renderPage()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' }))
+    await userEvent.type(screen.getByPlaceholderText('Enter subtask title'), 'Hidden{Enter}')
+    useData([...family, { ...baseTask, id: 99, title: 'Hidden', status: 'Draft', priority: 'Medium', parentTaskItemId: 1 }])
+    rerender(page())
+    expect(screen.getByRole('status')).toHaveTextContent(/^Subtask added under Goal$/)
+  })
+
+  it('announces the add without a section when the create response has no usable id', async () => {
+    useData(family)
+    taskMutations.mutate.mockImplementation((_data, { onSuccess }: { onSuccess: (r: unknown) => void }) =>
+      onSuccess({ data: {} }))
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Add subtask to Goal in High Priority' }))
+    await userEvent.type(screen.getByPlaceholderText('Enter subtask title'), 'Nameless{Enter}')
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/^Subtask added under Goal$/))
   })
 
   it('after an Add that turns the parent header-only, focus falls back to the new subtask status control', async () => {
@@ -394,7 +418,7 @@ describe('TasksPage sections and context headers (#384)', () => {
     const header = document.querySelector<HTMLElement>('.t-context-header') as HTMLElement
     within(header).getByRole('link', { name: 'Goal' }).focus()
     await userEvent.tab()
-    expect(within(header).getByRole('button', { name: 'Add subtask to Goal' })).toHaveFocus()
+    expect(within(header).getByRole('button', { name: /^Add subtask to Goal in / })).toHaveFocus()
     await userEvent.tab()
     expect(rowFor('Mid kid').contains(document.activeElement)).toBe(true)
   })

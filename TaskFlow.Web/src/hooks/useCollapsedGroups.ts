@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { SECTION_DEFS, SECTION_ORDER, type SectionKey } from '@/lib/task-sections'
 
 export const COLLAPSED_GROUPS_KEY = 'taskflow_tasks_section_collapse_v2'
@@ -36,17 +36,19 @@ export function useCollapsedGroups(): { isCollapsed: (key: SectionKey) => boolea
     [overrides],
   )
 
+  const overridesRef = useRef(overrides)
+
   const toggle = useCallback((key: SectionKey) => {
-    setOverrides(prev => {
-      const current = prev[key] ?? SECTION_DEFS[key].defaultCollapsed
-      const next: Overrides = { ...prev, [key]: !current }
-      try {
-        localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(next))
-      } catch {
-        // Storage unavailable: the in-memory state still works for this session.
-      }
-      return next
-    })
+    const prev = overridesRef.current
+    const current = prev[key] ?? SECTION_DEFS[key].defaultCollapsed
+    const next: Overrides = { ...prev, [key]: !current }
+    overridesRef.current = next
+    setOverrides(next)
+    try {
+      localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify(next))
+    } catch {
+      // Storage unavailable: the in-memory state still works for this session.
+    }
   }, [])
 
   return { isCollapsed, toggle }

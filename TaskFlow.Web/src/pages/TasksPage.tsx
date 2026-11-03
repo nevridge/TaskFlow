@@ -390,7 +390,11 @@ export function TasksPage() {
     if (add && (add.newId === null || allById.has(add.newId))) {
       pendingAddFocusRef.current = null
       const section = add.newId === null ? undefined : findSectionOfTask(sections, add.newId)
-      if (section) setLiveMessage(`Subtask added under ${add.parentTitle} in ${section.label}`)
+      setLiveMessage(
+        section
+          ? `Subtask added under ${add.parentTitle} in ${section.label}`
+          : `Subtask added under ${add.parentTitle}`,
+      )
       const active = document.activeElement
       if (!active || active === document.body || !active.isConnected) {
         const target =
@@ -784,6 +788,7 @@ export function TasksPage() {
                               path={header.path}
                               parentId={header.parentId}
                               anchor={`${anchor}:${header.parentId}`}
+                              sectionLabel={section.label}
                               isAdding={addingHeader}
                               onAddChild={() => beginAddChild(header.parentId, anchor)}
                             />,

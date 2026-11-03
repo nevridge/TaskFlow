@@ -6,12 +6,14 @@ interface Props {
   parentId: number
   /** Unique per rendered header, e.g. ctx:completed:12. */
   anchor: string
+  /** Label of the section the header sits in; keeps each header's button name unique. */
+  sectionLabel: string
   isAdding: boolean
   onAddChild: () => void
 }
 
 /** Context row above subtasks: the path to the nearest parent, a link to it and an Add subtask button. */
-export function TaskContextHeader({ path, parentId, anchor, isAdding, onAddChild }: Props) {
+export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAdding, onAddChild }: Props) {
   const upper = path.slice(0, -1)
   const nearest = path[path.length - 1]
   const nearestTitle = nearest?.title ?? ''
@@ -32,7 +34,7 @@ export function TaskContextHeader({ path, parentId, anchor, isAdding, onAddChild
           <button
             type="button"
             className={`t-btn-icon t-context-add${isAdding ? ' is-active' : ''}`}
-            aria-label={`Add subtask to ${nearestTitle}`}
+            aria-label={`Add subtask to ${nearestTitle} in ${sectionLabel}`}
             title="Add subtask"
             data-add-child-anchor={anchor}
             onClick={onAddChild}

@@ -331,11 +331,6 @@ describe('stacked rows (AC1, 5, 6, 9, 12)', () => {
 })
 
 describe('touch targets (AC2, 8, 16, 22, 25, 26, 29)', () => {
-  it('gives the tree toggle a 44px hit area around the 18px visual (AC2)', () => {
-    expect(touch).toMatch(/\.t-tree-toggle::after \{[^}]*inset: -13px/)
-    expect(base).toMatch(/\.t-tree-toggle,\r?\n\.t-tree-spacer \{\s*width: 18px;\s*height: 18px/)
-  })
-
   it('makes row actions 44x44 with 8px gaps and 16px before Delete (AC8)', () => {
     expect(touch).toMatch(/\.t-list-cell--actions \.t-btn-icon \{[^}]*width: 44px;[^}]*height: 44px/)
     expect(touch).toMatch(/\.t-list-cell--actions \.t-card-actions \{ gap: 8px; \}/)

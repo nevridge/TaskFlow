@@ -274,9 +274,7 @@ If a PR and an issue are both given, post once, to the issue.
    ```
    (or `gh pr comment <N> --body-file ...` when the target is the PR).
 
-Never use inline `--body`.
-
-If any `gh` write fails: print the full report to the conversation, report the exact error, go to Step 10, and stop. Do not retry, do not try another account, never run `gh auth switch`.
+If any `gh` write fails: print the full report to the conversation, report the exact error, go to Step 10, and stop.
 
 ---
 
@@ -300,7 +298,6 @@ If any `gh` write fails: print the full report to the conversation, report the e
 - **Only target `http://localhost:3200`** (the test stack). Never the live ports 3000, 8080 or 8081, `taskflow.skalaforge.com` or any other URL.
 - **Never touch the live stack.** Every `docker compose` command carries `-p taskflow-test` and the test `-f` file(s), the local file only as the second `-f` and only when it exists. Never run `down` before the `config --volumes` check passes. Never edit any `docker-compose*.yml`, and never read or depend on `docker-compose.override.yml`.
 - **No login step.** TaskFlow has no authentication; never wait for the user mid-run.
-- **Never run `gh auth switch`.** Run `gh` commands as plain `gh ...` using the already-active account.
 - **Always `--body-file`** (or `-F body=@file` for PATCH). Never inline `--body`.
 - **`gh`, `docker`, `git` and `curl` always go through the Bash tool**, never PowerShell.
 - **Scope is strict.** Test only what the PR/issue describes. The plan comes from the PR/issue body only.

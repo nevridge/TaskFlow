@@ -28,7 +28,6 @@ Complete every check below before invoking any agent. If a check fails, stop; no
 4. Preflight:
    - **Clean working tree.** Run `git status --short -- . ':(exclude).playwright-mcp'`. If there is any output, stop and ask the user how to proceed. The commit steps below stage everything, so unrelated uncommitted work would be swept into feature commits.
    - **Profile agents present.** Check that `story-writer.md`, `codebase-researcher.md` and `spec-writer.md` exist under `$HOME/.claude/agents/` (fall back to `$USERPROFILE/.claude/agents/`) using `test -f`. If any is missing, stop: "feature-factory needs the user-level agents story-writer, codebase-researcher and spec-writer in ~/.claude/agents/ (missing: X). This repo has no copies. Install them and re-run." Treat an "unknown subagent type" error at first invocation the same way.
-   - **GitHub write access.** Run `gh repo view --json viewerPermission --jq .viewerPermission` (this checks the currently active gh account). It must return `ADMIN`, `MAINTAIN` or `WRITE`. If it fails, report the exact error and stop. Do not retry, do not try another account, and never run `gh auth switch`.
 5. If you were on `main` and the preflight passed, run `git checkout -b <branch-name>` and confirm: "Created and switched to branch `<branch-name>`. All implementation will happen here."
 
 Never proceed on `main`. Pushes to `main` trigger a production deployment; all work reaches `main` through a pull request only.
@@ -212,7 +211,7 @@ The gate fires if ANY of these is true:
    ```bash
    gh issue comment <N> --body-file <file>
    ```
-   Delete the temp file afterwards. If any `gh` command fails, report the exact error and stop; do not retry and do not use another account.
+   Delete the temp file afterwards. If any `gh` command fails, report the exact error and stop.
    **If no issue number:** output the checklist to the conversation only.
 
 Then proceed to Step 10.6.
@@ -287,9 +286,8 @@ Used by Step 11 after an explicit "Yes". Run through Bash. Stop at the first fai
    ```bash
    gh pr create --base main --head "<branch>" --title "<conventional title>" --body-file "<temp-file>"
    ```
-   Never use inline `--body`. Never run `gh auth switch`.
 6. Delete the temp file and print the PR URL.
-7. If any `git push` or `gh` command fails: report the exact error and stop. Do not retry and do not try another account.
+7. If any `git push` or `gh` command fails: report the exact error and stop.
 
 ---
 
@@ -323,7 +321,6 @@ Used by Steps 6 and 7. Each caller initializes a `respec_count` variable and pro
 - **The frontend-builder never starts the API or runs the client generator.** The backend-builder owns regenerating `TaskFlow.Web/src/api/client/**`; it is committed with the backend commit. Nobody hand-edits it.
 - **Always use `git add -A -- . ':(exclude).playwright-mcp'`, never individual paths.**
 - **All `gh` body arguments must use `--body-file`, never `--body`.** Write the body to a temp file outside the repo with the Write tool, pass `--body-file <path>`, then delete the temp file. Inline bodies and heredocs mangle backticks, angle brackets, pipe characters, and `$`.
-- **GitHub writes use plain `gh` commands (the active account).** Never run `gh auth switch`. If a `gh` or `git push` command fails, report it and stop.
 - **Never commit or push to `main`.** All work reaches `main` through a pull request.
 - **No `Co-Authored-By` trailer on any commit.**
 - **Checklist idempotency.** Step 10.5 never creates a duplicate `<!-- ux-checklist -->` comment: if one already exists on the issue, update it.

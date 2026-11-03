@@ -69,6 +69,14 @@ describe('tasks.css MOBILE (#317) scoping contract (AC37)', () => {
     }
   })
 
+  it('keeps the tree spacer at 18px square and never resizes it in a media query', () => {
+    const spacer = body(base, '.t-tree-spacer').replace(/\s+/g, ' ').trim()
+    expect(spacer).toBe('width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;')
+    for (const block of [width, touch, tablet, width320, touch320]) {
+      expect(block).not.toContain('.t-tree-spacer')
+    }
+  })
+
   it('does not change the shared base rules the journal depends on', () => {
     const baseRule = (selector: string) => body(base, selector).replace(/\s+/g, ' ').trim()
     expect(baseRule('.t-card-actions')).toBe('display: flex; gap: 4px; flex-shrink: 0;')
@@ -331,14 +339,10 @@ describe('stacked rows (AC1, 5, 6, 9, 12)', () => {
 })
 
 describe('touch targets (AC2, 8, 16, 22, 25, 26, 29)', () => {
-  it('gives the tree toggle a 44px hit area around the 18px visual (AC2)', () => {
-    expect(touch).toMatch(/\.t-tree-toggle::after \{[^}]*inset: -13px/)
-    expect(base).toMatch(/\.t-tree-toggle,\r?\n\.t-tree-spacer \{\s*width: 18px;\s*height: 18px/)
-  })
-
   it('makes row actions 44x44 with 8px gaps and 16px before Delete (AC8)', () => {
     expect(touch).toMatch(/\.t-list-cell--actions \.t-btn-icon \{[^}]*width: 44px;[^}]*height: 44px/)
     expect(touch).toMatch(/\.t-list-cell--actions \.t-card-actions \{ gap: 8px; \}/)
+    expect(touch).toMatch(/\.t-context-header \.t-context-add \{[^}]*width: 44px;[^}]*height: 44px/)
     // Delete sits at the far edge; its neighbour adds 8px on top of the 8px gap => >=16px between them.
     expect(touch).toMatch(/\.t-action-delete \{ margin-left: auto; \}/)
     expect(touch).toMatch(/\.t-btn-icon:has\(\+ \.t-action-delete\) \{ margin-right: 8px; \}/)

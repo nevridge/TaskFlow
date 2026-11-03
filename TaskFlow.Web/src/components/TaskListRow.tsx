@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
@@ -18,10 +18,7 @@ type TaskRowModel = TaskItemResponseDto & {
 interface Props {
   task: TaskRowModel
   depth?: number
-  hasChildren?: boolean
-  isExpanded?: boolean
   childProgress?: string | null
-  onToggleChildren?: (task: TaskRowModel) => void
   onAddChild?: (task: TaskRowModel) => void
   isAddingChild?: boolean
   onEdit: (task: TaskRowModel) => void
@@ -30,6 +27,9 @@ interface Props {
   onStatusCycle: (task: TaskRowModel) => void
   /** Block with an optional reason. Must reject on failure so the reason input can re-open with the typed text. */
   onBlock?: (task: TaskRowModel, reason: string) => Promise<void>
+  /** Reason typed before a failed block that moved this row and rolled it back; re-opens the input with it. */
+  blockRetryReason?: string | null
+  onBlockRetryShown?: () => void
   onUnblock?: (task: TaskRowModel) => void
   /** Save a new reason for a Blocked task (""clears it). Must reject on failure. */
   onEditBlockedReason?: (task: TaskRowModel, reason: string) => Promise<void>
@@ -62,10 +62,7 @@ const XIcon = () => (
 export function TaskListRow({
   task,
   depth = 0,
-  hasChildren = false,
-  isExpanded = false,
   childProgress,
-  onToggleChildren,
   onAddChild,
   isAddingChild = false,
   onEdit,
@@ -73,6 +70,8 @@ export function TaskListRow({
   onDelete,
   onStatusCycle,
   onBlock,
+  blockRetryReason = null,
+  onBlockRetryShown,
   onUnblock,
   onEditBlockedReason,
 }: Props) {
@@ -90,6 +89,21 @@ export function TaskListRow({
   const deleteBlocked = childCount > 0
   const deleteHint = `Delete subtasks first (${childCount})`
   const deleteHintId = `del-hint-${task.id}`
+
+  // Adjusted during render (not in an effect) so the closed input never paints.
+  const [appliedRetryReason, setAppliedRetryReason] = useState<string | null>(null)
+  if (blockRetryReason !== appliedRetryReason) {
+    setAppliedRetryReason(blockRetryReason)
+    if (blockRetryReason !== null) {
+      setBlockDraft(blockRetryReason)
+      setBlocking(true)
+    }
+  }
+  // Consumed once, so a later remount of this row does not re-open the input.
+  useEffect(() => {
+    if (blockRetryReason !== null) onBlockRetryShown?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockRetryReason])
 
   const status = (task.status ?? 'draft').toLowerCase()
   const statusLabel = getStatusLabel(task.status ?? 'draft')
@@ -154,18 +168,7 @@ export function TaskListRow({
     <tr role="row" className={rowClasses}>
       <td role="cell" className="t-list-cell t-list-cell--title">
         <div className={`t-title-wrap t-depth-${depth}`}>
-          {hasChildren ? (
-            <button
-              className="t-tree-toggle"
-              onClick={() => onToggleChildren?.(task)}
-              aria-label={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
-              title={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
-            >
-              {isExpanded ? '▾' : '▸'}
-            </button>
-          ) : (
-            <span className="t-tree-spacer" aria-hidden="true" />
-          )}
+          <span className="t-tree-spacer" aria-hidden="true" />
           <div>
             <div className="t-title-line">
               {task.id !== undefined && task.id !== null && (
@@ -204,6 +207,7 @@ export function TaskListRow({
         {blocked ? (
           <button
             type="button"
+            data-task-status-id={task.id}
             className="t-badge t-badge-blocked t-badge-clickable t-status-btn tap-target"
             aria-label={`Unblock task: ${task.title}`}
             title="Unblock"
@@ -218,6 +222,7 @@ export function TaskListRow({
             onClick={() => onStatusCycle(task)}
             role="button"
             tabIndex={0}
+            data-task-status-id={task.id}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStatusCycle(task) } }}
             aria-label={nextLabel ? `Status: ${statusLabel}. Click to change to ${nextLabel}.` : `Status: ${statusLabel}. Click to change.`}
           >
@@ -243,7 +248,13 @@ export function TaskListRow({
       </td>
       <td role="cell" className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
-          <button className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`} aria-label="Add subtask" title="Add subtask" onClick={() => onAddChild?.(task)}>
+          <button
+            className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`}
+            aria-label="Add subtask"
+            title="Add subtask"
+            data-add-child-anchor={`row:${task.id}`}
+            onClick={() => onAddChild?.(task)}
+          >
             <PlusIcon />
           </button>
           {blockable && !blocking && (

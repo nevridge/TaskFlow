@@ -343,7 +343,12 @@ describe('TasksPage undoable delete (#321)', () => {
       ]
     })
 
-    it('Delete is aria-disabled, tabbable, and click schedules nothing', async () => {
+    it('Delete is aria-disabled, tabbable, and click schedules nothing (parent shown as a row once its subtasks are all Completed)', async () => {
+      server = [
+        row(1, 'Parent task', 'High', { childTaskCount: 2 }),
+        row(2, 'Child one', 'High', { parentTaskItemId: 1, status: 'Completed' }),
+        row(3, 'Child two', 'High', { parentTaskItemId: 1, status: 'Completed' }),
+      ]
       await loadPage()
       const btn = deleteButton('Parent task')
       expect(btn).toHaveAttribute('aria-disabled', 'true')
@@ -358,10 +363,11 @@ describe('TasksPage undoable delete (#321)', () => {
       expect(deleteCalls()).toHaveLength(0)
     })
 
-    it('N excludes pending children and the parent Delete enables after the last child is pending', async () => {
+    it('a parent with open subtasks is a header with no Delete control until its last subtask is pending, then Delete enables', async () => {
       await loadPage()
+      expect(screen.queryByRole('button', { name: 'Delete task: Parent task' })).not.toBeInTheDocument()
       fireEvent.click(deleteButton('Child one'))
-      expect(deleteButton('Parent task')).toHaveAccessibleDescription('Delete subtasks first (1)')
+      expect(screen.queryByRole('button', { name: 'Delete task: Parent task' })).not.toBeInTheDocument()
       fireEvent.click(deleteButton('Child two'))
       const parentDelete = deleteButton('Parent task')
       expect(parentDelete).not.toHaveAttribute('aria-disabled')

@@ -15,6 +15,7 @@ vi.mock('@/api/client/sdk.gen', async importOriginal => {
     ...actual,
     getApiV1TaskItems: vi.fn(),
     putApiV1TaskItemsById: vi.fn(),
+    patchApiV1TaskItemsById: vi.fn(),
   }
 })
 vi.mock('@/api/tasks', () => ({ getTaskHistory: vi.fn().mockResolvedValue({ data: [] }) }))
@@ -25,7 +26,8 @@ vi.mock('@/hooks/useProjects', () => ({
 vi.mock('@/components/Nav', () => ({ Nav: () => <nav aria-label="Main" /> }))
 vi.mock('@/components/SettingsDrawer', () => ({ SettingsDrawer: () => null }))
 
-import { getApiV1TaskItems, putApiV1TaskItemsById } from '@/api/client/sdk.gen'
+import { getApiV1TaskItems, putApiV1TaskItemsById, patchApiV1TaskItemsById } from '@/api/client/sdk.gen'
+import { COLLAPSED_GROUPS_KEY } from '@/hooks/useCollapsedGroups'
 
 const base = {
   description: null,
@@ -237,6 +239,87 @@ describe('TasksPage acceptance (#317)', () => {
       expect(screen.getByLabelText('Sort by')).toHaveValue('status')
       expect(screen.getByRole('button', { name: 'Status ↓' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Sort ascending' })).toBeInTheDocument()
+    })
+  })
+
+  describe('sections and status-change focus with real mutation hooks (#384)', () => {
+    const rows = [
+      { ...base, id: 1, title: 'Alpha task', status: 'Todo', priority: 'High' },
+      { ...base, id: 2, title: 'Bravo task', status: 'InProgress', priority: 'Medium' },
+      { ...base, id: 3, title: 'Stuck task', status: 'Blocked', priority: 'High', previousStatus: 'Todo', blockedReason: 'Waiting' },
+    ]
+    const statusControl = (id: number) => document.querySelector<HTMLElement>(`[data-task-status-id="${id}"]`)
+    const toggle = (name: RegExp) => screen.getByRole('button', { name })
+
+    function deferredPut() {
+      let resolve: (v: unknown) => void = () => {}
+      let reject: (e: unknown) => void = () => {}
+      vi.mocked(putApiV1TaskItemsById).mockImplementation((() =>
+        new Promise((res, rej) => { resolve = res; reject = rej })) as never)
+      return { resolve: () => resolve({ data: {} }), reject: (e: unknown) => reject(e) }
+    }
+
+    beforeEach(() => {
+      vi.mocked(getApiV1TaskItems).mockResolvedValue({ data: rows } as never)
+    })
+
+    it.each([['Enter', '{Enter}'], ['Space', ' ']])(
+      'moves the row to its new section at once and keeps focus on its status control (%s)',
+      async (_label, key) => {
+        const put = deferredPut()
+        renderPage()
+        await screen.findByText('Alpha task')
+        expect(toggle(/^In Progress · 1 task/)).toBeInTheDocument()
+        statusControl(1)?.focus()
+        await userEvent.keyboard(key)
+        // The request has not resolved yet: the move is optimistic.
+        await waitFor(() => expect(toggle(/^In Progress · 2 tasks/)).toBeInTheDocument())
+        expect(putApiV1TaskItemsById).toHaveBeenCalledTimes(1)
+        expect(statusControl(1)).toHaveFocus()
+        expect(screen.getByRole('status')).toHaveTextContent('Moved to In Progress')
+        await act(async () => { put.resolve() })
+        expect(statusControl(1)).toHaveFocus()
+      },
+    )
+
+    it('moves focus to the collapsed Completed toggle without expanding it or writing storage', async () => {
+      deferredPut()
+      renderPage()
+      await screen.findByText('Bravo task')
+      const setItem = vi.spyOn(Storage.prototype, 'setItem')
+      statusControl(2)?.focus()
+      await userEvent.keyboard('{Enter}')
+      await waitFor(() => expect(toggle(/^Completed · 1 task/)).toHaveFocus())
+      expect(toggle(/^Completed · 1 task/)).toHaveAttribute('aria-expanded', 'false')
+      expect(statusControl(2)).toBeNull()
+      expect(setItem.mock.calls.some(([key]) => key === COLLAPSED_GROUPS_KEY)).toBe(false)
+      expect(screen.getByRole('status')).toHaveTextContent('Moved to Completed')
+      setItem.mockRestore()
+    })
+
+    it('returns the row to its section on failure, shows the error and keeps focus on the status control', async () => {
+      const put = deferredPut()
+      renderPage()
+      await screen.findByText('Alpha task')
+      statusControl(1)?.focus()
+      await userEvent.keyboard('{Enter}')
+      await waitFor(() => expect(toggle(/^In Progress · 2 tasks/)).toBeInTheDocument())
+      await act(async () => { put.reject(new Error('network')) })
+      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
+      expect(toggle(/^In Progress · 1 task/)).toBeInTheDocument()
+      expect(toggle(/^High Priority · 1 task/)).toBeInTheDocument()
+      await waitFor(() => expect(statusControl(1)).toHaveFocus())
+    })
+
+    it('keeps focus on the moved row after Unblock', async () => {
+      vi.mocked(patchApiV1TaskItemsById).mockImplementation((() => new Promise(() => {})) as never)
+      renderPage()
+      await screen.findByText('Alpha task')
+      await userEvent.click(toggle(/^Blocked · 1 task/))
+      await userEvent.click(screen.getByRole('button', { name: 'Unblock task: Stuck task' }))
+      await waitFor(() => expect(toggle(/^High Priority · 2 tasks/)).toBeInTheDocument())
+      expect(screen.queryByRole('button', { name: /^Blocked ·/ })).not.toBeInTheDocument()
+      expect(statusControl(3)).toHaveFocus()
     })
   })
 })

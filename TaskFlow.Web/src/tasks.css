@@ -365,28 +365,12 @@ html.is-dark .t-status-option input[type="checkbox"] { color-scheme: dark; }
   padding-left: 18px;
 }
 
-.t-tree-toggle,
 .t-tree-spacer {
   width: 18px;
   height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-}
-
-.t-tree-toggle {
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--paper-2);
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0;
-  line-height: 1;
-}
-
-.t-tree-toggle:hover {
-  color: var(--ink);
-  border-color: var(--line-2);
 }
 
 .t-card-actions {
@@ -792,6 +776,43 @@ html.is-dark .t-input option { background: var(--paper); }
 .t-group-header--medium td { color: var(--warn-ink); border-left: 3px solid var(--warn-ink); }
 .t-group-header--low td { color: var(--muted); border-left: 3px solid var(--muted-2); }
 .t-group-header--draft td { color: var(--muted-2); border-left: 3px solid var(--line); }
+.t-group-header--inprogress td { color: var(--ink); border-left: 3px solid var(--ink); }
+.t-group-header--blocked td { color: var(--danger-ink); border-left: 3px solid var(--line); }
+.t-group-header--completed td { color: var(--muted-2); border-left: 3px solid var(--muted-2); }
+
+/* --- Context header: the parent path above subtasks. Quiet and lighter than a section header. --- */
+
+.t-context-header td {
+  padding: 4px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.t-context-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.t-context-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.t-context-ancestor { color: var(--muted-2); }
+.t-context-sep { margin: 0 2px; }
+
+.t-context-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.t-context-link:hover { text-decoration: underline; }
+
+.t-context-header .t-context-add { flex: 0 0 auto; }
 
 .t-group-count {
   font-weight: 400;
@@ -883,6 +904,12 @@ html.is-dark .t-input option { background: var(--paper); }
   background: var(--hover-soft);
   color: var(--ink);
   border-color: var(--line-2);
+}
+
+.t-btn-icon.t-context-add.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--paper));
 }
 
 .t-btn-icon--danger:hover {
@@ -1035,7 +1062,9 @@ html.is-dark .t-input option { background: var(--paper); }
   .tasks-page .t-list-table,
   .tasks-page .t-list-table tbody,
   .tasks-page .t-list-table .t-group-header,
-  .tasks-page .t-list-table .t-group-header td {
+  .tasks-page .t-list-table .t-group-header td,
+  .tasks-page .t-list-table .t-context-header,
+  .tasks-page .t-list-table .t-context-header td {
     display: block;
   }
   .tasks-page .t-list-table .t-list-row {
@@ -1175,14 +1204,7 @@ html.is-dark .t-input option { background: var(--paper); }
   .tasks-page .t-action-delete { margin-left: auto; }
   .tasks-page .t-list-cell--actions .t-btn-icon:has(+ .t-action-delete) { margin-right: 8px; }
   .tasks-page .t-list-cell--actions .t-btn-icon svg { width: 18px; height: 18px; }
-
-  /* Tree toggle: 18px visual, 44px hit area. */
-  .tasks-page .t-tree-toggle { position: relative; }
-  .tasks-page .t-tree-toggle::after {
-    content: '';
-    position: absolute;
-    inset: -13px;
-  }
+  .tasks-page .t-context-header .t-context-add { width: 44px; height: 44px; touch-action: manipulation; }
 
   /* Status control and unblock button: a 44px box whose visible pill is the padding box (transparent 8px border). */
   .tasks-page .t-status-btn {

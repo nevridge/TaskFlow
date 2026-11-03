@@ -467,7 +467,15 @@ Failures in any step block the PR. The build step verifies the production bundle
 
 ### Status filter not working
 
-The API returns status and priority as PascalCase strings (`"Draft"`, `"High"`) because `TaskItemResponseDto` stores them as `string` via `Status.ToString()`. The frontend normalises to lowercase via `.toLowerCase()` before the Status filter comparison and badge lookups. Remember the Status filter hides Completed tasks by default. If you see this breaking after a `gen:api` regeneration, check whether the API DTO types changed from `string` to an actual enum type.
+The API returns status and priority as PascalCase strings (`"Draft"`, `"High"`) because `TaskItemResponseDto` stores them as `string` via `Status.ToString()`. The frontend normalises to lowercase via `.toLowerCase()` before the Status filter comparison and badge lookups. All five statuses are checked by default, so Completed tasks are listed, in a collapsed Completed section at the bottom of the page. If you see this breaking after a `gen:api` regeneration, check whether the API DTO types changed from `string` to an actual enum type.
+
+### Tasks page sections and context headers
+
+`/tasks` groups work rows by each task's own status and priority (`src/lib/task-sections.ts`). Sections appear in this order, and empty sections are hidden: In Progress, High, Medium, Low, Blocked, Draft, Completed. Todo tasks (and tasks with an unrecognized status) go to a priority section; a missing or unrecognized priority counts as High. Blocked and Completed start collapsed. The collapse choice is stored under `taskflow_tasks_section_collapse_v2` and written only when the user toggles a section; the old `taskflow_tasks_collapsed_groups_v1` key is ignored. Section and footer counts are work rows only.
+
+A parent with at least one open subtask (anything not Completed, so Blocked counts as open) has no work row. It appears as a context header above its subtasks in every section that holds one: the path from the top-level goal to the nearest parent, a link to the nearest parent's detail page and an Add subtask button. Headers have no status, Edit, Delete or collapse control. A parent with no open subtasks is a normal row, and its completed subtasks sit in Completed under a header for it. If filters hide all of a parent's open subtasks, the parent stays a normal row so it doesn't vanish from the list.
+
+Changing a row's status re-sections it at once and keeps focus on its status control (`data-task-status-id`). When the destination section is collapsed, focus goes to that section's toggle (`data-section-toggle`) and the section is not expanded.
 
 ### API client out of date after backend changes
 

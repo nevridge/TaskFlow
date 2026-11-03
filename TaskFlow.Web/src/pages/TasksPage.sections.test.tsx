@@ -387,14 +387,17 @@ describe('TasksPage sections and context headers (#384)', () => {
     useData([
       { ...baseTask, id: 1, title: 'Parent', status: 'Todo', priority: 'High' },
       { ...baseTask, id: 2, title: 'Draft kid', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
+      { ...baseTask, id: 4, title: 'Blocked kid', status: 'Blocked', priority: 'High', parentTaskItemId: 1 },
       { ...baseTask, id: 3, title: 'Other', status: 'Todo', priority: 'High' },
     ])
     renderPage()
     expect(rowFor('Parent')).toHaveClass('t-context-header')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /^Blocked/ }))
     expect(screen.queryByText('Draft kid')).not.toBeInTheDocument()
     expect(rowFor('Parent')).not.toHaveClass('t-context-header')
-    expect(within(rowFor('Parent')).getByRole('button', { name: /^Status:/ })).toBeInTheDocument()
+    // Still derived from its hidden open subtasks (Draft + Blocked gives To-do), so the badge is read-only.
+    expect(within(rowFor('Parent')).getByText('To-do')).toHaveClass('t-badge-derived')
     expect(screen.getByText('Other')).toBeInTheDocument()
   })
 
@@ -476,12 +479,14 @@ describe('TasksPage sections and context headers (#384)', () => {
     useData([
       { ...baseTask, id: 1, title: 'Plan the trip', status: 'Todo', priority: 'High' },
       { ...baseTask, id: 2, title: 'Book flights', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
+      { ...baseTask, id: 3, title: 'Book hotels', status: 'Blocked', priority: 'High', parentTaskItemId: 1 },
     ])
     renderPage()
     await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'trip')
     await waitFor(() => expect(screen.getByText('Book flights')).toBeInTheDocument())
     expect(rowFor('Plan the trip')).toHaveClass('t-context-header')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /^Blocked/ }))
     expect(screen.queryByText('Book flights')).not.toBeInTheDocument()
     expect(rowFor('Plan the trip')).not.toHaveClass('t-context-header')
   })

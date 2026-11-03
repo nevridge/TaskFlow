@@ -162,3 +162,63 @@ describe('TaskListRow blocked tasks', () => {
     expect(screen.queryByRole('button', { name: /^Block task/ })).not.toBeInTheDocument()
   })
 })
+
+describe('TaskListRow derived (locked) status', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('shows the derived status as a non-interactive dashed badge with a singular title', () => {
+    const { onStatusCycle } = renderRow(todo, { displayStatus: 'InProgress', statusLocked: true, openChildCount: 1 })
+    const badge = screen.getByText('In Progress')
+    expect(badge.tagName).toBe('SPAN')
+    expect(badge).toHaveClass('t-badge-derived')
+    expect(badge).toHaveAttribute('title', 'Status follows its 1 open subtask. Complete or remove them to change it.')
+    expect(screen.queryByRole('button', { name: /^Status:/ })).not.toBeInTheDocument()
+    expect(screen.getByText('(derived from open subtasks)')).toHaveClass('sr-only')
+    badge.click()
+    expect(onStatusCycle).not.toHaveBeenCalled()
+  })
+
+  it('uses a plural title for several open subtasks', () => {
+    renderRow(todo, { displayStatus: 'Todo', statusLocked: true, openChildCount: 3 })
+    expect(screen.getByText('To-do')).toHaveAttribute('title', expect.stringContaining('3 open subtasks'))
+  })
+
+  it('hides Block and Unblock while locked', () => {
+    renderRow(todo, { displayStatus: 'Todo', statusLocked: true, openChildCount: 2 })
+    expect(screen.queryByRole('button', { name: /^Block task/ })).not.toBeInTheDocument()
+    renderRow(blocked, { displayStatus: 'Blocked', statusLocked: true, openChildCount: 2 })
+    expect(screen.queryByRole('button', { name: /^Unblock task/ })).not.toBeInTheDocument()
+  })
+
+  it('hides the stored blocked reason while locked and shows it again when unlocked', () => {
+    const { rerender } = renderRowWithRerender(blocked, { displayStatus: 'Todo', statusLocked: true, openChildCount: 1 })
+    expect(screen.queryByText('Waiting on Sam')).not.toBeInTheDocument()
+    rerender(blocked, { displayStatus: 'Blocked', statusLocked: false })
+    expect(screen.getByText('Waiting on Sam')).toBeInTheDocument()
+  })
+
+})
+
+function renderRowWithRerender(task: TaskProp, extra: Partial<Props>) {
+  const ui = (t: TaskProp, e: Partial<Props>) => (
+    <MemoryRouter>
+      <table>
+        <tbody>
+          <TaskListRow
+            task={t}
+            onEdit={vi.fn()}
+            onHistory={vi.fn()}
+            onDelete={vi.fn()}
+            onStatusCycle={vi.fn()}
+            onBlock={vi.fn()}
+            onUnblock={vi.fn()}
+            onEditBlockedReason={vi.fn()}
+            {...e}
+          />
+        </tbody>
+      </table>
+    </MemoryRouter>
+  )
+  const view = render(ui(task, extra))
+  return { rerender: (t: TaskProp, e: Partial<Props>) => view.rerender(ui(t, e)) }
+}

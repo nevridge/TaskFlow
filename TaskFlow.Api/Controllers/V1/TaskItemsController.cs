@@ -231,6 +231,9 @@ public class TaskItemsController(
     /// <c>journalDate</c> that differs from its current link. Re-sending the current link, or omitting
     /// <c>journalDate</c>, is accepted. Nothing is changed. A request that reopens and re-plans in one call is rejected;
     /// reopen first, plan second.</item>
+    /// <item><c>TASK_PARENT_STATUS_DERIVED</c>: a parent with at least one open (not Completed) subtask cannot have its
+    /// status changed directly, including blocking and unblocking. Re-sending the stored status is accepted.
+    /// <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c> takes precedence when completing. Nothing is saved.</item>
     /// <item>Other codes: <c>TASK_PARENT_SELF_NOT_ALLOWED</c>, <c>TASK_PARENT_NOT_FOUND</c>,
     /// <c>TASK_PARENT_DEPTH_NOT_ALLOWED</c>, <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c>,
     /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
@@ -282,7 +285,8 @@ public class TaskItemsController(
     /// (completion day, or linked day when <c>completedAt</c> is null, before the user's today; tasks with neither are
     /// exempt; <c>details.assignedDate</c> holds that day) and <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>
     /// (<c>journalDate</c> differs from the link of a task that has a <c>completedAt</c>), plus the parent, block,
-    /// start and past-day planning codes.
+    /// start and past-day planning codes, and <c>TASK_PARENT_STATUS_DERIVED</c> (a parent with an open subtask cannot
+    /// have its status changed directly; re-sending the stored status is accepted).
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
@@ -431,6 +435,16 @@ public class TaskItemsController(
                 code = ParentCompleteBlockedByChildrenErrorCode,
                 message = "Parent tasks cannot be completed while child tasks are still open."
             });
+        }
+
+        // A parent with open subtasks has its status derived from them; direct edits that change it are rejected.
+        // Compared against the stored status, so a full-object save that re-sends the same status passes.
+        // Deliberately placed after ResolveBlockedTransition and the start-not-allowed check: those rules are stricter
+        // (e.g. Draft parent -> InProgress returns TASK_START_NOT_ALLOWED, Draft/Completed -> Blocked returns
+        // TASK_BLOCK_*_NOT_ALLOWED), and nothing is saved either way.
+        if (nextStatus != existing.Status && (await GetChildrenOnceAsync()).Any(c => !IsCompleted(c.Status)))
+        {
+            return UnprocessableEntity(TaskRuleErrors.ParentStatusDerived());
         }
 
         if (wasCompleted && !nowCompleted)

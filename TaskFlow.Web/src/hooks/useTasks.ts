@@ -192,7 +192,14 @@ export function useUpdateTaskMutation() {
       if (!next || next === 'Blocked') return undefined
       return applyOptimisticTaskUpdate(qc, [taskKeys.all, taskKeys.detail(id)], id, task => ({ ...task, status: next }))
     },
-    onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),
+    onError: (err, { id }, snapshot) => {
+      rollbackTaskCache(qc, snapshot)
+      // A derived-status 422 means this view was stale: refetch so the lock shows.
+      if ((err as { code?: unknown } | null)?.code === 'TASK_PARENT_STATUS_DERIVED') {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+        qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
+      }
+    },
     onSuccess: (_result, { id }) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       qc.invalidateQueries({ queryKey: taskKeys.detail(id) })

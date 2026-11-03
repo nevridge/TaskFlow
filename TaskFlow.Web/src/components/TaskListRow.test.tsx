@@ -54,6 +54,40 @@ describe('TaskListRow', () => {
     vi.clearAllMocks()
   })
 
+  describe('lock engage focus', () => {
+    function rowTree(statusLocked: boolean) {
+      return (
+        <MemoryRouter>
+          <table>
+            <tbody>
+              <TaskListRow
+                task={baseTask}
+                statusLocked={statusLocked}
+                displayStatus={statusLocked ? 'InProgress' : undefined}
+                openChildCount={1}
+                onEdit={vi.fn()}
+                onHistory={vi.fn()}
+                onDelete={vi.fn()}
+                onStatusCycle={vi.fn()}
+              />
+            </tbody>
+          </table>
+        </MemoryRouter>
+      )
+    }
+
+    it('moves focus to the title link when the focused status badge becomes locked', () => {
+      const { rerender } = render(rowTree(false))
+      const badge = screen.getByRole('button', { name: /status/i })
+      badge.focus()
+      expect(badge).toHaveFocus()
+
+      rerender(rowTree(true))
+
+      expect(screen.getByRole('link', { name: 'Fix login bug' })).toHaveFocus()
+    })
+  })
+
   describe('task id', () => {
     it('shows #id with an accessible label before the title', () => {
       renderRow()

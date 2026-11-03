@@ -204,7 +204,8 @@ export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options
  * (completion day, or linked day when `completedAt` is null, before the user's today; tasks with neither are
  * exempt; `details.assignedDate` holds that day) and `TASK_PLAN_COMPLETED_NOT_ALLOWED`
  * (`journalDate` differs from the link of a task that has a `completedAt`), plus the parent, block,
- * start and past-day planning codes.
+ * start and past-day planning codes, and `TASK_PARENT_STATUS_DERIVED` (a parent with an open subtask cannot
+ * have its status changed directly; re-sending the stored status is accepted).
  */
 export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',
@@ -227,6 +228,9 @@ export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(op
  * journalDate that differs from its current link. Re-sending the current link, or omitting
  * journalDate, is accepted. Nothing is changed. A request that reopens and re-plans in one call is rejected;
  * reopen first, plan second.
+ * * TASK_PARENT_STATUS_DERIVED: a parent with at least one open (not Completed) subtask cannot have its
+ * status changed directly, including blocking and unblocking. Re-sending the stored status is accepted.
+ * TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN takes precedence when completing. Nothing is saved.
  * * Other codes: TASK_PARENT_SELF_NOT_ALLOWED, TASK_PARENT_NOT_FOUND,
  * TASK_PARENT_DEPTH_NOT_ALLOWED, TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN,
  * TASK_BLOCK_DRAFT_NOT_ALLOWED, TASK_BLOCK_COMPLETED_NOT_ALLOWED,

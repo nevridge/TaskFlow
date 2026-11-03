@@ -33,6 +33,7 @@ describe('getTaskMutationErrorMessage', () => {
     ['TASK_CREATION_PAST_DAY_NOT_ALLOWED', 'You cannot create new tasks on a past journal day.'],
     ['TASK_PROJECT_NOT_FOUND', PROJECT_CREATE_NOT_FOUND_MESSAGE],
     ['TASK_PLAN_COMPLETED_NOT_ALLOWED', 'Completed tasks cannot be moved to another day. Reopen the task first.'],
+    ['TASK_PARENT_STATUS_DERIVED', "This task's status follows its open subtasks. Complete or remove them to change it."],
   ])('maps %s', (code, message) => {
     expect(getTaskMutationErrorMessage({ code })).toBe(message)
   })

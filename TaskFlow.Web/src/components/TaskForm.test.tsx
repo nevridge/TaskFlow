@@ -57,6 +57,17 @@ describe('TaskForm', () => {
     expect(screen.getByDisplayValue('Existing task')).toBeInTheDocument()
   })
 
+  it('submits the stored status and no blockedReason when a lock engages after the user changed the select', async () => {
+    const onSubmit = vi.fn()
+    const { rerender } = renderForm(existing, onSubmit)
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'blocked')
+    rerender(<TaskForm task={existing} onSubmit={onSubmit} onCancel={vi.fn()} statusLocked displayStatus="InProgress" />)
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe('todo')
+    expect(payload).not.toHaveProperty('blockedReason')
+  })
+
   it('calls onSubmit with form data when submitted', async () => {
     const onSubmit = vi.fn()
     renderForm(undefined, onSubmit)
@@ -445,5 +456,38 @@ describe('TaskForm', () => {
       expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('blockedReason')
       expect(onSubmit.mock.calls[0][0]).toHaveProperty('status', 'todo')
     })
+  })
+})
+
+describe('TaskForm with a locked (derived) status', () => {
+  const blockedTask = { ...existing, status: 'Blocked' as const, blockedReason: 'Waiting on Sam' }
+
+  it('disables the status select, shows the derived status and links the helper text', () => {
+    renderForm(existing, vi.fn(), vi.fn(), { statusLocked: true, displayStatus: 'InProgress' })
+    const select = screen.getByRole('combobox', { name: 'Status' })
+    expect(select).toBeDisabled()
+    expect(select).toHaveValue('inprogress')
+    expect(select).toHaveAttribute('aria-describedby', 'status-locked-hint')
+    expect(document.getElementById('status-locked-hint')).toHaveTextContent('Follows open subtasks. Complete or remove them to change it.')
+  })
+
+  it('hides the blocked-reason input while locked', () => {
+    renderForm(blockedTask, vi.fn(), vi.fn(), { statusLocked: true, displayStatus: 'Todo' })
+    expect(screen.queryByLabelText(/blocked reason/i)).not.toBeInTheDocument()
+  })
+
+  it('submits the stored status and omits blockedReason', async () => {
+    const onSubmit = vi.fn()
+    renderForm(blockedTask, onSubmit, vi.fn(), { statusLocked: true, displayStatus: 'Todo' })
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe('blocked')
+    expect(payload).not.toHaveProperty('blockedReason')
+  })
+
+  it('keeps the select editable when not locked', () => {
+    renderForm(existing)
+    expect(screen.getByRole('combobox', { name: 'Status' })).toBeEnabled()
+    expect(document.getElementById('status-locked-hint')).toBeNull()
   })
 })

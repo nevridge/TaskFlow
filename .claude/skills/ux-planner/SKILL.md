@@ -46,4 +46,4 @@ After three re-evaluations that still conflict, stop looping: say that proceedin
 4. **Backend implications** — `BACKEND_IMPLICATIONS`, noting they must feed into a later technical brief. Skip if none.
 5. **Accessibility** — only notes specific to this question.
 6. **Testing criteria** — `TESTING_CRITERIA`, to carry into the story's acceptance criteria.
-7. **Next steps** — for implementation, suggest `/feature-factory` (the ux-advisor runs inside it and this plan informs the frontend build); otherwise offer to dig deeper. If the question came from a GitHub issue, offer to post the decisions as a comment there, and post only after the user agrees, following the `gh` rules in CLAUDE.local.md.
+7. **Next steps** — for implementation, suggest `/feature-factory` (the ux-advisor runs inside it and this plan informs the frontend build); otherwise offer to dig deeper. If the question came from a GitHub issue, offer to post the decisions as a comment there, and post only after the user agrees.

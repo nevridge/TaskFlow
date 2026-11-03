@@ -41,6 +41,22 @@ describe('useCollapsedGroups', () => {
     expect(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? 'null')).toEqual({ medium: true, completed: false })
   })
 
+  it('keeps state and storage in step across repeated toggles of one key, including within one batch', () => {
+    const { result } = renderHook(() => useCollapsedGroups())
+    act(() => result.current.toggle('high'))
+    expect(result.current.isCollapsed('high')).toBe(true)
+    act(() => result.current.toggle('high'))
+    expect(result.current.isCollapsed('high')).toBe(false)
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? 'null')).toEqual({ high: false })
+    act(() => {
+      result.current.toggle('high')
+      result.current.toggle('high')
+      result.current.toggle('high')
+    })
+    expect(result.current.isCollapsed('high')).toBe(true)
+    expect(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? 'null')).toEqual({ high: true })
+  })
+
   it('persists the choice across a remount', () => {
     const first = renderHook(() => useCollapsedGroups())
     act(() => first.result.current.toggle('completed'))

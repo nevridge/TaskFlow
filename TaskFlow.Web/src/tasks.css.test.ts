@@ -69,6 +69,14 @@ describe('tasks.css MOBILE (#317) scoping contract (AC37)', () => {
     }
   })
 
+  it('keeps the tree spacer at 18px square and never resizes it in a media query', () => {
+    const spacer = body(base, '.t-tree-spacer').replace(/\s+/g, ' ').trim()
+    expect(spacer).toBe('width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;')
+    for (const block of [width, touch, tablet, width320, touch320]) {
+      expect(block).not.toContain('.t-tree-spacer')
+    }
+  })
+
   it('does not change the shared base rules the journal depends on', () => {
     const baseRule = (selector: string) => body(base, selector).replace(/\s+/g, ' ').trim()
     expect(baseRule('.t-card-actions')).toBe('display: flex; gap: 4px; flex-shrink: 0;')

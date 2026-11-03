@@ -57,6 +57,17 @@ describe('TaskForm', () => {
     expect(screen.getByDisplayValue('Existing task')).toBeInTheDocument()
   })
 
+  it('submits the stored status and no blockedReason when a lock engages after the user changed the select', async () => {
+    const onSubmit = vi.fn()
+    const { rerender } = renderForm(existing, onSubmit)
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'blocked')
+    rerender(<TaskForm task={existing} onSubmit={onSubmit} onCancel={vi.fn()} statusLocked displayStatus="InProgress" />)
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe('todo')
+    expect(payload).not.toHaveProperty('blockedReason')
+  })
+
   it('calls onSubmit with form data when submitted', async () => {
     const onSubmit = vi.fn()
     renderForm(undefined, onSubmit)

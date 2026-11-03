@@ -945,6 +945,27 @@ describe('TasksPage', () => {
       expect(within(rowFor('Parent')).getByText('1/1 subtasks complete')).toBeInTheDocument()
     })
 
+    it('sorts a parent block by the parent derived status, not its stored one', () => {
+      vi.mocked(usePrefs).mockReturnValue({ ...vi.mocked(usePrefs)(), taskSortKey: 'status', taskSortDir: 'asc' })
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: {
+          data: [
+            // Stored Draft would rank the parent block before the Todo sibling; the In Progress child derives it to In Progress.
+            { ...baseTask, id: 91, title: 'Derived parent', status: 'Draft', childTaskCount: 2 },
+            { ...baseTask, id: 92, title: 'Active child', status: 'InProgress', parentTaskItemId: 91 },
+            { ...baseTask, id: 93, title: 'Todo child', status: 'Todo', parentTaskItemId: 91 },
+            { ...baseTask, id: 94, title: 'Todo sibling', status: 'Todo' },
+          ],
+        },
+        isLoading: false,
+        error: null,
+      } as never)
+      renderPage()
+      const order = Array.from(document.querySelectorAll('.t-task-link')).map(n => n.textContent)
+      expect(order.indexOf('Todo sibling')).toBeGreaterThan(-1)
+      expect(order.indexOf('Todo sibling')).toBeLessThan(order.indexOf('Todo child'))
+    })
+
     it('a parent with a blocked subtask is only a context header', async () => {
       vi.mocked(useTasksQuery).mockReturnValue({
         data: {

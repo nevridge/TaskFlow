@@ -439,6 +439,9 @@ public class TaskItemsController(
 
         // A parent with open subtasks has its status derived from them; direct edits that change it are rejected.
         // Compared against the stored status, so a full-object save that re-sends the same status passes.
+        // Deliberately placed after ResolveBlockedTransition and the start-not-allowed check: those rules are stricter
+        // (e.g. Draft parent -> InProgress returns TASK_START_NOT_ALLOWED, Draft/Completed -> Blocked returns
+        // TASK_BLOCK_*_NOT_ALLOWED), and nothing is saved either way.
         if (nextStatus != existing.Status && (await GetChildrenOnceAsync()).Any(c => !IsCompleted(c.Status)))
         {
             return UnprocessableEntity(TaskRuleErrors.ParentStatusDerived());

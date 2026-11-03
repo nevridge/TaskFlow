@@ -137,6 +137,61 @@ public class TaskItemsControllerParentStatusDerivedTests
         AssertOk(await _controller.Patch(1, new PatchTaskItemDto { Status = Status.InProgress }));
     }
 
+    [Fact]
+    public async Task Update_BlockedResendWithSameReasonAndTitleChange_OnBlockedParentWithOpenChild_Succeeds()
+    {
+        SetupParent(Status.Blocked, Status.Todo);
+
+        var result = await _controller.Update(1, new UpdateTaskItemDto
+        {
+            Title = "Renamed",
+            Status = Status.Blocked,
+            BlockedReason = "Waiting"
+        });
+
+        AssertOk(result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_BlockedResendWithSameReason_OnBlockedParentWithOpenChild_Succeeds()
+    {
+        SetupParent(Status.Blocked, Status.Todo);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { Status = Status.Blocked, BlockedReason = "Waiting" });
+
+        AssertOk(result);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RealStack_BlockedResendWithSameReason_OnBlockedParentWithOpenChild_Succeeds()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Blocked);
+        await stack.SeedAsync("Open", Status.Todo, parent.Id);
+
+        AssertOk(await stack.Controller.Update(parent.Id, new UpdateTaskItemDto
+        {
+            Title = "Renamed",
+            Status = Status.Blocked,
+            BlockedReason = "Waiting"
+        }));
+
+        Assert.Equal(Status.Blocked, await stack.StatusOfAsync(parent.Id));
+    }
+
+    [Fact]
+    public async Task Patch_DraftParentWithOpenChild_ToInProgress_ReturnsStartNotAllowedBeforeDerived()
+    {
+        SetupParent(Status.Draft, Status.Todo);
+
+        var result = await _controller.Patch(1, new PatchTaskItemDto { Status = Status.InProgress });
+
+        Assert.Equal("TASK_START_NOT_ALLOWED", Code(result));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
     // ---- Mocked: rejected ----
 
     [Fact]

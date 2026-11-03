@@ -121,7 +121,9 @@ export function TaskListRow({
   useEffect(() => {
     if (statusLocked && !wasLockedRef.current) {
       const active = document.activeElement
-      if (!active || active === document.body || !active.isConnected) titleLinkRef.current?.focus()
+      // Browsers blur an element that loses its tabindex; jsdom does not, so also check focusability.
+      const stillFocusable = !!active?.matches('a[href], button, input, select, textarea, [tabindex]')
+      if (!active || active === document.body || !active.isConnected || !stillFocusable) titleLinkRef.current?.focus()
     }
     wasLockedRef.current = statusLocked
   }, [statusLocked])

@@ -99,12 +99,14 @@ export function TaskForm({
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (isSaving) return
-    const normalized = normalizeStatus(status)
+    // While locked, local state may hold a stale user choice; send the stored status instead.
+    const effectiveStatus = statusLocked ? (task?.status ?? status).toLowerCase() : status
+    const normalized = normalizeStatus(effectiveStatus)
     onSubmit({
       title,
       description: description || null,
       // The form keeps the lowercased key; task-status.ts maps it to the wire value (`inProgress`).
-      status: (normalized ? toRequestStatus(normalized) : status) as RequestStatus,
+      status: (normalized ? toRequestStatus(normalized) : effectiveStatus) as RequestStatus,
       priority: priority as 'low' | 'medium' | 'high',
       // dueDate is a YYYY-MM-DD calendar date from <input type="date">; a cleared input sends null, never ""
       dueDate: dueDate || null,

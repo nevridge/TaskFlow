@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
@@ -21,14 +21,15 @@ interface Props {
   childProgress?: string | null
   onAddChild?: (task: TaskRowModel) => void
   isAddingChild?: boolean
-  /** Unique per instance so focus can return to the clicked Add subtask button. Defaults to row:<id>. */
-  addChildAnchor?: string
   onEdit: (task: TaskRowModel) => void
   onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
   onStatusCycle: (task: TaskRowModel) => void
   /** Block with an optional reason. Must reject on failure so the reason input can re-open with the typed text. */
   onBlock?: (task: TaskRowModel, reason: string) => Promise<void>
+  /** Reason typed before a failed block that moved this row and rolled it back; re-opens the input with it. */
+  blockRetryReason?: string | null
+  onBlockRetryShown?: () => void
   onUnblock?: (task: TaskRowModel) => void
   /** Save a new reason for a Blocked task (""clears it). Must reject on failure. */
   onEditBlockedReason?: (task: TaskRowModel, reason: string) => Promise<void>
@@ -64,12 +65,13 @@ export function TaskListRow({
   childProgress,
   onAddChild,
   isAddingChild = false,
-  addChildAnchor,
   onEdit,
   onHistory,
   onDelete,
   onStatusCycle,
   onBlock,
+  blockRetryReason = null,
+  onBlockRetryShown,
   onUnblock,
   onEditBlockedReason,
 }: Props) {
@@ -87,6 +89,21 @@ export function TaskListRow({
   const deleteBlocked = childCount > 0
   const deleteHint = `Delete subtasks first (${childCount})`
   const deleteHintId = `del-hint-${task.id}`
+
+  // Adjusted during render (not in an effect) so the closed input never paints.
+  const [appliedRetryReason, setAppliedRetryReason] = useState<string | null>(null)
+  if (blockRetryReason !== appliedRetryReason) {
+    setAppliedRetryReason(blockRetryReason)
+    if (blockRetryReason !== null) {
+      setBlockDraft(blockRetryReason)
+      setBlocking(true)
+    }
+  }
+  // Consumed once, so a later remount of this row does not re-open the input.
+  useEffect(() => {
+    if (blockRetryReason !== null) onBlockRetryShown?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockRetryReason])
 
   const status = (task.status ?? 'draft').toLowerCase()
   const statusLabel = getStatusLabel(task.status ?? 'draft')
@@ -235,7 +252,7 @@ export function TaskListRow({
             className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`}
             aria-label="Add subtask"
             title="Add subtask"
-            data-add-child-anchor={addChildAnchor ?? `row:${task.id}`}
+            data-add-child-anchor={`row:${task.id}`}
             onClick={() => onAddChild?.(task)}
           >
             <PlusIcon />

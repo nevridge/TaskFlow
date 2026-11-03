@@ -154,12 +154,13 @@ describe('buildTaskSections', () => {
     ])
   })
 
-  it('computes open-ness from all tasks, so filters never change a parent\'s row type', () => {
+  it('keeps a parent as a work row when filters hide all its open subtasks', () => {
     const parent = t(1, 'Parent', 'Todo', 'High')
     const openKid = t(2, 'Open kid', 'Todo', 'High', 1)
     const doneKid = t(3, 'Done kid', 'Completed', 'High', 1)
     const sections = build([parent, openKid, doneKid], [parent, doneKid])
-    expect(sections.flatMap(s => s.blocks.flatMap(b => b.rows.map(r => r.title)))).toEqual(['Done kid'])
+    expect(rowTitles(sections, 'high')).toEqual(['Parent'])
+    expect(rowTitles(sections, 'completed')).toEqual(['Done kid'])
   })
 
   it('still shows a header when the parent is outside the visible set (another project)', () => {

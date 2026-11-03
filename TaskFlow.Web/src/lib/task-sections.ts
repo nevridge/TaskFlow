@@ -136,9 +136,9 @@ interface BuildArgs<T extends SectionTaskLike> {
 
 /**
  * Places every visible task once, as a work row, in the section set by its own status and priority.
- * A parent with an open subtask (anything not Completed, so Blocked counts) is not a work row; it only
- * appears as a context header over its subtasks in each section that holds one. Open-ness is computed
- * from allTasks so filters never change a parent's row type.
+ * A parent with a visible open subtask (anything not Completed, so Blocked counts) is not a work row; it
+ * only appears as a context header over its subtasks in each section that holds one. A parent whose open
+ * subtasks are all filtered out stays a work row, because no header would otherwise show it.
  */
 export function buildTaskSections<T extends SectionTaskLike>({
   allTasks,
@@ -147,7 +147,7 @@ export function buildTaskSections<T extends SectionTaskLike>({
 }: BuildArgs<T>): TaskSection<T>[] {
   const byId = indexTasksById(allTasks)
   const openParentIds = new Set<number>()
-  allTasks.forEach(t => {
+  visibleTasks.forEach(t => {
     const parentId = parentIdOf(t)
     if (parentId !== null && normalizeStatus(t.status) !== 'Completed') openParentIds.add(parentId)
   })

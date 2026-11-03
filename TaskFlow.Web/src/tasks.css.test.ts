@@ -342,6 +342,7 @@ describe('touch targets (AC2, 8, 16, 22, 25, 26, 29)', () => {
   it('makes row actions 44x44 with 8px gaps and 16px before Delete (AC8)', () => {
     expect(touch).toMatch(/\.t-list-cell--actions \.t-btn-icon \{[^}]*width: 44px;[^}]*height: 44px/)
     expect(touch).toMatch(/\.t-list-cell--actions \.t-card-actions \{ gap: 8px; \}/)
+    expect(touch).toMatch(/\.t-context-header \.t-context-add \{[^}]*width: 44px;[^}]*height: 44px/)
     // Delete sits at the far edge; its neighbour adds 8px on top of the 8px gap => >=16px between them.
     expect(touch).toMatch(/\.t-action-delete \{ margin-left: auto; \}/)
     expect(touch).toMatch(/\.t-btn-icon:has\(\+ \.t-action-delete\) \{ margin-right: 8px; \}/)

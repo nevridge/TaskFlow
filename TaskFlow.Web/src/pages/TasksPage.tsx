@@ -124,6 +124,8 @@ export function TasksPage() {
   const { isCollapsed: isSectionCollapsed, toggle: toggleSection } = useCollapsedGroups()
   const [addingChild, setAddingChild] = useState<AddingChild | null>(null)
   const [childDraftTitle, setChildDraftTitle] = useState('')
+  // A failed block rolls its row back as a new instance, so the page carries the typed reason across the remount.
+  const [blockRetry, setBlockRetry] = useState<{ id: number; reason: string } | null>(null)
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
   const historyModalRef = useRef<HTMLDivElement | null>(null)
   const listWrapRef = useRef<HTMLDivElement | null>(null)
@@ -355,7 +357,7 @@ export function TasksPage() {
       const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
       if (!parentId) return
       const prev = stats.get(parentId) ?? { done: 0, total: 0 }
-      // Only a parent with no open subtasks is a work row, so progress never needs a blocked count.
+      // Progress counts done subtasks only; a parent with a visible blocked subtask is a header, not a row.
       stats.set(parentId, { total: prev.total + 1, done: prev.done + (isCompleted(task.status) ? 1 : 0) })
     })
     return stats
@@ -374,10 +376,13 @@ export function TasksPage() {
     if (pending) {
       const control = document.querySelector<HTMLElement>(`[data-task-status-id="${pending.id}"]`)
       const section = findSectionOfTask(sections, pending.id)
-      if (control) {
-        if (document.activeElement !== control) control.focus()
-      } else if (section) {
-        document.querySelector<HTMLElement>(`[data-section-toggle="${section.key}"]`)?.focus()
+      const active = document.activeElement
+      // Only take focus back when it was lost, or from a toggle this flow focused (a rollback leaves it there).
+      const mayRestore =
+        !active || active === document.body || !active.isConnected || active.hasAttribute('data-section-toggle')
+      if (mayRestore) {
+        if (control) control.focus()
+        else if (section) document.querySelector<HTMLElement>(`[data-section-toggle="${section.key}"]`)?.focus()
       }
       if (section && !pending.announced) {
         pending.announced = true
@@ -470,12 +475,21 @@ export function TasksPage() {
 
   async function handleBlock(task: TaskListModel, reason: string) {
     setMutationError(null)
+    setBlockRetry(null)
+    const id = Number(task.id)
+    // Already announced: success has its own "Task blocked" message and failure has the alert.
+    pendingStatusFocusRef.current = { id, settled: false, announced: true }
     try {
-      await blockMutation.mutateAsync({ id: Number(task.id), reason })
+      await blockMutation.mutateAsync({ id, reason })
       setLiveMessage(`Task blocked: ${task.title}`)
     } catch (err) {
+      // The re-opened input takes focus, so the status control must not.
+      if (pendingStatusFocusRef.current?.id === id) pendingStatusFocusRef.current = null
       setMutationError(getTaskMutationErrorMessage(err))
+      setBlockRetry({ id, reason })
       throw err
+    } finally {
+      markStatusFocusSettled(id)
     }
   }
 
@@ -815,6 +829,8 @@ export function TasksPage() {
                                 onDelete={handleDelete}
                                 onStatusCycle={handleStatusCycle}
                                 onBlock={handleBlock}
+                                blockRetryReason={blockRetry?.id === taskId && !isBlocked(task.status) ? blockRetry.reason : null}
+                                onBlockRetryShown={() => setBlockRetry(null)}
                                 onUnblock={handleUnblock}
                                 onEditBlockedReason={handleEditBlockedReason}
                               />

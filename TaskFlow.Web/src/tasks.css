@@ -1204,6 +1204,7 @@ html.is-dark .t-input option { background: var(--paper); }
   .tasks-page .t-action-delete { margin-left: auto; }
   .tasks-page .t-list-cell--actions .t-btn-icon:has(+ .t-action-delete) { margin-right: 8px; }
   .tasks-page .t-list-cell--actions .t-btn-icon svg { width: 18px; height: 18px; }
+  .tasks-page .t-context-header .t-context-add { width: 44px; height: 44px; touch-action: manipulation; }
 
   /* Status control and unblock button: a 44px box whose visible pill is the padding box (transparent 8px border). */
   .tasks-page .t-status-btn {

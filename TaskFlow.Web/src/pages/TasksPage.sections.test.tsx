@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -383,7 +383,7 @@ describe('TasksPage sections and context headers (#384)', () => {
     expect(setItem).not.toHaveBeenCalled()
   })
 
-  it('a status filter that hides a parent\'s open subtask does not turn the parent into a work row', async () => {
+  it('a status filter that hides all a parent\'s open subtasks keeps the parent as a work row', async () => {
     useData([
       { ...baseTask, id: 1, title: 'Parent', status: 'Todo', priority: 'High' },
       { ...baseTask, id: 2, title: 'Draft kid', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
@@ -393,11 +393,86 @@ describe('TasksPage sections and context headers (#384)', () => {
     expect(rowFor('Parent')).toHaveClass('t-context-header')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
     expect(screen.queryByText('Draft kid')).not.toBeInTheDocument()
-    expect(screen.queryByText('Parent')).not.toBeInTheDocument()
+    expect(rowFor('Parent')).not.toHaveClass('t-context-header')
+    expect(within(rowFor('Parent')).getByRole('button', { name: /^Status:/ })).toBeInTheDocument()
     expect(screen.getByText('Other')).toBeInTheDocument()
   })
 
-  it('a parent-title search shows nothing for the parent once a status filter excludes all its open subtasks', async () => {
+  it('the project filter keeps a parent whose subtasks have no project visible as a work row', async () => {
+    useData([
+      { ...baseTask, id: 1, title: 'Alpha parent', status: 'Todo', priority: 'High', projectId: 1, projectName: 'Alpha' },
+      { ...baseTask, id: 2, title: 'No-project kid', status: 'Todo', priority: 'High', parentTaskItemId: 1 },
+    ])
+    renderPage()
+    expect(rowFor('Alpha parent')).toHaveClass('t-context-header')
+    await userEvent.selectOptions(filterSelect(), 'Alpha')
+    expect(screen.queryByText('No-project kid')).not.toBeInTheDocument()
+    expect(rowFor('Alpha parent')).not.toHaveClass('t-context-header')
+  })
+
+  describe('blocking a row that moves sections', () => {
+    const todo = { ...baseTask, id: 1, title: 'Move me', status: 'Todo', priority: 'High' }
+    const blocked = { ...todo, status: 'Blocked' }
+    const setTasks = useData
+
+    async function blockAndMove() {
+      let settle!: { resolve: (v: unknown) => void; reject: (e: unknown) => void }
+      const mutateAsync = vi.fn(() => new Promise((resolve, reject) => { settle = { resolve, reject } }))
+      vi.mocked(useBlockTaskMutation).mockReturnValue({ mutateAsync, isPending: false } as never)
+      setTasks([todo])
+      const { rerender } = renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'Block task: Move me' }))
+      await userEvent.type(screen.getByRole('textbox', { name: 'Blocked reason, optional' }), 'Waiting{Enter}')
+      setTasks([blocked])
+      rerender(page())
+      return { settle, rerender }
+    }
+
+    it('moves focus to the collapsed Blocked toggle', async () => {
+      const { settle } = await blockAndMove()
+      expect(document.activeElement).toBe(toggleOf('blocked'))
+      expect(toggleOf('blocked')).toHaveAttribute('aria-expanded', 'false')
+      await act(async () => settle.resolve({}))
+      expect(screen.getByRole('status')).toHaveTextContent('Task blocked: Move me')
+    })
+
+    it('re-opens the input with the typed text after a failure rolls the row back', async () => {
+      const { settle, rerender } = await blockAndMove()
+      useData([todo])
+      rerender(page())
+      await act(async () => settle.reject({}))
+      const input = await screen.findByRole('textbox', { name: 'Blocked reason, optional' })
+      expect(input).toHaveValue('Waiting')
+      expect(document.activeElement).toBe(input)
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+    })
+
+    it('does not re-open the input again after Escape and a later remount', async () => {
+      const { settle, rerender } = await blockAndMove()
+      useData([todo])
+      rerender(page())
+      await act(async () => settle.reject({}))
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('textbox', { name: 'Blocked reason, optional' })).not.toBeInTheDocument()
+      useData([{ ...todo, status: 'InProgress' }])
+      rerender(page())
+      expect(screen.queryByRole('textbox', { name: 'Blocked reason, optional' })).not.toBeInTheDocument()
+    })
+  })
+
+  it('does not take focus back when the user moved it while a status change was in flight', async () => {
+    let settled!: () => void
+    taskMutations.mutate.mockImplementation((_vars, opts: { onSettled: () => void }) => { settled = opts.onSettled })
+    useData([{ ...baseTask, id: 1, title: 'Cycle me', status: 'Todo', priority: 'High' }])
+    renderPage()
+    await userEvent.click(within(rowFor('Cycle me')).getByRole('button', { name: /^Status:/ }))
+    const search = screen.getByPlaceholderText('Search tasks...')
+    search.focus()
+    act(() => settled())
+    expect(document.activeElement).toBe(search)
+  })
+
+  it('a parent-title search still shows the parent once a status filter excludes all its open subtasks', async () => {
     useData([
       { ...baseTask, id: 1, title: 'Plan the trip', status: 'Todo', priority: 'High' },
       { ...baseTask, id: 2, title: 'Book flights', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
@@ -408,8 +483,7 @@ describe('TasksPage sections and context headers (#384)', () => {
     expect(rowFor('Plan the trip')).toHaveClass('t-context-header')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
     expect(screen.queryByText('Book flights')).not.toBeInTheDocument()
-    expect(screen.queryByText('Plan the trip')).not.toBeInTheDocument()
-    expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
+    expect(rowFor('Plan the trip')).not.toHaveClass('t-context-header')
   })
 
   it('tabs from a header link to its Add subtask button and then into the block rows', async () => {

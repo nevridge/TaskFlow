@@ -792,6 +792,43 @@ html.is-dark .t-input option { background: var(--paper); }
 .t-group-header--medium td { color: var(--warn-ink); border-left: 3px solid var(--warn-ink); }
 .t-group-header--low td { color: var(--muted); border-left: 3px solid var(--muted-2); }
 .t-group-header--draft td { color: var(--muted-2); border-left: 3px solid var(--line); }
+.t-group-header--inprogress td { color: var(--ink); border-left: 3px solid var(--ink); }
+.t-group-header--blocked td { color: var(--danger-ink); border-left: 3px solid var(--line); }
+.t-group-header--completed td { color: var(--muted-2); border-left: 3px solid var(--muted-2); }
+
+/* --- Context header: the parent path above subtasks. Quiet and lighter than a section header. --- */
+
+.t-context-header td {
+  padding: 4px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.t-context-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.t-context-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.t-context-ancestor { color: var(--muted-2); }
+.t-context-sep { margin: 0 2px; }
+
+.t-context-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.t-context-link:hover { text-decoration: underline; }
+
+.t-context-header .t-context-add { flex: 0 0 auto; }
 
 .t-group-count {
   font-weight: 400;
@@ -883,6 +920,12 @@ html.is-dark .t-input option { background: var(--paper); }
   background: var(--hover-soft);
   color: var(--ink);
   border-color: var(--line-2);
+}
+
+.t-btn-icon.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  border-color: color-mix(in oklab, var(--accent) 28%, var(--paper));
 }
 
 .t-btn-icon--danger:hover {
@@ -1035,7 +1078,9 @@ html.is-dark .t-input option { background: var(--paper); }
   .tasks-page .t-list-table,
   .tasks-page .t-list-table tbody,
   .tasks-page .t-list-table .t-group-header,
-  .tasks-page .t-list-table .t-group-header td {
+  .tasks-page .t-list-table .t-group-header td,
+  .tasks-page .t-list-table .t-context-header,
+  .tasks-page .t-list-table .t-context-header td {
     display: block;
   }
   .tasks-page .t-list-table .t-list-row {

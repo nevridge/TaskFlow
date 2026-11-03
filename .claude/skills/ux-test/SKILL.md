@@ -149,7 +149,7 @@ Any AC with no step must either get one or be declared **not verifiable via UI**
 
 Add a **fixtures** sub-list: what will be seeded (every name or title prefixed `<RUN_ID>-`) and which steps are API-driven.
 
-Navigation hints: routes are `/`, `/journal/:date` (date format MM-DD-YYYY), `/tasks`, `/tasks/:id`, `/projects`, `/projects/:id`. On `/tasks` the Status filter is a group of checkboxes (Draft, To-do, Completed) with Draft and To-do checked by default, so Completed tasks are hidden until the Completed checkbox is checked.
+Navigation hints: routes are `/`, `/journal/:date` (date format MM-DD-YYYY), `/tasks`, `/tasks/:id`, `/projects`, `/projects/:id`. On `/tasks` the Status filter is a group of checkboxes (Draft, To-do, In Progress, Blocked, Completed), all checked by default. Tasks are listed in sections (In Progress, High, Medium, Low, Blocked, Draft, Completed); Blocked and Completed start collapsed, so expand a section's toggle to see its rows. A parent with open subtasks shows only as a context header (link to `/tasks/:id` and an Add subtask button) above its subtasks.
 
 Print the plan, the AC map and the fixtures list to the user.
 

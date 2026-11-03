@@ -18,12 +18,11 @@ type TaskRowModel = TaskItemResponseDto & {
 interface Props {
   task: TaskRowModel
   depth?: number
-  hasChildren?: boolean
-  isExpanded?: boolean
   childProgress?: string | null
-  onToggleChildren?: (task: TaskRowModel) => void
   onAddChild?: (task: TaskRowModel) => void
   isAddingChild?: boolean
+  /** Unique per instance so focus can return to the clicked Add subtask button. Defaults to row:<id>. */
+  addChildAnchor?: string
   onEdit: (task: TaskRowModel) => void
   onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
@@ -62,12 +61,10 @@ const XIcon = () => (
 export function TaskListRow({
   task,
   depth = 0,
-  hasChildren = false,
-  isExpanded = false,
   childProgress,
-  onToggleChildren,
   onAddChild,
   isAddingChild = false,
+  addChildAnchor,
   onEdit,
   onHistory,
   onDelete,
@@ -154,18 +151,7 @@ export function TaskListRow({
     <tr role="row" className={rowClasses}>
       <td role="cell" className="t-list-cell t-list-cell--title">
         <div className={`t-title-wrap t-depth-${depth}`}>
-          {hasChildren ? (
-            <button
-              className="t-tree-toggle"
-              onClick={() => onToggleChildren?.(task)}
-              aria-label={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
-              title={isExpanded ? 'Hide subtasks' : 'Show subtasks'}
-            >
-              {isExpanded ? '▾' : '▸'}
-            </button>
-          ) : (
-            <span className="t-tree-spacer" aria-hidden="true" />
-          )}
+          <span className="t-tree-spacer" aria-hidden="true" />
           <div>
             <div className="t-title-line">
               {task.id !== undefined && task.id !== null && (
@@ -204,6 +190,7 @@ export function TaskListRow({
         {blocked ? (
           <button
             type="button"
+            data-task-status-id={task.id}
             className="t-badge t-badge-blocked t-badge-clickable t-status-btn tap-target"
             aria-label={`Unblock task: ${task.title}`}
             title="Unblock"
@@ -218,6 +205,7 @@ export function TaskListRow({
             onClick={() => onStatusCycle(task)}
             role="button"
             tabIndex={0}
+            data-task-status-id={task.id}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStatusCycle(task) } }}
             aria-label={nextLabel ? `Status: ${statusLabel}. Click to change to ${nextLabel}.` : `Status: ${statusLabel}. Click to change.`}
           >
@@ -243,7 +231,13 @@ export function TaskListRow({
       </td>
       <td role="cell" className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
-          <button className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`} aria-label="Add subtask" title="Add subtask" onClick={() => onAddChild?.(task)}>
+          <button
+            className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`}
+            aria-label="Add subtask"
+            title="Add subtask"
+            data-add-child-anchor={addChildAnchor ?? `row:${task.id}`}
+            onClick={() => onAddChild?.(task)}
+          >
             <PlusIcon />
           </button>
           {blockable && !blocking && (

@@ -251,7 +251,7 @@ describe('TasksPage on mobile (#317)', () => {
     it('keeps a collapsed group collapsed after a remount (AC24)', async () => {
       const first = renderPage()
       await userEvent.click(groupHeader(/Medium Priority/))
-      expect(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? '[]')).toEqual(['medium'])
+      expect(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) ?? '[]')).toEqual({ medium: true })
       first.unmount()
       renderPage()
       expect(groupHeader(/Medium Priority/)).toHaveAttribute('aria-expanded', 'false')

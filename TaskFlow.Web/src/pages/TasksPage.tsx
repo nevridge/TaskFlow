@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   useTasksQuery,
@@ -20,10 +20,17 @@ import { usePrefs } from '@/context/usePrefs'
 import { useCollapsedGroups } from '@/hooks/useCollapsedGroups'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { TaskListRow } from '@/components/TaskListRow'
+import { TaskContextHeader } from '@/components/TaskContextHeader'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
+import {
+  buildTaskSections,
+  findSectionOfTask,
+  indexTasksById,
+  matchesSearchWithAncestors,
+} from '@/lib/task-sections'
 import {
   STATUS_LABELS,
   STATUS_ORDER,
@@ -42,18 +49,19 @@ const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = STATUS_ORDE
   value: toRequestStatus(status),
   label: STATUS_LABELS[status],
 }))
-const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'inProgress', 'blocked']
+const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'inProgress', 'blocked', 'completed']
 type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
 type ProjectFilter = 'all' | 'none' | number
 
 type TaskListModel = TaskItemViewModel
 
-type PriorityGroup = {
-  key: string
-  label: string
-  cssModifier: string
-  tasks: Array<{ task: TaskListModel; depth: number }>
+/** The Add subtask editor is open for one clicked instance: `row` (work row) or `ctx:<sectionKey>` (header). */
+interface AddingChild {
+  parentId: number
+  anchor: string
 }
+
+const addAnchorAttr = (a: AddingChild) => `${a.anchor}:${a.parentId}`
 
 /** Filter dimensions that differ from the defaults; shown as "Filters (n)" on phones. View chips and search do not count. */
 function countActiveFilters(status: Set<StatusValue>, project: ProjectFilter): number {
@@ -113,9 +121,8 @@ export function TasksPage() {
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState('')
-  const [expandedParentIds, setExpandedParentIds] = useState<Set<number>>(new Set())
-  const { collapsed: collapsedGroups, toggle: toggleGroup } = useCollapsedGroups()
-  const [addingChildForTaskId, setAddingChildForTaskId] = useState<number | null>(null)
+  const { isCollapsed: isSectionCollapsed, toggle: toggleSection } = useCollapsedGroups()
+  const [addingChild, setAddingChild] = useState<AddingChild | null>(null)
   const [childDraftTitle, setChildDraftTitle] = useState('')
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
   const historyModalRef = useRef<HTMLDivElement | null>(null)
@@ -127,7 +134,11 @@ export function TasksPage() {
   // Seed: open on first render only when the initial (default) filters already differ from "no filters".
   // Never re-derived afterwards, so changing or clearing a filter inside the panel keeps it open/closed as the user left it.
   const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0)
-  const knownParentIdsRef = useRef<Set<number>>(new Set())
+  // Status control to re-focus after a status change moves its row (survives the optimistic move and the rollback).
+  const pendingStatusFocusRef = useRef<{ id: number; settled: boolean; announced: boolean } | null>(null)
+  const [focusTick, setFocusTick] = useState(0)
+  // Set after a successful Add subtask; resolved once the refetch has brought the new task into the list.
+  const pendingAddFocusRef = useRef<{ anchorAttr: string; newId: number | null; parentTitle: string } | null>(null)
   // Set by a detail-page delete: focus New Task once on arrival. Captured on mount so a plain visit never does.
   const focusNewTaskRef = useRef((location.state as { focusNewTask?: boolean } | null)?.focusNewTask === true)
 
@@ -291,26 +302,30 @@ export function TasksPage() {
     return taskSortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
-  // Apply filters: view filter, status filter, project filter, search
-  const filtered = useMemo(() => {
+  const allById = useMemo(() => indexTasksById(tasks), [tasks])
+
+  // Apply filters: view filter, status filter, project filter, search (a parent's title also matches its subtasks)
+  const visibleTasks = useMemo(() => {
+    const allStatusesChecked = STATUS_OPTIONS.every(o => statusFilter.has(o.value))
     return tasks
       .filter(t => matchesViewFilter(t, viewFilter))
       .filter(t => {
         if (statusFilter.size === 0) return true
         const normalized = normalizeStatus(t.status)
-        return !!normalized && statusFilter.has(toRequestStatus(normalized))
+        // An unrecognized status passes only when no status is excluded.
+        if (!normalized) return allStatusesChecked
+        return statusFilter.has(toRequestStatus(normalized))
       })
       .filter(t => {
         if (projectFilter === 'all') return true
         const taskProjectId = normalizeProjectId(t.projectId)
         return projectFilter === 'none' ? taskProjectId === null : taskProjectId === projectFilter
       })
-      .filter(t => !debouncedSearch || t.title.toLowerCase().includes(debouncedSearch.toLowerCase()))
-  }, [tasks, viewFilter, statusFilter, projectFilter, debouncedSearch])
+      .filter(t => !debouncedSearch || matchesSearchWithAncestors(t, allById, debouncedSearch))
+  }, [tasks, allById, viewFilter, statusFilter, projectFilter, debouncedSearch])
 
-  const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
-
-  function compareWithinGroup(a: TaskListModel, b: TaskListModel): number {
+  const compareWithinGroup = useCallback((a: TaskListModel, b: TaskListModel): number => {
+    const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
     let cmp: number
     const aDue = a.dueDate ?? ''
     const bDue = b.dueDate ?? ''
@@ -320,108 +335,72 @@ export function TasksPage() {
     } else if (taskSortKey === 'status') {
       cmp = statusRank(a.status) - statusRank(b.status)
     } else if (taskSortKey === 'priority') {
-      const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 2
-      const pb = PRIORITY_ORDER[(b.priority ?? '').toLowerCase()] ?? 2
+      // A missing or unrecognized priority sorts as High, matching the section fallback.
+      const pa = PRIORITY_ORDER[(a.priority ?? '').toLowerCase()] ?? 0
+      const pb = PRIORITY_ORDER[(b.priority ?? '').toLowerCase()] ?? 0
       cmp = pa - pb
     } else {
-      // Default: due date — no-date items sort last in asc, first in desc
+      // Default: due date - no-date items sort last in asc, first in desc
       if (!aDue && bDue) return taskSortDir === 'asc' ? 1 : -1
       if (aDue && !bDue) return taskSortDir === 'asc' ? -1 : 1
       cmp = aDue.localeCompare(bDue)
     }
 
     return taskSortDir === 'asc' ? cmp : -cmp
-  }
-
-  // Build child lookup maps
-  const filteredById = useMemo(
-    () => new Map(filtered.map(task => [Number(task.id), task])),
-    [filtered],
-  )
+  }, [taskSortKey, taskSortDir])
 
   const childStatsByParentId = useMemo(() => {
-    const stats = new Map<number, { done: number; total: number; blocked: number }>()
+    const stats = new Map<number, { done: number; total: number }>()
     tasks.forEach(task => {
       const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
       if (!parentId) return
-      const prev = stats.get(parentId) ?? { done: 0, total: 0, blocked: 0 }
-      stats.set(parentId, {
-        total: prev.total + 1,
-        done: prev.done + (isCompleted(task.status) ? 1 : 0),
-        // Blocked subtasks are not done; they are reported separately.
-        blocked: prev.blocked + (isBlocked(task.status) ? 1 : 0),
-      })
+      const prev = stats.get(parentId) ?? { done: 0, total: 0 }
+      // Only a parent with no open subtasks is a work row, so progress never needs a blocked count.
+      stats.set(parentId, { total: prev.total + 1, done: prev.done + (isCompleted(task.status) ? 1 : 0) })
     })
     return stats
   }, [tasks])
 
-  const childrenByParentId = useMemo(() => {
-    const groups = new Map<number, TaskListModel[]>()
-    filtered.forEach(task => {
-      const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
-      if (!parentId || !filteredById.has(parentId)) return
-      const items = groups.get(parentId) ?? []
-      items.push(task)
-      groups.set(parentId, items)
-    })
-    return groups
-  }, [filtered, filteredById])
-
-  const parentIds = useMemo(
-    () => Array.from(childrenByParentId.keys()),
-    [childrenByParentId],
+  const sections = useMemo(
+    () => buildTaskSections({ allTasks: tasks, visibleTasks, compare: compareWithinGroup }),
+    [tasks, visibleTasks, compareWithinGroup],
   )
 
-  useEffect(() => {
-    setExpandedParentIds(prev => {
-      let changed = false
-      const next = new Set(prev)
-      const known = knownParentIdsRef.current
-      parentIds.forEach(id => {
-        if (!known.has(id)) { next.add(id); known.add(id); changed = true }
-      })
-      for (const knownId of Array.from(known)) {
-        if (!parentIds.includes(knownId)) known.delete(knownId)
+  // After a row changes section it remounts and loses focus: put it back on its status control, or on the
+  // destination section's toggle when that section is collapsed (its rows are not rendered). A subtask
+  // added from a header returns focus to the clicked button, else the new row's status control, else its section toggle.
+  useLayoutEffect(() => {
+    const pending = pendingStatusFocusRef.current
+    if (pending) {
+      const control = document.querySelector<HTMLElement>(`[data-task-status-id="${pending.id}"]`)
+      const section = findSectionOfTask(sections, pending.id)
+      if (control) {
+        if (document.activeElement !== control) control.focus()
+      } else if (section) {
+        document.querySelector<HTMLElement>(`[data-section-toggle="${section.key}"]`)?.focus()
       }
-      return changed ? next : prev
-    })
-  }, [parentIds])
+      if (section && !pending.announced) {
+        pending.announced = true
+        setLiveMessage(`Moved to ${section.label}`)
+      }
+      if (pending.settled) pendingStatusFocusRef.current = null
+    }
 
-  // Build priority groups with hierarchical rows
-  const priorityGroups: PriorityGroup[] = useMemo(() => {
-    const groupDefs = [
-      { key: 'high', label: 'High Priority', cssModifier: 'high' },
-      { key: 'medium', label: 'Medium Priority', cssModifier: 'medium' },
-      { key: 'low', label: 'Low Priority', cssModifier: 'low' },
-      { key: 'draft', label: 'Draft', cssModifier: 'draft' },
-    ]
-
-    return groupDefs.map(def => {
-      const groupTasks = filtered.filter(t => {
-        const status = (t.status ?? '').toLowerCase()
-        if (def.key === 'draft') return status === 'draft'
-        return status !== 'draft' && (t.priority ?? 'low').toLowerCase() === def.key
-      })
-
-      const sorted = [...groupTasks].sort(compareWithinGroup)
-      const rootTasks = sorted.filter(task => {
-        const parentId = task.parentTaskItemId ? Number(task.parentTaskItemId) : null
-        return !parentId || !filteredById.has(parentId)
-      })
-
-      const rows: Array<{ task: TaskListModel; depth: number }> = []
-      rootTasks.forEach(parent => {
-        rows.push({ task: parent, depth: 0 })
-        const parentId = Number(parent.id)
-        const children = childrenByParentId.get(parentId) ?? []
-        if (children.length > 0 && expandedParentIds.has(parentId)) {
-          children.forEach(child => rows.push({ task: child, depth: 1 }))
-        }
-      })
-
-      return { ...def, tasks: rows }
-    }).filter(g => g.tasks.length > 0)
-  }, [filtered, filteredById, childrenByParentId, expandedParentIds, taskSortKey, taskSortDir])
+    const add = pendingAddFocusRef.current
+    if (add && (add.newId === null || allById.has(add.newId))) {
+      pendingAddFocusRef.current = null
+      const section = add.newId === null ? undefined : findSectionOfTask(sections, add.newId)
+      if (section) setLiveMessage(`Subtask added under ${add.parentTitle} in ${section.label}`)
+      const active = document.activeElement
+      if (!active || active === document.body || !active.isConnected) {
+        const target =
+          document.querySelector<HTMLElement>(`[data-add-child-anchor="${add.anchorAttr}"]`) ??
+          (add.newId === null ? null : document.querySelector<HTMLElement>(`[data-task-status-id="${add.newId}"]`)) ??
+          (section ? document.querySelector<HTMLElement>(`[data-section-toggle="${section.key}"]`) : null)
+        target?.focus()
+      }
+    }
+  }, [sections, allById, focusTick])
 
   // Handlers
   function clearFormErrors() {
@@ -458,9 +437,11 @@ export function TasksPage() {
     const nextStatus = nextCycleStatus(task.status)
     if (!nextStatus) return
     setMutationError(null)
+    const id = Number(task.id)
+    pendingStatusFocusRef.current = { id, settled: false, announced: false }
     updateMutation.mutate(
       {
-        id: Number(task.id),
+        id,
         data: {
           title: task.title,
           description: task.description,
@@ -471,8 +452,16 @@ export function TasksPage() {
           autoCompleteParentWhenChildrenDone,
         } as UpdateTaskPayload,
       },
-      { onError: err => setMutationError(getTaskMutationErrorMessage(err)) }
+      {
+        onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+        onSettled: () => markStatusFocusSettled(id),
+      }
     )
+  }
+
+  function markStatusFocusSettled(id: number) {
+    if (pendingStatusFocusRef.current?.id === id) pendingStatusFocusRef.current.settled = true
+    setFocusTick(t => t + 1)
   }
 
   async function handleBlock(task: TaskListModel, reason: string) {
@@ -488,11 +477,14 @@ export function TasksPage() {
 
   function handleUnblock(task: TaskListModel) {
     setMutationError(null)
+    const id = Number(task.id)
+    pendingStatusFocusRef.current = { id, settled: false, announced: false }
     unblockMutation.mutate(
-      { id: Number(task.id) },
+      { id },
       {
         onSuccess: () => setLiveMessage(`Task unblocked: ${task.title}`),
         onError: err => setMutationError(getTaskMutationErrorMessage(err)),
+        onSettled: () => markStatusFocusSettled(id),
       },
     )
   }
@@ -522,38 +514,51 @@ export function TasksPage() {
     ;(next ?? newTaskBtnRef.current)?.focus()
     // An editor open for the deleted task would be left orphaned.
     if (editingSnapshot && Number(editingSnapshot.id) === id) setEditingSnapshot(null)
-    if (addingChildForTaskId === id) { setAddingChildForTaskId(null); setChildDraftTitle('') }
+    if (addingChild?.parentId === id) { setAddingChild(null); setChildDraftTitle('') }
     deleteTaskUndoable({ id, title: task.title }, () => {
       document.querySelector<HTMLElement>(`[data-task-delete-id="${id}"]`)?.focus()
     })
   }
 
-  function toggleChildren(task: TaskListModel) {
-    const parentId = Number(task.id)
-    setExpandedParentIds(prev => {
-      const next = new Set(prev)
-      if (next.has(parentId)) next.delete(parentId)
-      else next.add(parentId)
-      return next
-    })
+  function beginAddChild(parentId: number, anchor: string) {
+    setMutationError(null)
+    setAddingChild({ parentId, anchor })
+    setChildDraftTitle('')
   }
 
-  function beginAddChild(task: TaskListModel) {
-    setMutationError(null)
-    setAddingChildForTaskId(Number(task.id))
+  function closeAddChild() {
+    // Focus the clicked button first; it is always present while the editor is open.
+    if (addingChild) {
+      document.querySelector<HTMLElement>(`[data-add-child-anchor="${addAnchorAttr(addingChild)}"]`)?.focus()
+    }
+    setAddingChild(null)
     setChildDraftTitle('')
-    setExpandedParentIds(prev => { const next = new Set(prev); next.add(Number(task.id)); return next })
   }
 
   function submitAddChild() {
-    const parentId = addingChildForTaskId
+    if (!addingChild) return
+    const { parentId } = addingChild
+    const anchorAttr = addAnchorAttr(addingChild)
     const title = childDraftTitle.trim()
     if (!parentId || !title) return
     setMutationError(null)
     createMutation.mutate(
       { title, status: 'todo', parentTaskItemId: parentId } as CreateTaskPayload,
       {
-        onSuccess: () => { setAddingChildForTaskId(null); setChildDraftTitle('') },
+        onSuccess: result => {
+          const rawId = (result as { data?: { id?: number | string | null } } | undefined)?.data?.id
+          const newId = rawId === undefined || rawId === null ? null : Number(rawId)
+          pendingAddFocusRef.current = {
+            anchorAttr,
+            newId: newId !== null && Number.isFinite(newId) ? newId : null,
+            parentTitle: allById.get(parentId)?.title ?? '',
+          }
+          document.querySelector<HTMLElement>(`[data-add-child-anchor="${anchorAttr}"]`)?.focus()
+          setAddingChild(null)
+          setChildDraftTitle('')
+          // The list may already be current (nothing else would re-run the focus effect).
+          setFocusTick(t => t + 1)
+        },
         onError: err => setMutationError(getTaskMutationErrorMessage(err)),
       },
     )
@@ -562,7 +567,33 @@ export function TasksPage() {
   const formError = mutationError ?? saveWithProject.error
   const blockedTotal = tasks.filter(t => isBlocked(t.status)).length
   const activeFilterCount = countActiveFilters(statusFilter, projectFilter)
-  const totalFiltered = priorityGroups.reduce((sum, g) => sum + g.tasks.length, 0)
+  const totalFiltered = sections.reduce((sum, section) => sum + section.workRowCount, 0)
+
+  function renderChildEditor(key: string) {
+    return (
+      <tr key={key} role="row" className="t-list-row t-list-row--child-editor">
+        <td role="cell" className="t-list-cell" colSpan={5}>
+          <div className="t-subtask-editor">
+            <span className="t-subtask-label">New subtask</span>
+            <input
+              className="t-input"
+              placeholder="Enter subtask title"
+              aria-label={`New subtask for ${allById.get(addingChild?.parentId ?? 0)?.title ?? 'task'}`}
+              autoFocus
+              value={childDraftTitle}
+              onChange={e => setChildDraftTitle(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); submitAddChild() }
+                if (e.key === 'Escape') closeAddChild()
+              }}
+            />
+            <button className="t-btn" onClick={closeAddChild}>Cancel</button>
+            <button className="t-btn-primary" onClick={submitAddChild} disabled={!childDraftTitle.trim()}>Add</button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
 
   if (isLoading) return <div className="tasks-page"><div className="t-shell"><p className="t-loading">Loading tasks...</p></div></div>
   if (error) return <div className="tasks-page"><div className="t-shell"><p className="t-error" role="alert">Failed to load tasks.</p></div></div>
@@ -722,70 +753,71 @@ export function TasksPage() {
                 </tr>
               </thead>
               <tbody role="rowgroup">
-                {priorityGroups.map(group => {
-                  const isCollapsed = collapsedGroups.has(group.key)
+                {sections.map(section => {
+                  const collapsed = isSectionCollapsed(section.key)
                   return (
-                    <Fragment key={group.key}>
-                      <tr role="row" className={`t-group-header t-group-header--${group.cssModifier}`}>
+                    <Fragment key={section.key}>
+                      <tr role="row" className={`t-group-header t-group-header--${section.cssModifier}`}>
                         <td role="cell" colSpan={5}>
-                          <button type="button" className="t-group-toggle" aria-expanded={!isCollapsed} onClick={() => toggleGroup(group.key)}>
-                            <span aria-hidden="true" className={`t-group-chevron${isCollapsed ? ' t-group-chevron--collapsed' : ''}`}>{'▾'}</span>
-                            {group.label}{' '}
-                            <span className="t-group-count">{'·'} {group.tasks.length} task{group.tasks.length !== 1 ? 's' : ''}</span>
+                          <button
+                            type="button"
+                            className="t-group-toggle"
+                            aria-expanded={!collapsed}
+                            data-section-toggle={section.key}
+                            onClick={() => toggleSection(section.key)}
+                          >
+                            <span aria-hidden="true" className={`t-group-chevron${collapsed ? ' t-group-chevron--collapsed' : ''}`}>{'▾'}</span>
+                            {section.label}{' '}
+                            <span className="t-group-count">{'·'} {section.workRowCount} task{section.workRowCount !== 1 ? 's' : ''}</span>
                           </button>
                         </td>
                       </tr>
-                      {!isCollapsed && group.tasks.map(({ task, depth }) => {
-                        const taskId = Number(task.id)
-                        const children = childrenByParentId.get(taskId) ?? []
-                        const hasChildren = children.length > 0
-                        const childStats = childStatsByParentId.get(taskId)
-                        const childProgress = childStats
-                          ? `${childStats.done}/${childStats.total} subtasks complete${childStats.blocked > 0 ? `, ${childStats.blocked} blocked` : ''}`
-                          : null
-
-                        return (
-                          <Fragment key={`row-group-${taskId}`}>
-                            <TaskListRow
-                              task={task}
-                              depth={depth}
-                              hasChildren={hasChildren}
-                              isExpanded={hasChildren ? expandedParentIds.has(taskId) : undefined}
-                              childProgress={childProgress}
-                              onToggleChildren={hasChildren ? toggleChildren : undefined}
-                              onAddChild={beginAddChild}
-                              isAddingChild={addingChildForTaskId === taskId}
-                              onEdit={openEdit}
-                              onHistory={setHistoryTask}
-                              onDelete={handleDelete}
-                              onStatusCycle={handleStatusCycle}
-                              onBlock={handleBlock}
-                              onUnblock={handleUnblock}
-                              onEditBlockedReason={handleEditBlockedReason}
-                            />
-                            {addingChildForTaskId === taskId && (
-                              <tr key={`add-child-${taskId}`} role="row" className="t-list-row t-list-row--child-editor">
-                                <td role="cell" className="t-list-cell" colSpan={5}>
-                                  <div className="t-subtask-editor">
-                                    <span className="t-subtask-label">New subtask</span>
-                                    <input
-                                      className="t-input"
-                                      placeholder="Enter subtask title"
-                                      value={childDraftTitle}
-                                      onChange={e => setChildDraftTitle(e.target.value)}
-                                      onKeyDown={e => {
-                                        if (e.key === 'Enter') { e.preventDefault(); submitAddChild() }
-                                        if (e.key === 'Escape') { setAddingChildForTaskId(null); setChildDraftTitle('') }
-                                      }}
-                                    />
-                                    <button className="t-btn" onClick={() => { setAddingChildForTaskId(null); setChildDraftTitle('') }}>Cancel</button>
-                                    <button className="t-btn-primary" onClick={submitAddChild} disabled={!childDraftTitle.trim()}>Add</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        )
+                      {!collapsed && section.blocks.flatMap(block => {
+                        const items: ReactNode[] = []
+                        const header = block.header
+                        if (header) {
+                          const anchor = `ctx:${section.key}`
+                          const addingHeader = addingChild?.anchor === anchor && addingChild.parentId === header.parentId
+                          items.push(
+                            <TaskContextHeader
+                              key={`${section.key}:ctx:${header.parentId}`}
+                              path={header.path}
+                              parentId={header.parentId}
+                              anchor={`${anchor}:${header.parentId}`}
+                              isAdding={addingHeader}
+                              onAddChild={() => beginAddChild(header.parentId, anchor)}
+                            />,
+                          )
+                          if (addingHeader) items.push(renderChildEditor(`${section.key}:ctx-editor:${header.parentId}`))
+                        }
+                        block.rows.forEach(task => {
+                          const taskId = Number(task.id)
+                          const childStats = childStatsByParentId.get(taskId)
+                          const childProgress = childStats
+                            ? `${childStats.done}/${childStats.total} subtasks complete`
+                            : null
+                          const addingHere = addingChild?.anchor === 'row' && addingChild.parentId === taskId
+                          items.push(
+                            <Fragment key={`${section.key}:${taskId}`}>
+                              <TaskListRow
+                                task={task}
+                                depth={header ? 1 : 0}
+                                childProgress={childProgress}
+                                onAddChild={t => beginAddChild(Number(t.id), 'row')}
+                                isAddingChild={addingHere}
+                                onEdit={openEdit}
+                                onHistory={setHistoryTask}
+                                onDelete={handleDelete}
+                                onStatusCycle={handleStatusCycle}
+                                onBlock={handleBlock}
+                                onUnblock={handleUnblock}
+                                onEditBlockedReason={handleEditBlockedReason}
+                              />
+                              {addingHere && renderChildEditor(`${section.key}:editor:${taskId}`)}
+                            </Fragment>,
+                          )
+                        })
+                        return items
                       })}
                     </Fragment>
                   )

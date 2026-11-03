@@ -344,6 +344,74 @@ describe('TasksPage sections and context headers (#384)', () => {
     expect(rowFor('Outside parent')).toHaveClass('t-context-header')
   })
 
+  it('writes nothing to storage on filter changes (status, project, view, search)', async () => {
+    useData([
+      ...everyStatus,
+      { ...baseTask, id: 20, title: 'Alpha thing', status: 'Todo', priority: 'High', projectId: 1, projectName: 'Alpha' },
+    ])
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    renderPage()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    await userEvent.selectOptions(filterSelect(), 'Alpha')
+    await userEvent.click(screen.getByRole('button', { name: 'Active today' }))
+    await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'thing')
+    await waitFor(() => expect(screen.getByPlaceholderText('Search tasks...')).toHaveValue('thing'))
+    expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('a status filter that hides a parent\'s open subtask does not turn the parent into a work row', async () => {
+    useData([
+      { ...baseTask, id: 1, title: 'Parent', status: 'Todo', priority: 'High' },
+      { ...baseTask, id: 2, title: 'Draft kid', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
+      { ...baseTask, id: 3, title: 'Other', status: 'Todo', priority: 'High' },
+    ])
+    renderPage()
+    expect(rowFor('Parent')).toHaveClass('t-context-header')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    expect(screen.queryByText('Draft kid')).not.toBeInTheDocument()
+    expect(screen.queryByText('Parent')).not.toBeInTheDocument()
+    expect(screen.getByText('Other')).toBeInTheDocument()
+  })
+
+  it('a parent-title search shows nothing for the parent once a status filter excludes all its open subtasks', async () => {
+    useData([
+      { ...baseTask, id: 1, title: 'Plan the trip', status: 'Todo', priority: 'High' },
+      { ...baseTask, id: 2, title: 'Book flights', status: 'Draft', priority: 'High', parentTaskItemId: 1 },
+    ])
+    renderPage()
+    await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'trip')
+    await waitFor(() => expect(screen.getByText('Book flights')).toBeInTheDocument())
+    expect(rowFor('Plan the trip')).toHaveClass('t-context-header')
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+    expect(screen.queryByText('Book flights')).not.toBeInTheDocument()
+    expect(screen.queryByText('Plan the trip')).not.toBeInTheDocument()
+    expect(screen.getByText('No tasks match your filters.')).toBeInTheDocument()
+  })
+
+  it('tabs from a header link to its Add subtask button and then into the block rows', async () => {
+    useData(family)
+    renderPage()
+    const header = document.querySelector<HTMLElement>('.t-context-header') as HTMLElement
+    within(header).getByRole('link', { name: 'Goal' }).focus()
+    await userEvent.tab()
+    expect(within(header).getByRole('button', { name: 'Add subtask to Goal' })).toHaveFocus()
+    await userEvent.tab()
+    expect(rowFor('Mid kid').contains(document.activeElement)).toBe(true)
+  })
+
+  it('renders no context header or rows inside a collapsed section, and its toggle shows the work-row count', () => {
+    useData([
+      { ...baseTask, id: 1, title: 'Goal', status: 'Todo', priority: 'High' },
+      { ...baseTask, id: 2, title: 'Stuck kid', status: 'Blocked', priority: 'High', parentTaskItemId: 1 },
+    ])
+    renderPage()
+    expect(toggleOf('blocked')).toHaveAttribute('aria-expanded', 'false')
+    expect(toggleOf('blocked')).toHaveAccessibleName('Blocked · 1 task')
+    expect(document.querySelector('.t-context-header')).toBeNull()
+    expect(screen.queryByText('Stuck kid')).not.toBeInTheDocument()
+    expect(document.querySelector('[data-task-status-id]')).toBeNull()
+  })
+
   it('a Todo task with no priority lands in High', () => {
     useData([{ ...baseTask, id: 1, title: 'No priority', status: 'Todo', priority: undefined }])
     renderPage()

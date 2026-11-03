@@ -133,7 +133,7 @@ export function TaskListRow({
   const nextRequest = nextCycleStatus(shownStatus)
   const nextLabel = nextRequest ? getStatusLabel(nextRequest) : null
   const priority = (task.priority ?? 'low').toLowerCase()
-  const overdue = isOverdue(task.dueDate, task.status)
+  const overdue = isOverdue(task.dueDate, shownStatus)
   const moveCount = task.moveCount ?? 0
   const daysTagged = task.daysTagged ?? 0
   const isCompleted = status === 'completed'

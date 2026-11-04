@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { TaskItemResponseDto } from '@/api/journal'
+import { PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 
 const toggleTodoMutate = vi.fn()
 
@@ -188,10 +189,22 @@ describe('TodosSection completion-day behaviour', () => {
 
   it('shows the inline error when the server rejects a reopen (stale view)', async () => {
     toggleTodoMutate.mockImplementation((_vars, opts) =>
-      opts.onError({ response: { status: 422 }, error: { code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' } }),
+      opts.onError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' }),
     )
     show([{ ...base, status: 'Completed', completedAt: null, currentJournalDate: TODAY } as TaskItemResponseDto], TODAY)
     await userEvent.setup({ advanceTimers: () => {} }).click(screen.getByRole('button', { name: 'Mark not done' }))
-    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('Tasks completed on a past day cannot be reopened.')
+  })
+
+  it('shows the mapped parent-completed message when the server rejects a reopen under a Completed parent', async () => {
+    toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' }))
+    show([{ ...base, status: 'Completed', completedAt: null, currentJournalDate: TODAY } as TaskItemResponseDto], TODAY)
+    const user = userEvent.setup({ advanceTimers: () => {} })
+    const check = screen.getByRole('button', { name: 'Mark not done' })
+    await user.click(check)
+    expect(screen.getByRole('alert')).toHaveTextContent(PARENT_COMPLETED_MESSAGE)
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Unable to save task changes')
+    expect(screen.getByRole('button', { name: 'Mark not done' })).toBe(check)
+    expect(check).toHaveFocus()
   })
 })

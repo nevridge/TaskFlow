@@ -5,6 +5,7 @@ import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
 import type { TodosSectionHandle } from './TodosSection'
 import type { TaskItemResponseDto } from '@/api/journal'
+import { PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 
 const createTodoMutate = vi.fn()
 const toggleTodoMutate = vi.fn()
@@ -182,6 +183,17 @@ describe('TodosSection', () => {
     renderSection()
     await userEvent.click(screen.getByRole('button', { name: /mark not done/i }))
     expect(screen.getByText('Tasks completed on a past day cannot be reopened.')).toBeInTheDocument()
+    expect(screen.getByText('Fix bug').closest('li')?.className).toContain('is-done')
+  })
+
+  it('toggle rejected with TASK_PARENT_COMPLETED_NOT_ALLOWED shows the mapped message, not the generic one, and stays completed', async () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
+    toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' }))
+    renderSection()
+    await userEvent.click(screen.getByRole('button', { name: /mark not done/i }))
+    expect(screen.getByText(PARENT_COMPLETED_MESSAGE)).toBeInTheDocument()
+    expect(screen.queryByText('Unable to save task changes. Please try again.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /mark not done/i })).toBeInTheDocument()
     expect(screen.getByText('Fix bug').closest('li')?.className).toContain('is-done')
   })
 

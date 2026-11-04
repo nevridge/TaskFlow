@@ -492,6 +492,74 @@ describe('TaskForm with a locked (derived) status', () => {
   })
 })
 
+describe('TaskForm open statuses under a Completed parent', () => {
+  const parents = [
+    { id: 1, title: 'Open parent', status: 'Todo' },
+    { id: 2, title: 'Done parent', status: 'Completed' },
+  ]
+  const doneChild = { ...existing, status: 'Completed' as const, parentTaskItemId: 2 }
+  const statusSelect = () => screen.getByRole('combobox', { name: 'Status' })
+  const openNames = ['Draft', 'Todo', 'In Progress', 'Blocked']
+  const HINT = 'Parent is completed. Reopen the parent first to change this status.'
+
+  function expectOpenDisabled(disabled: boolean) {
+    for (const name of openNames) {
+      const option = within(statusSelect()).getByRole('option', { name: new RegExp(`^${name}`) })
+      if (disabled) expect(option).toBeDisabled()
+      else if (name === 'Draft' || name === 'Todo') expect(option).toBeEnabled()
+    }
+  }
+
+  it('disables all open statuses, keeps Completed selected, and shows a linked hint', () => {
+    renderForm(doneChild, vi.fn(), vi.fn(), { availableParents: parents })
+    expectOpenDisabled(true)
+    const completed = within(statusSelect()).getByRole('option', { name: 'Completed' }) as HTMLOptionElement
+    expect(completed).toBeEnabled()
+    expect(completed.selected).toBe(true)
+    const hint = screen.getByText(HINT)
+    expect(statusSelect()).toHaveAttribute('aria-describedby', hint.id)
+  })
+
+  it.each([
+    ['the parent is open', { ...doneChild, parentTaskItemId: 1 }, parents],
+    ['there is no parent', { ...doneChild, parentTaskItemId: null }, parents],
+    ['the parent is unknown', { ...doneChild, parentTaskItemId: 99 }, parents],
+    ['the task itself is open', { ...doneChild, status: 'Todo' as const }, parents],
+  ])('does not disable anything when %s', (_label, task, availableParents) => {
+    renderForm(task, vi.fn(), vi.fn(), { availableParents })
+    expectOpenDisabled(false)
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument()
+    expect(statusSelect()).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('does not apply in create mode', () => {
+    renderForm(undefined, vi.fn(), vi.fn(), { availableParents: parents })
+    expectOpenDisabled(false)
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument()
+  })
+
+  it('re-enables and hides the hint when the parent is cleared, then saves the new status with no parent', async () => {
+    const onSubmit = vi.fn()
+    renderForm(doneChild, onSubmit, vi.fn(), { availableParents: parents })
+    await userEvent.selectOptions(screen.getByLabelText('Parent Task'), '')
+    expectOpenDisabled(false)
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument()
+    await userEvent.selectOptions(statusSelect(), 'todo')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe('todo')
+    // Omitted/null parent: useUpdateTaskMutation puts `parentTaskItemId ?? null` on the wire.
+    expect(payload.parentTaskItemId ?? null).toBeNull()
+  })
+
+  it('re-enables when a non-Completed parent is chosen', async () => {
+    renderForm(doneChild, vi.fn(), vi.fn(), { availableParents: parents })
+    await userEvent.selectOptions(screen.getByLabelText('Parent Task'), '1')
+    expectOpenDisabled(false)
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument()
+  })
+})
+
 describe('TaskForm parent picker', () => {
   const parents = [
     { id: 1, title: 'Open parent', status: 'Todo' },

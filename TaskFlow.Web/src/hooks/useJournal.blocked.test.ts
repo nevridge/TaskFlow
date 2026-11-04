@@ -168,6 +168,19 @@ describe('useToggleTodoMutation on Blocked rows', () => {
     expect(rows(qc)[0]).toMatchObject({ status: 'Blocked', blockedReason: 'Waiting' })
   })
 
+  it('a reopen is not optimistic: the row stays Completed while pending and after a TASK_PARENT_COMPLETED_NOT_ALLOWED rejection', async () => {
+    const d = deferred()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
+    const qc = seeded([todo({ id: 3, status: 'Completed' })])
+    const { result } = renderHook(() => useToggleTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
+    let settled: Promise<unknown> = Promise.resolve()
+    act(() => { settled = result.current.mutateAsync({ id: 3, done: false }).catch(() => {}) })
+    await waitFor(() => expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalled())
+    expect(rows(qc)[0].status).toBe('Completed')
+    await act(async () => { d.reject({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' }); await settled })
+    expect(rows(qc)[0].status).toBe('Completed')
+  })
+
   it('completes a Todo row optimistically', async () => {
     const d = deferred()
     vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)

@@ -2,9 +2,14 @@ import { type FormEvent, type Ref, useEffect, useRef, useState } from 'react'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
-import { normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
+import { isCompleted, normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
 import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
-import { isParentOptionDisabled, parentOptionLabel, type ParentTaskOption } from '@/lib/parent-options'
+import {
+  COMPLETED_PARENT_STATUS_HINT,
+  isParentOptionDisabled,
+  parentOptionLabel,
+  type ParentTaskOption,
+} from '@/lib/parent-options'
 
 export type { ParentTaskOption }
 
@@ -72,6 +77,11 @@ export function TaskForm({
   const canChooseInProgress = !task || (originalStatus !== 'Draft' && originalStatus !== 'Completed')
   const [blockedReason, setBlockedReason] = useState(task?.blockedReason ?? '')
   const [parentTaskId, setParentTaskId] = useState<string>(task?.parentTaskItemId ? String(task.parentTaskItemId) : '')
+  // A Completed subtask cannot be reopened under a Completed parent (server 422). Derived from the live parent
+  // selection each render, so clearing or changing the parent re-enables the open statuses (reopen + detach).
+  const selectedParent = parentTaskId ? availableParents.find(p => String(p.id) === parentTaskId) : undefined
+  const openStatusesBlocked = !!task && originalStatus === 'Completed' && !statusLocked && isCompleted(selectedParent?.status)
+  const statusDescribedBy = statusLocked ? 'status-locked-hint' : openStatusesBlocked ? 'status-parent-completed-hint' : undefined
 
   const serverProjectId = normalizeProjectId(task?.projectId)
   const defaultActive =
@@ -143,24 +153,29 @@ export function TaskForm({
             className="t-input"
             value={statusLocked ? (normalizeStatus(displayStatus ?? task?.status)?.toLowerCase() ?? status) : status}
             disabled={statusLocked}
-            aria-describedby={statusLocked ? 'status-locked-hint' : undefined}
+            aria-describedby={statusDescribedBy}
             onChange={e => { setStatus(e.target.value); onParentOrStatusChange?.() }}
           >
-            <option value="draft">Draft</option>
-            <option value="todo">Todo</option>
+            <option value="draft" disabled={openStatusesBlocked}>Draft</option>
+            <option value="todo" disabled={openStatusesBlocked}>Todo</option>
             <option
               value="inprogress"
-              disabled={!statusLocked && !canChooseInProgress}
+              disabled={openStatusesBlocked || (!statusLocked && !canChooseInProgress)}
               title={canChooseInProgress ? undefined : 'Set to Todo first'}
             >
               {canChooseInProgress || statusLocked ? 'In Progress' : 'In Progress (set to Todo first)'}
             </option>
-            <option value="blocked" disabled={!statusLocked && !canChooseBlocked}>Blocked</option>
+            <option value="blocked" disabled={openStatusesBlocked || (!statusLocked && !canChooseBlocked)}>Blocked</option>
             <option value="completed">Completed</option>
           </select>
           {statusLocked && (
             <p id="status-locked-hint" className="t-detail-hint">
               Follows open subtasks. Complete or remove them to change it.
+            </p>
+          )}
+          {openStatusesBlocked && (
+            <p id="status-parent-completed-hint" className="t-detail-hint">
+              {COMPLETED_PARENT_STATUS_HINT}
             </p>
           )}
         </div>

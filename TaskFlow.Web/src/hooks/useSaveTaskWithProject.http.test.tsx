@@ -40,7 +40,7 @@ describe('useSaveTaskWithProject against an HTTP failing PUT', () => {
   })
 
   it('save() resolves false, sets the error and makes no project call when the PUT returns an HTTP error', async () => {
-    const apiError = { code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' }
+    const apiError = { code: 'TASK_PARENT_SELF_NOT_ALLOWED' }
     vi.mocked(sdk.putApiV1TaskItemsById).mockImplementation(((opts?: { throwOnError?: boolean }) =>
       opts?.throwOnError
         ? Promise.reject(apiError)
@@ -52,7 +52,7 @@ describe('useSaveTaskWithProject against an HTTP failing PUT', () => {
 
     expect(sdk.putApiV1TaskItemsById).toHaveBeenCalledWith(expect.objectContaining({ throwOnError: true }))
     expect(saved).toBe(false)
-    expect(result.current.error).toBe('This parent assignment would create a cycle.')
+    expect(result.current.error).toBe('A task cannot be set as its own parent.')
     expect(changeAsync).not.toHaveBeenCalled()
   })
 

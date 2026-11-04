@@ -295,7 +295,6 @@ Tasks pages map backend business-rule codes to user-friendly inline errors, incl
 - `TASK_PARENT_NOT_FOUND`
 - `TASK_PARENT_SELF_NOT_ALLOWED`
 - `TASK_PARENT_DEPTH_NOT_ALLOWED`
-- `TASK_PARENT_CYCLE_NOT_ALLOWED`
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_STATUS_DERIVED`: mapped by `getBlockErrorMessage` to "This task's status follows its open subtasks. Complete or remove them to change it." Only reachable on a race with stale data; the optimistic change rolls back and the task queries are invalidated.

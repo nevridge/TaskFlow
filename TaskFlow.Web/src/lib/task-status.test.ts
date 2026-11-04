@@ -3,9 +3,10 @@ import {
   STATUS_LABELS,
   STATUS_ORDER,
   canBlock,
-  formatSubtaskProgress,
+  formatSubtasksComplete,
   getBlockErrorMessage,
   getStatusLabel,
+  hasOpenChildren,
   isBlocked,
   isCompleted,
   journalSortTier,
@@ -111,12 +112,19 @@ describe('journalSortTier', () => {
   })
 })
 
-describe('formatSubtaskProgress', () => {
-  it('omits the blocked part when none are blocked', () => {
-    expect(formatSubtaskProgress(2, 5, 0)).toBe('2/5 done')
+describe('formatSubtasksComplete', () => {
+  it('uses the Tasks-page wording', () => {
+    expect(formatSubtasksComplete(2, 5)).toBe('2/5 subtasks complete')
   })
-  it('appends the blocked count when greater than zero', () => {
-    expect(formatSubtaskProgress(2, 5, 1)).toBe('2/5 done, 1 blocked')
+})
+
+describe('hasOpenChildren', () => {
+  it('is true only for a positive open child count, number or string', () => {
+    expect(hasOpenChildren({ openChildCount: 1 })).toBe(true)
+    expect(hasOpenChildren({ openChildCount: '2' })).toBe(true)
+    expect(hasOpenChildren({ openChildCount: 0 })).toBe(false)
+    expect(hasOpenChildren({ openChildCount: null })).toBe(false)
+    expect(hasOpenChildren({})).toBe(false)
   })
 })
 

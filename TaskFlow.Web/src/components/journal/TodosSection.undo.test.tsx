@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import type { TaskItemResponseDto } from '@/api/journal'
 import { ToastProvider } from '@/context/ToastContext'
 
@@ -41,14 +42,11 @@ function load(rows: TaskItemResponseDto[]) {
   vi.mocked(useJournalTodos).mockReturnValue({ data: { data: rows }, isLoading: false } as never)
 }
 
-const parent = todo({
-  id: 1,
-  title: 'Parent task',
-  children: [
-    todo({ id: 2, title: 'Child one', parentTaskItemId: 1 }),
-    todo({ id: 3, title: 'Child two', parentTaskItemId: 1 }),
-  ],
-})
+// Flat rows as the server sends them: a parent and its two subtasks.
+const parent = todo({ id: 1, title: 'Parent task', openChildCount: 2 })
+const childOne = todo({ id: 2, title: 'Child one', parentTaskItemId: 1 })
+const childTwo = todo({ id: 3, title: 'Child two', parentTaskItemId: 1 })
+const family = [parent, childOne, childTwo]
 
 function Page({ initiallyShown = true }: { initiallyShown?: boolean }) {
   const [shown, setShown] = useState(initiallyShown)
@@ -65,7 +63,9 @@ function renderPage() {
   const tree = (
     <QueryClientProvider client={client}>
       <ToastProvider>
-        <Page />
+        <MemoryRouter>
+          <Page />
+        </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>
   )
@@ -101,25 +101,29 @@ describe('TodosSection undoable delete', () => {
     expect(status).toHaveTextContent('Removed from this day: "A very long task title that ke…"')
   })
 
-  it('hides the parent and its children together and Undo restores all of them', () => {
-    load([parent])
+  // A parent row that stays a row (its subtasks are Completed) next to those subtask rows.
+  const rowParent = todo({ id: 1, title: 'Parent task', openChildCount: 0 })
+  const doneKids = [
+    todo({ id: 2, title: 'Child one', status: 'Completed', parentTaskItemId: 1 }),
+    todo({ id: 3, title: 'Child two', status: 'Completed', parentTaskItemId: 1 }),
+  ]
+
+  it('hides only the removed parent row, not its subtask rows, and Undo restores it', () => {
+    load([rowParent, ...doneKids])
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Remove from day: Parent task' }))
-    expect(screen.queryByText('Parent task')).not.toBeInTheDocument()
-    expect(screen.queryByText('Child one')).not.toBeInTheDocument()
-    expect(screen.queryByText('Child two')).not.toBeInTheDocument()
-    expect(screen.getByText('0/0')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    expect(screen.getByText('Parent task')).toBeInTheDocument()
+    expect(screen.queryByText('Parent task', { selector: '.todo-text' })).not.toBeInTheDocument()
     expect(screen.getByText('Child one')).toBeInTheDocument()
     expect(screen.getByText('Child two')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(screen.getByText('Parent task', { selector: '.todo-text' })).toBeInTheDocument()
     advance(10000)
     expect(removeJournalTodo).not.toHaveBeenCalled()
   })
 
   it('commits only the parent id when a parent is removed', () => {
-    load([parent])
+    load([rowParent, ...doneKids])
     renderPage()
     fireEvent.click(screen.getByRole('button', { name: 'Remove from day: Parent task' }))
     advance(6000)
@@ -127,12 +131,12 @@ describe('TodosSection undoable delete', () => {
     expect(removeJournalTodo).toHaveBeenCalledWith(10, 1)
   })
 
-  it('hides a single subtask with its own toast copy and leaves its parent and sibling', () => {
-    load([parent])
+  it('hides a single subtask with its own toast copy and leaves its header and sibling', () => {
+    load(family)
     renderPage()
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove from day' })[0])
     expect(screen.queryByText('Child one')).not.toBeInTheDocument()
-    expect(screen.getByText('Parent task')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Parent task/ })).toBeInTheDocument()
     expect(screen.getByText('Child two')).toBeInTheDocument()
     expect(within(screen.getByRole("region", { name: "Notifications" })).getByRole("status")).toHaveTextContent("Removed from this day")
   })
@@ -189,7 +193,7 @@ describe('TodosSection undoable delete', () => {
 
   it('shows an error toast and restores the row when the server rejects the delete', async () => {
     vi.mocked(removeJournalTodo).mockRejectedValueOnce({ status: 404 })
-    load([parent])
+    load(family)
     renderPage()
     fireEvent.click(screen.getAllByRole('button', { name: 'Remove from day' })[0])
     advance(6000)

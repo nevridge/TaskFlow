@@ -41,9 +41,14 @@ export type UpdateJournalEntryDto = {
 import type { TaskItemResponseDto as ClientTaskItemResponseDto } from './client/types.gen'
 export type TaskItemResponseDto = Omit<
   ClientTaskItemResponseDto,
-  'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children'
+  'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children' | 'openChildCount'
 > & {
-  // isContextOnly / completedAt come from the generated type (nullable); no override needed.
+  // completedAt comes from the generated type (nullable); no override needed.
+  // The journal todos endpoint returns a flat list: `children` is never populated there.
+  /** Set on subtask rows, even when the parent is not a row of this day. */
+  parentTitle?: string | null
+  /** Subtasks that are not Completed (Blocked counts as open). The generator types it number | string. */
+  openChildCount?: number | null
   currentJournalDate?: string | null
   moveCount?: number
   daysTagged?: number

@@ -31,7 +31,7 @@ import {
   rollbackTaskCache,
 } from '@/hooks/useTasks'
 import { journalKeys } from '@/hooks/journalKeys'
-import { filterPending, pendingKey, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
+import { filterPending, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
 import { isBlocked, mapCachedTask, withBlockedCompleted } from '@/lib/task-status'
 import type { BlockableFields } from '@/lib/task-status'
 import { addDays, formatEntryTitle, getTimezoneOffsetMinutes, todayISO } from '@/lib/journal-utils'
@@ -57,11 +57,7 @@ export function useJournalTodos(entryId: number | undefined) {
     (res: Awaited<ReturnType<typeof getJournalTodos>>) => {
       const list = res.data as TaskItemResponseDto[] | undefined
       if (!list || pendingKeys.size === 0) return res
-      const visible = filterPending('task', list, pendingKeys).map(t =>
-        t.children?.some(c => c.id != null && pendingKeys.has(pendingKey('task', c.id)))
-          ? { ...t, children: filterPending('task', t.children, pendingKeys) }
-          : t,
-      )
+      const visible = filterPending('task', list, pendingKeys)
       return { ...res, data: visible } as typeof res
     },
     [pendingKeys],
@@ -238,7 +234,7 @@ function entriesCacheList(qc: QueryClient): JournalEntryResponseDto[] {
 /**
  * Moves a just-completed task between the cached day lists: a task completed from another day than today is
  * attributed to today (its completion day), so it leaves the viewed day and joins today's completed tier.
- * Children stay in their parent (the server sends all subtasks) and are filtered at render time.
+ * The list is flat (roots and subtasks alike), so a subtask moves like any other row.
  */
 function moveCompletedAcrossDays(
   qc: QueryClient,
@@ -248,10 +244,10 @@ function moveCompletedAcrossDays(
   complete: (task: TaskItemResponseDto) => TaskItemResponseDto,
 ) {
   const viewed = qc.getQueryData<TodosCache>(viewedKey)
-  const roots = viewed?.data
-  if (!Array.isArray(roots)) return
-  const root = roots.find(t => Number(t.id) === id)
-  if (root) {
+  const rows = viewed?.data
+  if (!Array.isArray(rows)) return
+  const row = rows.find(t => Number(t.id) === id)
+  if (row) {
     qc.setQueryData<TodosCache>(viewedKey, old => (old?.data ? { ...old, data: old.data.filter(t => Number(t.id) !== id) } : old))
     // When today's list is not cached nothing is inserted: seeding a one-row list would be a wrong partial
     // list. The row is simply absent from the viewed day; today's list loads (and includes it) on first view,
@@ -260,26 +256,10 @@ function moveCompletedAcrossDays(
       qc.setQueryData<TodosCache>(todayKey, old => {
         if (!old?.data) return old
         const exists = old.data.some(t => Number(t.id) === id)
-        return { ...old, data: exists ? old.data.map(t => (Number(t.id) === id ? complete(t) : t)) : [...old.data, complete(root)] }
+        return { ...old, data: exists ? old.data.map(t => (Number(t.id) === id ? complete(t) : t)) : [...old.data, complete(row)] }
       })
     }
-    return
   }
-  // A subtask: update it inside its parent in both lists; the render filter hides it from the viewed day.
-  const inParent = (list: TodosCache) => (list?.data ?? []).some(t => t.children?.some(c => Number(c.id) === id))
-  const patch = (old: TodosCache): TodosCache =>
-    old?.data
-      ? {
-          ...old,
-          data: old.data.map(t =>
-            t.children?.some(c => Number(c.id) === id)
-              ? { ...t, children: t.children.map(c => (Number(c.id) === id ? complete(c) : c)) }
-              : t,
-          ),
-        }
-      : old
-  if (inParent(viewed)) qc.setQueryData<TodosCache>(viewedKey, patch)
-  if (todayKey && inParent(qc.getQueryData<TodosCache>(todayKey))) qc.setQueryData<TodosCache>(todayKey, patch)
 }
 
 export function useToggleTodoMutation(entryId: number, isoDate?: string) {
@@ -469,15 +449,15 @@ export function useDeleteLogEntryMutation(entryId: number) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Count open todos in a journal entry's todos list (roots only; context-only parents are not todos here). */
+/** Count open todos among the rendered work rows (context headers are never passed in). */
 export function openTodoCount(todos: TaskItemResponseDto[]): number {
   // Blocked counts as open (not done).
-  return todos.filter(t => !t.isContextOnly && t.status !== 'Completed').length
+  return todos.filter(t => t.status !== 'Completed').length
 }
 
-/** Count blocked todos in a journal entry's todos list. */
+/** Count blocked todos among the rendered work rows. */
 export function blockedTodoCount(todos: TaskItemResponseDto[]): number {
-  return todos.filter(t => !t.isContextOnly && t.status === 'Blocked').length
+  return todos.filter(t => t.status === 'Blocked').length
 }
 
 /** ISO date of yesterday relative to a given ISO date. */

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, act, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import type { JournalLogEntryResponseDto, JournalNoteResponseDto, TaskItemResponseDto } from '@/api/journal'
 import { ToastProvider } from '@/context/ToastContext'
 
@@ -53,7 +54,7 @@ function renderWith(ui: React.ReactElement, client = new QueryClient()) {
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <ToastProvider>{ui}</ToastProvider>
+        <ToastProvider><MemoryRouter>{ui}</MemoryRouter></ToastProvider>
       </QueryClientProvider>,
     ),
   }
@@ -92,10 +93,10 @@ describe('journal undo acceptance (note, log, subtask)', () => {
 
   it('AC9: a subtask delete toast reads exactly "Removed from this day" with no title', () => {
     const parent = {
-      id: 1, title: 'Parent', status: 'Todo', priority: 'low', description: null, dueDate: null,
-      children: [{ id: 2, title: 'Child', status: 'Todo', priority: 'low', parentTaskItemId: 1 }],
+      id: 1, title: 'Parent', status: 'Todo', priority: 'low', description: null, dueDate: null, openChildCount: 1,
     } as unknown as TaskItemResponseDto
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parent] }, isLoading: false } as never)
+    const child = { id: 2, title: 'Child', status: 'Todo', priority: 'low', parentTaskItemId: 1 } as unknown as TaskItemResponseDto
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parent, child] }, isLoading: false } as never)
     renderWith(<TodosSection entryId={10} isoDate="2099-01-01" sort="manual" />)
     fireEvent.click(screen.getByRole('button', { name: 'Remove from day' }))
     const toast = within(notifications()).getByRole('status')

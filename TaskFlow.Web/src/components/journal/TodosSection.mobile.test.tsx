@@ -262,8 +262,9 @@ describe('TodosSection title tap-to-edit', () => {
         title: 'Parent',
         status: 'Blocked',
         blockedReason: 'parent reason',
-        children: [row({ id: 2, title: 'Child', status: 'Blocked', blockedReason: 'child reason', parentTaskItemId: 1 })],
+        openChildCount: 1,
       } as Partial<TaskItemResponseDto>),
+      row({ id: 2, title: 'Child', status: 'Blocked', blockedReason: 'child reason', parentTaskItemId: 1 }),
     ])
     renderSection()
     const child = document.querySelector('li.todo-child') as HTMLElement

@@ -154,7 +154,7 @@ describe('TodosSection', () => {
   })
 
   it('renaming a subtask sends only id and title (no parentTaskItemId)', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [{ ...openTodo, children: [childTodo] }] }, isLoading: false } as never)
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
     renderSection()
     await userEvent.dblClick(screen.getByText('Sub A'))
     const editInput = screen.getByDisplayValue('Sub A')
@@ -360,14 +360,18 @@ describe('TodosSection', () => {
     currentJournalDate: '2026-05-28',
   }
 
-  const parentWithChild: TaskItemResponseDto = {
-    ...openTodo,
-    children: [childTodo],
-  }
+  // The flat rows the server sends: a parent with one open subtask, and that subtask.
+  const family: TaskItemResponseDto[] = [
+    { ...openTodo, childTaskCount: 1, openChildCount: 1 },
+    childTodo,
+  ]
 
   describe('task id', () => {
-    it('shows ids on top-level and nested subtask rows outside .todo-text', () => {
-      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    it('shows ids on top-level and subtask rows outside .todo-text', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({
+        data: { data: [openTodo, { ...childTodo, parentTaskItemId: 7, parentTitle: 'Elsewhere' }] },
+        isLoading: false,
+      } as never)
       renderSection()
       const top = screen.getByRole('img', { name: 'Task 1' })
       const sub = screen.getByRole('img', { name: 'Task 99' })
@@ -445,52 +449,33 @@ describe('TodosSection', () => {
     })
   })
 
-  it('renders subtask nested under parent when children array is populated', () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+  it('renders a subtask as a flat, indented row after its parent header', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
     renderSection()
-    expect(screen.getByText('Sub A')).toBeInTheDocument()
     const li = screen.getByText('Sub A').closest('li')
     expect(li?.className).toContain('todo-child')
+    expect(li?.className).toContain('todo-in-group')
+    // Flat siblings: no nested list anywhere
+    expect(document.querySelector('ul ul')).toBeNull()
+    const header = screen.getByRole('link', { name: /write tests/i }).closest('li') as HTMLElement
+    expect(header.nextElementSibling).toBe(li)
   })
 
-  it('subtask with future currentJournalDate gets is-future class', () => {
-    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
+  it('shows no future badge, is-future class or disabled remove for a subtask', () => {
     vi.mocked(useJournalTodos).mockReturnValue({
-      data: { data: [{ ...openTodo, children: [futureChild] }] },
+      data: { data: [family[0], { ...childTodo, currentJournalDate: '2026-06-10' }] },
       isLoading: false,
     } as never)
     renderSection({ isoDate: '2026-06-02' })
-    const li = screen.getByText('Sub A').closest('li')
-    expect(li?.className).toContain('is-future')
-  })
-
-  it('subtask with past currentJournalDate does NOT get is-future class', () => {
-    const pastChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-05-01' }
-    vi.mocked(useJournalTodos).mockReturnValue({
-      data: { data: [{ ...openTodo, children: [pastChild] }] },
-      isLoading: false,
-    } as never)
-    renderSection({ isoDate: '2026-06-02' })
-    const li = screen.getByText('Sub A').closest('li')
-    expect(li?.className).not.toContain('is-future')
-  })
-
-  it('future-date badge shows human-readable date', () => {
-    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
-    vi.mocked(useJournalTodos).mockReturnValue({
-      data: { data: [{ ...openTodo, children: [futureChild] }] },
-      isLoading: false,
-    } as never)
-    renderSection({ isoDate: '2026-06-02' })
-    expect(screen.getByText('Jun 10')).toBeInTheDocument()
+    expect(screen.queryByText('Jun 10')).not.toBeInTheDocument()
+    expect(screen.getByText('Sub A').closest('li')?.className).not.toContain('is-future')
+    expect(screen.getByRole('button', { name: 'Remove from day' })).toBeEnabled()
   })
 
   it('toggle on subtask calls mutation with child id', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
     renderSection()
-    const checkButtons = screen.getAllByRole('button', { name: /mark done/i })
-    // The child check button follows the parent's — it is the second 'Mark done' button
-    await userEvent.click(checkButtons[1])
+    await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
     expect(toggleTodoMutate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 99 }),
       expect.any(Object)
@@ -498,11 +483,9 @@ describe('TodosSection', () => {
   })
 
   it('toggling a subtask does not auto-complete the parent (autoCompleteParentWhenChildrenDone is false)', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
     renderSection()
-    const checkButtons = screen.getAllByRole('button', { name: /mark done/i })
-    // Click the child check button (second 'Mark done' button)
-    await userEvent.click(checkButtons[1])
+    await userEvent.click(screen.getByRole('button', { name: /mark done/i }))
     expect(toggleTodoMutate).toHaveBeenCalledWith(
       { id: 99, done: true, autoCompleteParentWhenChildrenDone: false },
       expect.any(Object)
@@ -512,7 +495,7 @@ describe('TodosSection', () => {
   it('delete on subtask calls removeJournalTodo with the child id after the undo window', () => {
     vi.useFakeTimers()
     try {
-      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
       renderSection()
       fireEvent.click(screen.getByRole('button', { name: 'Remove from day' }))
       expect(within(screen.getByRole('region', { name: 'Notifications' })).getByRole('status')).toHaveTextContent('Removed from this day')
@@ -523,32 +506,10 @@ describe('TodosSection', () => {
     }
   })
 
-  it('future-scheduled subtask does not show remove button', () => {
-    const futureChild: TaskItemResponseDto = { ...childTodo, currentJournalDate: '2026-06-10' }
-    vi.mocked(useJournalTodos).mockReturnValue({
-      data: { data: [{ ...openTodo, children: [futureChild] }] },
-      isLoading: false,
-    } as never)
-    renderSection({ isoDate: '2026-06-02' })
-    // The child row is present but no "Remove from day" button should appear for it
-    expect(screen.getByText('Sub A')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Remove from day' })).not.toBeInTheDocument()
-  })
-
-  it('child task does not appear at top level when nested under parent', () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
+  it('todo counter counts work rows only, never the header', () => {
+    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
     renderSection()
-    const childList = document.querySelector('.todo-child-list')
-    expect(childList).toBeInTheDocument()
-    // The child li is inside the child list, not a direct sibling of the parent li
-    const childLi = screen.getByText('Sub A').closest('li')
-    expect(childLi?.closest('.todo-child-list')).toBeInTheDocument()
-  })
-
-  it('todo counter reflects top-level count only', () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [parentWithChild] }, isLoading: false } as never)
-    renderSection()
-    // 1 top-level todo, 0 completed → counter shows "0/1"
+    // The parent is a header; the subtask is the one work row, so "0/1"
     expect(screen.getByText('0/1')).toBeInTheDocument()
   })
 
@@ -613,7 +574,10 @@ describe('TodosSection', () => {
 
   it('subtask shows its own priority and project badges', () => {
     const child = { ...childTodo, priority: 'High', projectName: 'Child Proj' } as TaskItemResponseDto
-    mockTodos([{ ...openTodo, priority: 'Low', projectName: 'Parent Proj', children: [child] } as TaskItemResponseDto])
+    mockTodos([
+      { ...openTodo, priority: 'Low', projectName: 'Parent Proj' } as TaskItemResponseDto,
+      { ...child, parentTaskItemId: 7, parentTitle: 'Elsewhere' },
+    ])
     renderSection()
     const childBadges = rowBadges('Sub A')!
     expect(childBadges).toHaveTextContent('high')
@@ -621,15 +585,6 @@ describe('TodosSection', () => {
     const parentBadges = rowBadges('Write tests')!
     expect(parentBadges).toHaveTextContent('low')
     expect(parentBadges).toHaveTextContent('Parent Proj')
-  })
-
-  it('future-dated subtask shows date badge before the new badges', () => {
-    const child = { ...childTodo, currentJournalDate: '2026-06-10', priority: 'High' }
-    mockTodos([{ ...openTodo, children: [child] }])
-    renderSection({ isoDate: '2026-06-02' })
-    const date = screen.getByText('Jun 10')
-    const group = rowBadges('Sub A')!
-    expect(date.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('badges stay visible in edit mode', async () => {

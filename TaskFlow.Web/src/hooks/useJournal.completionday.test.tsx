@@ -89,14 +89,23 @@ describe('useToggleTodoMutation completion-day move', () => {
     expect(list(PAST_ID)?.[0].completedAt).toBe(NOW.toISOString())
   })
 
-  it('completes a child inside its parent without touching the parent', async () => {
+  it('completes a subtask row in place on today without touching its parent or sibling rows', async () => {
     vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(new Promise(() => {}) as never)
-    const parent = task(1, { children: [task(5, { parentTaskItemId: 1 }), task(6, { parentTaskItemId: 1 })] })
-    const { hook, list } = setup([parent], [])
+    const rows = [task(1), task(5, { parentTaskItemId: 1 }), task(6, { parentTaskItemId: 1 })]
+    const { hook, list } = setup(rows, [], '2026-06-05')
     act(() => hook.result.current.mutate({ id: 5, done: true }))
-    await waitFor(() => expect(list(PAST_ID)?.[0].children?.[0].status).toBe('Completed'))
-    expect(list(PAST_ID)?.[0].status).toBe('Todo')
-    expect(list(PAST_ID)?.[0].children?.[1].status).toBe('Todo')
-    expect(list(PAST_ID)?.[0].children?.[0].completedAt).toBe(NOW.toISOString())
+    await waitFor(() => expect(list(PAST_ID)?.[1].status).toBe('Completed'))
+    expect(list(PAST_ID)?.map(t => t.status)).toEqual(['Todo', 'Completed', 'Todo'])
+    expect(list(PAST_ID)?.[1].completedAt).toBe(NOW.toISOString())
+  })
+
+  it('moves a subtask row completed from a past day into today like any other row', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(new Promise(() => {}) as never)
+    const rows = [task(1), task(5, { parentTaskItemId: 1 }), task(6, { parentTaskItemId: 1 })]
+    const { hook, list } = setup(rows, [task(3)])
+    act(() => hook.result.current.mutate({ id: 5, done: true }))
+    await waitFor(() => expect(list(PAST_ID)?.map(t => t.id)).toEqual([1, 6]))
+    expect(list(TODAY_ID)?.map(t => t.id)).toEqual([3, 5])
+    expect(list(TODAY_ID)?.[1].status).toBe('Completed')
   })
 })

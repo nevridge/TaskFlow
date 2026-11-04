@@ -154,6 +154,12 @@ export function useCreateTaskMutation() {
         // Per call: the client only rejects on HTTP errors when this is set.
         throwOnError: true,
       }),
+    onError: err => {
+      // A completed-parent 422 means the cached parent status was stale: refetch so the picker self-heals.
+      if ((err as { code?: unknown } | null)?.code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+      }
+    },
     onSuccess: (_result, variables) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       if (variables.projectId != null) qc.invalidateQueries({ queryKey: projectKeys.all })

@@ -2062,6 +2062,40 @@ public class UpdateTaskTests
         handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("blockedReasonTooLong")]
+    [InlineData("blockedReasonWithoutBlocked")]
+    [InlineData("invalidDueDate")]
+    public async Task OtherValidationErrors_WithUnknownProject_AreReported_WithoutAProjectLookup(string scenario)
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => scenario switch
+        {
+            "blockedReasonTooLong" => tools.UpdateTask(5, status: "blocked", blockedReason: new string('x', 201), project: "Typo", ct: TestContext.Current.CancellationToken),
+            "blockedReasonWithoutBlocked" => tools.UpdateTask(5, blockedReason: "waiting", project: "Typo", ct: TestContext.Current.CancellationToken),
+            _ => tools.UpdateTask(5, dueDate: "someday", project: "Typo", ct: TestContext.Current.CancellationToken),
+        };
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ProjectFailure_AfterAnUnblock_NamesTheUnblockAsSaved()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me");
+        var (tools, _) = Setup(blocked, Plan(null), h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, status: "todo", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("Task #5's fields were saved (unblocked").And.Contain("Retry only the project change");
+    }
+
     [Fact]
     public async Task InvalidJournalDate_WithUnknownProject_IsReported_WithoutAProjectLookup()
     {
@@ -2494,6 +2528,26 @@ public class UpdateTasksTests
         text.Should().Contain("x #1: journalDate").And.NotContain("No project matches");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
         handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_StatusTransitionOrBlockedReasonError_WithUnknownProject_ReportsTheValidationError_WithoutALookup()
+    {
+        var handler = HandlerFor(1, 2, 3).Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 1, BlockedReason = "waiting", Project = "Typo" },
+            new TaskUpdate { Id = 2, DueDate = "someday", Project = "Typo" },
+            new TaskUpdate { Id = 3, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[1].Should().StartWith("x #1: blockedReason needs status=blocked");
+        lines[2].Should().StartWith("x #2: ").And.NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
     }
 
     [Fact]

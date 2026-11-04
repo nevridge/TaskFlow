@@ -211,10 +211,13 @@ export type TaskItemResponseDto = {
      */
     completedAt?: null | string;
     /**
-     * True only on a parent returned by the journal todos endpoint purely as context for a subtask that is a todo
-     * on that day; such a parent embeds only that day's subtasks in `Children`. Omitted everywhere else.
+     * Title of the parent task; set only by the journal todos endpoint, on subtask rows.
      */
-    isContextOnly?: null | boolean;
+    parentTitle?: null | string;
+    /**
+     * Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint.
+     */
+    openChildCount?: null | number | string;
     children?: null | Array<TaskItemResponseDto>;
 };
 

@@ -104,8 +104,10 @@ export const putApiV1JournalEntriesByEntryIdNotesById = <ThrowOnError extends bo
  * completed (derived with `timezoneOffsetMinutes`, UTC when omitted), not on its linked day; every other
  * task is a todo on its linked day. Each task is a todo row on exactly one day.
  *
- * Returns root tasks. A subtask that is a todo on this day while its parent is not is returned under its parent,
- * which is then flagged `isContextOnly` and embeds only that day's subtasks. Each row's
+ * Returns one flat row per task attributed to the day (roots and subtasks alike), ordered by id; rows carry no
+ * `children`. A subtask row carries `parentTaskItemId` and `parentTitle` even when its parent is
+ * not a row of this day (no parent row is synthesised). `childTaskCount` is the task's total subtasks and
+ * `openChildCount` the subtasks that are not Completed (Blocked counts as open). Each row's
  * `currentJournalDate` is the task's own linked day (null when it was never linked).
  */
 export const getApiV1JournalEntriesByEntryIdTodos = <ThrowOnError extends boolean = false>(options: Options<GetApiV1JournalEntriesByEntryIdTodosData, ThrowOnError>): RequestResult<GetApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError> => (options.client ?? client).get<GetApiV1JournalEntriesByEntryIdTodosResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries/{entryId}/todos', ...options });
@@ -203,7 +205,9 @@ export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options
  * Shares the rules and 422 responses of the full update: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
  * (completion day, or linked day when `completedAt` is null, before the user's today; tasks with neither are
  * exempt; `details.assignedDate` holds that day) and `TASK_PLAN_COMPLETED_NOT_ALLOWED`
- * (`journalDate` differs from the link of a task that has a `completedAt`), plus the parent, block,
+ * (`journalDate` differs from the link of a task that has a `completedAt`),
+ * `TASK_PLAN_HAS_OPEN_SUBTASKS` (a task with an open subtask cannot be planned onto a `journalDate` that
+ * differs from its current link), plus the parent, block,
  * start and past-day planning codes, and `TASK_PARENT_STATUS_DERIVED` (a parent with an open subtask cannot
  * have its status changed directly; re-sending the stored status is accepted), and
  * `TASK_PARENT_COMPLETED_NOT_ALLOWED` (a task whose resulting status is not Completed cannot be moved under a
@@ -240,6 +244,9 @@ export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(op
  * Completing the task in the same request is accepted, an open task re-sending its current
  * parentTaskItemId with a status that stays open is accepted, and a Completed task stays Completed.
  * Nothing is saved.
+ * * TASK_PLAN_HAS_OPEN_SUBTASKS: a task with at least one open (not Completed) subtask cannot be planned
+ * onto a journalDate that differs from its current link; plan its subtasks instead. Checked after the
+ * Completed-task and past-day rules. details holds taskItemId and journalDate. Nothing is saved.
  * * Other codes: TASK_PARENT_SELF_NOT_ALLOWED, TASK_PARENT_NOT_FOUND,
  * TASK_PARENT_DEPTH_NOT_ALLOWED, TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN,
  * TASK_BLOCK_DRAFT_NOT_ALLOWED, TASK_BLOCK_COMPLETED_NOT_ALLOWED,

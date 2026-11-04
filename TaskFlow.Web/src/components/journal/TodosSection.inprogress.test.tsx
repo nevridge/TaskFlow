@@ -95,11 +95,11 @@ describe('TodosSection In Progress', () => {
     expect(screen.queryByRole('button', { name: 'Block' })).not.toBeInTheDocument()
   })
 
-  it('counts an InProgress subtask as open in the subtask progress', () => {
+  it('counts an InProgress subtask as open in the header progress', () => {
     const done = row({ id: 7, title: 'S1', status: 'Completed', parentTaskItemId: 1 })
     const started = row({ id: 8, title: 'S2', status: 'InProgress', parentTaskItemId: 1 })
-    load([{ ...row({}), children: [done, started] }])
+    load([{ ...row({}), openChildCount: 1 }, done, started])
     renderSection()
-    expect(screen.getByText('1/2 done')).toBeInTheDocument()
+    expect(screen.getByText('1/2 subtasks complete')).toBeInTheDocument()
   })
 })

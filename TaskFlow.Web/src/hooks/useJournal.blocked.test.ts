@@ -95,11 +95,11 @@ describe('journal block / unblock mutations', () => {
     const d = deferred()
     vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
     const child = todo({ id: 5, parentTaskItemId: 1 })
-    const qc = seeded([todo({ id: 1, children: [child] })])
+    const qc = seeded([todo({ id: 1 }), child])
     const { result } = renderHook(() => useBlockTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
     act(() => { result.current.mutate({ id: 5, reason: 'Waiting' }) })
-    await waitFor(() => expect(rows(qc)[0].children?.[0].status).toBe('Blocked'))
-    expect(rows(qc)[0].children?.[0]).toMatchObject({ blockedReason: 'Waiting', previousStatus: 'Todo' })
+    await waitFor(() => expect(rows(qc)[1].status).toBe('Blocked'))
+    expect(rows(qc)[1]).toMatchObject({ blockedReason: 'Waiting', previousStatus: 'Todo' })
     expect(rows(qc)[0].status).toBe('Todo')
     expect(vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls[0][0]).toMatchObject({
       path: { id: 5 },
@@ -179,6 +179,33 @@ describe('useToggleTodoMutation on Blocked rows', () => {
     expect(rows(qc)[0].status).toBe('Completed')
     await act(async () => { d.reject({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' }); await settled })
     expect(rows(qc)[0].status).toBe('Completed')
+  })
+
+  it('a subtask reopen under a Completed parent is not optimistic and stays Completed after the 422 (#396)', async () => {
+    const d = deferred()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
+    const qc = seeded([todo({ id: 1, status: 'Completed' }), todo({ id: 3, status: 'Completed', parentTaskItemId: 1 })])
+    const { result } = renderHook(() => useToggleTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
+    let settled: Promise<unknown> = Promise.resolve()
+    act(() => { settled = result.current.mutateAsync({ id: 3, done: false, autoCompleteParentWhenChildrenDone: false }).catch(() => {}) })
+    await waitFor(() => expect(sdk.patchApiV1TaskItemsById).toHaveBeenCalled())
+    expect(rows(qc).map(r => r.status)).toEqual(['Completed', 'Completed'])
+    await act(async () => { d.reject({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' }); await settled })
+    expect(rows(qc).map(r => r.status)).toEqual(['Completed', 'Completed'])
+  })
+
+  it('completing a subtask lowers its parent openChildCount optimistically and restores it on failure', async () => {
+    const d = deferred()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
+    const qc = seeded([todo({ id: 1, openChildCount: 1 }), todo({ id: 3, parentTaskItemId: 1 })])
+    const { result } = renderHook(() => useToggleTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
+    let settled: Promise<unknown> = Promise.resolve()
+    act(() => { settled = result.current.mutateAsync({ id: 3, done: true }).catch(() => {}) })
+    await waitFor(() => expect(rows(qc)[1].status).toBe('Completed'))
+    expect(rows(qc)[0].openChildCount).toBe(0)
+    await act(async () => { d.reject({ message: 'boom' }); await settled })
+    expect(rows(qc)[0].openChildCount).toBe(1)
+    expect(rows(qc)[1].status).toBe('Todo')
   })
 
   it('completes a Todo row optimistically', async () => {

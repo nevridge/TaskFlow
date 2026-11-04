@@ -309,7 +309,7 @@ describe('TodosSection blocked tasks', () => {
     it('subtasks can be blocked and unblocked too', async () => {
       const child = row({ id: 7, title: 'Sub', parentTaskItemId: 1 })
       const blockedChild = row({ id: 8, title: 'Blocked sub', parentTaskItemId: 1, status: 'Blocked', blockedReason: 'r' })
-      load([{ ...todoRow, children: [child, blockedChild] }])
+      load([{ ...todoRow, openChildCount: 2 }, child, blockedChild])
       renderSection()
       const subLi = screen.getByText('Sub').closest('li') as HTMLElement
       await userEvent.click(within(subLi).getByRole('button', { name: 'Block' }))
@@ -336,17 +336,16 @@ describe('TodosSection blocked tasks', () => {
       expect(screen.queryByText(/blocked/i)).not.toBeInTheDocument()
     })
 
-    it('subtask progress reads "N/M done" with ", K blocked" only when K > 0', () => {
+    it('header progress reads "N/M subtasks complete" and rows count as todos, never the header', () => {
       const done = row({ id: 7, title: 'S1', status: 'Completed', parentTaskItemId: 1 })
       const open = row({ id: 8, title: 'S2', parentTaskItemId: 1 })
       const blocked = row({ id: 9, title: 'S3', status: 'Blocked', parentTaskItemId: 1 })
-      load([{ ...todoRow, children: [done, open, blocked] }])
-      const { unmount } = renderSection()
-      expect(screen.getByText('1/3 done, 1 blocked')).toBeInTheDocument()
-      unmount()
-      load([{ ...todoRow, children: [done, open] }])
+      load([{ ...todoRow, openChildCount: 2 }, done, open, blocked])
       renderSection()
-      expect(screen.getByText('1/2 done')).toBeInTheDocument()
+      expect(screen.getByText('1/3 subtasks complete')).toBeInTheDocument()
+      // Three subtask rows, one done, one blocked; the parent header is not counted
+      expect(screen.getByText('1/3', { selector: '.todo-count' })).toBeInTheDocument()
+      expect(screen.getByText('· 1 blocked')).toBeInTheDocument()
     })
   })
 
@@ -369,13 +368,13 @@ describe('TodosSection blocked tasks', () => {
       expect(titles()).toEqual(['Done C', 'Blocked B', 'Open A', 'Blocked E', 'Open D'])
     })
 
-    it('children stay under their parent when the parent moves tier', () => {
+    it('a header is not sorted as a todo: it sits at its first subtask row', () => {
       const child = row({ id: 10, title: 'Child X', parentTaskItemId: 2 })
-      load([{ ...blocked, children: [child] }, open])
+      load([{ ...blocked, openChildCount: 1 }, child, open])
       renderSection('open first')
-      expect(titles()).toEqual(['Open A', 'Blocked B'])
-      const parentLi = screen.getByText('Blocked B').closest('li') as HTMLElement
-      expect(within(parentLi).getByText('Child X')).toBeInTheDocument()
+      expect(titles()).toEqual(['Child X', 'Open A'])
+      const header = screen.getByRole('link', { name: /Blocked B/ }).closest('li') as HTMLElement
+      expect(header.nextElementSibling).toBe(screen.getByText('Child X').closest('li'))
     })
 
     it('keeps focus on the right checkbox by id when blocking re-sorts the list', async () => {

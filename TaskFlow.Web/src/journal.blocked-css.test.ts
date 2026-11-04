@@ -180,7 +180,6 @@ describe('journal touch and responsive styles', () => {
     expect(phone).toMatch(/\.hdr \{ padding: 16px 14px; \}/)
     expect(phone).toMatch(/\.hdr-fulldate \{\s*font-size:\s*18px;\s*overflow-wrap:\s*anywhere/)
     expect(phone).toMatch(/\.hdr-num \{\s*flex:\s*1 1 0;\s*min-width:\s*0;\s*padding:\s*8px 12px/)
-    expect(phone).toMatch(/\.journal-page \.todo-child-list \{ padding-left: 16px; \}/)
     expect(phone).toMatch(/\.todo-edit \{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/)
     expect(phone).not.toMatch(/\.todo-text \{/)
     const title = rule('.journal-page .todo-text')
@@ -228,18 +227,19 @@ describe('journal touch and responsive styles', () => {
     expect(mediaBlock('(max-width: 480px)')).toMatch(/\.journal-page \.todo-subline-meta \{[^}]*flex-wrap:\s*wrap/)
   })
 
-  it('wins the cascade for the subtask indent at 480px: higher specificity than the later base rule', () => {
-    const classCount = (sel: string) => (sel.match(/\.[\w-]+/g) ?? []).length
-    const phoneSel = '.journal-page .todo-child-list'
-    const baseSel = '.todo-child-list'
-    const phoneAt = journalCss.indexOf(`${phoneSel} { padding-left: 16px; }`)
-    const baseAt = journalCss.indexOf(`\n${baseSel} {`)
-    expect(phoneAt).toBeGreaterThan(-1)
-    expect(baseAt).toBeGreaterThan(-1)
-    // Either it comes later in the source at equal specificity, or it is strictly more specific.
-    const wins = classCount(phoneSel) > classCount(baseSel) || (classCount(phoneSel) === classCount(baseSel) && phoneAt > baseAt)
-    expect(wins).toBe(true)
-    expect(journalCss.slice(baseAt)).toMatch(/padding:\s*0 0 0 20px/)
+  it('indents grouped subtask rows by 16px with a thin rule, on flat sibling rows (no nested list)', () => {
+    expect(rule('.journal-page .todo.todo-in-group')).toMatch(/margin-left:\s*16px/)
+    expect(rule('.journal-page .todo.todo-in-group::before')).toMatch(/background:\s*var\(--line\)/)
+    expect(journalCss).not.toContain('.todo-child-list')
+  })
+
+  it('styles the context header as a muted label row with a hover/focus underline link', () => {
+    const header = rule('.journal-page .todo.todo-context-header')
+    expect(header).toMatch(/display:\s*flex/)
+    expect(header).toMatch(/align-items:\s*baseline/)
+    expect(header).toMatch(/color:\s*var\(--muted\)/)
+    expect(rule('.journal-page .todo-context-progress')).toMatch(/tabular-nums/)
+    expect(journalCss).toMatch(/\.todo-context-link:focus-visible \{ text-decoration: underline; \}/)
   })
 
   it('aligns phone line 2 with the title start using the same measures as line 1', () => {

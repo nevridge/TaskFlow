@@ -340,13 +340,6 @@
   gap: 4px;
 }
 .journal-page .todo-completed-here svg { width: 9px; height: 9px; }
-/* Inert stand-in for the check on a context-only parent: same box so titles align. */
-.journal-page .todo-context-glyph {
-  flex: 0 0 auto;
-  width: var(--todo-check);
-  height: var(--todo-check);
-}
-.journal-page .todo-context-parent .todo-text { color: var(--muted); cursor: default; }
 .todo.is-done .todo-check {
   background: var(--accent);
   border-color: var(--accent);
@@ -911,9 +904,6 @@
     min-width: 0;
     padding: 8px 12px;
   }
-  /* .journal-page prefix (0-2-0) so this beats the base `.todo-child-list` padding declared later in the file. */
-  .journal-page .todo-child-list { padding-left: 16px; }
-
   /* Todo row on two lines. Line 1: check, id, title. Line 2 (indented to the title): history /
      block / delete left, badges right (DOM order is the visual and Tab order). The id has a fixed column at this width so
      the title always starts at check + gap + id column + gap; ids wider than the column (5+ chars) shift
@@ -1035,14 +1025,6 @@
 
 /* ─── Subtasks ─────────────────────────────────────────────────────────────── */
 
-.todo-child-list {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 0 20px;
-  flex: 0 0 100%;
-  width: 100%;
-}
-
 .todo-child {
   --todo-check: 15px;
   --todo-title-x: calc(var(--todo-check) + var(--todo-gap) + var(--todo-id-w) + var(--todo-gap));
@@ -1050,17 +1032,11 @@
   font-size: 13.5px;
 }
 
-.todo-child:last-child { border-bottom: 0; }
-
 /* Specificity 0-3-0 beats .journal-page button (0-1-1) */
 .journal-page .todo-child .todo-check {
   width: 15px;
   height: 15px;
   border-radius: 4px;
-}
-
-.journal-page .todo-child.is-future .todo-text {
-  color: var(--muted);
 }
 
 .todo-future-badge {
@@ -1125,6 +1101,49 @@
    Same specificity as the rule above, so source order wins. */
 .journal-page .todo-child {
   border-left: 0;
+}
+
+/* ─── Context header over a parent's subtask rows ──────────────────────────────
+   A plain label row: one link plus a progress count, no check or actions. Subtask rows below it are flat
+   siblings marked .todo-in-group (indent plus a thin rule), never nested lists. */
+.journal-page .todo.todo-context-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-bottom: 0;
+  border-left: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.journal-page .todo-list > .todo-context-header:first-child { padding-top: 0; }
+.journal-page .todo-context-link {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.journal-page .todo-context-link:hover,
+.journal-page .todo-context-link:focus-visible { text-decoration: underline; }
+.journal-page .todo-context-progress {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.journal-page .todo.todo-in-group {
+  position: relative;
+  margin-left: 16px;
+}
+.journal-page .todo.todo-in-group::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--line);
 }
 .journal-page .todo.is-blocked {
   border-left-color: color-mix(in oklab, var(--danger-ink) 45%, transparent);
@@ -1198,14 +1217,6 @@
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1.2;
-}
-
-.journal-page .todo-subprogress {
-  flex: 0 0 auto;
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-  white-space: nowrap;
 }
 
 /* Muted single-line reason on its own line under the title. */
@@ -1284,6 +1295,8 @@
 
   /* Title: the whole line is the tap zone. */
   .journal-page .todo-text { min-height: var(--tap-min); display: flex; align-items: center; }
+  .journal-page .todo-context-link { min-height: var(--tap-min); display: inline-flex; align-items: center; }
+  .journal-page .todo.todo-context-header { align-items: center; padding-top: 0; }
 
   /* Blocked badge and reason: 44px hit areas, reason wraps (3 lines) instead of truncating. */
   .journal-page .todo-blocked-badge { min-height: var(--tap-min); padding: 3px 12px; }

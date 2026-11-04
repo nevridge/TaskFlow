@@ -23,6 +23,16 @@ public static class TaskRuleErrors
         message = "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed."
     };
 
+    public const string PlanHasOpenSubtasksCode = "TASK_PLAN_HAS_OPEN_SUBTASKS";
+
+    /// <summary>The 422 body <c>{ code, message, details }</c> returned when a task with open subtasks is planned onto a day.</summary>
+    public static object PlanHasOpenSubtasks(int taskItemId, DateOnly? journalDate) => new
+    {
+        code = PlanHasOpenSubtasksCode,
+        message = "A task with open subtasks can't be planned on a day. Plan its subtasks instead.",
+        details = new { taskItemId, journalDate }
+    };
+
     /// <summary>The 422 body <c>{ code, message, details }</c> returned when a completed task is planned onto a day.</summary>
     public static object PlanCompletedNotAllowed(DateOnly? assignedDate, DateTime? completedAt, DateOnly? journalDate) => new
     {

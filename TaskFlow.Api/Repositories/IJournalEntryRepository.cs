@@ -16,7 +16,7 @@ public interface IJournalEntryRepository
     /// Subtasks are returned as rows of their own, with their parent loaded so it can be shown as context.
     /// </summary>
     Task<JournalDayTodos?> GetTodosForDayAsync(int entryId, int? offsetMinutes);
-    /// <summary>Root task ids per entry under the same day rule, in one batched query. Every requested entry has a key.</summary>
+    /// <summary>Task ids (roots and subtasks) per entry under the same day rule, in one batched query. Every requested entry has a key.</summary>
     Task<IReadOnlyDictionary<int, List<int>>> GetTodoTaskItemIdsAsync(IReadOnlyCollection<(int EntryId, DateOnly Date)> entries, int? offsetMinutes);
     /// <summary>The facts behind a <see cref="AddTodoResult.TaskCompleted"/> rejection; null when entry or task is missing.</summary>
     Task<PlanCompletedDetails?> GetPlanCompletedDetailsAsync(int entryId, int taskItemId);

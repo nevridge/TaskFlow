@@ -27,7 +27,7 @@ public class JournalEntriesController(
     private readonly IValidator<JournalEntry> _validator = validator;
 
     // GET: api/v1/JournalEntries
-    // TodoTaskItemIds are the root tasks that are todos on each entry's day (see JournalDayRule); the optional
+    // TodoTaskItemIds are the tasks (roots and subtasks) that are todos on each entry's day (see JournalDayRule); the optional
     // timezoneOffsetMinutes turns completion instants into local days (UTC when omitted).
     [HttpGet]
     public async Task<ActionResult<IEnumerable<JournalEntryResponseDto>>> GetAll([FromQuery] JournalDayQueryDto query)
@@ -173,7 +173,8 @@ public class JournalEntriesController(
         }
 
         await _journalRepo.UpdateAsync(existing);
-        // The update request carries no offset, so todo ids are attributed to UTC days.
+        // Known limitation (#406): the update request carries no offset, so todoTaskItemIds in this response are
+        // attributed to UTC days and may differ from GET (which honours timezoneOffsetMinutes) near day boundaries.
         return Ok(await ToDtoAsync(existing, null));
     }
 

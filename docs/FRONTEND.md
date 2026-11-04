@@ -275,7 +275,15 @@ Recent UX additions that are now part of the app flow:
 - Completing a task from a past day is optimistic: the row leaves the viewed day, joins the completed tier of today's cached list, and `completedAt` is set locally. Failure restores both caches; `['journal']` is invalidated on settle.
 - A completed row with `completedAt` has no "Remove from day" control (history). One without `completedAt` keeps it.
 - `isReopenBlocked` (`src/lib/journal-utils.ts`) mirrors the server's reopen rule (#350): a completed task whose completion day (from `completedAt`, else the linked day) is before the user's today. Its checkbox is a disabled `role="checkbox"` with an accessible explanation; a stale view that still reopens gets the server's 422 and the existing inline error.
-- A context-only parent (`isContextOnly`) renders as an inert "Parent task" row above its attributed subtask and is excluded from counts and sort tiers.
+
+#### Flat journal rows and parent context headers (#387)
+
+- `GET /JournalEntries/{id}/todos` returns a flat list: one row per attributed task, roots and subtasks alike (`children` is never populated). Subtask rows carry `parentTaskItemId` and `parentTitle` (even when the parent is not a row of the day); every row carries `childTaskCount` and `openChildCount` (subtasks not Completed; Blocked counts as open; the generated client types it `number | string`, so `hasOpenChildren` coerces with `Number`).
+- `buildJournalBlocks` (`src/lib/journal-rows.ts`) turns the rows (after undo-pending hiding) into display blocks. A parent with at least one visible open subtask row (`getOpenParentIds` in `src/lib/task-sections.ts`, the same rule as the Tasks page) is not a row: it renders as a context header, an `li.todo-context-header` with a link to `/tasks/:parentId` and "N/M subtasks complete". N/M count only that day's visible subtask rows. A parent whose open subtasks are all hidden or on other days stays a normal row. A Completed parent with Completed same-day subtasks keeps its row and also gets a header. A subtask whose parent is not a row of the day takes the header title from `parentTitle`.
+- Headers are never sorted as todos: each sits at the position of its first subtask row, and its subtask rows (`li.todo-in-group`, flat siblings with an indent and a thin rule, no nested list) follow it. The header has no checkbox, id, history, block or remove control, and focus never lands on it.
+- The TODOs counter (`total`, remaining, blocked) is computed from the rendered work rows only; subtask rows count as todos, headers never do. "No TODOs yet" shows only when there are no rows and no headers.
+- A parent with `openChildCount > 0` has a derived status and gets no Block button and no Unblock badge in any form (header, a normal row because filters hide its subtasks, or a stale link). The predicate `hasOpenChildren` lives next to `canBlock` in `src/lib/task-status.ts`.
+- `TASK_PLAN_HAS_OPEN_SUBTASKS` and `TASK_PARENT_STATUS_DERIVED` show inline messages from the code alone (the journal date in the error details is not read). Removing a parent row unlinks only that row; its subtask rows are not removed optimistically.
 
 #### Settings-driven hierarchy behavior
 
@@ -292,6 +300,7 @@ Tasks pages map backend business-rule codes to user-friendly inline errors, incl
 - `TASK_CREATION_PAST_DAY_NOT_ALLOWED`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`: a completed task cannot be reopened once its completion day is before the user's today. The completion day is the local day of the task's `completedAt` (derived with the `timezoneOffsetMinutes` the client sends), or, for legacy tasks with no `completedAt`, the journal day it is linked to. A task with neither is exempt and can always be reopened. `details.assignedDate` holds that day.
 - `TASK_PLAN_COMPLETED_NOT_ALLOWED`: a task with a `completedAt` cannot be planned onto a `journalDate` that differs from its current link, because the journal shows it on its completion day. Sending the current link or no `journalDate` is fine. Reopen first, then plan.
+- `TASK_PLAN_HAS_OPEN_SUBTASKS`: a parent with open subtasks cannot be planned onto a journal day (plan the subtasks instead). Its message is mapped only in the journal's own `getTaskActionErrorMessage` (`TodosSection.tsx`); `lib/task-errors.ts` `getTaskMutationErrorMessage` intentionally has no mapping because the Tasks page does not plan.
 - `TASK_PARENT_NOT_FOUND`
 - `TASK_PARENT_SELF_NOT_ALLOWED`
 - `TASK_PARENT_DEPTH_NOT_ALLOWED`

@@ -62,7 +62,7 @@ function toId(value: number | string | null | undefined): number | null {
   return Number.isFinite(n) && n !== 0 ? n : null
 }
 
-function parentIdOf(task: SectionTaskLike): number | null {
+function parentIdOf(task: Pick<SectionTaskLike, 'parentTaskItemId'>): number | null {
   return toId(task.parentTaskItemId)
 }
 
@@ -128,6 +128,18 @@ export function matchesSearchWithAncestors<T extends SectionTaskLike>(
   return false
 }
 
+/** Ids of parents with at least one visible subtask that is not Completed (Blocked counts as open). */
+export function getOpenParentIds(
+  visibleTasks: readonly Pick<SectionTaskLike, 'parentTaskItemId' | 'status'>[],
+): Set<number> {
+  const openParentIds = new Set<number>()
+  visibleTasks.forEach(t => {
+    const parentId = parentIdOf(t)
+    if (parentId !== null && normalizeStatus(t.status) !== 'Completed') openParentIds.add(parentId)
+  })
+  return openParentIds
+}
+
 interface BuildArgs<T extends SectionTaskLike> {
   allTasks: readonly T[]
   visibleTasks: readonly T[]
@@ -149,11 +161,7 @@ export function buildTaskSections<T extends SectionTaskLike>({
   statusOf = t => t.status,
 }: BuildArgs<T>): TaskSection<T>[] {
   const byId = indexTasksById(allTasks)
-  const openParentIds = new Set<number>()
-  visibleTasks.forEach(t => {
-    const parentId = parentIdOf(t)
-    if (parentId !== null && normalizeStatus(t.status) !== 'Completed') openParentIds.add(parentId)
-  })
+  const openParentIds = getOpenParentIds(visibleTasks)
 
   const idOf = (t: T) => toId(t.id) ?? 0
   const stable = (a: T, b: T) => compare(a, b) || idOf(a) - idOf(b)

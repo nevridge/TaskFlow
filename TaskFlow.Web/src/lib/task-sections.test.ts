@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildTaskSections,
   findSectionOfTask,
+  getOpenParentIds,
   indexTasksById,
   matchesSearchWithAncestors,
   SECTION_DEFS,
@@ -285,5 +286,19 @@ describe('buildTaskSections with a derived status', () => {
   it('falls back to the stored status without statusOf', () => {
     const sections = buildTaskSections({ allTasks: [t(1, 'P', 'Draft', 'Low')], visibleTasks: [t(1, 'P', 'Draft', 'Low')], compare: byTitle })
     expect(sections.map(s => s.key)).toEqual(['draft'])
+  })
+})
+
+describe('getOpenParentIds', () => {
+  const task = (id: number, status: string, parentTaskItemId: number | null = null) => ({ id, title: `T${id}`, status, parentTaskItemId })
+
+  it('collects parents that have at least one visible subtask that is not Completed (Blocked counts as open)', () => {
+    const ids = getOpenParentIds([task(1, 'Todo'), task(2, 'Todo', 1), task(3, 'Completed'), task(4, 'Completed', 3), task(5, 'Todo'), task(6, 'Blocked', 5)])
+    expect([...ids].sort()).toEqual([1, 5])
+  })
+
+  it('ignores rows without a parent and returns an empty set for nothing visible', () => {
+    expect(getOpenParentIds([task(1, 'Todo')]).size).toBe(0)
+    expect(getOpenParentIds([]).size).toBe(0)
   })
 })

@@ -131,33 +131,30 @@ describe('TodosSection completion-day behaviour', () => {
     expect(titles[1]).toContain('Finished')
   })
 
-  it('places context-only parents after the real rows in non-tier sort modes', () => {
-    const parent = { ...base, id: 9, title: 'Parent', isContextOnly: true, children: [{ ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY }] } as TaskItemResponseDto
-    show([parent, { ...base, id: 11, title: 'Solo' }], TODAY, 'manual')
-    const items = screen.getAllByRole('listitem').filter(li => li.classList.contains('todo') && !li.classList.contains('todo-child'))
-    expect(items[0]).toHaveTextContent('Solo')
-    expect(items[1]).toHaveTextContent('Parent')
+  const openParent = { ...base, id: 9, title: 'Parent', openChildCount: 1 } as TaskItemResponseDto
+  const attributed = { ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY } as TaskItemResponseDto
+
+  it('places the header at its first subtask row, never after the rows, in non-tier sort modes', () => {
+    show([openParent, attributed, { ...base, id: 11, title: 'Solo' }], TODAY, 'manual')
+    const items = screen.getAllByRole('listitem').filter(li => li.classList.contains('todo'))
+    expect(items[0]).toHaveClass('todo-context-header')
+    expect(items[1]).toHaveTextContent('Child')
+    expect(items[2]).toHaveTextContent('Solo')
   })
 
-  it('counts roots only and leaves context-only parents out', () => {
-    const parent = { ...base, id: 9, title: 'Parent', isContextOnly: true, children: [{ ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY }] } as TaskItemResponseDto
-    show([parent, { ...base, id: 11, title: 'Solo' }], TODAY)
-    expect(screen.getByText('0/1')).toBeInTheDocument()
+  it('counts work rows only and leaves the header out', () => {
+    show([openParent, attributed, { ...base, id: 11, title: 'Solo' }], TODAY)
+    expect(screen.getByText('0/2')).toBeInTheDocument()
   })
 
-  it('renders a context-only parent inertly above its attributed child', async () => {
-    const attributed = { ...base, id: 10, title: 'Child', parentTaskItemId: 9, currentJournalDate: TODAY } as TaskItemResponseDto
-    const elsewhere = { ...base, id: 12, title: 'Other-day child', parentTaskItemId: 9, status: 'Completed', completedAt: '2026-06-01T12:00:00Z', currentJournalDate: '2026-06-01' } as TaskItemResponseDto
-    const parent = { ...base, id: 9, title: 'Parent', isContextOnly: true, children: [attributed, elsewhere] } as TaskItemResponseDto
-    show([parent], TODAY)
-    const li = screen.getByText('Parent').closest('li.todo-context-parent') as HTMLElement
-    expect(within(li).getByText('Parent task')).toBeInTheDocument()
-    expect(within(li).getByRole('button', { name: 'History' })).toBeInTheDocument()
-    // Only the parent's own row has no controls; the child inside the nested list stays actionable.
-    expect(li.querySelectorAll(':scope > [data-todo-check], :scope > .todo-subline .todo-x, :scope > .todo-subline .todo-block')).toHaveLength(0)
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  it('renders the parent as an inert header above its subtask row', async () => {
+    show([openParent, attributed], TODAY)
+    const header = screen.getByRole('link', { name: /Parent/ }).closest('li.todo-context-header') as HTMLElement
+    expect(header).toHaveTextContent('0/1 subtasks complete')
+    expect(header.querySelectorAll('button')).toHaveLength(0)
+    expect(header.querySelector('[data-todo-check]')).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Mark done' })).toHaveLength(1)
     expect(screen.getByText('Child')).toBeInTheDocument()
-    expect(screen.queryByText('Other-day child')).not.toBeInTheDocument()
     await userEvent.setup({ advanceTimers: () => {} }).dblClick(screen.getByText('Parent'))
     expect(screen.queryByDisplayValue('Parent')).not.toBeInTheDocument()
   })

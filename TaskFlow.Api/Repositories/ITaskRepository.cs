@@ -8,6 +8,8 @@ public interface ITaskRepository
     Task<TaskItem?> GetByIdAsync(int id);
     Task<TaskItem?> GetByIdNoTrackingAsync(int id);
     Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId);
+    /// <summary>True when the task has at least one subtask that is not Completed (Blocked counts as open).</summary>
+    Task<bool> HasOpenSubtasksAsync(int taskId);
     Task<DateOnly?> GetAssignedJournalDateAsync(int taskId);
     Task<IReadOnlyDictionary<int, DateOnly>> GetAssignedJournalDatesAsync(IReadOnlyCollection<int> taskIds);
     Task<IReadOnlyDictionary<int, DateOnly>> GetLastMovedDatesAsync(IReadOnlyCollection<int> taskIds);

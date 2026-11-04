@@ -74,6 +74,14 @@ export function canBlock(raw: string | null | undefined): boolean {
   return status === 'Todo' || status === 'InProgress'
 }
 
+/**
+ * A parent with an open subtask (Blocked counts as open) has a derived status: the journal offers it no
+ * Block or Unblock control, whatever form it shows in. `openChildCount` may arrive as a string.
+ */
+export function hasOpenChildren(task: { openChildCount?: number | string | null }): boolean {
+  return Number(task.openChildCount ?? 0) > 0
+}
+
 /** Status-badge cycle on the tasks page. Blocked is not in the cycle. */
 export function nextCycleStatus(raw: string | null | undefined): RequestStatus | undefined {
   switch (normalizeStatus(raw)) {
@@ -92,9 +100,9 @@ export function journalSortTier(status: string | null | undefined): number {
   return 0
 }
 
-/** "N/M done" plus ", K blocked" only when K > 0. */
-export function formatSubtaskProgress(done: number, total: number, blocked: number): string {
-  return `${done}/${total} done${blocked > 0 ? `, ${blocked} blocked` : ''}`
+/** "N/M subtasks complete" (the Tasks-page wording). */
+export function formatSubtasksComplete(done: number, total: number): string {
+  return `${done}/${total} subtasks complete`
 }
 
 /** User-facing message for the 422 codes the block flow can return, or null for other codes. */

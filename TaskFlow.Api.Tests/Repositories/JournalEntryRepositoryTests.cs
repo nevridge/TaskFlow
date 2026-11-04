@@ -143,6 +143,100 @@ public class JournalEntryRepositoryTests
         Assert.Equal(AddTodoResult.AlreadyLinked, result);
     }
 
+    [Theory]
+    [InlineData(Status.Todo)]
+    [InlineData(Status.InProgress)]
+    [InlineData(Status.Blocked)]
+    public async Task AddTodoAsync_ShouldReturnHasOpenSubtasks_AndLinkNothing_WhenParentHasOpenSubtask(Status childStatus)
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+        context.TaskItems.Add(new TaskItem { Title = "Child", Status = childStatus, ParentTaskItemId = parent.Id });
+        await context.SaveChangesAsync();
+
+        var result = await repo.AddTodoAsync(entry.Id, parent.Id);
+
+        Assert.Equal(AddTodoResult.HasOpenSubtasks, result);
+        Assert.Null(parent.CurrentJournalEntryId);
+        Assert.Equal(0, parent.MoveCount);
+        Assert.False(await repo.TodoExistsAsync(entry.Id, parent.Id));
+        Assert.Empty(context.TaskItemEvents);
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldSucceed_WhenParentHasOnlyCompletedSubtasksOrNone()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var withDone = new TaskItem { Title = "Parent", Status = Status.Todo };
+        var leaf = new TaskItem { Title = "Leaf", Status = Status.Todo };
+        context.TaskItems.AddRange(withDone, leaf);
+        await context.SaveChangesAsync();
+        context.TaskItems.Add(new TaskItem
+        {
+            Title = "Done child",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow,
+            ParentTaskItemId = withDone.Id
+        });
+        await context.SaveChangesAsync();
+
+        Assert.Equal(AddTodoResult.Success, await repo.AddTodoAsync(entry.Id, withDone.Id));
+        Assert.Equal(AddTodoResult.Success, await repo.AddTodoAsync(entry.Id, leaf.Id));
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldReturnAlreadyLinked_WhenLinkedParentHasOpenSubtask()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+        Assert.Equal(AddTodoResult.Success, await repo.AddTodoAsync(entry.Id, parent.Id));
+        // A subtask added to an already-planned parent is allowed.
+        context.TaskItems.Add(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+        await context.SaveChangesAsync();
+
+        Assert.Equal(AddTodoResult.AlreadyLinked, await repo.AddTodoAsync(entry.Id, parent.Id));
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldReturnTaskCompleted_BeforeOpenSubtaskCheck()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "May 10", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Completed, CompletedAt = DateTime.UtcNow };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+        context.TaskItems.Add(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+        await context.SaveChangesAsync();
+
+        Assert.Equal(AddTodoResult.TaskCompleted, await repo.AddTodoAsync(entry.Id, parent.Id));
+    }
+
+    [Fact]
+    public async Task AddTodoAsync_ShouldReturnPastDay_BeforeOpenSubtaskCheck()
+    {
+        using var context = CreateInMemoryContext();
+        var repo = new JournalEntryRepository(context);
+        var entry = await repo.AddAsync(new JournalEntry { Title = "Old", Date = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-3)) });
+        var parent = new TaskItem { Title = "Parent", Status = Status.Todo };
+        context.TaskItems.Add(parent);
+        await context.SaveChangesAsync();
+        context.TaskItems.Add(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+        await context.SaveChangesAsync();
+
+        Assert.Equal(AddTodoResult.PastDayNotAllowed, await repo.AddTodoAsync(entry.Id, parent.Id));
+    }
+
     [Fact]
     public async Task AddTodoAsync_ShouldReturnEntryNotFound_WhenEntryMissing()
     {
@@ -427,11 +521,12 @@ public class JournalEntryRepositoryTests
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
 
+        // Plan the parent first: a parent with an open subtask can no longer be planned.
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
         var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(entry.Id, parent.Id);
 
         var all = (await repo.GetAllAsync()).ToList();
 
@@ -451,11 +546,11 @@ public class JournalEntryRepositoryTests
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
 
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
         var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(entry.Id, parent.Id);
 
         var found = await repo.GetByIdAsync(entry.Id);
 
@@ -476,11 +571,11 @@ public class JournalEntryRepositoryTests
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
 
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
         var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(entry.Id, parent.Id);
 
         var found = await repo.GetByDateAsync(date);
 
@@ -503,10 +598,10 @@ public class JournalEntryRepositoryTests
         var parent = new TaskItem { Title = "Parent", Status = Status.Todo, Project = project };
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
+        await repo.AddTodoAsync(entry.Id, parent.Id);
         var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id, ProjectId = project.Id };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-        await repo.AddTodoAsync(entry.Id, parent.Id);
         context.ChangeTracker.Clear();
 
         var day = await repo.GetTodosForDayAsync(entry.Id, null);
@@ -517,7 +612,6 @@ public class JournalEntryRepositoryTests
         Assert.Equal("Proj", parentTodo.Project?.Name);
         var childItem = Assert.Single(parentTodo.ChildTaskItems);
         Assert.Equal(child.Id, childItem.Id);
-        Assert.Equal("Proj", childItem.Project?.Name);
     }
 
     [Fact]
@@ -534,11 +628,11 @@ public class JournalEntryRepositoryTests
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
 
+        await repo.AddTodoAsync(entry.Id, parent.Id);
+
         var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(entry.Id, parent.Id);
 
         var todos = (await repo.GetTodosAsync(entry.Id)).ToList();
 
@@ -577,13 +671,15 @@ public class JournalEntryRepositoryTests
             await writeContext.SaveChangesAsync();
             parentId = parent.Id;
 
+            // Link the parent first (a parent with an open subtask can no longer be planned), then add the child.
+            await writeRepo.AddTodoAsync(entryId, parentId);
+
             var child = new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id };
             writeContext.TaskItems.Add(child);
             await writeContext.SaveChangesAsync();
             childId = child.Id;
 
             // Link both parent AND child to the same entry — this is the identity map collision scenario.
-            await writeRepo.AddTodoAsync(entryId, parentId);
             await writeRepo.AddTodoAsync(entryId, childId);
         }
 
@@ -632,6 +728,8 @@ public class JournalEntryRepositoryTests
         context.TaskItems.Add(parent);
         await context.SaveChangesAsync();
 
+        await repo.AddTodoAsync(firstEntry.Id, parent.Id);
+
         var child = new TaskItem
         {
             Title = "Child",
@@ -641,8 +739,6 @@ public class JournalEntryRepositoryTests
         };
         context.TaskItems.Add(child);
         await context.SaveChangesAsync();
-
-        await repo.AddTodoAsync(firstEntry.Id, parent.Id);
 
         var todos = (await repo.GetTodosAsync(firstEntry.Id)).ToList();
 

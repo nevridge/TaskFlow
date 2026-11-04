@@ -749,6 +749,25 @@ public class TaskRepositoryTests
     }
 
     [Fact]
+    public async Task HasOpenSubtasksAsync_ShouldCountNonCompletedChildrenOnly()
+    {
+        using var context = CreateInMemoryContext();
+        var repository = new TaskRepository(context);
+        await context.TaskItems.AddRangeAsync(
+            new TaskItem { Id = 1, Title = "Open parent", Status = Status.Todo },
+            new TaskItem { Id = 2, Title = "Blocked child", Status = Status.Blocked, ParentTaskItemId = 1 },
+            new TaskItem { Id = 3, Title = "Done parent", Status = Status.Todo },
+            new TaskItem { Id = 4, Title = "Done child", Status = Status.Completed, ParentTaskItemId = 3 },
+            new TaskItem { Id = 5, Title = "Leaf", Status = Status.Todo });
+        await context.SaveChangesAsync();
+
+        Assert.True(await repository.HasOpenSubtasksAsync(1));
+        Assert.False(await repository.HasOpenSubtasksAsync(3));
+        Assert.False(await repository.HasOpenSubtasksAsync(5));
+        Assert.False(await repository.HasOpenSubtasksAsync(999));
+    }
+
+    [Fact]
     public async Task GetChildrenAsync_ShouldReturnOnlyDirectChildren()
     {
         // Arrange

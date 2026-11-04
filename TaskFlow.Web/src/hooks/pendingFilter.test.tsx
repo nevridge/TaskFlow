@@ -130,20 +130,23 @@ describe('pending delete filter on read hooks', () => {
 
   it('useJournalTodos hides pending tasks and pending subtasks, but not journal todo keys (AC13)', async () => {
     vi.mocked(getJournalTodos).mockResolvedValue({
+      // Flat rows: roots and subtasks side by side.
       data: [
-        { id: 1, title: 'P', children: [{ id: 2, title: 'c1' }, { id: 3, title: 'c2' }] },
-        { id: 4, title: 'Q', children: [] },
+        { id: 1, title: 'P' },
+        { id: 2, title: 'c1', parentTaskItemId: 1 },
+        { id: 3, title: 'c2', parentTaskItemId: 1 },
+        { id: 4, title: 'Q' },
       ],
     } as never)
     const { result, hide } = setup(() => useJournalTodos(1))
     await waitFor(() => expect(result.current.value.isSuccess).toBe(true))
     hide('todo:1:4')
-    expect((result.current.value.data?.data as unknown[]).length).toBe(2)
+    expect((result.current.value.data?.data as unknown[]).length).toBe(4)
     hide(pendingKey('task', 2))
-    const todos = result.current.value.data?.data as Array<{ id: number; children: Array<{ id: number }> }>
-    expect(todos[0].children.map(c => c.id)).toEqual([3])
+    const ids = () => (result.current.value.data?.data as Array<{ id: number }>).map(t => t.id)
+    expect(ids()).toEqual([1, 3, 4])
     hide(pendingKey('task', 4))
-    expect((result.current.value.data?.data as Array<{ id: number }>).map(t => t.id)).toEqual([1])
+    expect(ids()).toEqual([1, 3])
   })
 })
 

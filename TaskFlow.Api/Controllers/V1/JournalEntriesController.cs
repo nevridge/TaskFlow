@@ -27,7 +27,7 @@ public class JournalEntriesController(
     private readonly IValidator<JournalEntry> _validator = validator;
 
     // GET: api/v1/JournalEntries
-    // TodoTaskItemIds are the root tasks that are todos on each entry's day (see JournalDayRule); the optional
+    // TodoTaskItemIds are the tasks (roots and subtasks) that are todos on each entry's day (see JournalDayRule); the optional
     // timezoneOffsetMinutes turns completion instants into local days (UTC when omitted).
     [HttpGet]
     public async Task<ActionResult<IEnumerable<JournalEntryResponseDto>>> GetAll([FromQuery] JournalDayQueryDto query)

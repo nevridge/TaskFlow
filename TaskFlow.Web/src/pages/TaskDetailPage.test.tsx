@@ -951,4 +951,19 @@ describe('TaskDetailPage derived status (#385)', () => {
     expect(sent.status).toBe('blocked')
     expect(sent).not.toHaveProperty('blockedReason')
   })
+
+  it('parent picker uses the stored status: Completed with an open child is disabled, open-stored with all-Completed children is not', async () => {
+    const doneWithOpenKid = { ...task, id: 20, title: 'Shipped', status: 'Completed' }
+    const openWithDoneKid = { ...task, id: 21, title: 'Wrapping up', status: 'Todo' }
+    withChildren({ status: 'Todo' }, [
+      doneWithOpenKid,
+      openWithDoneKid,
+      { ...task, id: 22, title: 'Open kid', status: 'Todo', parentTaskItemId: 20 },
+      { ...task, id: 23, title: 'Done kid', status: 'Completed', parentTaskItemId: 21 },
+    ])
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('option', { name: 'Shipped (completed)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Wrapping up' })).toBeEnabled()
+  })
 })

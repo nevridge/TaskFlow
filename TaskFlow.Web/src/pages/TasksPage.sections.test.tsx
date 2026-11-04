@@ -520,4 +520,50 @@ describe('TasksPage sections and context headers (#384)', () => {
     renderPage()
     expect(toggleOf('high')).toHaveAccessibleName('High Priority · 1 task')
   })
+
+  describe('Completed parents (#368)', () => {
+    const doneFamily = [
+      { ...baseTask, id: 1, title: 'Shipped', status: 'Completed', priority: 'High', childTaskCount: 1 },
+      { ...baseTask, id: 2, title: 'Late kid', status: 'Todo', priority: 'High', parentTaskItemId: 1 },
+      { ...baseTask, id: 3, title: 'Open parent', status: 'Todo', priority: 'High' },
+    ]
+
+    it('gates Add subtask on the header of a Completed parent that still has an open child', async () => {
+      useData(doneFamily)
+      renderPage()
+      const header = document.querySelector<HTMLElement>('.t-context-header') as HTMLElement
+      expect(within(header).getAllByRole('button')).toHaveLength(1)
+      const headerButton = within(header).getByRole('button', { name: /^Add subtask to Shipped/ })
+      expect(headerButton).toHaveAttribute('aria-disabled', 'true')
+      await userEvent.click(headerButton)
+      expect(screen.queryByPlaceholderText('Enter subtask title')).not.toBeInTheDocument()
+    })
+
+    it('leaves Add subtask enabled for an open-stored parent', async () => {
+      useData(doneFamily)
+      renderPage()
+      const button = within(rowFor('Open parent')).getByRole('button', { name: 'Add subtask' })
+      expect(button).not.toHaveAttribute('aria-disabled')
+      await userEvent.click(button)
+      expect(screen.getByPlaceholderText('Enter subtask title')).toBeInTheDocument()
+    })
+
+    it('gates Add subtask on a Completed work row', async () => {
+      useData([{ ...baseTask, id: 4, title: 'Finished solo', status: 'Completed', priority: 'High' }])
+      renderPage()
+      await userEvent.click(toggleOf('completed'))
+      const button = within(rowFor('Finished solo')).getByRole('button', { name: 'Add subtask' })
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      await userEvent.click(button)
+      expect(screen.queryByPlaceholderText('Enter subtask title')).not.toBeInTheDocument()
+    })
+
+    it('disables a Completed parent in the New Task picker', async () => {
+      useData(doneFamily)
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      expect(screen.getByRole('option', { name: 'Shipped (completed)' })).toBeDisabled()
+      expect(screen.getByRole('option', { name: 'Open parent' })).toBeEnabled()
+    })
+  })
 })

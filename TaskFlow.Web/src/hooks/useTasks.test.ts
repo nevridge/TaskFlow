@@ -285,4 +285,16 @@ describe('project handling in task mutations', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(keys()).toEqual([])
   })
+
+  it.each(['TASK_PARENT_COMPLETED_NOT_ALLOWED', 'TASK_PARENT_STATUS_DERIVED'])(
+    'invalidates the task list and detail queries when the update fails with %s',
+    async code => {
+      vi.mocked(sdk.putApiV1TaskItemsById).mockRejectedValue({ code })
+      const { result, keys } = setup(useUpdateTaskMutation)
+      result.current.mutate({ id: 2, data: { title: 'U', status: 'inProgress' } })
+      await waitFor(() => expect(result.current.isError).toBe(true))
+      expect(keys()).toContainEqual(['tasks'])
+      expect(keys()).toContainEqual(['tasks', 2])
+    },
+  )
 })

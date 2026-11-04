@@ -537,3 +537,58 @@ describe('TaskListRow', () => {
     })
   })
 })
+
+describe('TaskListRow gated Add subtask', () => {
+  function renderGated(addSubtaskDisabled: boolean, onAddChild = vi.fn()) {
+    render(
+      <MemoryRouter>
+        <table>
+          <tbody>
+            <TaskListRow
+              task={{ ...baseTask, status: 'Completed' }}
+              addSubtaskDisabled={addSubtaskDisabled}
+              onAddChild={onAddChild}
+              onEdit={vi.fn()}
+              onHistory={vi.fn()}
+              onDelete={vi.fn()}
+              onStatusCycle={vi.fn()}
+            />
+          </tbody>
+        </table>
+      </MemoryRouter>,
+    )
+    return onAddChild
+  }
+
+  it('is aria-disabled, focusable, explains itself and calls no handler', async () => {
+    const onAddChild = renderGated(true)
+    const button = screen.getByRole('button', { name: 'Add subtask' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAttribute('title', "Completed tasks can't take new subtasks")
+    expect(button).toHaveAccessibleDescription("Completed tasks can't take new subtasks")
+    await userEvent.click(button)
+    button.focus()
+    await userEvent.keyboard('{Enter}')
+    await userEvent.keyboard(' ')
+    expect(button).toHaveFocus()
+    expect(onAddChild).not.toHaveBeenCalled()
+  })
+
+  it('is reachable with Tab', async () => {
+    renderGated(true)
+    for (let i = 0; i < 6 && !(document.activeElement as HTMLElement | null)?.matches('[aria-label="Add subtask"]'); i++) {
+      await userEvent.tab()
+    }
+    expect(screen.getByRole('button', { name: 'Add subtask' })).toHaveFocus()
+  })
+
+  it('stays a normal button when not gated', async () => {
+    const onAddChild = renderGated(false)
+    const button = screen.getByRole('button', { name: 'Add subtask' })
+    expect(button).not.toHaveAttribute('aria-disabled')
+    expect(button).toHaveAttribute('title', 'Add subtask')
+    await userEvent.click(button)
+    expect(onAddChild).toHaveBeenCalledTimes(1)
+  })
+})

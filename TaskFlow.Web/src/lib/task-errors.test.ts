@@ -32,6 +32,7 @@ describe('getTaskMutationErrorMessage', () => {
     ['TASK_PROJECT_NOT_FOUND', PROJECT_CREATE_NOT_FOUND_MESSAGE],
     ['TASK_PLAN_COMPLETED_NOT_ALLOWED', 'Completed tasks cannot be moved to another day. Reopen the task first.'],
     ['TASK_PARENT_STATUS_DERIVED', "This task's status follows its open subtasks. Complete or remove them to change it."],
+    ['TASK_PARENT_COMPLETED_NOT_ALLOWED', "A completed task can't have open subtasks. Reopen the parent or complete this task first."],
   ])('maps %s', (code, message) => {
     expect(getTaskMutationErrorMessage({ code })).toBe(message)
   })

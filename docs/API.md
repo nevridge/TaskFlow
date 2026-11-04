@@ -65,6 +65,7 @@ Behavior:
 
 - If `journalDate` is in the past, returns `422` with `TASK_CREATION_PAST_DAY_NOT_ALLOWED` (the same code is returned by `PUT`/`PATCH` when planning on a past day). "Today" comes from `timezoneOffsetMinutes`, falling back to the UTC date when omitted.
 - If `journalDate` is today/future, the task is automatically assigned to that journal day.
+- If `parentTaskItemId` refers to a parent whose stored status is Completed and the new task is not itself Completed, returns `422` with `TASK_PARENT_COMPLETED_NOT_ALLOWED`; nothing is created.
 
 #### Task history endpoint
 
@@ -79,6 +80,7 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 - `TASK_PARENT_DEPTH_NOT_ALLOWED` (one subtask level only)
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_STATUS_DERIVED` (`PUT` and `PATCH`: a parent with at least one open, non-Completed subtask cannot have its status changed directly, including block/unblock. Re-sending the stored status while changing other fields is accepted, as are `blockedReason`-only edits. When the new status is Completed, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN` takes precedence. Auto-complete of a parent when its last subtask is completed is unaffected.)
+- `TASK_PARENT_COMPLETED_NOT_ALLOWED` (`POST`, `PUT` and `PATCH`: a non-Completed task cannot be created under, or moved to, a parent whose stored status is Completed. It applies only on create or when the parent changes; re-saving a task that already sits under a Completed parent is accepted, and a Completed child is exempt.)
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
 - `TASK_PLAN_COMPLETED_NOT_ALLOWED`
@@ -351,7 +353,7 @@ Updates an existing task item, including status assignment and optional journal 
 }
 ```
 
-Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
+Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create or parent change only; a Completed child is exempt), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
 
 `409 Conflict` - another request planned the task on that day at the same time; nothing is changed
 ```json

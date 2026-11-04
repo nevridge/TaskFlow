@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
+import { COMPLETED_PARENT_ADD_SUBTASK_HINT } from '@/lib/parent-options'
 import { getDerivedStatusTitle } from '@/lib/task-derived-status'
 import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
@@ -28,6 +29,8 @@ interface Props {
   openChildCount?: number
   onAddChild?: (task: TaskRowModel) => void
   isAddingChild?: boolean
+  /** True when the STORED status is Completed: Add subtask stays focusable but does nothing. */
+  addSubtaskDisabled?: boolean
   onEdit: (task: TaskRowModel) => void
   onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
@@ -75,6 +78,7 @@ export function TaskListRow({
   openChildCount = 0,
   onAddChild,
   isAddingChild = false,
+  addSubtaskDisabled = false,
   onEdit,
   onHistory,
   onDelete,
@@ -100,6 +104,7 @@ export function TaskListRow({
   const deleteBlocked = childCount > 0
   const deleteHint = `Delete subtasks first (${childCount})`
   const deleteHintId = `del-hint-${task.id}`
+  const addSubtaskHintId = `add-hint-${task.id}`
 
   // Adjusted during render (not in an effect) so the closed input never paints.
   const [appliedRetryReason, setAppliedRetryReason] = useState<string | null>(null)
@@ -279,15 +284,22 @@ export function TaskListRow({
       </td>
       <td role="cell" className="t-list-cell t-list-cell--actions">
         <div className="t-card-actions">
+          {/* Gated by the STORED status; aria-disabled (never `disabled`) keeps it focusable so the reason is readable. */}
           <button
-            className={`t-btn-icon${isAddingChild ? ' is-active' : ''}`}
+            className={`t-btn-icon${isAddingChild ? ' is-active' : ''} aria-disabled:opacity-50 aria-disabled:cursor-not-allowed! aria-disabled:hover:bg-transparent! aria-disabled:hover:text-(--muted)! aria-disabled:hover:border-(--line)!`}
             aria-label="Add subtask"
-            title="Add subtask"
+            title={addSubtaskDisabled ? COMPLETED_PARENT_ADD_SUBTASK_HINT : 'Add subtask'}
             data-add-child-anchor={`row:${task.id}`}
-            onClick={() => onAddChild?.(task)}
+            aria-disabled={addSubtaskDisabled ? 'true' : undefined}
+            aria-describedby={addSubtaskDisabled ? addSubtaskHintId : undefined}
+            onClick={() => {
+              if (addSubtaskDisabled) return
+              onAddChild?.(task)
+            }}
           >
             <PlusIcon />
           </button>
+          {addSubtaskDisabled && <span id={addSubtaskHintId} className="sr-only">{COMPLETED_PARENT_ADD_SUBTASK_HINT}</span>}
           {blockable && !blocking && (
             <button
               ref={blockBtnRef}

@@ -4,6 +4,9 @@ import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
 import { normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
 import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { isParentOptionDisabled, parentOptionLabel, type ParentTaskOption } from '@/lib/parent-options'
+
+export type { ParentTaskOption }
 
 export type TaskFormPayload = CreateTaskItemDto & {
   parentTaskItemId?: number | null
@@ -14,11 +17,6 @@ export type TaskFormPayload = CreateTaskItemDto & {
 }
 
 export type { ProjectOption }
-
-type ParentTaskOption = {
-  id: number
-  title: string
-}
 
 type TaskFormModel = TaskItemResponseDto & {
   parentTaskItemId?: number | null
@@ -43,6 +41,8 @@ interface Props {
   statusLocked?: boolean
   /** Derived status shown while locked (display only, never submitted). */
   displayStatus?: string | null
+  /** Fires when the parent or status select changes, so the page can clear a stale save error. */
+  onParentOrStatusChange?: () => void
 }
 
 export function TaskForm({
@@ -58,6 +58,7 @@ export function TaskForm({
   titleInputRef,
   statusLocked = false,
   displayStatus,
+  onParentOrStatusChange,
 }: Props) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -143,7 +144,7 @@ export function TaskForm({
             value={statusLocked ? (normalizeStatus(displayStatus ?? task?.status)?.toLowerCase() ?? status) : status}
             disabled={statusLocked}
             aria-describedby={statusLocked ? 'status-locked-hint' : undefined}
-            onChange={e => setStatus(e.target.value)}
+            onChange={e => { setStatus(e.target.value); onParentOrStatusChange?.() }}
           >
             <option value="draft">Draft</option>
             <option value="todo">Todo</option>
@@ -206,10 +207,20 @@ export function TaskForm({
       </div>
       <div className="t-field">
         <label htmlFor="parentTaskId" className="t-label">Parent Task</label>
-        <select id="parentTaskId" className="t-input" value={parentTaskId} onChange={e => setParentTaskId(e.target.value)}>
+        <select
+          id="parentTaskId"
+          className="t-input"
+          value={parentTaskId}
+          onChange={e => { setParentTaskId(e.target.value); onParentOrStatusChange?.() }}
+        >
           <option value="">None</option>
+          {parentTaskId && !availableParents.some(p => String(p.id) === parentTaskId) && (
+            <option value={parentTaskId} disabled>Current parent</option>
+          )}
           {availableParents.map(parent => (
-            <option key={parent.id} value={String(parent.id)}>{parent.title}</option>
+            <option key={parent.id} value={String(parent.id)} disabled={isParentOptionDisabled(parent, parentTaskId)}>
+              {parentOptionLabel(parent)}
+            </option>
           ))}
         </select>
       </div>

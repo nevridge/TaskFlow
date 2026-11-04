@@ -2141,6 +2141,22 @@ public class UpdateTaskTests
     }
 
     [Fact]
+    public async Task ProjectFailure_WhenThePutCarriedNoRealChange_DoesNotClaimFieldsWereSaved()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me", blockedReason: "waiting");
+        var (tools, handler) = Setup(blocked, configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, status: "blocked", blockedReason: "waiting", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("Task #5 was re-saved unchanged, but assigning it to project 'Alpha' failed: Project is full.")
+            .And.NotContain("fields were saved");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
     public async Task ProjectFailure_AfterAStatusTransition_NamesTheSavedChange()
     {
         var (tools, _) = Setup(Plan(null), configure: h => h
@@ -2531,7 +2547,7 @@ public class UpdateTasksTests
     }
 
     [Fact]
-    public async Task UpdateTasks_StatusTransitionOrBlockedReasonError_WithUnknownProject_ReportsTheValidationError_WithoutALookup()
+    public async Task UpdateTasks_ValidationErrorsWithUnknownProject_ReportTheValidationError_WithoutALookup()
     {
         var handler = HandlerFor(1, 2, 3).Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
 
@@ -2545,9 +2561,31 @@ public class UpdateTasksTests
         var lines = text.Split('\n');
         lines[1].Should().StartWith("x #1: blockedReason needs status=blocked");
         lines[2].Should().StartWith("x #2: ").And.NotContain("No project matches");
+        lines[3].Should().StartWith("+ #3 ");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
         handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
         handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_StartingADraftWithUnknownProject_ReportsTheStatusError_WithoutALookup()
+    {
+        var handler = HandlerFor(2)
+            .Get("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
+            .Put("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 4, Status = "inprogress", Project = "Typo" },
+            new TaskUpdate { Id = 2, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[1].Should().StartWith("x #4: ").And.Contain("can't be started").And.NotContain("No project matches");
+        lines[2].Should().StartWith("+ #2 ");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/4").Should().BeEmpty();
     }
 
     [Fact]

@@ -694,7 +694,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 var retry = inBatch
                     ? "resend only that item with just id and project."
                     : $"call update_task with id={id} and project='{retryProject}' only.";
-                message = $"Task #{id}'s fields were saved{(savedChanges.Count > 0 ? $" ({string.Join(", ", savedChanges)})" : string.Empty)}, but {action} failed: {reason}. Retry only the project change: {retry}";
+                var saved = savedChanges.Count > 0 ? $"fields were saved ({string.Join(", ", savedChanges)})" : "was re-saved unchanged";
+                message = $"Task #{id}{(savedChanges.Count > 0 ? "'s " : " ")}{saved}, but {action} failed: {reason}. Retry only the project change: {retry}";
             }
 
             throw new McpException(message, ex);

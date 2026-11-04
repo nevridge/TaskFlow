@@ -2006,25 +2006,292 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task JournalDate_UnknownProject_ReportsPartialSuccess()
+    public async Task JournalDate_UnknownProject_FailsWithThePlainError_AndSendsNoPut()
     {
-        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+        var (tools, handler) = Setup(Plan(null), Plan("2026-10-10"), h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Nope", ct: TestContext.Current.CancellationToken);
 
         var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("was updated and planned for 2026-10-10").And.Contain("No project matches 'Nope'").And.Contain("Retry only the project change.");
-        ex.InnerException.Should().BeOfType<McpException>();
+        ex.Message.Should().StartWith("No project matches 'Nope'").And.NotContain("was updated");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ProjectFailure_WithoutJournalDate_KeepsItsPlainMessage()
+    public async Task UnknownProject_WithOtherChanges_FailsBeforeAnyWrite()
     {
-        var (tools, _) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
-        var act = () => tools.UpdateTask(5, project: "Nope", ct: TestContext.Current.CancellationToken);
+        var act = () => tools.UpdateTask(5, priority: "high", project: "Typo", ct: TestContext.Current.CancellationToken);
 
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Nope'");
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Typo'");
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put || r.Method == HttpMethod.Post);
+    }
+
+    [Fact]
+    public async Task AmbiguousProject_WithOtherChanges_FailsBeforeAnyWrite()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha One"), Fixtures.Project(8, "Alpha Two") }));
+
+        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("ambiguous");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task StatusTransition_WithUnknownProject_FailsWithThePlainError_AndSendsNoPut()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => tools.UpdateTask(5, status: "blocked", project: "Typo", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Typo'").And.NotContain("was updated");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ValidationError_WithUnknownProject_IsReported_WithoutAProjectLookup()
+    {
+        var (tools, handler) = Setup(Plan(null, status: "Draft"), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => tools.UpdateTask(5, status: "inprogress", project: "Typo", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("can't be started").And.NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("blockedReasonTooLong")]
+    [InlineData("blockedReasonWithoutBlocked")]
+    [InlineData("invalidDueDate")]
+    public async Task OtherValidationErrors_WithUnknownProject_AreReported_WithoutAProjectLookup(string scenario)
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => scenario switch
+        {
+            "blockedReasonTooLong" => tools.UpdateTask(5, status: "blocked", blockedReason: new string('x', 201), project: "Typo", ct: TestContext.Current.CancellationToken),
+            "blockedReasonWithoutBlocked" => tools.UpdateTask(5, blockedReason: "waiting", project: "Typo", ct: TestContext.Current.CancellationToken),
+            _ => tools.UpdateTask(5, dueDate: "someday", project: "Typo", ct: TestContext.Current.CancellationToken),
+        };
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ProjectFailure_AfterAnUnblock_NamesTheUnblockAsSaved()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me");
+        var (tools, _) = Setup(blocked, Plan(null), h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, status: "todo", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message
+            .Should().Contain("Task #5's fields were saved (unblocked").And.Contain("Retry only the project change");
+    }
+
+    [Fact]
+    public async Task InvalidJournalDate_WithUnknownProject_IsReported_WithoutAProjectLookup()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        var act = () => tools.UpdateTask(5, journalDate: "someday", project: "Typo", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("journalDate").And.NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ValidProject_RunsGetValidateResolvePutAssign_InThatOrder()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+
+        var text = await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        handler.Requests.Select(r => $"{r.Method} {r.Path}").Take(4).Should().Equal(
+            "GET TaskItems/5", "GET Projects", "PUT TaskItems/5", "POST Projects/7/tasks");
+        text.Should().StartWith("Updated #5. Changed priority, project -> Alpha.");
+    }
+
+    [Fact]
+    public async Task ProjectFailure_AfterFieldsWereSaved_SaysSo_AndTellsToRetryOnlyTheProject()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("Task #5's fields were saved (priority)")
+            .And.Contain("assigning it to project 'Alpha' failed")
+            .And.Contain("Project is full.")
+            .And.Contain("Retry only the project change: call update_task with id=5 and project='Alpha' only.");
+        ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ProjectFailure_WhenThePutCarriedNoRealChange_DoesNotClaimFieldsWereSaved()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me", blockedReason: "waiting");
+        var (tools, handler) = Setup(blocked, configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, status: "blocked", blockedReason: "waiting", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("Task #5 was re-saved unchanged, but assigning it to project 'Alpha' failed: Project is full.")
+            .And.NotContain("fields were saved");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ProjectFailure_AfterAStatusTransition_NamesTheSavedChange()
+    {
+        var (tools, _) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, status: "inprogress", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("fields were saved (status)");
+    }
+
+    [Fact]
+    public async Task FailedUnassign_AfterFieldsWereSaved_GetsTheSavedFieldsMessage()
+    {
+        var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h
+            .Delete("Projects/7/tasks/5", HttpStatusCode.BadRequest, new { message = "Cannot remove." }));
+
+        var act = () => tools.UpdateTask(5, priority: "low", project: "none", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("fields were saved (priority)")
+            .And.Contain("removing it from its project failed")
+            .And.Contain("project='none' only");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ProjectOnly_SendsNoPut_AndAssigns()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+
+        var text = await tools.UpdateTask(5, project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(1);
+        text.Should().StartWith("Updated #5. Changed project -> Alpha.");
+    }
+
+    [Fact]
+    public async Task ProjectOnly_AssignFails_DoesNotClaimFieldsWereSaved()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("Project is full.").And.NotContain("saved").And.NotContain("was updated");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ProjectWithUnblockOrBlockedReasonChange_StillSendsThePut()
+    {
+        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me");
+        var (tools, handler) = Setup(blocked, configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+
+        await tools.UpdateTask(5, status: "todo", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task SameProjectAsCurrent_SendsNoAssignRequest()
+    {
+        var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
+
+        await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("none")]
+    [InlineData("None")]
+    [InlineData("  none ")]
+    public async Task ProjectNone_DoesNoLookup_AndUnassignsWhenTheTaskHasAProject(string value)
+    {
+        var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h.Delete("Projects/7/tasks/5"));
+
+        await tools.UpdateTask(5, priority: "low", project: value, ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Delete, "Projects/7/tasks/5").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task ProjectNone_WhenTheTaskHasNoProject_SendsNoDelete()
+    {
+        var (tools, handler) = Setup(Plan(null));
+
+        await tools.UpdateTask(5, priority: "low", project: "none", ct: TestContext.Current.CancellationToken);
+
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete);
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AssignConflict_IsSwallowed()
+    {
+        var (tools, _) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Already there." }, HttpStatusCode.Conflict));
+
+        var text = await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        text.Should().StartWith("Updated #5.");
+    }
+
+    [Fact]
+    public async Task UnreachableApiDuringTheProjectLookup_FailsBeforeAnyWrite()
+    {
+        var (tools, handler) = Setup(Plan(null), configure: h => h.Fail(HttpMethod.Get, "Projects", new HttpRequestException("refused")));
+
+        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Cannot reach the TaskFlow API");
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CancellationDuringTheProjectStep_PropagatesUnwrapped()
+    {
+        var (tools, _) = Setup(Plan(null), configure: h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Fail(HttpMethod.Post, "Projects/7/tasks", new OperationCanceledException()));
+
+        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
@@ -2260,6 +2527,100 @@ public class UpdateTasksTests
         lines[1].Should().StartWith("+ #1 \"Task 1\": Changed priority");
         lines[2].Should().StartWith("x #2: Not found");
         lines[3].Should().StartWith("x #3: No project matches 'nope'");
+        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_ValidationErrorWithUnknownProject_ReportsTheValidationError_WithoutALookup()
+    {
+        var handler = HandlerFor(1, 2).Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 1, JournalDate = "someday", Project = "Typo" },
+            new TaskUpdate { Id = 2, Priority = "low" },
+        ]);
+
+        text.Should().Contain("x #1: journalDate").And.NotContain("No project matches");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_ValidationErrorsWithUnknownProject_ReportTheValidationError_WithoutALookup()
+    {
+        var handler = HandlerFor(1, 2, 3).Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 1, BlockedReason = "waiting", Project = "Typo" },
+            new TaskUpdate { Id = 2, DueDate = "someday", Project = "Typo" },
+            new TaskUpdate { Id = 3, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[1].Should().StartWith("x #1: blockedReason needs status=blocked");
+        lines[2].Should().StartWith("x #2: ").And.NotContain("No project matches");
+        lines[3].Should().StartWith("+ #3 ");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_StartingADraftWithUnknownProject_ReportsTheStatusError_WithoutALookup()
+    {
+        var handler = HandlerFor(2)
+            .Get("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
+            .Put("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 4, Status = "inprogress", Project = "Typo" },
+            new TaskUpdate { Id = 2, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[1].Should().StartWith("x #4: ").And.Contain("can't be started").And.NotContain("No project matches");
+        lines[2].Should().StartWith("+ #2 ");
+        handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/4").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task UpdateTasks_ProjectFailureAfterFieldsWereSaved_ReportsTheSavedFields_AndOtherItemsStillRun()
+    {
+        var handler = HandlerFor(1, 2)
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity);
+
+        var text = await Tools(handler).UpdateTasks(
+        [
+            new TaskUpdate { Id = 1, Priority = "low", Project = "Alpha" },
+            new TaskUpdate { Id = 2, Priority = "low" },
+        ]);
+
+        var lines = text.Split('\n');
+        lines[0].Should().Be("Updated 1 of 2 task(s).");
+        lines[1].Should().StartWith("x #1: Task #1's fields were saved (priority)")
+            .And.Contain("assigning it to project 'Alpha' failed: Project is full.")
+            .And.Contain("Retry only the project change: resend only that item with just id and project.");
+        lines[2].Should().StartWith("+ #2 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task UpdateTasks_ProjectLookupNetworkFailure_StopsTheBatch_WithNoPut()
+    {
+        var handler = HandlerFor(1, 2).Fail(HttpMethod.Get, "Projects", new HttpRequestException("refused"));
+
+        var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "low", Project = "Alpha" }, new TaskUpdate { Id = 2, Priority = "low" }]);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("x #1: cannot reach the TaskFlow API").And.Contain("x #2: not attempted");
+        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
     }
 
     [Fact]

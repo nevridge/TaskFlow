@@ -578,6 +578,24 @@ public class ToolSurfaceTests
         RequiredNames(item).Should().NotContain("journalDate");
     }
 
+    [Fact]
+    public void UpdateTools_DescribeTheProjectStep_AndTheRetryOnlyTheProjectGuidance()
+    {
+        var updateTask = Tools().Single(t => t.Attribute.Name == "update_task");
+        var updateTasks = Tools().Single(t => t.Attribute.Name == "update_tasks");
+
+        updateTask.Attribute.Idempotent.Should().BeTrue();
+        updateTasks.Attribute.Idempotent.Should().BeTrue();
+        updateTask.Method.GetCustomAttribute<DescriptionAttribute>()!.Description
+            .Should().Contain("fields were saved").And.Contain("retry only the project change");
+        updateTasks.Method.GetCustomAttribute<DescriptionAttribute>()!.Description
+            .Should().Contain("Retry only the 'x' items").And.Contain("retry that item with just id and project");
+        updateTask.Method.GetParameters().Single(p => p.Name == "project").GetCustomAttribute<DescriptionAttribute>()!.Description
+            .Should().Contain("rejects the whole update before anything is saved");
+        typeof(TaskUpdate).GetProperty("Project")!.GetCustomAttribute<DescriptionAttribute>()!.Description
+            .Should().Contain("rejects the whole update before anything is saved");
+    }
+
     private static List<string> RequiredNames(System.Text.Json.JsonElement schema) =>
         schema.TryGetProperty("required", out var required)
             ? required.EnumerateArray().Select(e => e.GetString()!).ToList()

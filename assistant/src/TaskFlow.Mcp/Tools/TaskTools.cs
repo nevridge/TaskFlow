@@ -46,7 +46,7 @@ internal static class UpdateFieldText
         + "Completing a Blocked task clears the block.";
     public const string Priority = "low, medium or high.";
     public const string DueDate = "The deadline: yyyy-MM-dd, today/tomorrow, or 'none' to clear the due date. Separate from journalDate; it does not plan the task.";
-    public const string Project = "Project name or id to assign, or 'none' to remove the task from its project.";
+    public const string Project = "Project name or id to assign, or 'none' to remove the task from its project. An unknown or ambiguous project rejects the whole update before anything is saved.";
     public const string ParentTaskId = "Parent task id to make this a subtask; 0 removes the parent. Only one subtask level is supported.";
     public const string Complete = "true to mark complete, false to reopen.";
     public const string JournalDate = "Plans the task on this day: today, tomorrow or yyyy-MM-dd, and the day must be today or later. "
@@ -410,7 +410,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "update_task", Idempotent = true)]
     [Description(
         "Updates a task. Only the fields you pass change; everything else is kept. Use complete=true to finish a task and complete=false to reopen it. "
-        + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. "
+        + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. If assigning the project fails after the fields were saved, the error says so; retry only the project change. "
         + "dueDate is the deadline (yyyy-MM-dd, today/tomorrow, or 'none' to clear) and does not plan the task. "
         + "journalDate plans the task on a day (today or later); it is not the deadline. Planning is not removed via update (use set_journal_todos). Completed tasks planned on a past day cannot be reopened (the API says so). "
         + "Start a Todo task with status=inprogress. Only Todo or InProgress tasks can be blocked (use status=blocked with an optional blockedReason). "
@@ -432,7 +432,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         {
             var (today, offset) = InputParsing.LocalNow(time);
             var outcome = await UpdateTaskCoreAsync(
-                id, title, description, status, priority, dueDate, project, parentTaskId, complete, blockedReason, journalDate, today, offset, ct);
+                id, title, description, status, priority, dueDate, project, parentTaskId, complete, blockedReason, journalDate, today, offset, inBatch: false, ct);
             var summary = outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes);
             return $"Updated #{id}. {summary}.{(outcome.Note is null ? string.Empty : " " + outcome.Note)}\n{Formatting.Task(outcome.Task, today, detailed: true, nowUtc: time.GetUtcNow())}";
         });
@@ -441,8 +441,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     [Description(
         "Updates several tasks in one call (up to 25). Use for 2 or more tasks; use update_task for a single task. "
         + "Each item needs the task id and only the fields to change, exactly as in update_task (status, priority, dueDate, journalDate, project, complete, blockedReason...); fields you leave out keep their value. "
-        + "Items are independent: a failure is reported on its own 'x #id' line and does not stop the others. Retry only the 'x' items; "
-        + "a retry of a past-day journalDate failure should change or drop that item's journalDate. "
+        + "Items are independent: a failure is reported on its own 'x #id' line and does not stop the others. Retry only the 'x' items. An 'x' line that says fields were saved means only the project change remains; retry that item with just id and project. "
+        + "A retry of a past-day journalDate failure should change or drop that item's journalDate. "
         + "If the API cannot be reached, the remaining items are marked 'not attempted'. A task id may appear only once per call.")]
     public Task<string> UpdateTasks(
         [Description("The task updates. Each item: id (required) plus the fields to change.")] IReadOnlyList<TaskUpdate> tasks,
@@ -484,7 +484,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 try
                 {
                     var outcome = await UpdateTaskCoreAsync(
-                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.ParentTaskId, item.Complete, item.BlockedReason, item.JournalDate, today, offset, ct);
+                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.ParentTaskId, item.Complete, item.BlockedReason, item.JournalDate, today, offset, inBatch: true, ct);
                     var summary = (outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes))
                         + (outcome.Note is null ? string.Empty : ". " + outcome.Note);
                     lines.Add($"+ #{item.Id} \"{Formatting.CleanReason(outcome.Task.Title)}\": {summary}");
@@ -524,6 +524,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         string? journalDate,
         DateOnly today,
         int offset,
+        bool inBatch,
         CancellationToken ct)
     {
         var existing = await api.GetTaskAsync(id, ct);
@@ -607,6 +608,26 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         AddChange(changes, "dueDate", existing.DueDate != newDue);
         AddChange(changes, "parent", existing.ParentTaskItemId != newParent);
 
+        // Resolve the project before anything is written, so an unknown or ambiguous project rejects the whole update.
+        // "none" removes the project and needs no lookup. A null target with removeProject false means no project change.
+        var removeProject = false;
+        ProjectDto? target = null;
+        var projectKey = project?.Trim();
+        if (!string.IsNullOrEmpty(projectKey))
+        {
+            if (string.Equals(projectKey, "none", StringComparison.OrdinalIgnoreCase))
+            {
+                removeProject = true;
+            }
+            else
+            {
+                target = await ProjectResolver.ResolveAsync(api, projectKey, ct);
+            }
+        }
+
+        var projectRequested = removeProject || target is not null;
+        var savedChanges = changes.ToList();
+
         var request = new UpdateTaskRequest(
             newTitle,
             newDescription,
@@ -619,7 +640,13 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             requestReason,
             JournalDate: planDay);
 
-        var updated = await api.UpdateTaskAsync(id, request, ct);
+        // A project-only call carries nothing to save, so it sends no PUT.
+        var putCarriesChanges = savedChanges.Count > 0 || planDay is not null || requestReason is not null;
+        var updated = existing;
+        if (!projectRequested || putCarriesChanges)
+        {
+            updated = await api.UpdateTaskAsync(id, request, ct);
+        }
 
         if (unblockedIndex >= 0)
         {
@@ -627,24 +654,51 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             changes[unblockedIndex] = $"unblocked (now {updated.Status})";
         }
 
-        // The project step runs after the PUT. When it fails after the PUT already planned the task, say so.
+        // The project step runs after the PUT. When it fails after the PUT saved something, say so.
         var projectChanged = false;
-        if (!string.IsNullOrWhiteSpace(project))
+        try
         {
-            try
+            if (removeProject)
             {
-                projectChanged = await ApplyProjectAsync(project, existing, id, changes, ct);
+                if (existing.ProjectId is { } current)
+                {
+                    await api.UnassignTaskFromProjectAsync(current, id, ct);
+                    changes.Add("project (removed)");
+                    projectChanged = true;
+                }
             }
-            catch (Exception ex) when (planDay is not null && (ex is TaskFlowApiException or McpException))
+            else if (target is not null && existing.ProjectId != target.Id)
             {
-                var reason = ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message;
-                var action = string.Equals(project.Trim(), "none", StringComparison.OrdinalIgnoreCase)
-                    ? "removing it from its project"
-                    : $"assigning it to project '{project.Trim()}'";
-                throw new McpException(
-                    $"Task #{id} was updated and planned for {planDay:yyyy-MM-dd}, but {action} failed: {reason}. Retry only the project change.",
-                    ex);
+                await AssignAsync(target.Id, id, ct);
+                changes.Add($"project -> {target.Name}");
+                projectChanged = true;
             }
+        }
+        catch (Exception ex) when (ex is TaskFlowApiException or McpException)
+        {
+            if (!putCarriesChanges)
+            {
+                throw;
+            }
+
+            var reason = ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message;
+            var action = removeProject ? "removing it from its project" : $"assigning it to project '{target?.Name}'";
+            var retryProject = removeProject ? "none" : target?.Name;
+            string message;
+            if (planDay is { } plannedDay)
+            {
+                message = $"Task #{id} was updated and planned for {plannedDay:yyyy-MM-dd}, but {action} failed: {reason}. Retry only the project change.";
+            }
+            else
+            {
+                var retry = inBatch
+                    ? "resend only that item with just id and project."
+                    : $"call update_task with id={id} and project='{retryProject}' only.";
+                var saved = savedChanges.Count > 0 ? $"fields were saved ({string.Join(", ", savedChanges)})" : "was re-saved unchanged";
+                message = $"Task #{id}{(savedChanges.Count > 0 ? "'s " : " ")}{saved}, but {action} failed: {reason}. Retry only the project change: {retry}";
+            }
+
+            throw new McpException(message, ex);
         }
 
         var refreshed = false;
@@ -684,32 +738,6 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         return new UpdateOutcome(updated, changes, note);
-    }
-
-    // Returns true when the project changed; the caller re-reads the task outside the partial-success handling.
-    private async Task<bool> ApplyProjectAsync(string project, TaskItemDto existing, int id, List<string> changes, CancellationToken ct)
-    {
-        if (string.Equals(project.Trim(), "none", StringComparison.OrdinalIgnoreCase))
-        {
-            if (existing.ProjectId is { } current)
-            {
-                await api.UnassignTaskFromProjectAsync(current, id, ct);
-                changes.Add("project (removed)");
-                return true;
-            }
-
-            return false;
-        }
-
-        var target = await ProjectResolver.ResolveAsync(api, project, ct);
-        if (existing.ProjectId != target.Id)
-        {
-            await AssignAsync(target.Id, id, ct);
-            changes.Add($"project -> {target.Name}");
-            return true;
-        }
-
-        return false;
     }
 
     /// <summary>

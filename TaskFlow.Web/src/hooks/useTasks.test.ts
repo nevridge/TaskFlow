@@ -123,7 +123,7 @@ describe('task create/update reject on HTTP errors (throwOnError)', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('update passes throwOnError: true and rejects when the PUT fails', async () => {
-    const apiError = { code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' }
+    const apiError = { code: 'TASK_PARENT_SELF_NOT_ALLOWED' }
     vi.mocked(sdk.putApiV1TaskItemsById).mockImplementation(clientLike(apiError) as never)
     const { result } = renderHook(() => useUpdateTaskMutation(), { wrapper: makeWrapper() })
 

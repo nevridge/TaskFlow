@@ -360,9 +360,9 @@ describe('TaskDetailPage', () => {
     expect(await screen.findByText(/tasks completed on a past day cannot be reopened/i)).toBeInTheDocument()
   })
 
-  it('TASK_PARENT_CYCLE_NOT_ALLOWED error shows proper message', async () => {
-    await saveWithUpdateError({ code: 'TASK_PARENT_CYCLE_NOT_ALLOWED' })
-    expect(await screen.findByText(/cycle/i)).toBeInTheDocument()
+  it('TASK_PARENT_SELF_NOT_ALLOWED error shows proper message', async () => {
+    await saveWithUpdateError({ code: 'TASK_PARENT_SELF_NOT_ALLOWED' })
+    expect(await screen.findByText(/own parent/i)).toBeInTheDocument()
   })
 
   it('unknown mutation error shows generic message in an alert', async () => {

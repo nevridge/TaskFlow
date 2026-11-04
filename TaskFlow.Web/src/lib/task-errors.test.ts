@@ -24,9 +24,7 @@ describe('getTaskMutationErrorMessage', () => {
   it.each([
     ['TASK_REOPEN_PAST_DAY_NOT_ALLOWED', 'Tasks completed on a past day cannot be reopened.'],
     ['TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN', 'Parent tasks cannot be completed while child tasks are still open.'],
-    ['TASK_PARENT_INCOMPLETE_CHILDREN', 'Parent tasks cannot be completed while child tasks are still open.'],
     ['TASK_PARENT_SELF_NOT_ALLOWED', 'A task cannot be set as its own parent.'],
-    ['TASK_PARENT_CYCLE_NOT_ALLOWED', 'This parent assignment would create a cycle.'],
     ['TASK_PARENT_DEPTH_NOT_ALLOWED', 'Only one subtask level is supported.'],
     ['TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN', 'This task has subtasks. Remove or reassign subtasks before deleting.'],
     ['TASK_PARENT_NOT_FOUND', 'The selected parent task was not found.'],

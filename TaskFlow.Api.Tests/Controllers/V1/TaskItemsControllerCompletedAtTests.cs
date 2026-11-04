@@ -22,6 +22,9 @@ public class TaskItemsControllerCompletedAtTests
 {
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow);
 
+    // Seeds for tasks that get reopened must be on today's UTC day; "now minus N minutes" falls on yesterday just after 00:00 UTC.
+    private static DateTime StartOfTodayUtc => DateTime.UtcNow.Date;
+
     private sealed class RealStack : IDisposable
     {
         private readonly SqliteConnection _connection;
@@ -194,7 +197,7 @@ public class TaskItemsControllerCompletedAtTests
     public async Task Patch_ShouldClearCompletedAtOnReopen_AndSetLaterValueOnRecomplete()
     {
         using var stack = new RealStack();
-        var firstCompletion = DateTime.UtcNow.AddMinutes(-30);
+        var firstCompletion = StartOfTodayUtc;
         var seeded = await stack.SeedAsync(new TaskItem { Title = "T", Status = Status.Completed, CompletedAt = firstCompletion });
 
         var reopened = OkDto(await stack.Controller.Patch(seeded.Id, new PatchTaskItemDto { Status = Status.Todo }));
@@ -222,13 +225,13 @@ public class TaskItemsControllerCompletedAtTests
     public async Task Patch_ReopeningChild_ShouldNotReopenCompletedParent()
     {
         using var stack = new RealStack();
-        var parentCompletedAt = DateTime.UtcNow.AddMinutes(-5);
+        var parentCompletedAt = StartOfTodayUtc;
         var parent = await stack.SeedAsync(new TaskItem { Title = "Parent", Status = Status.Completed, CompletedAt = parentCompletedAt });
         var child = await stack.SeedAsync(new TaskItem
         {
             Title = "Child",
             Status = Status.Completed,
-            CompletedAt = DateTime.UtcNow.AddMinutes(-6),
+            CompletedAt = StartOfTodayUtc,
             ParentTaskItemId = parent.Id
         });
 

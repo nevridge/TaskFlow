@@ -402,6 +402,101 @@ public class TaskItemsControllerParentCompletedTests
     }
 
     [Fact]
+    public async Task Patch_ReopenCompletedChild_ResendSameCompletedParent_ReusesProposedParent_LooksUpParentOnce()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = ParentId });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndMoveToDifferentCompletedParent_ReturnsParentCompleted_LooksUpNewParentOnce()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem
+        {
+            Id = 2,
+            Title = "Other",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow
+        });
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = 2 });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        Assert.Equal(ParentId, child.ParentTaskItemId);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(2), Times.Once);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Never);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ReopenCompletedChild_AndMoveToDifferentCompletedParent_ReturnsParentCompleted_LooksUpNewParentOnce()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem
+        {
+            Id = 2,
+            Title = "Other",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow
+        });
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = 2
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(2), Times.Once);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Never);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_StoredParentNotFound_GuardDoesNotBlock_ReopenProceeds()
+    {
+        // The reopen guard only blocks when the resulting parent is found and Completed; a missing parent is not an error here.
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(ParentId)).ReturnsAsync((TaskItem?)null);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        AssertOk(result);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Status == Status.Todo)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ParentNotFound_ReturnsParentNotFound()
+    {
+        // With the parent re-sent, the not-found check on the proposed parent runs first, so the reopen guard is not reached.
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(ParentId)).ReturnsAsync((TaskItem?)null);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal("TASK_PARENT_NOT_FOUND", Code(result));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Update_ResendParent_CompletedChildStaysCompleted_Succeeds()
     {
         SetupParent(Status.Completed);

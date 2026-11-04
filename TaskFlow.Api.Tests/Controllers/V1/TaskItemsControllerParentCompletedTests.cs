@@ -316,6 +316,37 @@ public class TaskItemsControllerParentCompletedTests
     }
 
     [Fact]
+    public async Task Patch_ReopenCompletedChild_ToDraft_UnderCompletedParent_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Draft });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ToDraft_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Draft,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Patch_ReopenPastDayCompletedChild_UnderCompletedParent_ReturnsParentCompleted_NotPastDay()
     {
         SetupParent(Status.Completed);
@@ -668,6 +699,59 @@ public class TaskItemsControllerParentCompletedTests
         var stored = await stack.LoadAsync(child.Id);
         Assert.Equal(parent.Id, stored.ParentTaskItemId);
         Assert.Equal(Status.Completed, stored.Status);
+    }
+
+    [Fact]
+    public async Task RealStack_Patch_ReopenCompletedChild_UnderCompletedParent_LeavesChildAndParentUnchanged()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Completed);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        var result = await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+        var storedChild = await stack.LoadAsync(child.Id);
+        var storedParent = await stack.LoadAsync(parent.Id);
+        Assert.Equal(Status.Completed, storedChild.Status);
+        Assert.NotNull(storedChild.CompletedAt);
+        Assert.Equal(parent.Id, storedChild.ParentTaskItemId);
+        Assert.Equal(Status.Completed, storedParent.Status);
+        Assert.NotNull(storedParent.CompletedAt);
+    }
+
+    [Fact]
+    public async Task RealStack_Put_ReopenCompletedChild_UnderCompletedParent_LeavesChildAndParentUnchanged()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Completed);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        var result = await stack.Controller.Update(child.Id, new UpdateTaskItemDto
+        {
+            Title = "Renamed",
+            Status = Status.Todo,
+            ParentTaskItemId = parent.Id
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        var storedChild = await stack.LoadAsync(child.Id);
+        Assert.Equal(Status.Completed, storedChild.Status);
+        Assert.Equal("C", storedChild.Title);
+        Assert.Equal(Status.Completed, (await stack.LoadAsync(parent.Id)).Status);
+    }
+
+    [Fact]
+    public async Task RealStack_Patch_ReopenCompletedChild_UnderOpenParent_ReopensChildAndLeavesParentOpen()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Todo);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        AssertOk(await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo }));
+
+        Assert.Equal(Status.Todo, (await stack.LoadAsync(child.Id)).Status);
+        Assert.NotEqual(Status.Completed, (await stack.LoadAsync(parent.Id)).Status);
     }
 
     [Fact]

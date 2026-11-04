@@ -90,6 +90,13 @@ describe('TodosSection context headers', () => {
     expect(screen.getByRole('button', { name: 'Remove from day' })).toBeEnabled()
   })
 
+  it('describes each subtask remove button by the parent title without changing its accessible name', () => {
+    load([parent(), sub(2)])
+    renderSection()
+    const remove = screen.getByRole('button', { name: 'Remove from day' })
+    expect(remove).toHaveAccessibleDescription('Parent')
+  })
+
   it('shows a parent as a normal row with a checkbox and no header when no subtask is a row of the day', () => {
     load([parent()])
     renderSection()

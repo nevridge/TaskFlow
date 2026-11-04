@@ -612,7 +612,6 @@ public class JournalEntryRepositoryTests
         Assert.Equal("Proj", parentTodo.Project?.Name);
         var childItem = Assert.Single(parentTodo.ChildTaskItems);
         Assert.Equal(child.Id, childItem.Id);
-        Assert.Equal("Proj", childItem.Project?.Name);
     }
 
     [Fact]

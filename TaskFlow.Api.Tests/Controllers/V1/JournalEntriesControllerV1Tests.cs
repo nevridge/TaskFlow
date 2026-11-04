@@ -787,6 +787,65 @@ public class JournalEntriesControllerV1Tests
         Assert.Contains(child.Id, wedDto.TodoTaskItemIds);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-300)]
+    [InlineData(600)]
+    public async Task GetEntry_AndTodosEndpoint_EndToEnd_ShouldAgreeOnTodoRows_NearLocalMidnightBoundaries(int? offset)
+    {
+        await using var h = new RealRepoHarness();
+        var days = Enumerable.Range(1, 5).Select(d => new DateOnly(2026, 6, d)).ToList();
+        var entries = days.Select(d => new JournalEntry { Title = d.ToString("O"), Date = d, CreatedAt = DateTime.UtcNow }).ToList();
+        h.Context.JournalEntries.AddRange(entries);
+
+        // Completion instants straddling local midnight for the offsets in the theory (-300 and +600) and UTC.
+        var instants = new[]
+        {
+            new DateTime(2026, 6, 2, 23, 30, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 0, 30, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 4, 59, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 5, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 13, 59, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 14, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 14, 30, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 3, 23, 59, 0, DateTimeKind.Utc),
+            new DateTime(2026, 6, 4, 0, 0, 0, DateTimeKind.Utc),
+        };
+        await h.Context.SaveChangesAsync();
+        var tasks = new List<TaskItem>();
+        for (var i = 0; i < instants.Length; i++)
+        {
+            // Alternate linked and never-linked so both query branches meet the boundaries.
+            tasks.Add(new TaskItem
+            {
+                Title = $"Done {i}",
+                Status = Status.Completed,
+                CompletedAt = instants[i],
+                CurrentJournalEntryId = i % 2 == 0 ? entries[0].Id : null
+            });
+        }
+
+        tasks.Add(new TaskItem { Title = "Open Wed", Status = Status.Todo, CurrentJournalEntryId = entries[2].Id });
+        h.Context.TaskItems.AddRange(tasks);
+        await h.Context.SaveChangesAsync();
+        h.Context.ChangeTracker.Clear();
+
+        var attributed = 0;
+        foreach (var entry in entries)
+        {
+            var todos = await h.TodosController.GetAll(entry.Id, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+            var rows = Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(Assert.IsType<OkObjectResult>(todos.Result).Value).ToList();
+            var response = await h.Controller.Get(entry.Id, new JournalDayQueryDto { TimezoneOffsetMinutes = offset });
+            var dto = Assert.IsType<JournalEntryResponseDto>(Assert.IsType<OkObjectResult>(response.Result).Value);
+
+            Assert.Equal(rows.Select(r => r.Id).Order(), dto.TodoTaskItemIds.Order());
+            attributed += rows.Count;
+        }
+
+        // Every task lands on exactly one of the five days, so no day double-counts and none is dropped.
+        Assert.Equal(tasks.Count, attributed);
+    }
+
     [Fact]
     public async Task UpdateEntry_EndToEnd_ShouldAttributeTodoIdsToUtcDays_UnlikeGetWithOffset()
     {

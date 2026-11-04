@@ -53,7 +53,6 @@ export type TaskItemResponseDto = Omit<
   moveCount?: number
   daysTagged?: number
   parentTaskItemId?: number | null
-  children?: TaskItemResponseDto[] | null
 }
 
 const J = { 'Content-Type': 'application/json' }

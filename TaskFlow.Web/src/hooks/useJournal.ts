@@ -302,6 +302,20 @@ export function useToggleTodoMutation(entryId: number, isoDate?: string) {
       if (qc.getQueryData(taskKeys.all) !== undefined) {
         qc.setQueryData(taskKeys.all, (old: unknown) => mapCachedTask(old, id, complete))
       }
+      // Completing an open subtask also lowers its parent's cached openChildCount (when the parent row is in the
+      // same list), so the parent does not keep hasOpenChildren (no Block button) until the refetch. Both lists
+      // are in the snapshot, so onError restores them.
+      const before = snapshot[0]?.[1] as TodosCache | undefined
+      const completedRow = before?.data?.find(t => Number(t.id) === id)
+      if (completedRow && completedRow.parentTaskItemId != null && completedRow.status !== 'Completed') {
+        const parentId = Number(completedRow.parentTaskItemId)
+        const dec = (old: TodosCache | undefined): TodosCache | undefined =>
+          old?.data
+            ? { ...old, data: old.data.map(t => (Number(t.id) === parentId ? { ...t, openChildCount: Math.max(0, Number(t.openChildCount ?? 0) - 1) } : t)) }
+            : old
+        qc.setQueryData<TodosCache>(viewedKey, dec)
+        if (todayKey && qc.getQueryData<TodosCache>(todayKey)?.data) qc.setQueryData<TodosCache>(todayKey, dec)
+      }
       return snapshot
     },
     onError: (_err, _vars, snapshot) => rollbackTaskCache(qc, snapshot),

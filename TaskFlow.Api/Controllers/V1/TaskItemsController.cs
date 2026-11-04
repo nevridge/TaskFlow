@@ -298,7 +298,9 @@ public class TaskItemsController(
     /// Shares the rules and 422 responses of the full update: <c>TASK_REOPEN_PAST_DAY_NOT_ALLOWED</c>
     /// (completion day, or linked day when <c>completedAt</c> is null, before the user's today; tasks with neither are
     /// exempt; <c>details.assignedDate</c> holds that day) and <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>
-    /// (<c>journalDate</c> differs from the link of a task that has a <c>completedAt</c>), plus the parent, block,
+    /// (<c>journalDate</c> differs from the link of a task that has a <c>completedAt</c>),
+    /// <c>TASK_PLAN_HAS_OPEN_SUBTASKS</c> (a task with an open subtask cannot be planned onto a <c>journalDate</c> that
+    /// differs from its current link), plus the parent, block,
     /// start and past-day planning codes, and <c>TASK_PARENT_STATUS_DERIVED</c> (a parent with an open subtask cannot
     /// have its status changed directly; re-sending the stored status is accepted), and
     /// <c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c> (a task whose resulting status is not Completed cannot be moved under a

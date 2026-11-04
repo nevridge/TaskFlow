@@ -396,7 +396,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }
 
   /** Controls shared by top-level todos and subtasks (both are flat work rows). */
-  function renderRow(td: TaskItemResponseDto) {
+  function renderRow(td: TaskItemResponseDto, headerParentId?: number) {
     const id = Number(td.id)
     const isChild = td.parentTaskItemId != null
     const isDone = td.status === 'Completed'
@@ -489,6 +489,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                 onClick={() => removeFromDay(td)}
                 aria-label={isChild ? 'Remove from day' : `Remove from day: ${td.title ?? ''}`}
                 title={isChild ? undefined : `Remove from day: ${td.title ?? ''}`}
+                // Subtask rows under a header are described by the parent title (disambiguates "Remove from day").
+                aria-describedby={isChild && headerParentId !== undefined ? `todo-ctx-${headerParentId}` : undefined}
               >
                 <DeleteSvg />
               </button>
@@ -616,7 +618,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                   (td.status === 'Blocked' ? ' is-blocked' : '')
                 }
               >
-                {renderRow(td)}
+                {renderRow(td, block.header?.parentId)}
               </li>
             )),
           ])}

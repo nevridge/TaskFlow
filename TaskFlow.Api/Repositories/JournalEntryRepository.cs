@@ -208,10 +208,8 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             .AsNoTracking()
             .Include(t => t.Project)
             .Include(t => t.CurrentJournalEntry)
-            .Include(t => t.ParentTaskItem).ThenInclude(p => p!.Project)
-            .Include(t => t.ParentTaskItem).ThenInclude(p => p!.CurrentJournalEntry)
-            .Include(t => t.ChildTaskItems).ThenInclude(c => c.Project)
-            .Include(t => t.ChildTaskItems).ThenInclude(c => c.CurrentJournalEntry)
+            .Include(t => t.ParentTaskItem)
+            .Include(t => t.ChildTaskItems)
             // Split so the children collection does not multiply the parent rows (and their joined project/entry columns).
             .AsSplitQuery()
             .Where(JournalDayRule.OnDayPredicate(entryId, startUtc - SqlRangePadding, endUtc + SqlRangePadding))

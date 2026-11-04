@@ -194,6 +194,20 @@ describe('useToggleTodoMutation on Blocked rows', () => {
     expect(rows(qc).map(r => r.status)).toEqual(['Completed', 'Completed'])
   })
 
+  it('completing a subtask lowers its parent openChildCount optimistically and restores it on failure', async () => {
+    const d = deferred()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)
+    const qc = seeded([todo({ id: 1, openChildCount: 1 }), todo({ id: 3, parentTaskItemId: 1 })])
+    const { result } = renderHook(() => useToggleTodoMutation(ENTRY), { wrapper: wrapperFor(qc) })
+    let settled: Promise<unknown> = Promise.resolve()
+    act(() => { settled = result.current.mutateAsync({ id: 3, done: true }).catch(() => {}) })
+    await waitFor(() => expect(rows(qc)[1].status).toBe('Completed'))
+    expect(rows(qc)[0].openChildCount).toBe(0)
+    await act(async () => { d.reject({ message: 'boom' }); await settled })
+    expect(rows(qc)[0].openChildCount).toBe(1)
+    expect(rows(qc)[1].status).toBe('Todo')
+  })
+
   it('completes a Todo row optimistically', async () => {
     const d = deferred()
     vi.mocked(sdk.patchApiV1TaskItemsById).mockReturnValue(d.promise as never)

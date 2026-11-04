@@ -84,6 +84,7 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
 - `TASK_PLAN_COMPLETED_NOT_ALLOWED`
+- `TASK_PLAN_HAS_OPEN_SUBTASKS` (`PUT`, `PATCH` and Add a Todo: a task with at least one open, non-Completed subtask cannot be planned onto a different day; plan its subtasks instead)
 
 #### Reopen past-day guard and `timezoneOffsetMinutes`
 
@@ -121,6 +122,8 @@ A task with a stored `completedAt` is shown on its completion day whatever its j
 ```
 
 A `journalDate` equal to the current link, or a null/omitted one, is accepted. Completed tasks without a `completedAt` (legacy rows) can still be planned.
+
+**A parent with open subtasks cannot be planned.** `PUT`/`PATCH` with a `journalDate` that differs from the current link of a task that has at least one open (not Completed) subtask returns `422` `TASK_PLAN_HAS_OPEN_SUBTASKS` and changes nothing; `details` holds `taskItemId` and `journalDate`. It is checked after the Completed-task and past-day rules. Plan the subtasks instead.
 
 **Completing and planning in one request is rejected.** `PUT`/`PATCH` with `status: "Completed"` together with a `journalDate` on a task that is not yet completed returns `422` `TASK_PLAN_COMPLETED_NOT_ALLOWED` and the whole update is rolled back: the status stays unchanged, `completedAt` stays null, no journal entry or link is created and no history event is written. The completion is stamped before the link is attempted, so the task already counts as completed when the link is refused; `details` is `{ "assignedDate": null, "completedAt": null, "journalDate": "<requested day>" }`. Completing first and planning in a separate request is also rejected once `completedAt` exists (see above). To plan a task, plan it while it is still open. A single request that reopens a task and also changes its `journalDate` is rejected with this code: reopen first, plan second. When both the reopen rule and this rule would reject a request, the reopen error is returned.
 
@@ -353,7 +356,7 @@ Updates an existing task item, including status assignment and optional journal 
 }
 ```
 
-Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create, parent change, or reopening a Completed child whose resulting direct parent is Completed), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
+Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create, parent change, or reopening a Completed child whose resulting direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS` (planning a task with open subtasks onto a different day), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
 
 `409 Conflict` - another request planned the task on that day at the same time; nothing is changed
 ```json
@@ -391,7 +394,7 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
 - Completion is set only through `status` (`Completed`); `isComplete` and `completedAt` are not part of the request contract and are ignored if sent.
-- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (also when reopening a Completed child whose direct parent is Completed), plus the parent, block, start and past-day planning codes.
+- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (also when reopening a Completed child whose direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS`, plus the parent, block, start and past-day planning codes.
 
 **Example:**
 ```bash
@@ -823,7 +826,7 @@ curl http://localhost:8080/health/live
 | `204 No Content` | Success with no body | PUT, DELETE successful |
 | `400 Bad Request` | Validation error | Invalid input data |
 | `404 Not Found` | Resource not found | Requested item doesn't exist |
-| `422 Unprocessable Entity` | Business rule violated | Task update/create rejected with a `{ code, message, details }` body (for example `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`, `TASK_PLAN_COMPLETED_NOT_ALLOWED`) |
+| `422 Unprocessable Entity` | Business rule violated | Task update/create rejected with a `{ code, message, details }` body (for example `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`, `TASK_PLAN_COMPLETED_NOT_ALLOWED`, `TASK_PLAN_HAS_OPEN_SUBTASKS`) |
 | `500 Internal Server Error` | Server error | Unexpected server-side error |
 | `503 Service Unavailable` | Service unhealthy | Health check failure |
 

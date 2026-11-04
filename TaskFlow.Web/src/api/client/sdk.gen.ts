@@ -205,7 +205,9 @@ export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options
  * Shares the rules and 422 responses of the full update: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
  * (completion day, or linked day when `completedAt` is null, before the user's today; tasks with neither are
  * exempt; `details.assignedDate` holds that day) and `TASK_PLAN_COMPLETED_NOT_ALLOWED`
- * (`journalDate` differs from the link of a task that has a `completedAt`), plus the parent, block,
+ * (`journalDate` differs from the link of a task that has a `completedAt`),
+ * `TASK_PLAN_HAS_OPEN_SUBTASKS` (a task with an open subtask cannot be planned onto a `journalDate` that
+ * differs from its current link), plus the parent, block,
  * start and past-day planning codes, and `TASK_PARENT_STATUS_DERIVED` (a parent with an open subtask cannot
  * have its status changed directly; re-sending the stored status is accepted), and
  * `TASK_PARENT_COMPLETED_NOT_ALLOWED` (a task whose resulting status is not Completed cannot be moved under a

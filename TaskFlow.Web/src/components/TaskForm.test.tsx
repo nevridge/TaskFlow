@@ -491,3 +491,51 @@ describe('TaskForm with a locked (derived) status', () => {
     expect(document.getElementById('status-locked-hint')).toBeNull()
   })
 })
+
+describe('TaskForm parent picker', () => {
+  const parents = [
+    { id: 1, title: 'Open parent', status: 'Todo' },
+    { id: 2, title: 'Done parent', status: 'Completed' },
+    { id: 3, title: 'Also done', status: 'completed' },
+  ]
+
+  it('disables Completed parents with a visible suffix and keeps open parents enabled', () => {
+    renderForm(undefined, vi.fn(), vi.fn(), { availableParents: parents })
+    expect(screen.getByRole('option', { name: 'Open parent' })).toBeEnabled()
+    expect(screen.getByRole('option', { name: 'Done parent (completed)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Also done (completed)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'None' })).toBeEnabled()
+  })
+
+  it('keeps a selected Completed parent enabled and submits it unchanged', async () => {
+    const onSubmit = vi.fn()
+    renderForm({ ...existing, parentTaskItemId: 2 }, onSubmit, vi.fn(), { availableParents: parents })
+    expect(screen.getByRole('option', { name: 'Done parent (completed)' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSubmit.mock.calls[0][0].parentTaskItemId).toBe(2)
+  })
+
+  it('disables the Completed parent once another parent is chosen', async () => {
+    renderForm({ ...existing, parentTaskItemId: 2 }, vi.fn(), vi.fn(), { availableParents: parents })
+    await userEvent.selectOptions(screen.getByLabelText('Parent Task'), '1')
+    expect(screen.getByRole('option', { name: 'Done parent (completed)' })).toBeDisabled()
+  })
+
+  it('shows a disabled, selected fallback option when the parent is missing from the list', async () => {
+    const onSubmit = vi.fn()
+    renderForm({ ...existing, parentTaskItemId: 99 }, onSubmit, vi.fn(), { availableParents: parents })
+    const fallback = screen.getByRole('option', { name: 'Current parent' }) as HTMLOptionElement
+    expect(fallback).toBeDisabled()
+    expect(fallback.selected).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(onSubmit.mock.calls[0][0].parentTaskItemId).toBe(99)
+  })
+
+  it('notifies when the parent or status changes', async () => {
+    const onParentOrStatusChange = vi.fn()
+    renderForm(existing, vi.fn(), vi.fn(), { availableParents: parents, onParentOrStatusChange })
+    await userEvent.selectOptions(screen.getByLabelText('Parent Task'), '1')
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'draft')
+    expect(onParentOrStatusChange).toHaveBeenCalledTimes(2)
+  })
+})

@@ -172,6 +172,11 @@ public class TaskItemsController(
                     details = new { parentTaskItemId = createDto.ParentTaskItemId }
                 });
             }
+
+            if (parent.Status == Status.Completed && createDto.Status != Status.Completed)
+            {
+                return UnprocessableEntity(TaskRuleErrors.ParentCompletedNotAllowed());
+            }
         }
 
         if (createDto.ProjectId.HasValue && await _projectRepo.GetByIdNoTrackingAsync(createDto.ProjectId.Value) is null)
@@ -234,6 +239,9 @@ public class TaskItemsController(
     /// <item><c>TASK_PARENT_STATUS_DERIVED</c>: a parent with at least one open (not Completed) subtask cannot have its
     /// status changed directly, including blocking and unblocking. Re-sending the stored status is accepted.
     /// <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c> takes precedence when completing. Nothing is saved.</item>
+    /// <item><c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c>: a task whose resulting status is not Completed cannot be moved
+    /// under a Completed parent. Completing the task in the same request is accepted, and re-sending the current
+    /// <c>parentTaskItemId</c> is accepted. Nothing is saved.</item>
     /// <item>Other codes: <c>TASK_PARENT_SELF_NOT_ALLOWED</c>, <c>TASK_PARENT_NOT_FOUND</c>,
     /// <c>TASK_PARENT_DEPTH_NOT_ALLOWED</c>, <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c>,
     /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
@@ -286,7 +294,9 @@ public class TaskItemsController(
     /// exempt; <c>details.assignedDate</c> holds that day) and <c>TASK_PLAN_COMPLETED_NOT_ALLOWED</c>
     /// (<c>journalDate</c> differs from the link of a task that has a <c>completedAt</c>), plus the parent, block,
     /// start and past-day planning codes, and <c>TASK_PARENT_STATUS_DERIVED</c> (a parent with an open subtask cannot
-    /// have its status changed directly; re-sending the stored status is accepted).
+    /// have its status changed directly; re-sending the stored status is accepted), and
+    /// <c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c> (a task whose resulting status is not Completed cannot be moved under a
+    /// Completed parent; completing it in the same request, or re-sending its current parent, is accepted).
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
@@ -361,6 +371,7 @@ public class TaskItemsController(
         async Task<List<TaskItem>> GetChildrenOnceAsync() =>
             children ??= (await _repo.GetChildrenAsync(id)).ToList();
 
+        TaskItem? proposedParent = null;
         if (changes.HasParent && changes.ParentTaskItemId.HasValue)
         {
             var proposedParentId = changes.ParentTaskItemId.Value;
@@ -375,6 +386,7 @@ public class TaskItemsController(
             }
 
             var parent = await _repo.GetByIdNoTrackingAsync(proposedParentId);
+            proposedParent = parent;
             if (parent is null)
             {
                 return UnprocessableEntity(new
@@ -425,6 +437,18 @@ public class TaskItemsController(
             });
         }
 
+        // An open task cannot be attached to a Completed parent. Only a change of parent triggers this, so a full-object
+        // save that re-sends the stored parent passes. existing.ParentTaskItemId still holds the stored value here.
+        // Judged on the post-change status, so completing the task in the same request is allowed.
+        if (changes.HasParent &&
+            changes.ParentTaskItemId.HasValue &&
+            changes.ParentTaskItemId != existing.ParentTaskItemId &&
+            proposedParent?.Status == Status.Completed &&
+            !IsCompleted(nextStatus))
+        {
+            return UnprocessableEntity(TaskRuleErrors.ParentCompletedNotAllowed());
+        }
+
         var wasCompleted = IsCompleted(existing.Status);
         var nowCompleted = IsCompleted(nextStatus);
 
@@ -441,7 +465,8 @@ public class TaskItemsController(
         // Compared against the stored status, so a full-object save that re-sends the same status passes.
         // Deliberately placed after ResolveBlockedTransition and the start-not-allowed check: those rules are stricter
         // (e.g. Draft parent -> InProgress returns TASK_START_NOT_ALLOWED, Draft/Completed -> Blocked returns
-        // TASK_BLOCK_*_NOT_ALLOWED), and nothing is saved either way.
+        // TASK_BLOCK_*_NOT_ALLOWED), and nothing is saved either way. Guard order for parent rules: self, not found,
+        // depth, then TASK_PARENT_COMPLETED_NOT_ALLOWED (after the start check), then complete-blocked, then derived.
         if (nextStatus != existing.Status && (await GetChildrenOnceAsync()).Any(c => !IsCompleted(c.Status)))
         {
             return UnprocessableEntity(TaskRuleErrors.ParentStatusDerived());

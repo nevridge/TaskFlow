@@ -154,6 +154,12 @@ export function useCreateTaskMutation() {
         // Per call: the client only rejects on HTTP errors when this is set.
         throwOnError: true,
       }),
+    onError: err => {
+      // A completed-parent 422 means the cached parent status was stale: refetch so the picker self-heals.
+      if ((err as { code?: unknown } | null)?.code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+      }
+    },
     onSuccess: (_result, variables) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       if (variables.projectId != null) qc.invalidateQueries({ queryKey: projectKeys.all })
@@ -194,8 +200,9 @@ export function useUpdateTaskMutation() {
     },
     onError: (err, { id }, snapshot) => {
       rollbackTaskCache(qc, snapshot)
-      // A derived-status 422 means this view was stale: refetch so the lock shows.
-      if ((err as { code?: unknown } | null)?.code === 'TASK_PARENT_STATUS_DERIVED') {
+      // A derived-status or completed-parent 422 means this view was stale: refetch so it self-heals.
+      const code = (err as { code?: unknown } | null)?.code
+      if (code === 'TASK_PARENT_STATUS_DERIVED' || code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') {
         qc.invalidateQueries({ queryKey: taskKeys.all })
         qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
       }

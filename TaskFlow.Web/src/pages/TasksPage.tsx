@@ -531,7 +531,12 @@ export function TasksPage() {
 
   const parentOptions = tasks
     .filter(t => !editingTask || Number(t.id) !== Number(editingTask.id))
-    .map(t => ({ id: Number(t.id), title: t.title }))
+    .map(t => ({ id: Number(t.id), title: t.title, status: t.status }))
+
+  // Stored status on purpose (not statusOf): a Completed parent with an open child is still gated.
+  function isParentCompleted(id: number): boolean {
+    return isCompleted(allById.get(id)?.status)
+  }
 
   function handleDelete(task: TaskListModel) {
     const id = Number(task.id)
@@ -551,6 +556,7 @@ export function TasksPage() {
   }
 
   function beginAddChild(parentId: number, anchor: string) {
+    if (isParentCompleted(parentId)) return
     setMutationError(null)
     setAddingChild({ parentId, anchor })
     setChildDraftTitle('')
@@ -651,6 +657,7 @@ export function TasksPage() {
               defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
               projectInvalid={createProjectInvalid || saveWithProject.projectInvalid}
               onProjectChange={() => { setCreateProjectInvalid(false); saveWithProject.setProjectInvalid(false) }}
+              onParentOrStatusChange={clearFormErrors}
               isSaving={saveWithProject.isSaving || createMutation.isPending}
               onSubmit={editingTask ? handleUpdate : handleCreate}
               onCancel={() => { setShowCreate(false); setEditingTask(null); clearFormErrors() }}
@@ -821,6 +828,7 @@ export function TasksPage() {
                               sectionLabel={section.label}
                               isAdding={addingHeader}
                               onAddChild={() => beginAddChild(header.parentId, anchor)}
+                              addSubtaskDisabled={isParentCompleted(header.parentId)}
                               progressLabel={headerInfo && headerInfo.directTotal > 0 ? getParentProgressLabel(headerInfo) : undefined}
                             />,
                           )
@@ -844,6 +852,7 @@ export function TasksPage() {
                                 openChildCount={derived.get(taskId)?.openChildCount ?? 0}
                                 onAddChild={t => beginAddChild(Number(t.id), 'row')}
                                 isAddingChild={addingHere}
+                                addSubtaskDisabled={isCompleted(task.status)}
                                 onEdit={openEdit}
                                 onHistory={setHistoryTask}
                                 onDelete={handleDelete}

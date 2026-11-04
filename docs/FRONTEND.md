@@ -297,6 +297,7 @@ Tasks pages map backend business-rule codes to user-friendly inline errors, incl
 - `TASK_PARENT_DEPTH_NOT_ALLOWED`
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
+- `TASK_PARENT_COMPLETED_NOT_ALLOWED`: mapped by `getTaskMutationErrorMessage` (not `getBlockErrorMessage`) to "A completed task can't have open subtasks. Reopen the parent or complete this task first." Shown in the form's error banner; the form clears it when the parent or status select changes, and the update mutation refetches the task queries.
 - `TASK_PARENT_STATUS_DERIVED`: mapped by `getBlockErrorMessage` to "This task's status follows its open subtasks. Complete or remove them to change it." Only reachable on a race with stale data; the optimistic change rolls back and the task queries are invalidated.
 
 ### Derived parent status (Tasks page and task detail page)
@@ -308,6 +309,7 @@ A parent with at least one open subtask (stored status not Completed) displays a
 - `TaskForm` always receives the stored task. When `statusLocked` it displays `displayStatus`, submits the stored status unchanged and omits `blockedReason`.
 - The context header shows direct-subtask progress (`getParentProgressLabel`), e.g. "1 of 4 done · 1 in progress" (total includes Completed; the suffix appears only when at least one is In Progress).
 - The journal is unchanged and keeps using the stored status.
+- The derived status only drives display. The STORED status gates "Add subtask" (row and context header: `aria-disabled`, focusable, no-op, reason in `title` and a hidden description) and the Parent Task picker (`src/lib/parent-options.ts`: Completed parents are disabled and labelled "(completed)" in all three pickers; the currently selected parent stays enabled, and a selected id missing from the list shows a disabled "Current parent" option). So a Completed parent with an open child is still gated, and an open-stored parent whose derived status is Completed is not.
 
 ### TaskCard
 

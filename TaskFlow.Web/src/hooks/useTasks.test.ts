@@ -285,4 +285,33 @@ describe('project handling in task mutations', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(keys()).toEqual([])
   })
+
+  it('create invalidates the task list on TASK_PARENT_COMPLETED_NOT_ALLOWED and still rejects', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+    const { result, keys } = setup(useCreateTaskMutation)
+    result.current.mutate({ title: 'T', parentTaskItemId: 3 })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error).toEqual({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+    expect(keys()).toContainEqual(['tasks'])
+  })
+
+  it('create does not invalidate on other errors', async () => {
+    vi.mocked(sdk.postApiV1TaskItems).mockRejectedValue({ code: 'X' })
+    const { result, keys } = setup(useCreateTaskMutation)
+    result.current.mutate({ title: 'T' })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(keys()).toEqual([])
+  })
+
+  it.each(['TASK_PARENT_COMPLETED_NOT_ALLOWED', 'TASK_PARENT_STATUS_DERIVED'])(
+    'invalidates the task list and detail queries when the update fails with %s',
+    async code => {
+      vi.mocked(sdk.putApiV1TaskItemsById).mockRejectedValue({ code })
+      const { result, keys } = setup(useUpdateTaskMutation)
+      result.current.mutate({ id: 2, data: { title: 'U', status: 'inProgress' } })
+      await waitFor(() => expect(result.current.isError).toBe(true))
+      expect(keys()).toContainEqual(['tasks'])
+      expect(keys()).toContainEqual(['tasks', 2])
+    },
+  )
 })

@@ -14,6 +14,15 @@ public static class TaskRuleErrors
         message = "A parent task's status follows its open subtasks and cannot be changed directly."
     };
 
+    public const string ParentCompletedNotAllowedCode = "TASK_PARENT_COMPLETED_NOT_ALLOWED";
+
+    /// <summary>The 422 body <c>{ code, message }</c> returned when an open task would be attached to a Completed parent.</summary>
+    public static object ParentCompletedNotAllowed() => new
+    {
+        code = ParentCompletedNotAllowedCode,
+        message = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+    };
+
     /// <summary>The 422 body <c>{ code, message, details }</c> returned when a completed task is planned onto a day.</summary>
     public static object PlanCompletedNotAllowed(DateOnly? assignedDate, DateTime? completedAt, DateOnly? journalDate) => new
     {

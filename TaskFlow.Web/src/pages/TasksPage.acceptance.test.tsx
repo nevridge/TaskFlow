@@ -16,6 +16,7 @@ vi.mock('@/api/client/sdk.gen', async importOriginal => {
     getApiV1TaskItems: vi.fn(),
     putApiV1TaskItemsById: vi.fn(),
     patchApiV1TaskItemsById: vi.fn(),
+    postApiV1TaskItems: vi.fn(),
   }
 })
 vi.mock('@/api/tasks', () => ({ getTaskHistory: vi.fn().mockResolvedValue({ data: [] }) }))
@@ -26,7 +27,7 @@ vi.mock('@/hooks/useProjects', () => ({
 vi.mock('@/components/Nav', () => ({ Nav: () => <nav aria-label="Main" /> }))
 vi.mock('@/components/SettingsDrawer', () => ({ SettingsDrawer: () => null }))
 
-import { getApiV1TaskItems, putApiV1TaskItemsById, patchApiV1TaskItemsById } from '@/api/client/sdk.gen'
+import { getApiV1TaskItems, putApiV1TaskItemsById, patchApiV1TaskItemsById, postApiV1TaskItems } from '@/api/client/sdk.gen'
 import { COLLAPSED_GROUPS_KEY } from '@/hooks/useCollapsedGroups'
 
 const base = {
@@ -185,6 +186,48 @@ describe('TasksPage acceptance (#317)', () => {
       const after = screen.getByText('Alpha task').closest('tr') as HTMLElement
       expect(within(after).getByRole('button', { name: /^Status: To-do/ })).toBeInTheDocument()
       expect(within(after).queryByRole('button', { name: /^Status: In Progress/ })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('TASK_PARENT_COMPLETED_NOT_ALLOWED through the form (#368)', () => {
+    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+
+    it('create: shows the mapped message once, keeps the typed values, and clears it when the parent changes', async () => {
+      vi.mocked(postApiV1TaskItems).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+      renderPage()
+      await screen.findByText('Alpha task')
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      await userEvent.type(screen.getByLabelText(/^title/i), 'Late subtask')
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'Alpha task')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const alerts = await screen.findAllByRole('alert')
+      expect(alerts).toHaveLength(1)
+      expect(alerts[0]).toHaveTextContent(MESSAGE)
+      expect(screen.getByLabelText(/^title/i)).toHaveValue('Late subtask')
+      expect(screen.getByLabelText('Parent Task')).toHaveValue('1')
+      expect(vi.mocked(postApiV1TaskItems).mock.calls[0][0]).toMatchObject({ body: { parentTaskItemId: 1 } })
+
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'None')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('edit: a rejected PUT shows the mapped message, refetches the task list, and clears on status change', async () => {
+      vi.mocked(putApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+      renderPage()
+      const row = (await screen.findByText('Bravo task')).closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'Alpha task')
+      const fetchesBefore = vi.mocked(getApiV1TaskItems).mock.calls.length
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(MESSAGE)
+      expect(screen.getAllByRole('alert')).toHaveLength(1)
+      await waitFor(() => expect(vi.mocked(getApiV1TaskItems).mock.calls.length).toBeGreaterThan(fetchesBefore))
+
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'draft')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
   })
 

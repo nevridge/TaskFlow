@@ -365,6 +365,44 @@ describe('TaskDetailPage', () => {
     expect(await screen.findByText(/own parent/i)).toBeInTheDocument()
   })
 
+  describe('TASK_PARENT_COMPLETED_NOT_ALLOWED (#368)', () => {
+    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+
+    async function failSaveAfterPickingParent() {
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: [task, { ...task, id: 7, title: 'Open target', status: 'Todo' }, { ...task, id: 8, title: 'Done target', status: 'Completed' }] },
+        isLoading: false,
+      } as never)
+      updateAsync.mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'Open target')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    }
+
+    it('shows the mapped message once in an alert, keeps the form open with the chosen parent', async () => {
+      await failSaveAfterPickingParent()
+      const alerts = await screen.findAllByRole('alert')
+      expect(alerts).toHaveLength(1)
+      expect(alerts[0]).toHaveTextContent(MESSAGE)
+      expect(screen.getAllByText(MESSAGE)).toHaveLength(1)
+      expect(screen.getByLabelText('Parent Task')).toHaveValue('7')
+    })
+
+    it('clears the error when the parent or status changes', async () => {
+      await failSaveAfterPickingParent()
+      await screen.findByRole('alert')
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'None')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+
+      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'Open target')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await screen.findByRole('alert')
+      await userEvent.selectOptions(screen.getByLabelText('Status'), 'draft')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
   it('unknown mutation error shows generic message in an alert', async () => {
     await saveWithUpdateError({ code: 'UNKNOWN_ERROR' })
     expect(await screen.findByRole('alert')).toHaveTextContent(/unable to save task changes/i)
@@ -950,5 +988,20 @@ describe('TaskDetailPage derived status (#385)', () => {
     const sent = updateAsync.mock.calls[0][0].data
     expect(sent.status).toBe('blocked')
     expect(sent).not.toHaveProperty('blockedReason')
+  })
+
+  it('parent picker uses the stored status: Completed with an open child is disabled, open-stored with all-Completed children is not', async () => {
+    const doneWithOpenKid = { ...task, id: 20, title: 'Shipped', status: 'Completed' }
+    const openWithDoneKid = { ...task, id: 21, title: 'Wrapping up', status: 'Todo' }
+    withChildren({ status: 'Todo' }, [
+      doneWithOpenKid,
+      openWithDoneKid,
+      { ...task, id: 22, title: 'Open kid', status: 'Todo', parentTaskItemId: 20 },
+      { ...task, id: 23, title: 'Done kid', status: 'Completed', parentTaskItemId: 21 },
+    ])
+    renderPage()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    expect(screen.getByRole('option', { name: 'Shipped (completed)' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Wrapping up' })).toBeEnabled()
   })
 })

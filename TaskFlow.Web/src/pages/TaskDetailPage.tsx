@@ -98,7 +98,7 @@ export function TaskDetailPage() {
 
   const parentOptions = allTasks
     .filter(t => Number(t.id) !== taskId)
-    .map(t => ({ id: Number(t.id), title: t.title }))
+    .map(t => ({ id: Number(t.id), title: t.title, status: t.status }))
 
   if (!Number.isFinite(taskId)) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
   if (leaving) return <div className="tasks-page"><div className="t-shell" /></div>
@@ -186,6 +186,7 @@ export function TaskDetailPage() {
                 titleInputRef={titleRef}
                 projectInvalid={saveWithProject.projectInvalid}
                 onProjectChange={() => saveWithProject.setProjectInvalid(false)}
+                onParentOrStatusChange={saveWithProject.clearError}
                 isSaving={saveWithProject.isSaving}
                 onSubmit={handleUpdateTask}
                 onCancel={() => { setEditingTask(false); saveWithProject.clearError() }}

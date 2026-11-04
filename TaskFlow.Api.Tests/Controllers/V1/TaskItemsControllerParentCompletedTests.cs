@@ -264,6 +264,18 @@ public class TaskItemsControllerParentCompletedTests
     }
 
     [Fact]
+    public async Task Patch_OpenTaskToCompletedParent_LoadsChildrenAtMostOnce()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Todo);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { ParentTaskItemId = ParentId });
+
+        Assert.Equal(CompletedCode, Code(result));
+        _repo.Verify(r => r.GetChildrenAsync(It.IsAny<int>()), Times.AtMostOnce);
+    }
+
+    [Fact]
     public async Task Patch_ParentAndCompletedStatus_ToCompletedParent_Succeeds()
     {
         SetupParent(Status.Completed);

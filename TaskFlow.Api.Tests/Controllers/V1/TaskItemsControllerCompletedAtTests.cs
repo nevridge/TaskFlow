@@ -222,7 +222,7 @@ public class TaskItemsControllerCompletedAtTests
     }
 
     [Fact]
-    public async Task Patch_ReopeningChild_ShouldNotReopenCompletedParent()
+    public async Task Patch_ReopeningChild_UnderCompletedParent_IsRejectedAndLeavesBothCompleted()
     {
         using var stack = new RealStack();
         var parentCompletedAt = StartOfTodayUtc;
@@ -235,12 +235,13 @@ public class TaskItemsControllerCompletedAtTests
             ParentTaskItemId = parent.Id
         });
 
-        OkDto(await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo }));
+        var result = await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo });
 
+        Assert.IsType<UnprocessableEntityObjectResult>(result.Result);
         var reloadedParent = await stack.ReloadAsync(parent.Id);
         Assert.Equal(Status.Completed, reloadedParent.Status);
         Assert.Equal(parentCompletedAt, reloadedParent.CompletedAt);
-        Assert.Equal(Status.Todo, (await stack.ReloadAsync(child.Id)).Status);
+        Assert.Equal(Status.Completed, (await stack.ReloadAsync(child.Id)).Status);
     }
 
     [Fact]

@@ -80,7 +80,7 @@ Task parent/child updates return machine-readable error payloads (`code`, `messa
 - `TASK_PARENT_DEPTH_NOT_ALLOWED` (one subtask level only)
 - `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`
 - `TASK_PARENT_STATUS_DERIVED` (`PUT` and `PATCH`: a parent with at least one open, non-Completed subtask cannot have its status changed directly, including block/unblock. Re-sending the stored status while changing other fields is accepted, as are `blockedReason`-only edits. When the new status is Completed, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN` takes precedence. Auto-complete of a parent when its last subtask is completed is unaffected.)
-- `TASK_PARENT_COMPLETED_NOT_ALLOWED` (`POST`, `PUT` and `PATCH`: a non-Completed task cannot be created under, or moved to, a parent whose stored status is Completed. It applies only on create or when the parent changes; re-saving a task that already sits under a Completed parent is accepted, and a Completed child is exempt.)
+- `TASK_PARENT_COMPLETED_NOT_ALLOWED` (`POST`, `PUT` and `PATCH`: a non-Completed task cannot be created under, or moved to, a parent whose stored status is Completed. It also applies when a Completed task is reopened while its resulting direct parent is Completed, even if the parent is unchanged; this wins over `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`. A Completed child that stays Completed is accepted, as is reopening in the same request that detaches it or moves it under a non-Completed parent. An open child that already sits under a Completed parent and re-sends that parent with a status that stays open is accepted. Message: "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed.")
 - `TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN`
 - `TASK_REOPEN_PAST_DAY_NOT_ALLOWED`
 - `TASK_PLAN_COMPLETED_NOT_ALLOWED`
@@ -353,7 +353,7 @@ Updates an existing task item, including status assignment and optional journal 
 }
 ```
 
-Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create or parent change only; a Completed child is exempt), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
+Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create, parent change, or reopening a Completed child whose resulting direct parent is Completed), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
 
 `409 Conflict` - another request planned the task on that day at the same time; nothing is changed
 ```json
@@ -391,7 +391,7 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
 - Completion is set only through `status` (`Completed`); `isComplete` and `completedAt` are not part of the request contract and are ignored if sent.
-- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), plus the parent, block, start and past-day planning codes.
+- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (also when reopening a Completed child whose direct parent is Completed), plus the parent, block, start and past-day planning codes.
 
 **Example:**
 ```bash

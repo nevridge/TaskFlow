@@ -113,7 +113,7 @@ public class TaskItemsControllerParentCompletedTests
         var result = await _controller.Create(new CreateTaskItemDto { Title = "Sub", ParentTaskItemId = ParentId });
 
         Assert.Equal(CompletedCode, Code(result));
-        Assert.Equal("A completed task can't have open subtasks. Reopen the parent or complete this task first.", Message(result));
+        Assert.Equal("A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed.", Message(result));
         _repo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -300,12 +300,151 @@ public class TaskItemsControllerParentCompletedTests
     }
 
     [Fact]
-    public async Task Patch_ReopenCompletedChild_UnderCompletedParent_IsNotBlockedByThisRule()
+    public async Task Patch_ReopenCompletedChild_UnderCompletedParent_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal("A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed.", Message(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.GetChildrenAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenPastDayCompletedChild_UnderCompletedParent_ReturnsParentCompleted_NotPastDay()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+        child.CompletedAt = DateTime.UtcNow.AddDays(-3);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenPastDayCompletedChild_UnderOpenParent_ReturnsPastDay()
+    {
+        SetupParent(Status.Todo);
+        var child = SetupChild(Status.Completed, ParentId);
+        child.CompletedAt = DateTime.UtcNow.AddDays(-3);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", Code(result));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_ToInProgress_UnderCompletedParent_IsRejectedByStartRule()
+    {
+        // Completed -> InProgress is rejected earlier by TASK_START_NOT_ALLOWED; documents rule order.
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.InProgress });
+
+        Assert.Equal("TASK_START_NOT_ALLOWED", Code(result));
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_CompletedChildStaysCompleted_Succeeds()
     {
         SetupParent(Status.Completed);
         SetupChild(Status.Completed, ParentId);
 
+        AssertOk(await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Completed,
+            ParentTaskItemId = ParentId
+        }));
+    }
+
+    [Fact]
+    public async Task Patch_CompletedChildStaysCompleted_UnderCompletedParent_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Completed }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_UnderOpenParent_Succeeds()
+    {
+        SetupParent(Status.Todo);
+        SetupChild(Status.Completed, ParentId);
+
         AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_UnderOpenParent_WithCompletedGrandparent_Succeeds()
+    {
+        SetupParent(Status.Todo, grandParentId: 50);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(50)).ReturnsAsync(new TaskItem { Id = 50, Title = "GP", Status = Status.Completed });
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo }));
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(50), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ReopenCompletedChild_AndDetach_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = null
+        }));
+        _repo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.ParentTaskItemId == null && t.Status == Status.Todo)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndDetach_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = null }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndMoveToOpenParent_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem { Id = 2, Title = "Open", Status = Status.Todo });
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = 2 }));
     }
 
     [Fact]

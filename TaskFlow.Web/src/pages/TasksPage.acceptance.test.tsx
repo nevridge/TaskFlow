@@ -190,7 +190,28 @@ describe('TasksPage acceptance (#317)', () => {
   })
 
   describe('TASK_PARENT_COMPLETED_NOT_ALLOWED through the form (#368)', () => {
-    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed."
+
+    it('status cycle: a rejected reopen of a Completed subtask reverts the row and shows the mapped message', async () => {
+      vi.mocked(getApiV1TaskItems).mockResolvedValue({
+        data: [
+          { ...base, id: 10, title: 'Shipped parent', status: 'Completed', priority: 'High', childTaskCount: 1 },
+          { ...base, id: 11, title: 'Done child', status: 'Completed', priority: 'High', parentTaskItemId: 10 },
+        ],
+      } as never)
+      vi.mocked(putApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
+      renderPage()
+      await waitFor(() => expect(document.querySelector('[data-section-toggle="completed"]')).not.toBeNull())
+      const toggle = document.querySelector<HTMLElement>('[data-section-toggle="completed"]') as HTMLElement
+      if (toggle.getAttribute('aria-expanded') !== 'true') await userEvent.click(toggle)
+      const row = (await screen.findByText('Done child')).closest('tr') as HTMLElement
+      await userEvent.click(within(row).getByRole('button', { name: /^Status: Completed/ }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(MESSAGE)
+      expect(vi.mocked(putApiV1TaskItemsById).mock.calls[0][0]).toMatchObject({ path: { id: 11 }, body: { status: 'draft' } })
+      const after = screen.getByText('Done child').closest('tr') as HTMLElement
+      expect(within(after).getByRole('button', { name: /^Status: Completed/ })).toBeInTheDocument()
+    })
 
     it('create: shows the mapped message once, keeps the typed values, and clears it when the parent changes', async () => {
       vi.mocked(postApiV1TaskItems).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })

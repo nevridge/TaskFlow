@@ -240,8 +240,11 @@ public class TaskItemsController(
     /// status changed directly, including blocking and unblocking. Re-sending the stored status is accepted.
     /// <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c> takes precedence when completing. Nothing is saved.</item>
     /// <item><c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c>: a task whose resulting status is not Completed cannot be moved
-    /// under a Completed parent. Completing the task in the same request is accepted, and re-sending the current
-    /// <c>parentTaskItemId</c> is accepted. Nothing is saved.</item>
+    /// under a Completed parent, and a Completed task cannot be reopened while its resulting direct parent is
+    /// Completed (reopening and detaching or re-parenting in the same request is judged on the new parent).
+    /// Completing the task in the same request is accepted, an open task re-sending its current
+    /// <c>parentTaskItemId</c> with a status that stays open is accepted, and a Completed task stays Completed.
+    /// Nothing is saved.</item>
     /// <item>Other codes: <c>TASK_PARENT_SELF_NOT_ALLOWED</c>, <c>TASK_PARENT_NOT_FOUND</c>,
     /// <c>TASK_PARENT_DEPTH_NOT_ALLOWED</c>, <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c>,
     /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
@@ -296,7 +299,8 @@ public class TaskItemsController(
     /// start and past-day planning codes, and <c>TASK_PARENT_STATUS_DERIVED</c> (a parent with an open subtask cannot
     /// have its status changed directly; re-sending the stored status is accepted), and
     /// <c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c> (a task whose resulting status is not Completed cannot be moved under a
-    /// Completed parent; completing it in the same request, or re-sending its current parent, is accepted).
+    /// Completed parent, and a Completed task cannot be reopened while its resulting direct parent is Completed;
+    /// completing it in the same request, or an open task re-sending its current parent, is accepted).
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
@@ -451,6 +455,24 @@ public class TaskItemsController(
 
         var wasCompleted = IsCompleted(existing.Status);
         var nowCompleted = IsCompleted(nextStatus);
+
+        // A Completed task cannot be reopened while its resulting direct parent is Completed. The parent is judged after
+        // the request is applied, so reopening and detaching/re-parenting in one request passes. Placed before the
+        // past-day reopen check so this code wins when both apply. Only the reopen path costs a parent lookup.
+        if (wasCompleted && !nowCompleted)
+        {
+            var resultingParentId = changes.HasParent ? changes.ParentTaskItemId : existing.ParentTaskItemId;
+            if (resultingParentId.HasValue)
+            {
+                var resultingParent = proposedParent is not null && proposedParent.Id == resultingParentId.Value
+                    ? proposedParent
+                    : await _repo.GetByIdNoTrackingAsync(resultingParentId.Value);
+                if (resultingParent?.Status == Status.Completed)
+                {
+                    return UnprocessableEntity(TaskRuleErrors.ParentCompletedNotAllowed());
+                }
+            }
+        }
 
         if (!wasCompleted && nowCompleted && (await GetChildrenOnceAsync()).Any(c => !IsCompleted(c.Status)))
         {

@@ -28,7 +28,7 @@ import {
 } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
-import { getErrorCode } from '@/lib/task-errors'
+import { getErrorCode, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 import {
   todayISO,
   formatMonthDay,
@@ -737,6 +737,7 @@ function getTaskActionErrorMessage(error: unknown): string {
   if (code === 'TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED') {
     return 'This task cannot be assigned to a past day.'
   }
+  if (code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') return PARENT_COMPLETED_MESSAGE
   const blockMessage = getBlockErrorMessage(code)
   if (blockMessage) return blockMessage
   return 'Unable to save task changes. Please try again.'

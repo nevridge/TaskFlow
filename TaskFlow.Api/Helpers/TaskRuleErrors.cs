@@ -20,7 +20,7 @@ public static class TaskRuleErrors
     public static object ParentCompletedNotAllowed() => new
     {
         code = ParentCompletedNotAllowedCode,
-        message = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+        message = "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed."
     };
 
     /// <summary>The 422 body <c>{ code, message, details }</c> returned when a completed task is planned onto a day.</summary>

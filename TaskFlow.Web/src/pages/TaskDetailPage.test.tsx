@@ -366,7 +366,7 @@ describe('TaskDetailPage', () => {
   })
 
   describe('TASK_PARENT_COMPLETED_NOT_ALLOWED (#368)', () => {
-    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+    const MESSAGE = "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed."
 
     async function failSaveAfterPickingParent() {
       vi.mocked(useTasksQuery).mockReturnValue({

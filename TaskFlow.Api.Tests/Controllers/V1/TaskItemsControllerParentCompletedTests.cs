@@ -113,7 +113,7 @@ public class TaskItemsControllerParentCompletedTests
         var result = await _controller.Create(new CreateTaskItemDto { Title = "Sub", ParentTaskItemId = ParentId });
 
         Assert.Equal(CompletedCode, Code(result));
-        Assert.Equal("A completed task can't have open subtasks. Reopen the parent or complete this task first.", Message(result));
+        Assert.Equal("A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed.", Message(result));
         _repo.Verify(r => r.AddAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
@@ -300,12 +300,277 @@ public class TaskItemsControllerParentCompletedTests
     }
 
     [Fact]
-    public async Task Patch_ReopenCompletedChild_UnderCompletedParent_IsNotBlockedByThisRule()
+    public async Task Patch_ReopenCompletedChild_UnderCompletedParent_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal("A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed.", Message(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.GetChildrenAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_ToDraft_UnderCompletedParent_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Draft });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ToDraft_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Draft,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenPastDayCompletedChild_UnderCompletedParent_ReturnsParentCompleted_NotPastDay()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+        child.CompletedAt = DateTime.UtcNow.AddDays(-3);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenPastDayCompletedChild_UnderOpenParent_ReturnsPastDay()
+    {
+        SetupParent(Status.Todo);
+        var child = SetupChild(Status.Completed, ParentId);
+        child.CompletedAt = DateTime.UtcNow.AddDays(-3);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal("TASK_REOPEN_PAST_DAY_NOT_ALLOWED", Code(result));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_ToInProgress_UnderCompletedParent_IsRejectedByStartRule()
+    {
+        // Completed -> InProgress is rejected earlier by TASK_START_NOT_ALLOWED; documents rule order.
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.InProgress });
+
+        Assert.Equal("TASK_START_NOT_ALLOWED", Code(result));
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ReturnsParentCompleted()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_ResendSameCompletedParent_ReusesProposedParent_LooksUpParentOnce()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = ParentId });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndMoveToDifferentCompletedParent_ReturnsParentCompleted_LooksUpNewParentOnce()
+    {
+        SetupParent(Status.Completed);
+        var child = SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem
+        {
+            Id = 2,
+            Title = "Other",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow
+        });
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = 2 });
+
+        Assert.Equal(CompletedCode, Code(result));
+        Assert.Equal(Status.Completed, child.Status);
+        Assert.Equal(ParentId, child.ParentTaskItemId);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(2), Times.Once);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Never);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ReopenCompletedChild_AndMoveToDifferentCompletedParent_ReturnsParentCompleted_LooksUpNewParentOnce()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem
+        {
+            Id = 2,
+            Title = "Other",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow
+        });
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = 2
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(2), Times.Once);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Never);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_StoredParentNotFound_GuardDoesNotBlock_ReopenProceeds()
+    {
+        // The reopen guard only blocks when the resulting parent is found and Completed; a missing parent is not an error here.
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(ParentId)).ReturnsAsync((TaskItem?)null);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo });
+
+        AssertOk(result);
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(ParentId), Times.Once);
+        _repo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.Status == Status.Todo)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_ReopenCompletedChild_ParentNotFound_ReturnsParentNotFound()
+    {
+        // With the parent re-sent, the not-found check on the proposed parent runs first, so the reopen guard is not reached.
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(ParentId)).ReturnsAsync((TaskItem?)null);
+        SetupChild(Status.Completed, ParentId);
+
+        var result = await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = ParentId
+        });
+
+        Assert.Equal("TASK_PARENT_NOT_FOUND", Code(result));
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ResendParent_CompletedChildStaysCompleted_Succeeds()
     {
         SetupParent(Status.Completed);
         SetupChild(Status.Completed, ParentId);
 
+        AssertOk(await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Completed,
+            ParentTaskItemId = ParentId
+        }));
+    }
+
+    [Fact]
+    public async Task Patch_CompletedChildStaysCompleted_UnderCompletedParent_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Completed }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_UnderOpenParent_Succeeds()
+    {
+        SetupParent(Status.Todo);
+        SetupChild(Status.Completed, ParentId);
+
         AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_UnderOpenParent_WithCompletedGrandparent_Succeeds()
+    {
+        SetupParent(Status.Todo, grandParentId: 50);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(50)).ReturnsAsync(new TaskItem { Id = 50, Title = "GP", Status = Status.Completed });
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo }));
+        _repo.Verify(r => r.GetByIdNoTrackingAsync(50), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_ReopenCompletedChild_AndDetach_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Update(ChildId, new UpdateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = null
+        }));
+        _repo.Verify(r => r.UpdateAsync(It.Is<TaskItem>(t => t.ParentTaskItemId == null && t.Status == Status.Todo)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndDetach_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = null }));
+    }
+
+    [Fact]
+    public async Task Patch_ReopenCompletedChild_AndMoveToOpenParent_Succeeds()
+    {
+        SetupParent(Status.Completed);
+        SetupChild(Status.Completed, ParentId);
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(2)).ReturnsAsync(new TaskItem { Id = 2, Title = "Open", Status = Status.Todo });
+
+        AssertOk(await _controller.Patch(ChildId, new PatchTaskItemDto { Status = Status.Todo, ParentTaskItemId = 2 }));
     }
 
     [Fact]
@@ -529,6 +794,59 @@ public class TaskItemsControllerParentCompletedTests
         var stored = await stack.LoadAsync(child.Id);
         Assert.Equal(parent.Id, stored.ParentTaskItemId);
         Assert.Equal(Status.Completed, stored.Status);
+    }
+
+    [Fact]
+    public async Task RealStack_Patch_ReopenCompletedChild_UnderCompletedParent_LeavesChildAndParentUnchanged()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Completed);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        var result = await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo });
+
+        Assert.Equal(CompletedCode, Code(result));
+        var storedChild = await stack.LoadAsync(child.Id);
+        var storedParent = await stack.LoadAsync(parent.Id);
+        Assert.Equal(Status.Completed, storedChild.Status);
+        Assert.NotNull(storedChild.CompletedAt);
+        Assert.Equal(parent.Id, storedChild.ParentTaskItemId);
+        Assert.Equal(Status.Completed, storedParent.Status);
+        Assert.NotNull(storedParent.CompletedAt);
+    }
+
+    [Fact]
+    public async Task RealStack_Put_ReopenCompletedChild_UnderCompletedParent_LeavesChildAndParentUnchanged()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Completed);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        var result = await stack.Controller.Update(child.Id, new UpdateTaskItemDto
+        {
+            Title = "Renamed",
+            Status = Status.Todo,
+            ParentTaskItemId = parent.Id
+        });
+
+        Assert.Equal(CompletedCode, Code(result));
+        var storedChild = await stack.LoadAsync(child.Id);
+        Assert.Equal(Status.Completed, storedChild.Status);
+        Assert.Equal("C", storedChild.Title);
+        Assert.Equal(Status.Completed, (await stack.LoadAsync(parent.Id)).Status);
+    }
+
+    [Fact]
+    public async Task RealStack_Patch_ReopenCompletedChild_UnderOpenParent_ReopensChildAndLeavesParentOpen()
+    {
+        using var stack = new RealStack();
+        var parent = await stack.SeedAsync("P", Status.Todo);
+        var child = await stack.SeedAsync("C", Status.Completed, parent.Id);
+
+        AssertOk(await stack.Controller.Patch(child.Id, new PatchTaskItemDto { Status = Status.Todo }));
+
+        Assert.Equal(Status.Todo, (await stack.LoadAsync(child.Id)).Status);
+        Assert.NotEqual(Status.Completed, (await stack.LoadAsync(parent.Id)).Status);
     }
 
     [Fact]

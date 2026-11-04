@@ -1,6 +1,10 @@
 import { PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
 import { getBlockErrorMessage } from '@/lib/task-status'
 
+/** Shown wherever the server answers TASK_PARENT_COMPLETED_NOT_ALLOWED (Tasks, detail, journal). */
+export const PARENT_COMPLETED_MESSAGE =
+  "A completed task can't have open subtasks. Reopen the parent first, or keep this subtask completed."
+
 export function getErrorCode(error: unknown): string | null {
   if (!error || typeof error !== 'object') return null
   const maybeCode = (error as { code?: unknown }).code
@@ -13,7 +17,7 @@ export function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED') return 'Tasks completed on a past day cannot be reopened.'
   if (code === 'TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN') return 'Parent tasks cannot be completed while child tasks are still open.'
   if (code === 'TASK_PARENT_SELF_NOT_ALLOWED') return 'A task cannot be set as its own parent.'
-  if (code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') return "A completed task can't have open subtasks. Reopen the parent or complete this task first."
+  if (code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') return PARENT_COMPLETED_MESSAGE
   if (code === 'TASK_PARENT_DEPTH_NOT_ALLOWED') return 'Only one subtask level is supported.'
   if (code === 'TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN') return 'This task has subtasks. Remove or reassign subtasks before deleting.'
   if (code === 'TASK_PARENT_NOT_FOUND') return 'The selected parent task was not found.'

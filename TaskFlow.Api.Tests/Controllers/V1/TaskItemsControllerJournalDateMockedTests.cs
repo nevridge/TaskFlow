@@ -607,6 +607,28 @@ public class TaskItemsControllerJournalDateMockedTests
         _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateAndPatch_ParentCompletedGuardWinsOverPlanHasOpenSubtasks_WhenBothApply(bool usePut)
+    {
+        var task = SeedCompleted(null);
+        task.ParentTaskItemId = 9;
+        _repo.Setup(r => r.GetByIdNoTrackingAsync(9))
+            .ReturnsAsync(new TaskItem { Id = 9, Title = "Done parent", Status = Status.Completed });
+        _repo.Setup(r => r.HasOpenSubtasksAsync(1)).ReturnsAsync(true);
+        var day = Today.AddDays(2);
+
+        var result = usePut
+            ? (await _controller.Update(1, new UpdateTaskItemDto { Title = "Task", Status = Status.Todo, ParentTaskItemId = 9, JournalDate = day })).Result
+            : (await _controller.Patch(1, new PatchTaskItemDto { Status = Status.Todo, JournalDate = day })).Result;
+
+        Assert.Equal("TASK_PARENT_COMPLETED_NOT_ALLOWED", Code(result as ActionResult));
+        _repo.Verify(r => r.HasOpenSubtasksAsync(It.IsAny<int>()), Times.Never);
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+        AssertNoJournalOrTx();
+    }
+
     [Fact]
     public async Task Update_SameDayResendOfPastLinkOnLegacyTask_DoesNotFail()
     {

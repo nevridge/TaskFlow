@@ -8,4 +8,5 @@ public enum AddTodoResult
     AlreadyLinked,
     PastDayNotAllowed,
     TaskCompleted,
+    HasOpenSubtasks,
 }

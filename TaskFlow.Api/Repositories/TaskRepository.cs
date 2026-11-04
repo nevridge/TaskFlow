@@ -36,6 +36,9 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
         await _context.TaskItems.AsNoTracking().Where(t => t.ParentTaskItemId == parentId).ToListAsync();
 
+    public async Task<bool> HasOpenSubtasksAsync(int taskId) =>
+        await _context.TaskItems.AsNoTracking().AnyAsync(t => t.ParentTaskItemId == taskId && t.Status != Status.Completed);
+
     public async Task<DateOnly?> GetAssignedJournalDateAsync(int taskId) =>
         await _context.TaskItems
             .Where(t => t.Id == taskId)

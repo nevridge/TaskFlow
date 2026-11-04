@@ -199,7 +199,7 @@ public class JournalEntryRepositoryCompletionDayTests : IAsyncDisposable
     // ---- batched ids ----
 
     [Fact]
-    public async Task GetTodoTaskItemIdsAsync_ShouldNotCrossContaminateEntries_AndReturnRootsOnly()
+    public async Task GetTodoTaskItemIdsAsync_ShouldNotCrossContaminateEntries_AndReturnRootsAndSubtasks()
     {
         var mon = await AddEntryAsync(Mon);
         var tue = await AddEntryAsync(Tue);
@@ -209,14 +209,18 @@ public class JournalEntryRepositoryCompletionDayTests : IAsyncDisposable
         var linkedMonDoneWed = await AddTaskAsync(Status.Completed, mon.Id, Text(At(Wed, 3), ".0000000"), title: "movedByCompletion");
         var neverLinkedDoneTue = await AddTaskAsync(Status.Completed, null, Text(At(Tue, 3), ""), title: "doneTue");
         var parent = await AddTaskAsync(Status.Todo, wed.Id, title: "parentWed");
-        await AddTaskAsync(Status.Todo, wed.Id, null, parent.Id, "childWed");
-        await AddTaskAsync(Status.Completed, null, Text(At(Wed, 5), ""), parent.Id, "childDoneWed");
+        var childWed = await AddTaskAsync(Status.Todo, wed.Id, null, parent.Id, "childWed");
+        var childDoneWed = await AddTaskAsync(Status.Completed, null, Text(At(Wed, 5), ""), parent.Id, "childDoneWed");
 
         var ids = await _repo.GetTodoTaskItemIdsAsync([(mon.Id, Mon), (tue.Id, Tue), (wed.Id, Wed)], null);
 
         Assert.Equal([openMon.Id], ids[mon.Id]);
         Assert.Equal(new[] { openTue.Id, neverLinkedDoneTue.Id }.Order(), ids[tue.Id].Order());
-        Assert.Equal(new[] { parent.Id, linkedMonDoneWed.Id }.Order(), ids[wed.Id].Order());
+        Assert.Equal(new[] { parent.Id, linkedMonDoneWed.Id, childWed.Id, childDoneWed.Id }.Order(), ids[wed.Id].Order());
+
+        // The ids equal the rows the todos endpoint reads for the same day.
+        var day = await _repo.GetTodosForDayAsync(wed.Id, null);
+        Assert.Equal(day!.Tasks.Select(t => t.Id).Order(), ids[wed.Id].Order());
     }
 
     [Fact]

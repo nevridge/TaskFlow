@@ -28,12 +28,15 @@ public class TaskItemResponseDto
     /// <summary>Server-owned UTC instant the task was completed; null when not Completed or for legacy rows.</summary>
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Title of the parent task; set only by the journal todos endpoint, on subtask rows.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ParentTitle { get; set; }
+
     /// <summary>
-    /// True only on a parent returned by the journal todos endpoint purely as context for a subtask that is a todo
-    /// on that day; such a parent embeds only that day's subtasks in <c>Children</c>. Omitted everywhere else.
+    /// Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? IsContextOnly { get; set; }
+    public int? OpenChildCount { get; set; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ICollection<TaskItemResponseDto>? Children { get; set; }

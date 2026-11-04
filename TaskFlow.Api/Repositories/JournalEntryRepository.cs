@@ -248,13 +248,13 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var lo = ranges.Min(r => r.StartUtc) - SqlRangePadding;
         var hi = ranges.Max(r => r.EndUtc) + SqlRangePadding;
 
-        // One query for the linked branch and the completed branch together. Roots only: subtasks are never ids here.
+        // One query for the linked branch and the completed branch together. Roots and subtasks alike: the ids equal
+        // the rows GetTodosForDayAsync returns for the day.
         var rows = await _context.TaskItems
             .AsNoTracking()
-            .Where(t => t.ParentTaskItemId == null
-                && ((t.CurrentJournalEntryId != null && ids.Contains(t.CurrentJournalEntryId.Value)
+            .Where(t => (t.CurrentJournalEntryId != null && ids.Contains(t.CurrentJournalEntryId.Value)
                         && !(t.Status == Status.Completed && t.CompletedAt != null))
-                    || (t.Status == Status.Completed && t.CompletedAt != null && t.CompletedAt >= lo && t.CompletedAt < hi)))
+                    || (t.Status == Status.Completed && t.CompletedAt != null && t.CompletedAt >= lo && t.CompletedAt < hi))
             .OrderBy(t => t.Id)
             .ToListAsync();
 
@@ -337,6 +337,13 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         if (entry.Todos.Any(t => t.Id == taskItemId))
         {
             return AddTodoResult.AlreadyLinked;
+        }
+
+        // Checked last so a request that trips several rules keeps today's error. A parent is planned through its
+        // subtasks; Completed subtasks do not count as open.
+        if (await _context.TaskItems.AnyAsync(c => c.ParentTaskItemId == taskItemId && c.Status != Status.Completed))
+        {
+            return AddTodoResult.HasOpenSubtasks;
         }
 
         var previousEntryId = task.CurrentJournalEntryId;

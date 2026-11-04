@@ -438,7 +438,7 @@ A task is a todo row on **exactly one** journal day (`TaskFlow.Api/Helpers/Journ
 
 - A `Completed` task that has a `completedAt` is a todo on the **local day it was completed**, whatever day it is linked to.
 - Every other task (open, or legacy `Completed` with a null `completedAt`) is a todo on the day it is linked to.
-- Subtasks follow the same per-task rule. A subtask shown on a day whose parent is not shown there comes back under that parent, marked `isContextOnly: true`.
+- Subtasks follow the same per-task rule. A subtask is its own row on its own day, whether or not its parent is a row of that day.
 
 The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewing day `D` covers the UTC range `[D - offset, D + 1 day - offset)`. When the offset is omitted the server uses UTC (unlike carry-forward, which never falls back to UTC).
 
@@ -450,16 +450,17 @@ The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewi
 - `entryId` (path, integer, required)
 - `timezoneOffsetMinutes` (query, integer, optional, -720 to 840) - the viewer's UTC offset in minutes (`-300` is UTC-5). Omitted means UTC.
 
-**Response:** `200 OK` - an array of root `TaskItemResponseDto` rows.
+**Response:** `200 OK` - a flat array of `TaskItemResponseDto` rows, one per task attributed to the day (roots and subtasks alike), ordered by `id`.
+- Rows are never nested: `children` is omitted, and no parent row is added for a subtask whose parent is not a todo on this day.
+- Every subtask row carries `parentTaskItemId`, and `parentTitle` (the parent's title; omitted on root rows), even when the parent is off-day. A parent and its subtask can both be rows of the same day.
+- `childTaskCount` is the task's total subtasks; `openChildCount` is how many are not `Completed` (`Blocked` counts as open). `openChildCount` is only present on this endpoint.
 - `currentJournalDate` is the task's **own linked day** (null when it was never linked), not the viewed day; `daysTagged` is derived from it. A task linked Monday and completed Wednesday appears on Wednesday with `currentJournalDate` = Monday.
-- `children` is preview data for a shown parent: all of its subtasks, whichever day each is a todo on.
-- `isContextOnly` is `true` only on a parent returned as context for a subtask that is a todo on this day. Such a parent embeds **only** that day's subtasks in `children`. The property is omitted everywhere else.
 
 **Errors:** `400 Bad Request` when the offset is outside -720..840; `404 Not Found` when the entry does not exist.
 
 ### Journal Entries
 
-`GET /api/v1/JournalEntries` and `GET /api/v1/JournalEntries/{id}` accept the same optional `timezoneOffsetMinutes` query parameter (400 outside -720..840). `todoTaskItemIds` lists the **root** tasks that are todos on the entry's day under the rule above (subtasks and context-only parents are not listed), computed in one batched query. For the same day and offset it equals the root rows returned by the todos endpoint (excluding `isContextOnly` rows). `POST` and `PUT` responses, and the `409` `existingEntry`, use the request's offset when it has one and UTC otherwise.
+`GET /api/v1/JournalEntries` and `GET /api/v1/JournalEntries/{id}` accept the same optional `timezoneOffsetMinutes` query parameter (400 outside -720..840). `todoTaskItemIds` lists every task, subtasks included, that is a todo on the entry's day under the rule above, computed in one batched query. For the same day and offset it equals the ids of the rows returned by the todos endpoint. `POST` responses, and the `409` `existingEntry`, use the request's offset when it has one and UTC otherwise. `PUT /api/v1/JournalEntries/{id}` takes no offset, so its response attributes `todoTaskItemIds` to **UTC days** and can differ from `GET` near day boundaries (known limitation, tracked as #406).
 
 ### Add a Todo
 
@@ -468,6 +469,9 @@ The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewi
 **Responses:** `204` on success; `404` entry or task missing; `409` already linked; `422` with `{ code, message }`:
 - `TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED` - the entry is before the user's today.
 - `TASK_PLAN_COMPLETED_NOT_ALLOWED` - the task is already completed (has a `completedAt`); body is `{ code, message, details: { assignedDate, completedAt, journalDate } }`, the same shape as on `PUT`/`PATCH /api/v1/TaskItems`. Nothing is linked. `POST /api/v1/TaskItems` returns the same 422 when `status` is `Completed` and `journalDate` is set, and the task is not created.
+- `TASK_PLAN_HAS_OPEN_SUBTASKS` - the task has at least one subtask that is not `Completed` (`Blocked` counts as open); plan its subtasks instead. Body is `{ code, message, details: { taskItemId, journalDate } }`; `journalDate` is `null` on this endpoint (the request names the entry, not a date). Nothing is linked. Checked after the other rules, so an already-linked parent still gets `409`. `PUT`/`PATCH /api/v1/TaskItems/{id}` with a `journalDate` different from the task's current link return the same 422 with `journalDate` set (after the completed-task and past-day rules; re-sending the current link is not rejected, and nothing is saved). Adding a subtask to an already-planned parent is allowed, and existing links are not migrated.
+
+Removing a todo (`DELETE /api/v1/JournalEntries/{entryId}/todos/{taskItemId}`) unlinks only that task; its subtasks keep their own links.
 
 ---
 

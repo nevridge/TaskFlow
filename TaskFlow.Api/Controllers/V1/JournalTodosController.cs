@@ -27,8 +27,10 @@ public class JournalTodosController(
     /// task is a todo on its linked day. Each task is a todo row on exactly one day.
     /// </summary>
     /// <remarks>
-    /// Returns root tasks. A subtask that is a todo on this day while its parent is not is returned under its parent,
-    /// which is then flagged <c>isContextOnly</c> and embeds only that day's subtasks. Each row's
+    /// Returns one flat row per task attributed to the day (roots and subtasks alike), ordered by id; rows carry no
+    /// <c>children</c>. A subtask row carries <c>parentTaskItemId</c> and <c>parentTitle</c> even when its parent is
+    /// not a row of this day (no parent row is synthesised). <c>childTaskCount</c> is the task's total subtasks and
+    /// <c>openChildCount</c> the subtasks that are not Completed (Blocked counts as open). Each row's
     /// <c>currentJournalDate</c> is the task's own linked day (null when it was never linked).
     /// </remarks>
     // GET: api/v1/JournalEntries/{entryId}/todos
@@ -47,25 +49,7 @@ public class JournalTodosController(
             return NotFound();
         }
 
-        var rowIds = day.Tasks.Select(t => t.Id).ToHashSet();
-        var rows = new List<TaskItemResponseDto>();
-
-        foreach (var root in day.Tasks.Where(t => t.ParentTaskItemId is null))
-        {
-            rows.Add(MapTodo(root));
-        }
-
-        // A subtask whose parent is not a row of this day: show the parent as context, with only the subtasks of this day.
-        var contextParents = day.Tasks
-            .Where(t => t.ParentTaskItemId is { } parentId && !rowIds.Contains(parentId) && t.ParentTaskItem is not null)
-            .GroupBy(t => t.ParentTaskItemId!.Value)
-            .OrderBy(g => g.Key);
-        foreach (var group in contextParents)
-        {
-            rows.Add(MapContextParent(group.First().ParentTaskItem!, group.OrderBy(c => c.Id)));
-        }
-
-        return Ok(rows);
+        return Ok(day.Tasks.OrderBy(t => t.Id).Select(MapTodo).ToList());
     }
 
     // POST: api/v1/JournalEntries/{entryId}/todos
@@ -88,15 +72,19 @@ public class JournalTodosController(
 
         return result switch
         {
+            AddTodoResult.Success => NoContent(),
             AddTodoResult.EntryNotFound => NotFound(),
             AddTodoResult.TaskNotFound => NotFound(),
+            // The day is not echoed: the request names the entry, not a date.
+            AddTodoResult.HasOpenSubtasks => UnprocessableEntity(TaskRuleErrors.PlanHasOpenSubtasks(dto.TaskItemId, null)),
             AddTodoResult.AlreadyLinked => Conflict(new { message = "This task is already linked to the journal entry." }),
             AddTodoResult.PastDayNotAllowed => UnprocessableEntity(new
             {
                 code = AssignmentPastDayErrorCode,
                 message = "This task cannot be assigned to a past day."
             }),
-            _ => NoContent(),
+            _ => throw new InvalidOperationException(
+                $"Adding task {dto.TaskItemId} to journal entry {entryId} failed unexpectedly: {result}.")
         };
     }
 
@@ -104,38 +92,14 @@ public class JournalTodosController(
     [HttpDelete("{taskItemId}")]
     public async Task<IActionResult> RemoveTodo(int entryId, int taskItemId)
     {
-        var currentTodos = await _journalRepo.GetTodosAsync(entryId);
-        var todoList = currentTodos.ToList();
-
-        if (!await _journalRepo.RemoveTodoAsync(entryId, taskItemId))
-        {
-            return NotFound();
-        }
-
-        var children = todoList.Where(t => t.ParentTaskItemId == taskItemId);
-        foreach (var child in children)
-        {
-            await _journalRepo.RemoveTodoAsync(entryId, child.Id);
-        }
-
-        return NoContent();
+        // Unlinks only the removed task; its subtasks are separate rows with their own links.
+        return await _journalRepo.RemoveTodoAsync(entryId, taskItemId) ? NoContent() : NotFound();
     }
 
-    // Maps a task with its own linked day. Children are preview data (#349): every subtask of a shown parent is
-    // included, whichever day it is a todo on, and none of them is counted as a todo row of this day.
-    private static TaskItemResponseDto MapTodo(TaskItem task) =>
-        MapTodo(task, task.ChildTaskItems);
-
-    private static TaskItemResponseDto MapContextParent(TaskItem parent, IEnumerable<TaskItem> attributedChildren)
+    // One flat row per task. ChildTaskCount is the total subtasks, OpenChildCount those not Completed; Children is
+    // never populated here (the client groups by ParentTaskItemId).
+    private static TaskItemResponseDto MapTodo(TaskItem task)
     {
-        var dto = MapTodo(parent, attributedChildren);
-        dto.IsContextOnly = true;
-        return dto;
-    }
-
-    private static TaskItemResponseDto MapTodo(TaskItem task, IEnumerable<TaskItem> childTasks)
-    {
-        var children = childTasks.Select(c => MapTodo(c, [])).ToList();
         // The task's own linked day, not the viewed day: a completed task is a row on its completion day.
         var linkedDate = task.CurrentJournalEntry?.Date;
 
@@ -155,13 +119,14 @@ public class JournalTodosController(
             MoveCount = task.MoveCount,
             CurrentJournalDate = linkedDate,
             DaysTagged = DaysTaggedHelper.GetDaysTagged(task.FirstTaggedDate, linkedDate),
-            ChildTaskCount = children.Count,
+            ChildTaskCount = task.ChildTaskItems.Count,
+            ParentTitle = task.ParentTaskItem?.Title,
+            OpenChildCount = task.ChildTaskItems.Count(c => c.Status != Status.Completed),
             BlockedReason = task.BlockedReason,
             BlockedAt = task.BlockedAt,
             PreviousStatus = task.PreviousStatus?.ToString(),
             StartedAt = task.StartedAt,
             CompletedAt = task.CompletedAt,
-            Children = children.Count > 0 ? children : null,
         };
     }
 }

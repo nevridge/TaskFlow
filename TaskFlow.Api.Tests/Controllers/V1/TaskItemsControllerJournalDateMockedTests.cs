@@ -20,6 +20,7 @@ public class TaskItemsControllerJournalDateMockedTests
 {
     private const string PastDayCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
     private const string ConflictCode = "TASK_JOURNAL_ASSIGNMENT_CONFLICT";
+    private const string OpenSubtasksCode = "TASK_PLAN_HAS_OPEN_SUBTASKS";
 
     private readonly Mock<ITaskRepository> _repo = new();
     private readonly Mock<IValidator<TaskItem>> _validator = new();
@@ -271,6 +272,7 @@ public class TaskItemsControllerJournalDateMockedTests
     [InlineData(AddTodoResult.PastDayNotAllowed, 422)]
     [InlineData(AddTodoResult.TaskNotFound, 404)]
     [InlineData(AddTodoResult.TaskCompleted, 422)]
+    [InlineData(AddTodoResult.HasOpenSubtasks, 422)]
     public async Task Update_AddTodoFailure_MapsErrorAndDoesNotCommit(AddTodoResult failure, int status)
     {
         Seed();
@@ -291,9 +293,62 @@ public class TaskItemsControllerJournalDateMockedTests
         {
             Assert.Equal(PastDayCode, Code(result.Result as ActionResult));
         }
+        else if (failure == AddTodoResult.HasOpenSubtasks)
+        {
+            Assert.Equal(OpenSubtasksCode, Code(result.Result as ActionResult));
+        }
 
         _tx.Verify(t => t.CommitAsync(It.IsAny<CancellationToken>()), Times.Never);
         _tx.Verify(t => t.DisposeAsync(), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateAndPatch_ParentWithOpenSubtasks_Returns422WithDetailsAndNoTransaction(bool usePut)
+    {
+        Seed();
+        _repo.Setup(r => r.HasOpenSubtasksAsync(1)).ReturnsAsync(true);
+        var day = Today.AddDays(1);
+
+        var result = usePut
+            ? (await _controller.Update(1, Put(day))).Result
+            : (await _controller.Patch(1, new PatchTaskItemDto { JournalDate = day })).Result;
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        var value = unprocessable.Value!;
+        Assert.Equal(OpenSubtasksCode, Code(unprocessable));
+        var details = value.GetType().GetProperty("details")!.GetValue(value)!;
+        Assert.Equal(1, details.GetType().GetProperty("taskItemId")!.GetValue(details));
+        Assert.Equal((DateOnly?)day, details.GetType().GetProperty("journalDate")!.GetValue(details));
+        AssertNoJournalOrTx();
+        _repo.Verify(r => r.UpdateAsync(It.IsAny<TaskItem>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Update_OpenSubtasksAndPastDay_ReturnsPastDayError()
+    {
+        Seed();
+        _repo.Setup(r => r.HasOpenSubtasksAsync(1)).ReturnsAsync(true);
+
+        var result = await _controller.Update(1, Put(Today.AddDays(-1)));
+
+        Assert.Equal(PastDayCode, Code(result.Result as ActionResult));
+    }
+
+    [Fact]
+    public async Task Update_ResendingCurrentLinkWithOpenSubtasks_IsNotRejectedAndSkipsTheCheck()
+    {
+        Seed();
+        var day = Today.AddDays(2);
+        _repo.Setup(r => r.GetAssignedJournalDateAsync(1)).ReturnsAsync(day);
+        _repo.Setup(r => r.HasOpenSubtasksAsync(1)).ReturnsAsync(true);
+
+        var result = await _controller.Update(1, Put(day));
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        _repo.Verify(r => r.HasOpenSubtasksAsync(It.IsAny<int>()), Times.Never);
+        AssertNoJournalOrTx();
     }
 
     [Fact]

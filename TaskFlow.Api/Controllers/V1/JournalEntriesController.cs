@@ -173,7 +173,8 @@ public class JournalEntriesController(
         }
 
         await _journalRepo.UpdateAsync(existing);
-        // The update request carries no offset, so todo ids are attributed to UTC days.
+        // Known limitation (#406): the update request carries no offset, so todoTaskItemIds in this response are
+        // attributed to UTC days and may differ from GET (which honours timezoneOffsetMinutes) near day boundaries.
         return Ok(await ToDtoAsync(existing, null));
     }
 

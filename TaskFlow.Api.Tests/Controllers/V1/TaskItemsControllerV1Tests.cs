@@ -402,6 +402,24 @@ public class TaskItemsControllerV1Tests
         _mockJournalRepo.Verify(r => r.AddTodoAsync(entry.Id, createdTask.Id), Times.Once);
     }
 
+    [Fact]
+    public async Task Create_ShouldStillReturn201_WhenPlanningResultIsHasOpenSubtasks()
+    {
+        var targetDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
+        var createDto = new CreateTaskItemDto { Title = "Scheduled task", Status = Status.Todo, JournalDate = targetDate };
+        var createdTask = new TaskItem { Id = 78, Title = "Scheduled task", Status = Status.Todo };
+        var entry = new JournalEntry { Id = 13, Date = targetDate, Title = "Journal" };
+        _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<TaskItem>(), default)).ReturnsAsync(new ValidationResult());
+        _mockRepo.Setup(r => r.AddAsync(It.IsAny<TaskItem>())).ReturnsAsync(createdTask);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(78)).ReturnsAsync(createdTask);
+        _mockJournalRepo.Setup(r => r.GetByDateAsync(targetDate)).ReturnsAsync(entry);
+        _mockJournalRepo.Setup(r => r.AddTodoAsync(entry.Id, createdTask.Id)).ReturnsAsync(AddTodoResult.HasOpenSubtasks);
+
+        var result = await _controller.Create(createDto);
+
+        Assert.IsType<CreatedAtRouteResult>(result.Result);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(-1)]

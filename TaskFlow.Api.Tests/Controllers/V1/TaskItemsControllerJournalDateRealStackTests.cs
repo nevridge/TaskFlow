@@ -370,17 +370,128 @@ public class TaskItemsControllerJournalDateRealStackTests
     }
 
     [Fact]
-    public async Task Put_PlanningParent_DoesNotPlanChildren()
+    public async Task Put_PlanningParentWithOpenSubtask_Returns422AndNothingLinked()
     {
         using var stack = new Stack();
         var parent = await stack.SeedTaskAsync();
         var child = await stack.SeedTaskAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+        var day = Today.AddDays(1);
+
+        var result = await stack.Controller.Update(parent.Id, Put(day, title: "Renamed"));
+
+        AssertPlanHasOpenSubtasks(result.Result, parent.Id, day);
+        Assert.Equal("Original", (await stack.ReloadAsync(parent.Id)).Title);
+        Assert.Null((await stack.ReloadAsync(parent.Id)).CurrentJournalEntryId);
+        Assert.Null((await stack.ReloadAsync(child.Id)).CurrentJournalEntryId);
+        Assert.Empty(await stack.EventTypesAsync(parent.Id));
+        Assert.Equal(0, await stack.EntryCountAsync());
+    }
+
+    [Fact]
+    public async Task Patch_PlanningParentWithOpenSubtask_Returns422AndNothingLinked()
+    {
+        using var stack = new Stack();
+        var parent = await stack.SeedTaskAsync();
+        await stack.SeedTaskAsync(new TaskItem { Title = "Blocked child", Status = Status.Blocked, ParentTaskItemId = parent.Id });
+        var day = Today.AddDays(1);
+
+        var result = await stack.Controller.Patch(parent.Id, new PatchTaskItemDto { Title = "Renamed", JournalDate = day });
+
+        AssertPlanHasOpenSubtasks(result.Result, parent.Id, day);
+        Assert.Equal("Original", (await stack.ReloadAsync(parent.Id)).Title);
+        Assert.Null((await stack.ReloadAsync(parent.Id)).CurrentJournalEntryId);
+        Assert.Equal(0, await stack.EntryCountAsync());
+    }
+
+    [Fact]
+    public async Task Put_PlanningParentWithOnlyCompletedSubtasks_Succeeds()
+    {
+        using var stack = new Stack();
+        var parent = await stack.SeedTaskAsync();
+        await stack.SeedTaskAsync(new TaskItem
+        {
+            Title = "Done child",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow,
+            ParentTaskItemId = parent.Id
+        });
 
         var dto = OkDto(await stack.Controller.Update(parent.Id, Put(Today.AddDays(1))));
 
         Assert.NotNull(dto.CurrentJournalDate);
-        Assert.Equal(1, dto.ChildTaskCount);
-        Assert.Null((await stack.ReloadAsync(child.Id)).CurrentJournalEntryId);
+    }
+
+    [Fact]
+    public async Task Put_PastDateOnParentWithOpenSubtask_ReturnsPastDayError()
+    {
+        using var stack = new Stack();
+        var parent = await stack.SeedTaskAsync();
+        await stack.SeedTaskAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+
+        var result = await stack.Controller.Update(parent.Id, Put(Today.AddDays(-1)));
+
+        Assert.Equal("TASK_CREATION_PAST_DAY_NOT_ALLOWED", ErrorCode(result));
+    }
+
+    [Fact]
+    public async Task Put_PlanningCompletedParentWithOpenSubtask_ReturnsPlanCompletedError()
+    {
+        using var stack = new Stack();
+        var parent = await stack.SeedTaskAsync(new TaskItem
+        {
+            Title = "Original",
+            Status = Status.Completed,
+            CompletedAt = DateTime.UtcNow,
+            Priority = Priority.Low
+        });
+        await stack.SeedTaskAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+
+        var result = await stack.Controller.Update(parent.Id, Put(Today.AddDays(1), status: Status.Completed));
+
+        Assert.Equal("TASK_PLAN_COMPLETED_NOT_ALLOWED", ErrorCode(result));
+    }
+
+    [Fact]
+    public async Task Put_ResendingCurrentDayOnStaleLinkedParentWithOpenSubtask_IsNotRejected()
+    {
+        using var stack = new Stack();
+        var day = Today.AddDays(2);
+        var (parent, _) = await stack.SeedPlannedTaskAsync(day);
+        await stack.SeedTaskAsync(new TaskItem { Title = "Child", Status = Status.Todo, ParentTaskItemId = parent.Id });
+
+        var dto = OkDto(await stack.Controller.Update(parent.Id, Put(day, title: "Renamed")));
+
+        Assert.Equal("Renamed", dto.Title);
+        Assert.Equal(day, dto.CurrentJournalDate);
+    }
+
+    [Fact]
+    public async Task Post_CreatingSubtaskUnderAlreadyPlannedParent_Succeeds()
+    {
+        using var stack = new Stack();
+        var day = Today.AddDays(2);
+        var (parent, _) = await stack.SeedPlannedTaskAsync(day);
+
+        var result = await stack.Controller.Create(new CreateTaskItemDto
+        {
+            Title = "Child",
+            Status = Status.Todo,
+            ParentTaskItemId = parent.Id,
+        });
+
+        var created = Assert.IsType<CreatedAtRouteResult>(result.Result);
+        Assert.Equal(parent.Id, Assert.IsType<TaskItemResponseDto>(created.Value).ParentTaskItemId);
+        Assert.NotNull((await stack.ReloadAsync(parent.Id)).CurrentJournalEntryId);
+    }
+
+    private static void AssertPlanHasOpenSubtasks(IActionResult? result, int taskId, DateOnly journalDate)
+    {
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        using var body = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(unprocessable.Value));
+        Assert.Equal("TASK_PLAN_HAS_OPEN_SUBTASKS", body.RootElement.GetProperty("code").GetString());
+        var details = body.RootElement.GetProperty("details");
+        Assert.Equal(taskId, details.GetProperty("taskItemId").GetInt32());
+        Assert.Equal(journalDate.ToString("yyyy-MM-dd"), details.GetProperty("journalDate").GetString());
     }
 
     [Theory]

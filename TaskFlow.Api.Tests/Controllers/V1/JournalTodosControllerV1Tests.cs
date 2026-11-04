@@ -86,6 +86,16 @@ public class JournalTodosControllerV1Tests
     public async Task GetAll_ShouldReturnBlockedFields_ForBlockedTodoAndItsChild()
     {
         var blockedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+        var blockedChild = new TaskItem
+        {
+            Id = 3,
+            Title = "Blocked child",
+            Status = Status.Blocked,
+            BlockedReason = "Child reason",
+            BlockedAt = blockedAt,
+            PreviousStatus = Status.Todo,
+            ParentTaskItemId = 2
+        };
         SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
@@ -94,27 +104,17 @@ public class JournalTodosControllerV1Tests
             BlockedReason = "Waiting on Sam",
             BlockedAt = blockedAt,
             PreviousStatus = Status.Todo,
-            ChildTaskItems =
-            [
-                new TaskItem
-                {
-                    Id = 3,
-                    Title = "Blocked child",
-                    Status = Status.Blocked,
-                    BlockedReason = "Child reason",
-                    BlockedAt = blockedAt,
-                    PreviousStatus = Status.Todo,
-                    ParentTaskItemId = 2
-                }
-            ]
-        });
+            ChildTaskItems = [blockedChild]
+        }, blockedChild);
 
-        var dto = (await GetRowsAsync()).Single();
+        var rows = await GetRowsAsync();
 
+        var dto = rows.Single(r => r.Id == 2);
         Assert.Equal("Waiting on Sam", dto.BlockedReason);
         Assert.Equal(blockedAt, dto.BlockedAt);
         Assert.Equal("Todo", dto.PreviousStatus);
-        var child = Assert.Single(dto.Children!);
+        Assert.Equal(1, dto.OpenChildCount);
+        var child = rows.Single(r => r.Id == 3);
         Assert.Equal("Child reason", child.BlockedReason);
         Assert.Equal("Todo", child.PreviousStatus);
     }
@@ -122,18 +122,19 @@ public class JournalTodosControllerV1Tests
     [Fact]
     public async Task GetAll_ShouldMapDueDateAsCalendarDate_ForTodoAndItsChild()
     {
+        var child = new TaskItem { Id = 3, Title = "Child", ParentTaskItemId = 2 };
         SetupDay(new DateOnly(2026, 5, 1), new TaskItem
         {
             Id = 2,
             Title = "Parent",
             DueDate = new DateOnly(2026, 5, 1),
-            ChildTaskItems = [new TaskItem { Id = 3, Title = "Child", ParentTaskItemId = 2 }]
-        });
+            ChildTaskItems = [child]
+        }, child);
 
-        var dto = (await GetRowsAsync()).Single();
+        var rows = await GetRowsAsync();
 
-        Assert.Equal(new DateOnly(2026, 5, 1), dto.DueDate);
-        Assert.Null(dto.Children!.Single().DueDate);
+        Assert.Equal(new DateOnly(2026, 5, 1), rows.Single(r => r.Id == 2).DueDate);
+        Assert.Null(rows.Single(r => r.Id == 3).DueDate);
     }
 
     [Fact]
@@ -141,25 +142,24 @@ public class JournalTodosControllerV1Tests
     {
         var startedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
         var childStartedAt = new DateTime(2026, 10, 2, 10, 0, 0, DateTimeKind.Utc);
+        var startedChild = new TaskItem { Id = 3, Title = "Started child", Status = Status.InProgress, StartedAt = childStartedAt, ParentTaskItemId = 2 };
+        var plainChild = new TaskItem { Id = 4, Title = "Plain child", Status = Status.Todo, ParentTaskItemId = 2 };
         SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
             Title = "Started parent",
             Status = Status.InProgress,
             StartedAt = startedAt,
-            ChildTaskItems =
-            [
-                new TaskItem { Id = 3, Title = "Started child", Status = Status.InProgress, StartedAt = childStartedAt, ParentTaskItemId = 2 },
-                new TaskItem { Id = 4, Title = "Plain child", Status = Status.Todo, ParentTaskItemId = 2 }
-            ]
-        });
+            ChildTaskItems = [startedChild, plainChild]
+        }, startedChild, plainChild);
 
-        var dto = (await GetRowsAsync()).Single();
+        var rows = await GetRowsAsync();
 
+        var dto = rows.Single(r => r.Id == 2);
         Assert.Equal("InProgress", dto.Status);
         Assert.Equal(startedAt, dto.StartedAt);
-        Assert.Equal(childStartedAt, dto.Children!.Single(c => c.Id == 3).StartedAt);
-        Assert.Null(dto.Children!.Single(c => c.Id == 4).StartedAt);
+        Assert.Equal(childStartedAt, rows.Single(c => c.Id == 3).StartedAt);
+        Assert.Null(rows.Single(c => c.Id == 4).StartedAt);
     }
 
     [Fact]
@@ -167,24 +167,22 @@ public class JournalTodosControllerV1Tests
     {
         var completedAt = new DateTime(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
         var childCompletedAt = new DateTime(2026, 10, 2, 8, 0, 0, DateTimeKind.Utc);
+        var doneChild = new TaskItem { Id = 3, Title = "Done child", Status = Status.Completed, CompletedAt = childCompletedAt, ParentTaskItemId = 2 };
+        var openChild = new TaskItem { Id = 4, Title = "Open child", Status = Status.Todo, ParentTaskItemId = 2 };
         SetupDay(new DateOnly(2026, 10, 2), new TaskItem
         {
             Id = 2,
             Title = "Done parent",
             Status = Status.Completed,
             CompletedAt = completedAt,
-            ChildTaskItems =
-            [
-                new TaskItem { Id = 3, Title = "Done child", Status = Status.Completed, CompletedAt = childCompletedAt, ParentTaskItemId = 2 },
-                new TaskItem { Id = 4, Title = "Open child", Status = Status.Todo, ParentTaskItemId = 2 }
-            ]
-        });
+            ChildTaskItems = [doneChild, openChild]
+        }, doneChild, openChild);
 
-        var dto = (await GetRowsAsync()).Single();
+        var rows = await GetRowsAsync();
 
-        Assert.Equal(completedAt, dto.CompletedAt);
-        Assert.Equal(childCompletedAt, dto.Children!.Single(c => c.Id == 3).CompletedAt);
-        Assert.Null(dto.Children!.Single(c => c.Id == 4).CompletedAt);
+        Assert.Equal(completedAt, rows.Single(r => r.Id == 2).CompletedAt);
+        Assert.Equal(childCompletedAt, rows.Single(c => c.Id == 3).CompletedAt);
+        Assert.Null(rows.Single(c => c.Id == 4).CompletedAt);
     }
 
     [Fact]
@@ -310,48 +308,45 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
-    public async Task GetAll_ShouldReturnChildren_WhenParentHasSubtasks()
+    public async Task GetAll_ShouldReturnParentWithCounts_AndNoChildren()
     {
-        var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
-        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
+        var done = new TaskItem { Id = 10, Title = "Done", Status = Status.Completed, ParentTaskItemId = 2, ChildTaskItems = [] };
+        var blocked = new TaskItem { Id = 11, Title = "Blocked", Status = Status.Blocked, ParentTaskItemId = 2, ChildTaskItems = [] };
+        var todo = new TaskItem { Id = 12, Title = "Todo", Status = Status.Todo, ParentTaskItemId = 2, ChildTaskItems = [] };
+        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [done, blocked, todo] });
 
-        var todos = await GetRowsAsync();
+        var row = Assert.Single(await GetRowsAsync());
 
-        Assert.Single(todos, t => t.Id == 2);
-        Assert.Single(todos[0].Children!, c => c.Id == 10);
-        Assert.Null(todos[0].IsContextOnly);
+        Assert.Equal(2, row.Id);
+        Assert.Equal(3, row.ChildTaskCount);
+        Assert.Equal(2, row.OpenChildCount);
+        Assert.Null(row.Children);
+        Assert.Null(row.ParentTitle);
     }
 
     [Fact]
-    public async Task GetAll_ShouldExcludeChildFromTopLevel_WhenParentAlsoPresent()
+    public async Task GetAll_ShouldReturnParentAndSubtaskAsTwoRows_WhenBothAreOnTheDay()
     {
-        var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 2, ChildTaskItems = [] };
-        var parent = new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] };
-        SetupDay(Day, parent, child);
+        var parent = new TaskItem { Id = 2, Title = "Parent" };
+        var child = new TaskItem { Id = 10, Title = "Child", ParentTaskItemId = 2, ParentTaskItem = parent, ChildTaskItems = [] };
+        parent.ChildTaskItems = [child];
+        SetupDay(Day, child, parent);
 
-        var todos = await GetRowsAsync();
+        var rows = await GetRowsAsync();
 
-        Assert.Single(todos, t => t.Id == 2);
-        Assert.DoesNotContain(todos, t => t.Id == 10);
-        Assert.Single(todos[0].Children!, c => c.Id == 10);
-        Assert.Null(todos[0].IsContextOnly);
+        Assert.Equal([2, 10], rows.Select(r => r.Id));
+        Assert.All(rows, r => Assert.Null(r.Children));
+        var childRow = rows.Single(r => r.Id == 10);
+        Assert.Equal(2, childRow.ParentTaskItemId);
+        Assert.Equal("Parent", childRow.ParentTitle);
+        Assert.Equal(0, childRow.OpenChildCount);
+        Assert.Equal(1, rows.Single(r => r.Id == 2).OpenChildCount);
     }
 
     [Fact]
-    public async Task GetAll_ShouldExcludeOrphanedSubtask_WhenParentNotLoaded()
-    {
-        // No ParentTaskItem to show as context: the orphan cannot be placed, so it is not returned.
-        var orphan = new TaskItem { Id = 10, Title = "Orphan", ParentTaskItemId = 99, ChildTaskItems = [] };
-        SetupDay(Day, orphan);
-
-        Assert.Empty(await GetRowsAsync());
-    }
-
-    [Fact]
-    public async Task GetAll_ShouldEmitParentAsContextOnly_WhenSubtaskIsTodoButParentIsNot()
+    public async Task GetAll_ShouldReturnSubtaskWithParentTitle_AndNoParentRow_WhenParentIsOffDay()
     {
         var wed = new DateOnly(2026, 6, 3);
-        var monEntry = new JournalEntry { Id = 5, Title = "Mon", Date = new DateOnly(2026, 6, 1) };
         var otherDaySibling = new TaskItem { Id = 11, Title = "Sibling", ParentTaskItemId = 2, Status = Status.Todo };
         var doneChild = new TaskItem
         {
@@ -360,6 +355,7 @@ public class JournalTodosControllerV1Tests
             ParentTaskItemId = 2,
             Status = Status.Completed,
             CompletedAt = new DateTime(2026, 6, 3, 10, 0, 0, DateTimeKind.Utc),
+            ChildTaskItems = [],
         };
         var parent = new TaskItem
         {
@@ -367,29 +363,23 @@ public class JournalTodosControllerV1Tests
             Title = "Parent",
             Status = Status.Todo,
             CurrentJournalEntryId = 5,
-            CurrentJournalEntry = monEntry,
-            FirstTaggedDate = new DateOnly(2026, 5, 30),
+            CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Mon", Date = new DateOnly(2026, 6, 1) },
             ChildTaskItems = [doneChild, otherDaySibling],
         };
         doneChild.ParentTaskItem = parent;
         SetupDay(wed, doneChild);
 
-        var rows = await GetRowsAsync();
+        var row = Assert.Single(await GetRowsAsync());
 
-        var context = Assert.Single(rows);
-        Assert.Equal(2, context.Id);
-        Assert.True(context.IsContextOnly);
-        Assert.Equal(new DateOnly(2026, 6, 1), context.CurrentJournalDate);
-        Assert.Equal(3, context.DaysTagged);
-        var child = Assert.Single(context.Children!);
-        Assert.Equal(10, child.Id);
-        Assert.Equal(1, context.ChildTaskCount);
-        Assert.Null(child.IsContextOnly);
-        Assert.NotNull(child.CompletedAt);
+        Assert.Equal(10, row.Id);
+        Assert.Equal(2, row.ParentTaskItemId);
+        Assert.Equal("Parent", row.ParentTitle);
+        Assert.NotNull(row.CompletedAt);
+        Assert.Null(row.Children);
     }
 
     [Fact]
-    public async Task GetAll_ShouldEmitOneContextParent_ForSeveralSubtasksOfTheSameParent()
+    public async Task GetAll_ShouldReturnOneRowPerSubtask_ForSeveralSubtasksOfTheSameOffDayParent()
     {
         var parent = new TaskItem { Id = 2, Title = "Parent" };
         var c1 = new TaskItem { Id = 10, Title = "C1", ParentTaskItemId = 2, ParentTaskItem = parent };
@@ -398,9 +388,20 @@ public class JournalTodosControllerV1Tests
 
         var rows = await GetRowsAsync();
 
-        var context = Assert.Single(rows);
-        Assert.True(context.IsContextOnly);
-        Assert.Equal([10, 11], context.Children!.Select(c => c.Id));
+        Assert.Equal([10, 11], rows.Select(r => r.Id));
+        Assert.All(rows, r => Assert.Equal(2, r.ParentTaskItemId));
+    }
+
+    [Fact]
+    public async Task GetAll_ShouldReturnSubtaskRow_WhenParentIsNotLoaded()
+    {
+        var orphan = new TaskItem { Id = 10, Title = "Orphan", ParentTaskItemId = 99, ChildTaskItems = [] };
+        SetupDay(Day, orphan);
+
+        var row = Assert.Single(await GetRowsAsync());
+
+        Assert.Equal(99, row.ParentTaskItemId);
+        Assert.Null(row.ParentTitle);
     }
 
     [Fact]
@@ -445,29 +446,11 @@ public class JournalTodosControllerV1Tests
 
         Assert.Single(todos);
         Assert.Null(todos[0].Children);
+        Assert.Equal(0, todos[0].OpenChildCount);
     }
 
     [Fact]
-    public async Task GetAll_ShouldSetCurrentJournalDate_OnChildDto()
-    {
-        var childJournalDate = new DateOnly(2026, 5, 8);
-        var child = new TaskItem
-        {
-            Id = 10,
-            Title = "Child",
-            ParentTaskItemId = 2,
-            ChildTaskItems = [],
-            CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Another Day", Date = childJournalDate }
-        };
-        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
-
-        var todos = await GetRowsAsync();
-
-        Assert.Equal(childJournalDate, todos[0].Children!.Single().CurrentJournalDate);
-    }
-
-    [Fact]
-    public async Task GetAll_ShouldComputeDaysTagged_ForChildIndependently()
+    public async Task GetAll_ShouldSetOwnCurrentJournalDateAndDaysTagged_OnSubtaskRow()
     {
         var child = new TaskItem
         {
@@ -478,56 +461,52 @@ public class JournalTodosControllerV1Tests
             FirstTaggedDate = new DateOnly(2026, 5, 8),
             CurrentJournalEntry = new JournalEntry { Id = 5, Title = "Day", Date = new DateOnly(2026, 5, 10) }
         };
-        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [child] });
+        SetupDay(Day, child);
 
-        var todos = await GetRowsAsync();
+        var row = Assert.Single(await GetRowsAsync());
 
-        // DaysTagged = childJournalDate.DayNumber - childFirstTaggedDate.DayNumber + 1 = 3
-        Assert.Equal(3, todos[0].Children!.Single().DaysTagged);
+        Assert.Equal(new DateOnly(2026, 5, 10), row.CurrentJournalDate);
+        // DaysTagged = journalDate.DayNumber - firstTaggedDate.DayNumber + 1 = 3
+        Assert.Equal(3, row.DaysTagged);
     }
 
     [Fact]
-    public async Task GetAll_ShouldNotIncludeOrphanedSubtask_InAnyChildList()
+    public async Task RemoveTodo_ShouldUnlinkOnlyTheRemovedTask_WhenParentIsRemoved()
     {
-        // A child whose ParentTaskItemId does not match the parent's Id - misconfigured relationship.
-        var misconfiguredChild = new TaskItem { Id = 10, Title = "Misconfigured", ParentTaskItemId = 99, ChildTaskItems = [] };
-        SetupDay(Day, new TaskItem { Id = 2, Title = "Parent", ChildTaskItems = [misconfiguredChild] });
-
-        var todos = await GetRowsAsync();
-
-        Assert.Single(todos, t => t.Id == 2);
-        Assert.DoesNotContain(todos, t => t.Id == 10);
-    }
-
-    [Fact]
-    public async Task RemoveTodo_ShouldAlsoRemoveChildren_WhenParentIsRemoved()
-    {
-        var child = new TaskItem { Id = 10, Title = "Child", Status = Status.Todo, Priority = Priority.Low, ParentTaskItemId = 4, ChildTaskItems = [] };
-        var parent = new TaskItem { Id = 4, Title = "Parent", Status = Status.Todo, Priority = Priority.Low, ChildTaskItems = [child] };
-
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent, child]);
-        _journalRepo.Setup(s => s.RemoveTodoAsync(1, 4)).ReturnsAsync(true);
-        _journalRepo.Setup(s => s.RemoveTodoAsync(1, 10)).ReturnsAsync(true);
-
-        var result = await _controller.RemoveTodo(1, 4);
-
-        Assert.IsType<NoContentResult>(result);
-        _journalRepo.Verify(s => s.RemoveTodoAsync(1, 10), Times.Once);
-    }
-
-    [Fact]
-    public async Task RemoveTodo_ShouldNotRemoveUnrelatedTodos_WhenParentIsRemoved()
-    {
-        var unrelated = new TaskItem { Id = 20, Title = "Unrelated", Status = Status.Todo, Priority = Priority.Low, ChildTaskItems = [] };
-        var parent = new TaskItem { Id = 4, Title = "Parent", Status = Status.Todo, Priority = Priority.Low, ChildTaskItems = [] };
-
-        _journalRepo.Setup(s => s.GetTodosAsync(1)).ReturnsAsync([parent, unrelated]);
         _journalRepo.Setup(s => s.RemoveTodoAsync(1, 4)).ReturnsAsync(true);
 
         var result = await _controller.RemoveTodo(1, 4);
 
         Assert.IsType<NoContentResult>(result);
-        _journalRepo.Verify(s => s.RemoveTodoAsync(1, 20), Times.Never);
+        _journalRepo.Verify(s => s.RemoveTodoAsync(1, 4), Times.Once);
+        _journalRepo.Verify(s => s.RemoveTodoAsync(1, It.Is<int>(i => i != 4)), Times.Never);
+        _journalRepo.Verify(s => s.GetTodosAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AddTodo_ShouldReturnPlanHasOpenSubtasks422_WhenParentHasOpenSubtasks()
+    {
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync(AddTodoResult.HasOpenSubtasks);
+
+        var result = await _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 });
+
+        var unprocessable = Assert.IsType<UnprocessableEntityObjectResult>(result);
+        using var body = JsonDocument.Parse(JsonSerializer.Serialize(unprocessable.Value));
+        var root = body.RootElement;
+        Assert.Equal("TASK_PLAN_HAS_OPEN_SUBTASKS", root.GetProperty("code").GetString());
+        Assert.Equal("A task with open subtasks can't be planned on a day. Plan its subtasks instead.", root.GetProperty("message").GetString());
+        var details = root.GetProperty("details");
+        Assert.Equal(4, details.GetProperty("taskItemId").GetInt32());
+        Assert.Equal(JsonValueKind.Null, details.GetProperty("journalDate").ValueKind);
+    }
+
+    [Fact]
+    public async Task AddTodo_ShouldThrow_WhenResultIsUnknown()
+    {
+        _journalRepo.Setup(s => s.AddTodoAsync(1, 4)).ReturnsAsync((AddTodoResult)999);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _controller.AddTodo(1, new AddJournalTodoDto { TaskItemId = 4 }));
     }
 
     [Fact]
@@ -554,11 +533,19 @@ public class JournalTodosControllerV1Tests
     }
 
     [Fact]
-    public void IsContextOnly_ShouldBeOmittedFromJson_WhenNull()
+    public async Task GetAll_Json_ShouldHaveNoContextOnlyOrChildren_AndCarryParentFields()
     {
-        var json = JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t" });
+        var parent = new TaskItem { Id = 2, Title = "Parent" };
+        var child = new TaskItem { Id = 10, Title = "Child", ParentTaskItemId = 2, ParentTaskItem = parent, ChildTaskItems = [] };
+        parent.ChildTaskItems = [child];
+        SetupDay(Day, parent, child);
 
-        Assert.DoesNotContain("IsContextOnly", json);
-        Assert.Contains("\"IsContextOnly\":true", JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t", IsContextOnly = true }));
+        var json = JsonSerializer.Serialize(await GetRowsAsync());
+
+        Assert.DoesNotContain("IsContextOnly", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Children", json);
+        Assert.Contains("\"ParentTitle\":\"Parent\"", json);
+        Assert.Contains("\"OpenChildCount\":1", json);
+        Assert.DoesNotContain("IsContextOnly", JsonSerializer.Serialize(new TaskItemResponseDto { Title = "t" }), StringComparison.OrdinalIgnoreCase);
     }
 }

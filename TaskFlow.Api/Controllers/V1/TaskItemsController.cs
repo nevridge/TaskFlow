@@ -245,6 +245,9 @@ public class TaskItemsController(
     /// Completing the task in the same request is accepted, an open task re-sending its current
     /// <c>parentTaskItemId</c> with a status that stays open is accepted, and a Completed task stays Completed.
     /// Nothing is saved.</item>
+    /// <item><c>TASK_PLAN_HAS_OPEN_SUBTASKS</c>: a task with at least one open (not Completed) subtask cannot be planned
+    /// onto a <c>journalDate</c> that differs from its current link; plan its subtasks instead. Checked after the
+    /// Completed-task and past-day rules. <c>details</c> holds <c>taskItemId</c> and <c>journalDate</c>. Nothing is saved.</item>
     /// <item>Other codes: <c>TASK_PARENT_SELF_NOT_ALLOWED</c>, <c>TASK_PARENT_NOT_FOUND</c>,
     /// <c>TASK_PARENT_DEPTH_NOT_ALLOWED</c>, <c>TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN</c>,
     /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
@@ -571,6 +574,7 @@ public class TaskItemsController(
             await _repo.UpdateAsync(existing);
             var planningFailure = MapPlanningFailure(
                 await AssignToJournalDateAsync(id, journalDate, changes.TimezoneOffsetMinutes),
+                id,
                 journalDate);
             if (planningFailure is not null)
             {
@@ -794,7 +798,7 @@ public class TaskItemsController(
     /// Maps a failed planning result on the update path to an error response, or null on success.
     /// Callers hold an open transaction, so returning an error rolls the whole update back.
     /// </summary>
-    private ActionResult? MapPlanningFailure(AddTodoResult result, DateOnly journalDate) => result switch
+    private ActionResult? MapPlanningFailure(AddTodoResult result, int taskId, DateOnly journalDate) => result switch
     {
         AddTodoResult.Success => null,
         AddTodoResult.PastDayNotAllowed => PastDayPlanningError(journalDate),
@@ -806,6 +810,8 @@ public class TaskItemsController(
         AddTodoResult.TaskNotFound => NotFound(),
         // The task became Completed in this same request; a completed task is shown on its completion day, not planned.
         AddTodoResult.TaskCompleted => UnprocessableEntity(TaskRuleErrors.PlanCompletedNotAllowed(null, null, journalDate)),
+        // Backstop for a subtask added between the pre-check and the link.
+        AddTodoResult.HasOpenSubtasks => UnprocessableEntity(TaskRuleErrors.PlanHasOpenSubtasks(taskId, journalDate)),
         _ => throw new InvalidOperationException(
             $"Planning task on journal day {journalDate:yyyy-MM-dd} failed unexpectedly: {result}.")
     };
@@ -837,6 +843,13 @@ public class TaskItemsController(
         if (journalDate < today)
         {
             return (PastDayPlanningError(journalDate), null);
+        }
+
+        // A parent is planned through its subtasks. Checked last so a request that trips several rules keeps its
+        // earlier error.
+        if (await _repo.HasOpenSubtasksAsync(id))
+        {
+            return (UnprocessableEntity(TaskRuleErrors.PlanHasOpenSubtasks(id, journalDate)), null);
         }
 
         return (null, journalDate);

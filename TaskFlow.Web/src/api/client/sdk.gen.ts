@@ -205,7 +205,9 @@ export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options
  * exempt; `details.assignedDate` holds that day) and `TASK_PLAN_COMPLETED_NOT_ALLOWED`
  * (`journalDate` differs from the link of a task that has a `completedAt`), plus the parent, block,
  * start and past-day planning codes, and `TASK_PARENT_STATUS_DERIVED` (a parent with an open subtask cannot
- * have its status changed directly; re-sending the stored status is accepted).
+ * have its status changed directly; re-sending the stored status is accepted), and
+ * `TASK_PARENT_COMPLETED_NOT_ALLOWED` (a task whose resulting status is not Completed cannot be moved under a
+ * Completed parent; completing it in the same request, or re-sending its current parent, is accepted).
  */
 export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',
@@ -231,6 +233,9 @@ export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(op
  * * TASK_PARENT_STATUS_DERIVED: a parent with at least one open (not Completed) subtask cannot have its
  * status changed directly, including blocking and unblocking. Re-sending the stored status is accepted.
  * TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN takes precedence when completing. Nothing is saved.
+ * * TASK_PARENT_COMPLETED_NOT_ALLOWED: a task whose resulting status is not Completed cannot be moved
+ * under a Completed parent. Completing the task in the same request is accepted, and re-sending the current
+ * parentTaskItemId is accepted. Nothing is saved.
  * * Other codes: TASK_PARENT_SELF_NOT_ALLOWED, TASK_PARENT_NOT_FOUND,
  * TASK_PARENT_DEPTH_NOT_ALLOWED, TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN,
  * TASK_BLOCK_DRAFT_NOT_ALLOWED, TASK_BLOCK_COMPLETED_NOT_ALLOWED,

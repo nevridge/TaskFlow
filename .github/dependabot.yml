@@ -33,9 +33,12 @@ updates:
           - "vitest"
           - "@vitest/*"
 
-  # Backend dependencies (TaskFlow.sln at the root references both projects)
+  # Backend dependencies (TaskFlow.sln at the root references both projects;
+  # assistant/ has its own solution, which the root solution does not reference)
   - package-ecosystem: "nuget"
-    directory: "/"
+    directories:
+      - "/"
+      - "/assistant"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

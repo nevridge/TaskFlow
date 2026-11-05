@@ -3,6 +3,8 @@ name: Build and Deploy to Portainer
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'assistant/**'
 
 env:
   REGISTRY: ghcr.io

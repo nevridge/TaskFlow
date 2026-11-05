@@ -52,6 +52,21 @@ jobs:
         run: reportgenerator -reports:"**/TestResults/coverage.cobertura*.xml" -targetdir:"coveragereport" -reporttypes:"TextSummary;Html"
       - name: Display coverage summary
         run: cat coveragereport/Summary.txt
+  assistant:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: assistant
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet format TaskFlow.Assistant.sln --verify-no-changes
+      - run: dotnet build TaskFlow.Assistant.sln --configuration Release
+      - run: dotnet test --solution TaskFlow.Assistant.sln --configuration Release
   taskflow-web:
     runs-on: ubuntu-latest
     permissions:

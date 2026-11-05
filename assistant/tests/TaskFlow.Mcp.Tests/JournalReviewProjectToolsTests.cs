@@ -634,6 +634,7 @@ public class JournalToolsTests
 
         text.Should().Contain("= #1 Goal was already planned for 2026-10-09");
     }
+
     [Fact]
     public async Task GetJournal_FetchesTaskItemsOnce_WithNoPerParentRequests()
     {

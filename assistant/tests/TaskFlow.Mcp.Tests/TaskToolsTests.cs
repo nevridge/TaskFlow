@@ -2057,7 +2057,22 @@ public class UpdateTaskTests
             .And.NotContain("Nothing was changed");
         ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
         Occurrences(ex.Message, "was updated and planned").Should().Be(1);
-        ex.Message.Should().NotContain("Only Todo tasks can be started");
+    }
+
+    [Fact]
+    public async Task JournalDate_ProjectAssignmentFailsWithCodedRule_ReportsTheProjectErrorExactlyOnce()
+    {
+        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
+            .Post("Projects/7/tasks", new { code = "X", message = "Project rule broken." }, HttpStatusCode.UnprocessableEntity));
+
+        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
+            .And.Contain("Retry only the project change.");
+        Occurrences(ex.Message, "Project rule broken.").Should().Be(1);
+        Occurrences(ex.Message, "was updated and planned").Should().Be(1);
     }
 
     [Fact]

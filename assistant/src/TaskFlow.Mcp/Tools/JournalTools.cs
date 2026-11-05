@@ -59,7 +59,9 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
             }
 
             var rowIds = position.Keys.ToHashSet();
-            var subtaskRows = rows.Where(r => r.ParentTaskItemId is { }).ToLookup(r => r.ParentTaskItemId is { } pid ? pid : 0);
+            // TaskFlow allows one subtask level only (TASK_PARENT_DEPTH_NOT_ALLOWED, docs/API.md), so a row is never
+            // both a subtask and a parent; the rendering below relies on that.
+            var subtaskRows = rows.Where(r => r.ParentTaskItemId.HasValue).ToLookup(r => r.ParentTaskItemId.GetValueOrDefault());
 
             // A parent is context (not counted) while at least one of its subtask rows that day is open.
             var contextParentIds = subtaskRows.Where(g => g.Any(s => !s.IsDone)).Select(g => g.Key).ToHashSet();

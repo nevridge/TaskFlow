@@ -387,115 +387,253 @@ public class JournalToolsTests
         .Get("JournalEntries/3/notes", Array.Empty<object>())
         .Get("TaskItems", allTasks);
 
+    private static int LineOf(string[] lines, string startsWith) =>
+        Array.FindIndex(lines, l => l.StartsWith(startsWith, StringComparison.Ordinal));
+
     [Fact]
-    public async Task GetJournal_ConciseParentWithOpenSubtasks_ListsThemUnderTheParentWithoutCount()
+    public void TaskItemDto_Deserializes_ParentTitleAndOpenChildCount_WhenPresent()
     {
-        var handler = JournalWith(
-            [Fixtures.Task(5, "Ship", priority: "High", childTaskCount: 2)],
-            [Fixtures.Task(5, "Ship", priority: "High", childTaskCount: 2), Fixtures.Task(12, "Changelog", parentId: 5), Fixtures.Task(14, "Tag", status: "Blocked", parentId: 5, blockedReason: "CI")]);
+        var json = System.Text.Json.JsonSerializer.Serialize(Fixtures.Task(12, "Sub", parentId: 5, parentTitle: "Ship", openChildCount: 3), TaskFlowApiClient.Json);
+
+        var dto = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        dto.ParentTitle.Should().Be("Ship");
+        dto.OpenChildCount.Should().Be(3);
+    }
+
+    [Fact]
+    public void TaskItemDto_Deserializes_WithDefaults_WhenFieldsAreAbsent()
+    {
+        const string json = """{"id":1,"title":"T","status":"Todo","priority":"Low","childTaskCount":0,"moveCount":0,"daysTagged":0}""";
+
+        var dto = System.Text.Json.JsonSerializer.Deserialize<TaskItemDto>(json, TaskFlowApiClient.Json)!;
+
+        dto.ParentTitle.Should().BeNull();
+        dto.OpenChildCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetJournal_SubtaskWhoseParentIsNotARow_ShowsContextHeaderAndCountsOnlyTheSubtask()
+    {
+        var handler = JournalWith([Fixtures.Task(12, "Changelog", parentId: 5, parentTitle: "Ship")], []);
 
         var text = await Tools(handler).GetJournal();
 
-        text.Should().Contain("#5 [High/Todo] Ship").And.Contain("    Open subtasks (2):")
-            .And.Contain("      - #12 [Todo] Changelog")
-            .And.Contain("      - #14 [Blocked] Tag")
-            .And.NotContain("subtask(s)").And.NotContain("CI");
+        var lines = text.Split('\n');
+        text.Should().Contain("Planned tasks (1):");
+        var header = LineOf(lines, "  Context: #5 Ship (not counted)");
+        header.Should().BeGreaterThan(0);
+        lines[header + 1].Should().StartWith("    #12 [Low/Todo] Changelog");
     }
 
     [Fact]
-    public async Task GetJournal_DetailedParentWithOpenSubtasks_ListsThemAndDropsTheCount()
+    public async Task GetJournal_ParentRowWithOpenSubtaskRow_IsAnUncountedContextLine_AndNothingIsListedTwice()
     {
-        var handler = JournalWith(
-            [Fixtures.Task(5, "Ship", childTaskCount: 1)],
-            [Fixtures.Task(5, "Ship", childTaskCount: 1), Fixtures.Task(12, "Changelog", parentId: 5)]);
-
-        var text = await Tools(handler).GetJournal(responseFormat: "detailed");
-
-        text.Should().Contain("Open subtasks (1):").And.Contain("      - #12 [Todo] Changelog").And.NotContain("subtask(s)");
-    }
-
-    [Fact]
-    public async Task GetJournal_ParentWithNoSubtasks_HasNoSubtaskSection()
-    {
-        var handler = JournalWith([Fixtures.Task(5, "Ship")], [Fixtures.Task(5, "Ship")]);
+        var parent = Fixtures.Task(5, "Ship", priority: "High", childTaskCount: 1, openChildCount: 1);
+        var sub = Fixtures.Task(14, "Tag", parentId: 5, parentTitle: "Ship", priority: "Medium");
+        var handler = JournalWith([parent, sub], []);
 
         var text = await Tools(handler).GetJournal();
 
-        text.Should().NotContain("Open subtasks").And.NotContain("subtask(s)");
+        var lines = text.Split('\n');
+        text.Should().Contain("Planned tasks (1):");
+        lines[LineOf(lines, "  Context: #5 Ship (not counted)") + 1].Should().StartWith("    #14 [Medium/Todo] Tag");
+        text.Should().NotContain("#5 [High");
+        lines.Count(l => l.Contains("#14", StringComparison.Ordinal)).Should().Be(1);
+        lines.Count(l => l.Contains("#5 ", StringComparison.Ordinal)).Should().Be(1);
     }
 
     [Fact]
-    public async Task GetJournal_ParentWithOnlyClosedSubtasks_HasNoSectionAndNoCount()
+    public async Task GetJournal_CompletedOnlySubtaskUnderANonRowParent_IsANormalCountedRowWithNoHeader()
     {
-        var handler = JournalWith(
-            [Fixtures.Task(5, "Ship", childTaskCount: 2)],
-            [Fixtures.Task(5, "Ship", childTaskCount: 2), Fixtures.Task(12, "Done", status: "Completed", parentId: 5), Fixtures.Task(13, "Done2", status: "Completed", parentId: 5)]);
+        var handler = JournalWith([Fixtures.Task(12, "Done", status: "Completed", parentId: 5, parentTitle: "Ship")], []);
 
-        var text = await Tools(handler).GetJournal(responseFormat: "detailed");
+        var text = await Tools(handler).GetJournal();
 
-        text.Should().NotContain("Open subtasks").And.NotContain("subtask(s)").And.NotContain("Done");
+        text.Should().Contain("Planned tasks (1):").And.Contain("  #12 [Low/Completed] Done").And.NotContain("Context");
     }
 
     [Fact]
-    public async Task GetJournal_MixedOpenAndClosedSubtasks_ShowsOnlyOpenOrderedByUrgency()
+    public async Task GetJournal_CompletedOnlySubtaskUnderARowParent_NestsUnderANormalCountedParent()
     {
         var handler = JournalWith(
-            [Fixtures.Task(5, "Ship")],
+            [Fixtures.Task(5, "Ship", childTaskCount: 1), Fixtures.Task(12, "Done", status: "Completed", parentId: 5, parentTitle: "Ship")],
+            []);
+
+        var text = await Tools(handler).GetJournal();
+
+        var lines = text.Split('\n');
+        text.Should().Contain("Planned tasks (2):").And.NotContain("Context");
+        lines[LineOf(lines, "  #5 [Low/Todo] Ship") + 1].Should().StartWith("    #12 [Low/Completed] Done");
+    }
+
+    [Fact]
+    public async Task GetJournal_SeveralSubtasksOfOneNonRowParent_ShareOneHeaderPlacedAtTheMostUrgentSubtask()
+    {
+        var handler = JournalWith(
             [
-                Fixtures.Task(21, "Low late", parentId: 5, priority: "Low"),
-                Fixtures.Task(22, "Closed", status: "Completed", parentId: 5, priority: "High"),
-                Fixtures.Task(23, "High", parentId: 5, priority: "High", due: "2026-11-02"),
-                Fixtures.Task(24, "High sooner", parentId: 5, priority: "High", due: "2026-11-01"),
-                Fixtures.Task(5, "Ship"),
-            ]);
+                Fixtures.Task(21, "Low late", parentId: 5, parentTitle: "Ship"),
+                Fixtures.Task(23, "High sub", parentId: 5, parentTitle: "Ship", priority: "High", due: "2026-11-02"),
+                Fixtures.Task(24, "Medium", priority: "Medium"),
+                Fixtures.Task(30, "Urgent", priority: "High"),
+            ],
+            []);
 
         var text = await Tools(handler).GetJournal();
 
-        text.Should().Contain("Open subtasks (3):").And.NotContain("Closed");
-        text.IndexOf("#24 [Todo]", StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("#23 [Todo]", StringComparison.Ordinal));
-        text.IndexOf("#23 [Todo]", StringComparison.Ordinal).Should().BeLessThan(text.IndexOf("#21 [Todo]", StringComparison.Ordinal));
+        var lines = text.Split('\n');
+        text.Should().Contain("Planned tasks (4):");
+        lines.Count(l => l.StartsWith("  Context:", StringComparison.Ordinal)).Should().Be(1);
+        var order = new[] { "  Context: #5 Ship", "    #23 ", "    #21 ", "  #30 ", "  #24 " }.Select(p => LineOf(lines, p)).ToArray();
+        order.Should().OnlyContain(i => i > 0).And.BeInAscendingOrder();
     }
 
     [Fact]
-    public async Task GetJournal_SubtaskPlannedSameDay_AppearsTopLevelAndNestedWithMarker()
+    public async Task GetJournal_MixedDay_CountEqualsTheCountedLines()
     {
-        var parent = Fixtures.Task(5, "Ship", priority: "High");
-        var sub = Fixtures.Task(14, "Tag", parentId: 5, priority: "Medium");
-        var handler = JournalWith([parent, sub], [parent, sub]);
+        var handler = JournalWith(
+            [
+                Fixtures.Task(5, "Ship", priority: "High", openChildCount: 1),
+                Fixtures.Task(14, "Tag", parentId: 5, parentTitle: "Ship"),
+                Fixtures.Task(15, "Other sub", parentId: 8, parentTitle: "Other"),
+                Fixtures.Task(16, "Done sub", status: "Completed", parentId: 9, parentTitle: "Third"),
+                Fixtures.Task(20, "Plain"),
+            ],
+            []);
 
         var text = await Tools(handler).GetJournal();
 
-        text.Should().Contain("Planned tasks (2):")
-            .And.Contain("  #14 [Medium/Todo] Tag | subtask of #5")
-            .And.Contain("      - #14 [Todo] Tag | planned today");
+        var taskLines = text.Split('\n').Count(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\s+#\d+ \["));
+        text.Should().Contain("Planned tasks (4):").And.Contain("  Context: #5 Ship (not counted)").And.Contain("  Context: #8 Other (not counted)");
+        taskLines.Should().Be(4);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public async Task GetJournal_BlankParentTitle_FallsBackToTheParentId(string? parentTitle)
+    {
+        var handler = JournalWith([Fixtures.Task(12, "Changelog", parentId: 5, parentTitle: parentTitle)], []);
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("  Context: #5 (not counted)");
     }
 
     [Fact]
-    public async Task GetJournal_SubtaskPlannedOnANonTodayDay_UsesPlannedThisDayMarker()
+    public async Task GetJournal_ParentWithOpenChildrenButNoSubtaskRowsThatDay_IsANormalRow()
     {
-        var parent = Fixtures.Task(5, "Ship");
-        var sub = Fixtures.Task(14, "Tag", parentId: 5);
-        var handler = JournalWith([parent, sub], [parent, sub], "2026-10-10");
-
-        var text = await Tools(handler).GetJournal("tomorrow");
-
-        text.Should().Contain("      - #14 [Todo] Tag | planned this day").And.NotContain("planned today");
-    }
-
-    [Fact]
-    public async Task GetJournal_BlockedSubtask_ShowsReasonInDetailedOnly()
-    {
-        var parent = Fixtures.Task(5, "Ship");
-        var sub = Fixtures.Task(14, "Tag", status: "Blocked", parentId: 5, blockedReason: "waiting on CI", blockedAt: "2026-10-07T10:00:00Z");
-        var handler = JournalWith([parent], [parent, sub]);
+        var handler = JournalWith([Fixtures.Task(5, "Ship", childTaskCount: 2, openChildCount: 2)], []);
 
         var concise = await Tools(handler).GetJournal();
         var detailed = await Tools(handler).GetJournal(responseFormat: "detailed");
 
-        concise.Should().Contain("      - #14 [Blocked] Tag").And.NotContain("waiting on CI");
-        detailed.Should().Contain("      - #14 [Blocked] Tag | blocked: waiting on CI (2d)");
+        concise.Should().Contain("Planned tasks (1):").And.Contain("  #5 [Low/Todo] Ship").And.NotContain("Context");
+        detailed.Should().Contain("2 subtask(s)");
     }
 
+    [Fact]
+    public async Task GetJournal_TaskItemsFails_PlannedBlockIsUnaffected_AndOnlyTheLogLinkNoteIsAdded()
+    {
+        var logs = new[] { LinkedLog(1, 12) };
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", null, logs) })
+            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(12, "Changelog", parentId: 5, parentTitle: "Ship") })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Planned tasks (1):").And.Contain("  Context: #5 Ship (not counted)").And.Contain("    #12 [Low/Todo] Changelog")
+            .And.Contain("Note: task details unavailable for linked log lines (")
+            .And.NotContain("open subtasks could not be loaded");
+        text.Split('\n').Count(l => l.StartsWith("Note:", StringComparison.Ordinal)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetJournal_TaskItemsTimesOut_PlannedBlockIsUnaffected_AndThereIsNoNoteWithoutLinkedLogs()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Fail(HttpMethod.Get, "TaskItems", new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Planned tasks (1):").And.Contain("#5").And.NotContain("Note:");
+    }
+
+    [Fact]
+    public async Task GetJournal_NoRows_SaysNone()
+    {
+        var handler = JournalWith([], []);
+
+        var text = await Tools(handler).GetJournal();
+
+        text.Should().Contain("Planned tasks: none");
+    }
+
+    [Fact]
+    public async Task SetJournalTodos_MixedBatch_ShowsGuidanceOnTheRefusedTask_AndAddsTheRest()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Goal"), Fixtures.Task(2, "Plain") })
+            .Post("JournalEntries/3/todos", new { code = "TASK_PLAN_HAS_OPEN_SUBTASKS", message = "A task with open subtasks can't be planned on a day. Plan its subtasks instead." }, HttpStatusCode.UnprocessableEntity)
+            .Post("JournalEntries/3/todos", status: HttpStatusCode.NoContent);
+
+        var text = await Tools(handler).SetJournalTodos(add: [1, 2]);
+
+        text.Should().Contain("x #1 Goal: A task with open subtasks can't be planned on a day. Plan its subtasks instead.")
+            .And.Contain("[TASK_PLAN_HAS_OPEN_SUBTASKS]")
+            .And.Contain("Plan its subtasks instead, using update_task or update_tasks with journalDate")
+            .And.Contain("+ #2 Plain planned for 2026-10-09");
+    }
+
+    [Fact]
+    public async Task SetJournalTodos_EveryAddRefused_ThrowsWithGuidanceOnEachLine()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Goal"), Fixtures.Task(2, "Done") })
+            .Post("JournalEntries/3/todos", new { code = "TASK_PLAN_HAS_OPEN_SUBTASKS", message = "Has open subtasks." }, HttpStatusCode.UnprocessableEntity)
+            .Post("JournalEntries/3/todos", new { code = "TASK_PLAN_COMPLETED_NOT_ALLOWED", message = "Completed." }, HttpStatusCode.UnprocessableEntity);
+
+        var act = () => Tools(handler).SetJournalTodos(add: [1, 2]);
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Contain("x #1 Goal: Has open subtasks.").And.Contain("Plan its subtasks instead")
+            .And.Contain("x #2 Done: Completed.").And.Contain("A completed task cannot be planned onto a different day");
+    }
+
+    [Fact]
+    public async Task SetJournalTodos_CodedUnprocessableOnRemove_UsesGuidance()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Goal"), Fixtures.Task(2, "Plain") })
+            .On(HttpMethod.Delete, "JournalEntries/3/todos/1", new { code = "TASK_PLAN_COMPLETED_NOT_ALLOWED", message = "Completed." }, HttpStatusCode.UnprocessableEntity)
+            .On(HttpMethod.Delete, "JournalEntries/3/todos/2", status: HttpStatusCode.NoContent);
+
+        var text = await Tools(handler).SetJournalTodos(remove: [1, 2]);
+
+        text.Should().Contain("x #1 Goal: Completed.").And.Contain("A completed task cannot be planned onto a different day")
+            .And.Contain("- #2 Plain removed from 2026-10-09");
+    }
+
+    [Fact]
+    public async Task SetJournalTodos_ConflictStillReportsAlreadyPlanned()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("TaskItems", new[] { Fixtures.Task(1, "Goal") })
+            .Post("JournalEntries/3/todos", new { message = "already linked" }, HttpStatusCode.Conflict);
+
+        var text = await Tools(handler).SetJournalTodos(add: [1]);
+
+        text.Should().Contain("= #1 Goal was already planned for 2026-10-09");
+    }
     [Fact]
     public async Task GetJournal_FetchesTaskItemsOnce_WithNoPerParentRequests()
     {
@@ -509,85 +647,6 @@ public class JournalToolsTests
         handler.Sent(HttpMethod.Get, "JournalEntries/3/todos").Should().ContainSingle();
         handler.Sent(HttpMethod.Get, "JournalEntries/3/notes").Should().ContainSingle();
         handler.Requests.Should().OnlyContain(r => r.Method == HttpMethod.Get && !r.Path.StartsWith("TaskItems/", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task GetJournal_SubtaskOfAnUnplannedParent_IsNotNested()
-    {
-        var handler = JournalWith(
-            [Fixtures.Task(5, "Planned")],
-            [Fixtures.Task(5, "Planned"), Fixtures.Task(99, "Other parent"), Fixtures.Task(12, "Orphan sub", parentId: 99)]);
-
-        var text = await Tools(handler).GetJournal();
-
-        text.Should().NotContain("Open subtasks").And.NotContain("Orphan sub");
-    }
-
-    [Fact]
-    public async Task GetJournal_TaskItemsFails_ReturnsJournalWithoutSubtasksAndAddsNote()
-    {
-        var parent = Fixtures.Task(5, "Ship", childTaskCount: 2);
-        var handler = new StubHandler()
-            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
-            .Get("JournalEntries/3/todos", new[] { parent, Fixtures.Task(6, "Other") })
-            .Get("JournalEntries/3/notes", Array.Empty<object>())
-            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
-
-        var concise = await Tools(handler).GetJournal();
-        var detailed = await Tools(handler).GetJournal(responseFormat: "detailed");
-
-        concise.Should().Contain("Planned tasks (2):")
-            .And.Contain("#5").And.Contain("#6")
-            .And.Contain("Note: open subtasks could not be loaded (")
-            .And.Contain("); call list_tasks to see them.")
-            .And.NotContain("Open subtasks");
-        concise.Split('\n').Count(l => l.StartsWith("Note:", StringComparison.Ordinal)).Should().Be(1);
-        detailed.Should().Contain("2 subtask(s)").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
-    }
-
-    [Fact]
-    public async Task GetJournal_TaskItemsTimesOut_ReturnsJournalWithoutSubtasksAndAddsNote()
-    {
-        var handler = new StubHandler()
-            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
-            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
-            .Get("JournalEntries/3/notes", Array.Empty<object>())
-            .Fail(HttpMethod.Get, "TaskItems", new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout."));
-
-        var text = await Tools(handler).GetJournal();
-
-        text.Should().Contain("#5").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
-    }
-
-    [Fact]
-    public async Task GetJournal_TaskItemsBodyUnreadable_ReturnsJournalWithoutSubtasksAndAddsNote()
-    {
-        var handler = new StubHandler()
-            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
-            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
-            .Get("JournalEntries/3/notes", Array.Empty<object>())
-            .Get("TaskItems", "not json");
-
-        var text = await Tools(handler).GetJournal();
-
-        text.Should().Contain("#5").And.Contain("Note: open subtasks could not be loaded (").And.NotContain("Open subtasks");
-    }
-
-    [Fact]
-    public async Task GetJournal_TaskItemsFails_NoteSitsRightAfterPlannedBlock()
-    {
-        var handler = new StubHandler()
-            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
-            .Get("JournalEntries/3/todos", new[] { Fixtures.Task(5, "Ship") })
-            .Get("JournalEntries/3/notes", new[] { new { id = 1, content = "keep me", createdAt = "2026-10-09T15:00:00Z" } })
-            .On(HttpMethod.Get, "TaskItems", status: HttpStatusCode.InternalServerError);
-
-        var text = await Tools(handler).GetJournal();
-
-        var lines = text.Split('\n');
-        var planned = Array.FindIndex(lines, l => l.StartsWith("Planned tasks", StringComparison.Ordinal));
-        lines[planned + 2].Should().StartWith("Note: open subtasks could not be loaded");
-        text.Should().Contain("keep me");
     }
 
     [Fact]
@@ -628,18 +687,6 @@ public class JournalToolsTests
         var act = () => Tools(handler).GetJournal();
 
         await act.Should().ThrowAsync<McpException>();
-    }
-
-    [Fact]
-    public async Task GetJournal_ChildCountDisagreesWithFoundChildren_RendersTheFoundList()
-    {
-        var handler = JournalWith(
-            [Fixtures.Task(5, "Ship", childTaskCount: 3), Fixtures.Task(6, "Other", childTaskCount: 0)],
-            [Fixtures.Task(5, "Ship", childTaskCount: 3), Fixtures.Task(6, "Other"), Fixtures.Task(12, "One", parentId: 5), Fixtures.Task(13, "A", parentId: 6), Fixtures.Task(14, "B", parentId: 6)]);
-
-        var text = await Tools(handler).GetJournal(responseFormat: "detailed");
-
-        text.Should().Contain("Open subtasks (1):").And.Contain("Open subtasks (2):").And.NotContain("subtask(s)");
     }
 
     [Fact]

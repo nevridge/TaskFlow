@@ -18,8 +18,8 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
     [Description(
         "Shows the daily journal for a date: summary, the tasks planned for that day, log entries and notes. Defaults to today. "
         + "Creates the day's journal entry if it does not exist yet (the journal always has one entry per day), so calling it for today is safe. Use it to start planning a day. "
-        + "Each planned task lists its open subtasks (id, title, status) beneath it; completed subtasks are hidden. "
-        + "Subtasks are listed only under planned parents; use list_tasks to find subtasks of tasks that are not planned.")]
+        + "Lists the day's rows. A parent with an open subtask row that day appears as a 'Context' line and is not counted as a planned task; a subtask whose parent is not planned that day appears under a context line built from the parent's title. "
+        + "Subtasks that are not planned that day are not shown; use list_tasks to find them.")]
     public Task<string> GetJournal(
         [Description("yyyy-MM-dd, today, tomorrow or yesterday. Default today.")] string? date = null,
         [Description("concise (default) or detailed (adds descriptions and journal info to planned tasks).")] string responseFormat = "concise",
@@ -51,49 +51,73 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 }
             }
 
-            var todos = Formatting.OrderByUrgency(await todosTask).ToList();
-            sb.AppendLine(todos.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({todos.Count}):");
-            if (todos.Count > 0)
+            var rows = Formatting.OrderByUrgency(await todosTask).ToList();
+            var position = new Dictionary<int, int>();
+            for (var i = 0; i < rows.Count; i++)
+            {
+                position.TryAdd(rows[i].Id, i);
+            }
+
+            var rowIds = position.Keys.ToHashSet();
+            var subtaskRows = rows.Where(r => r.ParentTaskItemId is { }).ToLookup(r => r.ParentTaskItemId is { } pid ? pid : 0);
+
+            // A parent is context (not counted) while at least one of its subtask rows that day is open.
+            var contextParentIds = subtaskRows.Where(g => g.Any(s => !s.IsDone)).Select(g => g.Key).ToHashSet();
+            var contextRowCount = contextParentIds.Count(rowIds.Contains);
+            var plannedCount = rows.Count - contextRowCount;
+
+            sb.AppendLine(rows.Count == 0 ? "Planned tasks: none" : $"Planned tasks ({plannedCount}):");
+            if (rows.Count > 0)
             {
                 var nowUtc = time.GetUtcNow();
-                var plannedIds = todos.Select(t => t.Id).ToHashSet();
-                var subtasks = allTasks is null ? null : Formatting.OpenSubtasksByParent(allTasks);
-                var marker = day == today ? " | planned today" : " | planned this day";
-                foreach (var task in todos)
+
+                // Subtask rows with a parent that is a row or a context header render nested; everything else is top level.
+                bool IsNested(TaskItemDto r) => r.ParentTaskItemId is { } pid && (rowIds.Contains(pid) || contextParentIds.Contains(pid));
+
+                string Line(TaskItemDto t, bool showChildCount) => Formatting.Task(t, today, detailed, nowUtc, showChildCount);
+
+                var units = new List<(int Position, Action Render)>();
+                foreach (var row in rows)
                 {
-                    sb.AppendLine("  " + Formatting.Task(task, today, detailed, nowUtc, showChildCount: subtasks is null));
-                    if (subtasks is null)
+                    if (IsNested(row) || contextParentIds.Contains(row.Id))
                     {
                         continue;
                     }
 
-                    var open = Formatting.OrderByUrgency(subtasks[task.Id]).ToList();
-                    if (open.Count == 0)
+                    var captured = row;
+                    units.Add((position[row.Id], () =>
                     {
-                        continue;
-                    }
-
-                    sb.AppendLine($"    Open subtasks ({open.Count}):");
-                    foreach (var sub in open)
-                    {
-                        sb.Append($"      - #{sub.Id} [{sub.Status}] {sub.Title}");
-                        if (detailed && sub.IsBlocked)
+                        var nested = subtaskRows[captured.Id].ToList();
+                        sb.AppendLine("  " + Line(captured, captured.OpenChildCount > 0 && nested.Count == 0));
+                        foreach (var sub in nested)
                         {
-                            sb.Append(" | ").Append(Formatting.BlockedLabel(sub, nowUtc));
+                            sb.AppendLine("    " + Line(sub, sub.OpenChildCount > 0));
                         }
-
-                        if (plannedIds.Contains(sub.Id))
-                        {
-                            sb.Append(marker);
-                        }
-
-                        sb.AppendLine();
                     }
+                    ));
                 }
 
-                if (failure is not null)
+                foreach (var parentId in contextParentIds)
                 {
-                    sb.AppendLine($"Note: open subtasks could not be loaded ({failure}); call list_tasks to see them.");
+                    var subs = subtaskRows[parentId].ToList();
+                    var first = subs.Min(s => position[s.Id]);
+                    units.Add((first, () =>
+                    {
+                        var parentRow = rows.FirstOrDefault(r => r.Id == parentId);
+                        var title = parentRow?.Title ?? subs.Select(s => s.ParentTitle).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+                        var label = string.IsNullOrWhiteSpace(title) ? $"#{parentId}" : $"#{parentId} {title.Trim()}";
+                        sb.AppendLine($"  Context: {label} (not counted)");
+                        foreach (var sub in subs)
+                        {
+                            sb.AppendLine("    " + Line(sub, sub.OpenChildCount > 0));
+                        }
+                    }
+                    ));
+                }
+
+                foreach (var unit in units.OrderBy(u => u.Position))
+                {
+                    unit.Render();
                 }
             }
 
@@ -128,7 +152,8 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "set_journal_todos")]
     [Description(
         "Plans a day: adds existing tasks to a day's journal and/or removes them. Use after the user confirms what to focus on. "
-        + "Tasks are linked, not copied, and the API rejects planning onto a past day. Removing a task also removes its subtasks from that day.")]
+        + "Tasks are linked, not copied, and the API rejects planning onto a past day. "
+        + "A task with open subtasks cannot be planned (Blocked counts as open): plan its subtasks instead. A completed task cannot be planned onto a different day.")]
     public Task<string> SetJournalTodos(
         [Description("Task ids to plan for the day.")] IReadOnlyList<int>? add = null,
         [Description("Task ids to remove from the day.")] IReadOnlyList<int>? remove = null,
@@ -171,7 +196,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 }
                 catch (TaskFlowApiException ex)
                 {
-                    results.Add($"x {Label(id)}: {ex.Message}");
+                    results.Add($"x {Label(id)}: {ToolGuard.WithGuidance(ex)}");
                 }
             }
 
@@ -185,7 +210,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 }
                 catch (TaskFlowApiException ex)
                 {
-                    results.Add($"x {Label(id)}: {ex.Message}");
+                    results.Add($"x {Label(id)}: {ToolGuard.WithGuidance(ex)}");
                 }
             }
 

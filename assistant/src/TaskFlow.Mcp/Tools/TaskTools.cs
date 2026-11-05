@@ -51,7 +51,7 @@ internal static class UpdateFieldText
     public const string Complete = "true to mark complete, false to reopen.";
     public const string JournalDate = "Plans the task on this day: today, tomorrow or yyyy-MM-dd, and the day must be today or later. "
         + "Omit to leave the planned day unchanged (empty or whitespace counts as omitted). Planning cannot be cleared via update; use set_journal_todos. "
-        + "Not the deadline (that is dueDate). Planning a parent task does not plan its subtasks.";
+        + "Not the deadline (that is dueDate). A task with open subtasks cannot be planned: plan its subtasks instead.";
     public const string BlockedReason = "Reason the task is blocked (max 200 characters). Only valid with status=blocked on a Todo or InProgress task or a task that is already Blocked. Pass an empty string to clear the reason (the task stays Blocked). Omit to keep the stored reason.";
 }
 
@@ -293,6 +293,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         "Creates one or more tasks (up to 25). Use for a single task or to turn notes into many tasks. Each task needs a title; priority defaults to low and status to todo. "
         + "Tasks that fail (for example an unknown project) are reported individually and do not stop the others. Do not guess due dates or projects: leave them out unless the user said so. "
         + "Tasks cannot be created as blocked: create the task, then call update_task with status=blocked. "
+        + "An open task cannot be created under a Completed parent (parentTaskId): reopen the parent first or leave the parent out. "
         + "Tasks are still created when a possible duplicate (an existing open or done task with the same title, ignoring case and extra spaces) is found; the line is flagged `!`. "
         + "The duplicate check is best-effort: if existing tasks cannot be read, tasks are still created and the report says the check was skipped. "
         + "Tell the user; do not delete anything without confirmation.")]
@@ -390,7 +391,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 }
                 catch (Exception ex) when (ex is McpException or TaskFlowApiException)
                 {
-                    failed.Add($"x \"{item.Title}\": {ex.Message}");
+                    failed.Add($"x \"{item.Title}\": {(ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message)}");
                 }
             }
 
@@ -413,6 +414,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. If assigning the project fails after the fields were saved, the error says so; retry only the project change. "
         + "dueDate is the deadline (yyyy-MM-dd, today/tomorrow, or 'none' to clear) and does not plan the task. "
         + "journalDate plans the task on a day (today or later); it is not the deadline. Planning is not removed via update (use set_journal_todos). Completed tasks planned on a past day cannot be reopened (the API says so). "
+        + "A task with open subtasks (Blocked counts as open) cannot get a journalDate: plan its subtasks instead. A parent's status follows its subtasks, so change the subtasks, not the parent. A completed task cannot be planned onto a different day. "
         + "Start a Todo task with status=inprogress. Only Todo or InProgress tasks can be blocked (use status=blocked with an optional blockedReason). "
         + "status=todo on a Blocked task unblocks it and restores its previous status (Todo or InProgress); on an InProgress task it moves it back to Todo. Completing a Blocked task clears the block.")]
     public Task<string> UpdateTask(
@@ -443,6 +445,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         + "Each item needs the task id and only the fields to change, exactly as in update_task (status, priority, dueDate, journalDate, project, complete, blockedReason...); fields you leave out keep their value. "
         + "Items are independent: a failure is reported on its own 'x #id' line and does not stop the others. Retry only the 'x' items. An 'x' line that says fields were saved means only the project change remains; retry that item with just id and project. "
         + "A retry of a past-day journalDate failure should change or drop that item's journalDate. "
+        + "A task with open subtasks (Blocked counts as open) cannot get a journalDate: plan its subtasks instead. A parent's status follows its subtasks, so change the subtasks, not the parent. A completed task cannot be planned onto a different day. "
         + "If the API cannot be reached, the remaining items are marked 'not attempted'. A task id may appear only once per call.")]
     public Task<string> UpdateTasks(
         [Description("The task updates. Each item: id (required) plus the fields to change.")] IReadOnlyList<TaskUpdate> tasks,

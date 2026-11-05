@@ -431,6 +431,10 @@ public class ToolGuardTests
     [InlineData("TASK_START_NOT_ALLOWED", "reopen it first (complete=false)")]
     [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "or omit journalDate")]
     [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "journalDate must be today or later")]
+    [InlineData("TASK_PLAN_HAS_OPEN_SUBTASKS", "Plan its subtasks instead")]
+    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "Reopen the parent first")]
+    [InlineData("TASK_PARENT_STATUS_DERIVED", "Change the status of its subtasks")]
+    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "Omit journalDate")]
     public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
     {
         var api = Fixtures.Client(new StubHandler());
@@ -440,6 +444,28 @@ public class ToolGuardTests
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().StartWith($"Nope. [{code}]\n").And.Contain(expectedGuidance);
         message.Split('\n').Should().HaveCount(2);
+    }
+
+    [Theory]
+    [InlineData("TASK_PLAN_HAS_OPEN_SUBTASKS", "update_task")]
+    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "update_task")]
+    [InlineData("TASK_PARENT_STATUS_DERIVED", "update_tasks")]
+    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "journalDate")]
+    public void WithGuidance_ForTheNewCodes_NamesAToolOrParameter_AndNoSubtaskId(string code, string expectedName)
+    {
+        var ex = new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, code, $"Nope. [{code}]");
+
+        var guidance = ToolGuard.WithGuidance(ex).Split('\n')[1];
+
+        guidance.Should().Contain(expectedName).And.NotContain("#").And.NotMatchRegex(@"\d+");
+    }
+
+    [Fact]
+    public void WithGuidance_ForACodelessUnprocessableError_ReturnsTheRawMessage()
+    {
+        var ex = new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, null, "Plain failure");
+
+        ToolGuard.WithGuidance(ex).Should().Be("Plain failure");
     }
 
     [Fact]
@@ -567,6 +593,11 @@ public class ToolSurfaceTests
 
         updateTask.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("journalDate").And.Contain("dueDate");
         updateTasks.GetCustomAttribute<DescriptionAttribute>()!.Description.Should().Contain("journalDate");
+        foreach (var method in new[] { updateTask, updateTasks })
+        {
+            method.GetCustomAttribute<DescriptionAttribute>()!.Description
+                .Should().Contain("open subtasks").And.Contain("Blocked counts as open").And.Contain("follows its subtasks").And.Contain("completed task cannot be planned");
+        }
 
         var singleSchema = McpServerTool.Create(updateTask, new TaskTools(Fixtures.Client(new StubHandler()), Fixtures.Time())).ProtocolTool.InputSchema;
         singleSchema.GetProperty("properties").TryGetProperty("journalDate", out _).Should().BeTrue();
@@ -576,6 +607,19 @@ public class ToolSurfaceTests
         var item = batchSchema.GetProperty("properties").GetProperty("tasks").GetProperty("items");
         item.GetProperty("properties").TryGetProperty("journalDate", out _).Should().BeTrue();
         RequiredNames(item).Should().NotContain("journalDate");
+    }
+
+    [Fact]
+    public void JournalAndCreateTools_DescribeTheSubtaskPlanningRules()
+    {
+        string Description(string name) => Tools().Single(t => t.Attribute.Name == name).Method.GetCustomAttribute<DescriptionAttribute>()!.Description;
+
+        Description("get_journal").Should().Contain("Context").And.Contain("not counted").And.NotContain("completed subtasks are hidden");
+        Description("set_journal_todos").Should().Contain("open subtasks cannot be planned").And.Contain("completed task cannot be planned")
+            .And.NotContain("also removes its subtasks");
+        Description("create_tasks").Should().Contain("Completed parent").And.NotContain("open subtasks");
+        typeof(TaskUpdate).GetProperty("JournalDate")!.GetCustomAttribute<DescriptionAttribute>()!.Description
+            .Should().Contain("open subtasks cannot be planned").And.NotContain("does not plan its subtasks");
     }
 
     [Fact]

@@ -174,7 +174,9 @@ internal static class Fixtures
         string? blockedAt = null,
         string? previousStatus = null,
         int childTaskCount = 0,
-        string? startedAt = null) => new
+        string? startedAt = null,
+        string? parentTitle = null,
+        int openChildCount = 0) => new
         {
             id,
             title,
@@ -194,6 +196,8 @@ internal static class Fixtures
             blockedAt,
             previousStatus,
             startedAt,
+            parentTitle,
+            openChildCount,
         };
 
     public static object Project(int id, string name, bool archived = false, int open = 0, int done = 0, string? description = null, int blockedCount = 0) => new

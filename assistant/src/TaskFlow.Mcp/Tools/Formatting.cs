@@ -198,11 +198,6 @@ internal static class Formatting
             .ThenBy(t => t.DueDate ?? DateOnly.MaxValue)
             .ThenBy(t => t.Id);
 
-    /// <summary>Open (not done) subtasks grouped by parent id. Group order follows the source; order each group at render time.</summary>
-    public static ILookup<int, TaskItemDto> OpenSubtasksByParent(IEnumerable<TaskItemDto> tasks) =>
-        tasks.Where(t => !t.IsDone && t.ParentTaskItemId != null)
-            .ToLookup(t => t.ParentTaskItemId!.Value);
-
     public static IOrderedEnumerable<TaskItemDto> OrderByDue(IEnumerable<TaskItemDto> tasks) =>
         tasks.OrderBy(t => t.DueDate ?? DateOnly.MaxValue)
             .ThenBy(t => PriorityRank(t.Priority))

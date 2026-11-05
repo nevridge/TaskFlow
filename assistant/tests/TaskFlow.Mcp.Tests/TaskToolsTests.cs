@@ -761,6 +761,20 @@ public class CreateTasksTests
     }
 
     [Fact]
+    public async Task ParentCompletedRefusal_ShowsGuidanceOnThatItem_AndOthersContinue()
+    {
+        var handler = new StubHandler()
+            .Post("TaskItems", new { code = "TASK_PARENT_COMPLETED_NOT_ALLOWED", message = "Parent is completed." }, HttpStatusCode.UnprocessableEntity)
+            .Post("TaskItems", Fixtures.Task(11, "Fine"), HttpStatusCode.Created);
+        var (tools, _) = Setup(handler);
+
+        var text = await tools.CreateTasks([new NewTask { Title = "Child", ParentTaskId = 3 }, new NewTask { Title = "Fine" }]);
+
+        text.Should().StartWith("Created 1 of 2 task(s).").And.Contain("+ #11 ")
+            .And.Contain("x \"Child\": Parent is completed. [TASK_PARENT_COMPLETED_NOT_ALLOWED]\nAn open task cannot sit under a Completed parent");
+    }
+
+    [Fact]
     public async Task InvalidStatus_IsReportedPerItem_WithAllowedValues_AndNoPost()
     {
         var (tools, handler) = Setup();
@@ -1882,14 +1896,55 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task JournalDate_OnAParent_MakesOnePut_AndNoSubtaskRequests()
+    public async Task JournalDate_OnAParentWithOpenSubtasks_ThrowsWithGuidance_AndMakesNoFurtherRequests()
     {
-        var (tools, handler) = Setup(Plan(null, children: 2), Plan("2026-10-10", children: 2));
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null, children: 2))
+            .Put("TaskItems/5", new { code = "TASK_PLAN_HAS_OPEN_SUBTASKS", message = "A task with open subtasks can't be planned on a day. Plan its subtasks instead." }, HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
-        await tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
+        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
 
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().StartWith("A task with open subtasks can't be planned on a day. Plan its subtasks instead. [TASK_PLAN_HAS_OPEN_SUBTASKS]\n")
+            .And.Contain("Plan its subtasks instead, using update_task or update_tasks with journalDate");
+        message.Split('\n').Should().HaveCount(2);
         handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
         handler.Requests.Should().OnlyContain(r => r.Path == "TaskItems/5");
+    }
+
+    [Theory]
+    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "Completed", "reopen", "Reopen the parent first")]
+    [InlineData("TASK_PARENT_STATUS_DERIVED", "Todo", "start", "Change the status of its subtasks")]
+    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "Completed", "plan", "A completed task cannot be planned onto a different day")]
+    public async Task ParentAndPlanningCodes_SurfaceMessageCodeAndOneGuidanceLine(string code, string status, string scenario, string guidance)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null, status: status))
+            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = scenario switch
+        {
+            "reopen" => () => tools.UpdateTask(5, complete: false, ct: TestContext.Current.CancellationToken),
+            "start" => () => tools.UpdateTask(5, status: "inprogress", ct: TestContext.Current.CancellationToken),
+            _ => (Func<Task<string>>)(() => tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken)),
+        };
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().StartWith($"Refused. [{code}]\n").And.Contain(guidance);
+        message.Split('\n').Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task PriorityOnlyEdit_OnATaskWithChildren_SendsThePut_WithoutAnyPreCheck()
+    {
+        var (tools, handler) = Setup(Plan(null, children: 2));
+
+        var text = await tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
+
+        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        text.Should().StartWith("Updated #5. Changed priority.");
     }
 
     [Fact]
@@ -1990,7 +2045,7 @@ public class UpdateTaskTests
     {
         var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { code = "TASK_START_NOT_ALLOWED", message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.BadRequest));
 
         var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
@@ -2002,7 +2057,7 @@ public class UpdateTaskTests
             .And.NotContain("Nothing was changed");
         ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
         Occurrences(ex.Message, "was updated and planned").Should().Be(1);
-        Occurrences(ex.Message, "Only Todo tasks can be started").Should().Be(1);
+        ex.Message.Should().NotContain("Only Todo tasks can be started");
     }
 
     [Fact]
@@ -2635,6 +2690,39 @@ public class UpdateTasksTests
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked" }, new TaskUpdate { Id = 6, Priority = "low" }]);
 
         text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: ").And.Contain("Only Todo or InProgress tasks can be blocked").And.NotContain("Only Todo tasks can be blocked");
+    }
+
+    [Theory]
+    [InlineData("TASK_PLAN_HAS_OPEN_SUBTASKS", "Plan its subtasks instead, using update_task")]
+    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "A completed task cannot be planned onto a different day")]
+    public async Task JournalDateBatch_RefusedItemShowsGuidance_AndTheRestAreProcessed(string code, string guidance)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing(5))
+            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/6", Existing(6))
+            .Put("TaskItems/6", Existing(6));
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, JournalDate = "tomorrow" }, new TaskUpdate { Id = 6, JournalDate = "tomorrow" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain($"x #5: Refused. [{code}]").And.Contain(guidance).And.Contain("+ #6 ");
+        handler.Sent(HttpMethod.Put, "TaskItems/6").Should().HaveCount(1);
+    }
+
+    [Theory]
+    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "Reopen the parent first")]
+    [InlineData("TASK_PARENT_STATUS_DERIVED", "Change the status of its subtasks")]
+    public async Task ParentRuleBatch_RefusedItemShowsGuidance_AndTheRestContinue(string code, string guidance)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Existing(5, status: "Completed"))
+            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/6", Existing(6))
+            .Put("TaskItems/6", Existing(6));
+
+        var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Complete = false }, new TaskUpdate { Id = 6, Priority = "low" }]);
+
+        text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain($"x #5: Refused. [{code}]").And.Contain(guidance).And.Contain("+ #6 ");
     }
 
     [Fact]

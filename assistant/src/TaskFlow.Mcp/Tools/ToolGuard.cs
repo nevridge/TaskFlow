@@ -53,6 +53,10 @@ internal static class ToolGuard
             "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS" => "A blockedReason needs status=blocked on a Todo or InProgress task; pass status=blocked with it, or omit blockedReason.",
             "TASK_START_NOT_ALLOWED" => "Only Todo tasks can be started. If the task is Draft, set status=todo first; if it is Completed, reopen it first (complete=false); then set status=inprogress.",
             "TASK_CREATION_PAST_DAY_NOT_ALLOWED" => "journalDate must be today or later; pass today, tomorrow or a future yyyy-MM-dd, or omit journalDate.",
+            "TASK_PLAN_HAS_OPEN_SUBTASKS" => "A task with open subtasks cannot be planned on a day. Plan its subtasks instead, using update_task or update_tasks with journalDate, or set_journal_todos (find them with list_tasks).",
+            "TASK_PARENT_COMPLETED_NOT_ALLOWED" => "An open task cannot sit under a Completed parent. Reopen the parent first (update_task on the parent with complete=false), or keep the child completed, or detach it (parentTaskId).",
+            "TASK_PARENT_STATUS_DERIVED" => "A parent's status follows its subtasks. Change the status of its subtasks with update_task or update_tasks instead of the parent's.",
+            "TASK_PLAN_COMPLETED_NOT_ALLOWED" => "A completed task cannot be planned onto a different day. Omit journalDate, or reopen the task first (complete=false) and then plan it.",
             _ => null,
         };
 

@@ -22,7 +22,9 @@ public sealed record TaskItemDto(
     string? BlockedReason = null,
     DateTime? BlockedAt = null,
     string? PreviousStatus = null,
-    DateTime? StartedAt = null)
+    DateTime? StartedAt = null,
+    string? ParentTitle = null,
+    int OpenChildCount = 0)
 {
     public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
 

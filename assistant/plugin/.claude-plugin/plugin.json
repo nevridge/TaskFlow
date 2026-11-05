@@ -6,7 +6,7 @@
   "author": {
     "name": "Neil"
   },
-  "repository": "https://github.com/nevridge/taskflow-assistant",
+  "repository": "https://github.com/nevridge/TaskFlow",
   "keywords": ["tasks", "projects", "journal", "planning"],
   "userConfig": {
     "api_url": {

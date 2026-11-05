@@ -137,6 +137,7 @@ TaskFlow/
 │   └── Dockerfile              # Multi-stage build → vite preview
 │
 ├── TaskFlow.Api.Tests/         # xUnit test suite for the API
+├── assistant/                  # Claude work-assistant: MCP server, Claude Code plugin, Chat skill (own solution)
 ├── docs/                       # Extended documentation
 ├── docker-compose.yml          # Full-stack dev environment (api + web + seq)
 └── docker-compose.prod.yml     # Local prod-like harness (NOT production; see nevridge/taskflow-deploy)

@@ -1,5 +1,7 @@
 # taskflow-assistant
 
+Lives in the `assistant/` folder of the [TaskFlow](https://github.com/nevridge/TaskFlow) repo. Run the commands below from that folder.
+
 Helps you manage your **own work tasks and projects** in a local [TaskFlow](https://github.com/nevridge/TaskFlow) instance, from any folder. One MCP server, two ways to use it:
 
 | Where | How | Section |
@@ -50,7 +52,7 @@ Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` 
 
 ```powershell
 ./build.ps1                                   # publishes the server into plugin/bin (gitignored)
-claude plugin marketplace add C:\code\taskflow-assistant
+claude plugin marketplace add C:\code\TaskFlow\assistant
 claude plugin install taskflow-assistant@taskflow-assistant   # user scope: every project in Claude Code
 ```
 
@@ -95,7 +97,7 @@ Behaviors worth knowing:
 ## Develop
 
 ```powershell
-dotnet test TaskFlow.Assistant.sln
+dotnet test --solution TaskFlow.Assistant.sln
 dotnet format TaskFlow.Assistant.sln --verify-no-changes
 claude plugin validate ./plugin
 claude plugin validate .                      # the marketplace

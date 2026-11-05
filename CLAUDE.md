@@ -56,6 +56,16 @@ Two execution tools are available on this Windows machine:
 
 **`rg` (ripgrep) is installed natively on Windows** — works in both Bash and PowerShell without WSL. Use it when a shell-level content search is needed and the Grep tool is not appropriate.
 
+## Assistant (`assistant/`)
+
+The Claude work-assistant MCP server, Claude Code plugin and Chat skill live in `assistant/`, with their own `TaskFlow.Assistant.sln`, `Directory.Build.props` and `.editorconfig`. The root solution and commands do not touch it; CI covers it in the `assistant` job. See `assistant/CLAUDE.md`.
+
+```bash
+cd assistant && dotnet test --solution TaskFlow.Assistant.sln
+cd assistant && dotnet format TaskFlow.Assistant.sln --verify-no-changes
+# manual gate (not in CI): claude plugin validate ./plugin && claude plugin validate .
+```
+
 ## Architecture
 
 **Extension method pattern** — `Program.cs` stays clean by delegating all service registration to methods in `Extensions/`. Each extension file owns one concern (persistence, versioning, health checks, OpenTelemetry, validation, JSON, OpenAPI). Adding a new cross-cutting concern means a new extension file, not touching `Program.cs`.

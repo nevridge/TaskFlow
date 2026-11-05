@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- All Microsoft.Extensions.* packages ship together on the same patch cadence. -->
+    <MicrosoftPlatformVersion>10.0.8</MicrosoftPlatformVersion>
+  </PropertyGroup>
+</Project>

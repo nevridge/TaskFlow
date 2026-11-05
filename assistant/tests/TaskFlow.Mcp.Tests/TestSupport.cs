@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Time.Testing;
 using TaskFlow.Mcp.Api;
 

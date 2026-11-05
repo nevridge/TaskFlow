@@ -1,5 +1,5 @@
 using System.Net;
-using FluentAssertions;
+using AwesomeAssertions;
 using ModelContextProtocol;
 using TaskFlow.Mcp.Api;
 using TaskFlow.Mcp.Tools;

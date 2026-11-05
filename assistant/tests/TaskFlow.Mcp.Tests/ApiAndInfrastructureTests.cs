@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Net;
 using System.Reflection;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;

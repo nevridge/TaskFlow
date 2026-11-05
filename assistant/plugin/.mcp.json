@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "taskflow": {
+      "command": "dotnet",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/bin/TaskFlow.Mcp.dll"],
+      "env": {
+        "TASKFLOW_API_URL": "${user_config.api_url}"
+      }
+    }
+  }
+}

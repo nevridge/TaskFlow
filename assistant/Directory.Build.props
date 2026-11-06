@@ -7,6 +7,6 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <!-- All Microsoft.Extensions.* packages ship together on the same patch cadence. -->
-    <MicrosoftPlatformVersion>10.0.8</MicrosoftPlatformVersion>
+    <MicrosoftPlatformVersion>10.0.14</MicrosoftPlatformVersion>
   </PropertyGroup>
 </Project>

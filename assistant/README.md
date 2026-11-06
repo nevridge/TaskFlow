@@ -62,7 +62,9 @@ This is for Claude Code only. The Chat part of Claude Desktop does not read it; 
 
 Add the marketplace from the **local path** (as above). Claude Code then loads the plugin in place, so the published `plugin/bin` is found and your edits apply on the next session or `/reload-plugins`. A copy installed from GitHub would not contain `plugin/bin`.
 
-The API URL comes from the plugin's `api_url` setting (default `http://localhost:8081`), which is passed to the server as `TASKFLOW_API_URL`. A blank or malformed value falls back to the default. Change it with `/plugin configure taskflow-assistant`.
+The API URL comes from the plugin's `api_url` setting (default `http://localhost:8081`), which is passed to the server as `TASKFLOW_API_URL`. A blank or malformed value falls back to the default. Change it with `/plugin configure taskflow-assistant`, or from a shell: `'{"api_url": "https://host"}' | claude plugin configure taskflow-assistant@taskflow-assistant --values-stdin`, then restart Claude Code.
+
+Uninstalling and reinstalling the plugin (for example when you move to a new clone) resets `api_url` to the default, so set it again. Claude Desktop keeps its own URL: re-run `./scripts/install-claude-desktop.ps1 -ApiUrl https://host` after a move, because the script writes both the DLL path and the URL.
 
 Check it: `claude mcp list` should show `plugin:taskflow-assistant:taskflow ... Connected`.
 

@@ -21,7 +21,7 @@ You get run-folder paths: the story, the brief, the build summaries, and `adviso
 
 ## Boundaries
 
-- Write only test files: `TaskFlow.Api.Tests/**`, `TaskFlow.Web/src/**/*.test.{ts,tsx}` and `assistant/` test projects.
+- Write only test files: `TaskFlow.Api.Tests/**`, `TaskFlow.Web/src/**/*.test.{ts,tsx}` and `assistant/tests/**`.
 - Never edit production code, the generated client, migrations, project or package files, or CI and compose files. Report production bugs; do not fix them.
 - Do not run `git add`, `git commit` or `git push`.
 
@@ -40,7 +40,7 @@ After the AC tests, write up to about five probe tests on the changed behavior a
 
 ## Gates
 
-Find the changed areas from `git diff --name-only main...HEAD` and `git status --short`: api is `TaskFlow.Api*/`, web is `TaskFlow.Web/`, assistant is `assistant/`. Run only the gates `.github/workflows/ci.yml` runs for those areas, with its thresholds; CI is the source for commands. For assistant changes to `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`. Develop with targeted runs, then run the full gates once. Never lower or bypass a threshold; one top-up attempt if coverage is short because of new untested code.
+Find the changed areas from `git diff --name-only main...HEAD` and `git status --short`: api is `TaskFlow.Api*/`, web is `TaskFlow.Web/`, assistant is `assistant/`. Run only the gates `.github/workflows/ci.yml` runs for those areas, with its thresholds; CI is the source for commands. For assistant changes to `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`. Never lower or bypass a threshold; one top-up attempt if coverage is short because of new untested code.
 
 ## Classifying results
 
@@ -48,8 +48,6 @@ Find the changed areas from `git diff --name-only main...HEAD` and `git status -
 - **Code failure**: a compile error, failing test or lint violation in production code. Report it with a diagnosis. Before reporting a failing test you wrote, re-read the AC and the code to decide which is wrong; fix the test if it misreads the AC.
 - **Format-only failure**: only the format check failed. Say `FORMAT-ONLY` so the builder can run the formatter. Fix formatting in your own test files yourself.
 - **Environment failure**: a missing SDK or CLI, or a command that cannot run for reasons unrelated to the code. Say `ENVIRONMENT FAILURE` and stop; do not work around it.
-
-If a fix fails twice, stop and document the obstacle.
 
 ## Reply
 

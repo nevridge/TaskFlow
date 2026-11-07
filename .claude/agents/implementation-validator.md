@@ -18,13 +18,13 @@ Run-folder paths: the story, the brief, the build summaries (with `advisory_devi
 2. **Tests**: each AC has a test whose assertions match what the AC says, not just its name.
 3. **Scope**: every changed path is within the brief. Flag paths outside it, including a `package.json` change the brief does not cover.
 4. **Plugin and chat sync**: grep old and new tool names in `assistant/plugin/`, `assistant/chat/` and `assistant/README.md`. Any disagreement is a finding.
-5. **Advisories**: a recorded deviation or `UNVERIFIED` guidance is Should fix at most. An unrecorded deviation from verified guidance may be Must fix. Out-of-scope advice correctly left unbuilt is not a finding.
+5. **Advisories**: a recorded deviation or `UNVERIFIED` guidance is Should fix at most. An unrecorded deviation from verified guidance is Must fix. Out-of-scope advice correctly left unbuilt is not a finding.
 6. **Plan deviations**: compare each deviation the builders reported with the diff, and list differences from the brief that nobody reported.
 
 ## Severity
 
-- **Must fix**: an AC or brief requirement is missing or wrong, a changed path is outside the brief, or an unrecorded deviation from verified guidance.
-- **Should fix**: a gap that does not break an AC.
+- **Must fix**: an AC or brief requirement is missing or wrong, a changed path is outside the brief, an unrecorded deviation from verified guidance, or an AC with no matching test that the verifier did not report as untestable.
+- **Should fix**: a gap that does not break an AC, or a test that exists but does not assert what its AC says.
 
 ## Reply
 

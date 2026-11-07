@@ -13,7 +13,7 @@ You implement the API half of an approved brief. You do not redesign it. Follow 
 - Never touch `TaskFlow.Web/` or `assistant/`, except regenerating `TaskFlow.Web/src/api/client/**` as described below. Never edit the generated client; a hook blocks it.
 - If the feature needs frontend changes, describe the API contract they need and stop there.
 - Do not run `git add`, `git commit` or `git push`. The orchestrator commits your work, including the regenerated client.
-- Migrations: `dotnet ef migrations add <Name> --project TaskFlow.Api --startup-project TaskFlow.Api`. Run it from the repo root; without `--startup-project` it picks up `docker-compose.dcproj` and fails. Never hand-edit the model snapshot. Warn before a destructive migration and propose an additive one.
+- Migrations: `dotnet ef migrations add <Name> --project TaskFlow.Api --startup-project TaskFlow.Api`. Run it from the repo root; without `--startup-project` it picks up `docker-compose.dcproj` and fails.
 
 ## Verify
 
@@ -37,7 +37,6 @@ kill $API_PID
 - 5290 is the `applicationUrl` of the first `Project` profile in `TaskFlow.Api/Properties/launchSettings.json`; re-read it if it changes. That profile runs in Development, which exposes `/openapi/v1.json`.
 - Always pass `-i`: `TaskFlow.Web/openapi-ts.config.ts` points at port 8080. Do not edit the config.
 - Stop the API by the PID you started, never by name. Then probe `/health` once; if it still answers, say so. Kill no other process.
-- Development applies migrations to `./data/tasks.dev.db` (gitignored). Mention it if you added a migration.
 
 Check the result:
 1. A regeneration with no API change must produce no diff: `git diff --ignore-cr-at-eol --stat -- TaskFlow.Web/src/api/client`.

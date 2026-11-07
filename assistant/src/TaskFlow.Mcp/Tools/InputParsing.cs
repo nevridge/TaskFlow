@@ -13,6 +13,7 @@ internal static class InputParsing
     public static DateOnly Today(TimeProvider time) => DateOnly.FromDateTime(time.GetLocalNow().DateTime);
 
     /// <summary>Local date and UTC offset from a single clock read, so the two can never straddle midnight or a DST change.</summary>
+    /// <remarks>OffsetMinutes is minutes east of UTC: UTC-7 is -420. JavaScript's getTimezoneOffset() uses the opposite sign.</remarks>
     public static (DateOnly Today, int OffsetMinutes) LocalNow(TimeProvider time)
     {
         var n = time.GetLocalNow();

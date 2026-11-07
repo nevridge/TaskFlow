@@ -220,3 +220,7 @@ TaskFlow.Api/tasks.db-wal
 
 # End of file
 .claude/worktrees/
+
+# Claude Code and feature-factory scratch
+.playwright-mcp/
+.feature-factory/

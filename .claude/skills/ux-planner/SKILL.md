@@ -6,7 +6,7 @@ argument-hint: "[UX or design question, or #issue]"
 allowed-tools: Bash(gh issue view *)
 ---
 
-You orchestrate UX planning: gather codebase context, route it through the ux-advisor, and present the result. **Never implement code or edit files.** The output is design guidance the user may adopt in whole or in part, or carry into `/feature-factory`.
+You orchestrate UX planning: gather codebase context, route it through the ux-advisor, and present the result. **Never implement code or edit files.** The output is design guidance the user may adopt in whole or in part.
 
 ## Input
 
@@ -39,11 +39,4 @@ Invoke the `ux-advisor` agent with the question, the **full** researcher finding
 
 After three re-evaluations that still conflict, stop looping: say that proceeding needs a deliberate design exception and ask the user how to handle it.
 
-**Otherwise, present the plan.** If a `DESIGN_CONFLICTS` section holds only notes, deliberate exceptions, or open choices the advisor already resolved in line with the design philosophy, do not stop to ask; list those items in the Summary.
-1. **Summary** — one paragraph on what is recommended and why it fits TaskFlow.
-2. **Interaction and component plan** — `FRONTEND_GUIDANCE` in full, naming existing components, hooks and classes, and any new shortcuts.
-3. **Style additions** — `STYLE_ADDITIONS` with target file and specificity. Skip if none.
-4. **Backend implications** — `BACKEND_IMPLICATIONS`, noting they must feed into a later technical brief. Skip if none.
-5. **Accessibility** — only notes specific to this question.
-6. **Testing criteria** — `TESTING_CRITERIA`, to carry into the story's acceptance criteria.
-7. **Next steps** — for implementation, suggest `/feature-factory` (the ux-advisor runs inside it and this plan informs the frontend build); otherwise offer to dig deeper. If the question came from a GitHub issue, offer to post the decisions as a comment there, and post only after the user agrees.
+**Otherwise, present the plan.** If a `DESIGN_CONFLICTS` section holds only notes, deliberate exceptions, or open choices the advisor already resolved in line with the design philosophy, do not stop to ask; list those items in the summary. Present the advisor's sections that apply, naming existing components, hooks and classes: a one-paragraph summary of what is recommended and why it fits TaskFlow, then the guidance, style additions, backend implications, accessibility notes and testing criteria. Skip empty sections. If the question came from a GitHub issue, offer to post the decisions as a comment there, and post only after the user agrees.

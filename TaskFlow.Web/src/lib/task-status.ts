@@ -4,7 +4,7 @@
  * The API serializes the C# enum as PascalCase in responses and accepts lowercase in
  * request bodies (the generated `Status` type). `normalizeStatus` is tolerant of either
  * casing for display code; the journal still compares the PascalCase response value
- * strictly (see CLAUDE.md "Enum comparisons").
+ * strictly.
  *
  * Internal UI key is the lowercased status (`inprogress`); the wire value for requests is
  * `inProgress` (see REQUEST_STATUS), the only camelCase value. This file is the single

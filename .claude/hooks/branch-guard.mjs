@@ -36,8 +36,13 @@ process.stdin.on('end', () => {
 
     // A checkout or switch earlier in the same command changes the branch the later commit lands on.
     if (sub === 'checkout' || sub === 'switch') {
-      const target = args.filter((a) => !a.startsWith('-')).pop()
-      branch = target ?? currentBranch()
+      const create = args.findIndex((a) => /^-[bBcC]$/.test(a))
+      const beforePaths = args.slice(0, args.indexOf('--') === -1 ? args.length : args.indexOf('--'))
+      const positional = beforePaths.filter((a) => !a.startsWith('-'))
+      if (create !== -1) branch = args[create + 1] ?? currentBranch()
+      else if (positional.length === 1 && positional[0] === 'main') branch = 'main'
+      else if (sub === 'switch' && positional.length === 1) branch = positional[0]
+      else branch = currentBranch()
       continue
     }
 

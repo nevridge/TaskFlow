@@ -166,7 +166,6 @@ Fixtures (create only those the plan uses):
 - Tasks titled `<RUN_ID>-<label>`, with and without `projectId`: `curl -s -X POST http://localhost:3200/api/v1/TaskItems -H 'Content-Type: application/json' -d '{"title":"<RUN_ID>-<label>","status":"Todo","priority":"Medium","projectId":<id>}'`
 
 Rules:
-- Enum values are PascalCase strings: status `"Todo"`/`"Completed"`, priority `"Low"`/`"Medium"`/`"High"`.
 - Names and titles are at most 100 characters, so the prefix plus label must fit.
 - Do not create a task on a past journal day (`journalDate` before the user's today is rejected with 422).
 - One level of nesting only: a subtask's parent must not itself be a subtask.
@@ -298,10 +297,8 @@ If any `gh` write fails: print the full report to the conversation, report the e
 - **Only target `http://localhost:3200`** (the test stack). Never the live ports 3000, 8080 or 8081, `taskflow.skalaforge.com` or any other URL.
 - **Never touch the live stack.** Every `docker compose` command carries `-p taskflow-test` and the test `-f` file(s), the local file only as the second `-f` and only when it exists. Never run `down` before the `config --volumes` check passes. Never edit any `docker-compose*.yml`, and never read or depend on `docker-compose.override.yml`.
 - **No login step.** TaskFlow has no authentication; never wait for the user mid-run.
-- **Always `--body-file`** (or `-F body=@file` for PATCH). Never inline `--body`.
 - **`gh`, `docker`, `git` and `curl` always go through the Bash tool**, never PowerShell.
 - **Scope is strict.** Test only what the PR/issue describes. The plan comes from the PR/issue body only.
 - **State-changing features are carried through to completion.** A dismissed dialog is not a tested mutation.
 - **An AC is Verified only with a passing numbered step from this run.** Never from reading source.
-- **PascalCase enum values** in every API payload and comparison.
 - **Re-running is idempotent.** A second run updates the existing `<!-- ux-test-results -->` comment instead of adding another.

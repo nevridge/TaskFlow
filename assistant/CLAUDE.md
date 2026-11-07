@@ -14,8 +14,3 @@ Every workflow under `plugin/skills/` (`plugin/skills/*/SKILL.md`) has a matchin
 ## The TaskFlow API is in the same repo
 
 `TaskFlowApiClient` and `ApiModels` are hand-written against `TaskFlow.Api/` one folder up, not generated. A feature that needs an API change can ship the API change and the client change in one PR; otherwise check the linked TaskFlow issue or PR before building on it. This folder has its own solution and `Directory.Build.props`; the root `CLAUDE.md` covers the rest of the repo.
-
-## Workflow
-
-- Build features with the `feature-factory` skill. Its commit and PR rules (Conventional Commits, no `Co-Authored-By` trailer, no "Generated with Claude Code" line, `--body-file`) are in `.claude/skills/feature-factory/SKILL.md`, which is the source of truth.
-- Never push to `main`; work on `feature/` or `bugfix/` branches and open a PR.

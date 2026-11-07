@@ -1,0 +1,35 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/branch-guard.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Edit(/TaskFlow.Web/src/api/client/**)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/generated-client-guard.mjs\""
+          },
+          {
+            "type": "command",
+            "if": "Write(/TaskFlow.Web/src/api/client/**)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/generated-client-guard.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

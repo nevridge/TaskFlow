@@ -431,13 +431,6 @@ button.t-badge-blocked { cursor: pointer; }
   border: 1px dashed currentColor;
   cursor: default;
 }
-.t-badge-scheduled {
-  margin-top: 4px;
-  display: inline-flex;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-
 /* Project pill: quiet outline, keeps the project's own casing, truncates long names.
    Declared after the other .t-badge-* rules so source order wins. */
 .t-badge-project {
@@ -456,6 +449,24 @@ button.t-badge-blocked { cursor: pointer; }
 .t-list-cell--title .t-badge-project {
   max-width: 14rem;
   margin-top: 4px;
+}
+
+/* Planned journal day: informational, same quiet outline as the project pill, wraps instead of truncating. */
+.t-badge-planned {
+  text-transform: none;
+  display: inline-block;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.t-list-cell--title .t-badge-planned { margin-top: 4px; }
+.t-list-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
@@ -548,6 +559,9 @@ button.t-badge-blocked { cursor: pointer; }
 .t-detail-meta .t-select { max-width: 100%; }
 .t-detail-project { overflow-wrap: anywhere; }
 .t-detail-project .t-inline-error { margin: 4px 0 0; }
+.t-planned-day-row { display: flex; align-items: center; gap: 8px; }
+.t-planned-day-row .t-input { flex: 1; min-width: 0; }
+.t-field .t-inline-error { margin: 4px 0 0; }
 
 .t-section-hdr {
   display: flex;
@@ -1306,6 +1320,8 @@ html.is-dark .t-input option { background: var(--paper); }
 
 @media (hover: none), (pointer: coarse) {
   .tasks-page .t-form-row .t-input { min-height: 44px; }
+  .tasks-page .t-planned-day-row .t-input,
+  .tasks-page .t-planned-day-row .t-btn { min-height: 44px; }
   .tasks-page .t-form-actions .t-btn,
   .tasks-page .t-form-actions .t-btn-primary { min-height: 44px; }
   .tasks-page .t-card-row .t-card-actions { gap: 8px; }

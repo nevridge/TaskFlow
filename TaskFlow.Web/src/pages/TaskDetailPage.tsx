@@ -11,7 +11,7 @@ import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
 import { getProjectMutationErrorMessage, normalizeProjectId } from '@/lib/project-errors'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation } from '@/hooks/useNotes'
 import { useDeleteNoteUndoable, useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
-import { getTaskMutationErrorMessage } from '@/lib/task-errors'
+import { getTaskPlanSaveErrorMessage } from '@/lib/task-errors'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload } from '@/components/TaskForm'
 import { usePrefs } from '@/context/usePrefs'
@@ -41,7 +41,7 @@ export function TaskDetailPage() {
   const { data: allTasksData } = useTasksQuery()
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
   const { data: projectsData } = useProjectsQuery()
-  const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
+  const saveWithProject = useSaveTaskWithProject(getTaskPlanSaveErrorMessage)
   const changeProject = useChangeTaskProject()
   const deleteTaskUndoable = useDeleteTaskUndoable()
   const createNote = useCreateNoteMutation(taskId)
@@ -236,6 +236,7 @@ export function TaskDetailPage() {
                 projects={projects}
                 titleInputRef={titleRef}
                 projectInvalid={saveWithProject.projectInvalid}
+                plannedDayRevertToken={saveWithProject.plannedDayRevertToken}
                 onProjectChange={() => saveWithProject.setProjectInvalid(false)}
                 onParentOrStatusChange={saveWithProject.clearError}
                 isSaving={saveWithProject.isSaving}

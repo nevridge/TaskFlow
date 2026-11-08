@@ -337,6 +337,72 @@ describe('TaskListRow', () => {
     })
   })
 
+  describe('planned day badge (#424)', () => {
+    const planned = { ...baseTask, currentJournalDate: '2099-11-12' }
+
+    it('shows "Planned for Nov 12" with the full date in the title', () => {
+      renderRow(planned)
+      const badge = screen.getByText('Planned for Nov 12')
+      expect(badge).toHaveClass('t-badge-planned')
+      expect(badge).toHaveAttribute('title', 'Planned for 11-12-2099')
+      expect(badge.closest('td')).toHaveClass('t-list-cell--title')
+    })
+
+    it.each([
+      ['unplanned', { currentJournalDate: null }],
+      ['no planned field', {}],
+    ])('shows no badge when %s', (_label, extra) => {
+      const { container } = renderRow({ ...baseTask, ...extra })
+      expect(container.querySelector('.t-badge-planned')).toBeNull()
+    })
+
+    it('shows no badge for a Completed task', () => {
+      const { container } = renderRow({ ...planned, status: 'Completed' })
+      expect(container.querySelector('.t-badge-planned')).toBeNull()
+    })
+
+    it('follows the displayed (derived) status, not the stored one, when hiding for Completed', () => {
+      const { container } = render(
+        <MemoryRouter>
+          <table>
+            <tbody>
+              <TaskListRow
+                task={planned}
+                displayStatus="Completed"
+                onEdit={vi.fn()}
+                onHistory={vi.fn()}
+                onDelete={vi.fn()}
+                onStatusCycle={vi.fn()}
+              />
+            </tbody>
+          </table>
+        </MemoryRouter>,
+      )
+      expect(container.querySelector('.t-badge-planned')).toBeNull()
+    })
+
+    it('a past planned day is neutral: no overdue class or "!" icon', () => {
+      const { container } = renderRow({ ...baseTask, currentJournalDate: '2000-01-05' })
+      expect(screen.getByText('Planned for Jan 5')).toBeInTheDocument()
+      expect(container.querySelector('.t-overdue, .t-overdue-icon, .t-row--overdue')).toBeNull()
+    })
+
+    it('renders alongside a due date without affecting it', () => {
+      renderRow({ ...planned, dueDate: '2099-12-31' })
+      expect(screen.getByText('Planned for Nov 12')).toBeInTheDocument()
+      expect(screen.getByText(/2099/, { selector: '.t-list-cell--due span' })).toBeInTheDocument()
+    })
+
+    it('shares one wrapper with the project badge, and renders without a project', () => {
+      const { container, unmount } = renderRow({ ...planned, projectId: 3, projectName: 'Alpha Launch' })
+      expect(screen.getByText('Alpha Launch').parentElement).toBe(screen.getByText('Planned for Nov 12').parentElement)
+      expect(container.querySelectorAll('.t-list-badges')).toHaveLength(1)
+      unmount()
+      renderRow(planned)
+      expect(screen.getByText('Planned for Nov 12')).toBeInTheDocument()
+    })
+  })
+
   describe('mobile row (#317)', () => {
     type Props = Parameters<typeof TaskListRow>[0]
 

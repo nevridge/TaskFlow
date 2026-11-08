@@ -1677,6 +1677,125 @@ public class TaskItemsControllerV1Tests
         Assert.Equal(0, dtos.Single(d => d.Id == 4).ChildTaskCount);
     }
 
+    private async Task<List<TaskItemResponseDto>> GetAllDtosAsync(List<TaskItem> tasks)
+    {
+        _mockRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(tasks);
+        var result = await _controller.GetAll();
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        return Assert.IsAssignableFrom<IEnumerable<TaskItemResponseDto>>(okResult.Value).ToList();
+    }
+
+    private static TaskItem Task_(int id, Status status, int? parentId = null)
+        => new() { Id = id, Title = $"T{id}", Status = status, Priority = Priority.Low, ParentTaskItemId = parentId };
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_CountsNonCompletedDirectChildren()
+    {
+        var dtos = await GetAllDtosAsync(
+        [
+            Task_(1, Status.Todo),
+            Task_(2, Status.Todo, 1),
+            Task_(3, Status.InProgress, 1),
+            Task_(4, Status.Completed, 1)
+        ]);
+
+        var parent = dtos.Single(d => d.Id == 1);
+        Assert.Equal(2, parent.OpenChildCount);
+        Assert.Equal(3, parent.ChildTaskCount);
+    }
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_BlockedChildCountsAsOpen()
+    {
+        var dtos = await GetAllDtosAsync([Task_(1, Status.Todo), Task_(2, Status.Blocked, 1)]);
+
+        Assert.Equal(1, dtos.Single(d => d.Id == 1).OpenChildCount);
+    }
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_CompletedParentWithOpenChild()
+    {
+        var dtos = await GetAllDtosAsync([Task_(1, Status.Completed), Task_(2, Status.Todo, 1)]);
+
+        Assert.Equal(1, dtos.Single(d => d.Id == 1).OpenChildCount);
+    }
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_ZeroWhenAllCompletedOrNoChildren()
+    {
+        var dtos = await GetAllDtosAsync(
+        [
+            Task_(1, Status.Todo),
+            Task_(2, Status.Completed, 1),
+            Task_(3, Status.Todo)
+        ]);
+
+        Assert.Equal(0, dtos.Single(d => d.Id == 1).OpenChildCount);
+        Assert.Equal(0, dtos.Single(d => d.Id == 3).OpenChildCount);
+        Assert.Equal(0, dtos.Single(d => d.Id == 2).OpenChildCount);
+    }
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_IgnoresGrandchildrenAndCountsSubtaskParentsOwn()
+    {
+        var dtos = await GetAllDtosAsync(
+        [
+            Task_(1, Status.Todo),
+            Task_(2, Status.Completed, 1),
+            Task_(3, Status.Todo, 2),
+            Task_(4, Status.Todo, 2)
+        ]);
+
+        Assert.Equal(0, dtos.Single(d => d.Id == 1).OpenChildCount);
+        Assert.Equal(2, dtos.Single(d => d.Id == 2).OpenChildCount);
+    }
+
+    [Fact]
+    public async Task GetAll_OpenChildCount_QueriesRepositoryOnce()
+    {
+        await GetAllDtosAsync([Task_(1, Status.Todo), Task_(2, Status.Todo, 1)]);
+
+        _mockRepo.Verify(r => r.GetAllAsync(), Times.Once);
+        _mockRepo.Verify(r => r.GetChildrenAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAll_EmptyList_ReturnsEmptyArray()
+    {
+        var dtos = await GetAllDtosAsync([]);
+
+        Assert.Empty(dtos);
+    }
+
+    [Fact]
+    public async Task Get_SingleTask_LeavesOpenChildCountNull()
+    {
+        var parent = Task_(1, Status.Todo);
+        _mockRepo.Setup(r => r.GetByIdNoTrackingAsync(1)).ReturnsAsync(parent);
+        _mockRepo.Setup(r => r.GetChildrenAsync(1)).ReturnsAsync([Task_(2, Status.Todo, 1)]);
+
+        var result = await _controller.Get(1);
+
+        var dto = Assert.IsType<TaskItemResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+        Assert.Null(dto.OpenChildCount);
+    }
+
+    [Fact]
+    public void OpenChildCount_Serialization_OmittedWhenNullAndCamelCaseIntegerWhenSet()
+    {
+        var options = TaskFlow.Api.Providers.JsonSerializerOptionsProvider.Default;
+        var single = new TaskItemResponseDto { Title = "x" };
+        var listed = new TaskItemResponseDto { Title = "x", OpenChildCount = 0 };
+
+        using var singleJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(single, options));
+        using var listedJson = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(listed, options));
+
+        Assert.False(singleJson.RootElement.TryGetProperty("openChildCount", out _));
+        Assert.True(listedJson.RootElement.TryGetProperty("openChildCount", out var value));
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, value.ValueKind);
+        Assert.Equal(0, value.GetInt32());
+    }
+
     // ---- DTO timezone offset validation (issue #207) ----
 
     private const string OffsetMessage = TimezoneOffsetTestHelpers.OffsetMessage;

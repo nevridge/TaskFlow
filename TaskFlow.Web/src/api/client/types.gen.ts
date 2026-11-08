@@ -215,7 +215,8 @@ export type TaskItemResponseDto = {
      */
     parentTitle?: null | string;
     /**
-     * Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint.
+     * Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint
+     * and by the list endpoint (GET TaskItems); null and omitted on single-task responses.
      */
     openChildCount?: null | number | string;
     children?: null | Array<TaskItemResponseDto>;

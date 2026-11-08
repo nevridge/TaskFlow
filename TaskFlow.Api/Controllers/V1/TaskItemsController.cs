@@ -57,6 +57,11 @@ public class TaskItemsController(
             .GroupBy(t => t.ParentTaskItemId!.Value)
             .ToDictionary(g => g.Key, g => g.Count());
 
+        var openChildCounts = items
+            .Where(t => t.ParentTaskItemId.HasValue && t.Status != Status.Completed)
+            .GroupBy(t => t.ParentTaskItemId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
         var ids = items.Select(i => i.Id).ToList();
         // Sequential on purpose: both calls share one scoped DbContext, which does not support concurrent operations.
         var journalDates = await _repo.GetAssignedJournalDatesAsync(ids);
@@ -66,7 +71,8 @@ public class TaskItemsController(
             i,
             journalDates.TryGetValue(i.Id, out var jd) ? jd : null,
             lastMovedDates.TryGetValue(i.Id, out var lm) ? lm : null,
-            childCounts.GetValueOrDefault(i.Id)));
+            childCounts.GetValueOrDefault(i.Id),
+            openChildCounts.GetValueOrDefault(i.Id)));
         return Ok(dtos.ToList());
     }
 
@@ -865,7 +871,7 @@ public class TaskItemsController(
         return BuildTaskItemResponse(item, currentJournalDate, lastMovedDate, childTaskCount);
     }
 
-    private static TaskItemResponseDto BuildTaskItemResponse(TaskItem item, DateOnly? currentJournalDate, DateOnly? lastMovedDate, int childTaskCount)
+    private static TaskItemResponseDto BuildTaskItemResponse(TaskItem item, DateOnly? currentJournalDate, DateOnly? lastMovedDate, int childTaskCount, int? openChildCount = null)
     {
         return new TaskItemResponseDto
         {
@@ -882,6 +888,7 @@ public class TaskItemsController(
             FirstTaggedDate = item.FirstTaggedDate,
             LastMovedDate = lastMovedDate,
             ChildTaskCount = childTaskCount,
+            OpenChildCount = openChildCount,
             CurrentJournalDate = currentJournalDate,
             MoveCount = item.MoveCount,
             DaysTagged = DaysTaggedHelper.GetDaysTagged(item.FirstTaggedDate, currentJournalDate),

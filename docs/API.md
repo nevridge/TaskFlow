@@ -135,6 +135,8 @@ Retrieves all task items with status information.
 
 **Response:** `200 OK`
 
+Each item includes `openChildCount`: the number of direct subtasks that are not `Completed` (`Blocked` counts as open; completed parents are still counted; grandchildren are ignored). It is always an integer on this endpoint, including `0`.
+
 ```json
 [
   {
@@ -456,7 +458,7 @@ The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewi
 **Response:** `200 OK` - a flat array of `TaskItemResponseDto` rows, one per task attributed to the day (roots and subtasks alike), ordered by `id`.
 - Rows are never nested: `children` is omitted, and no parent row is added for a subtask whose parent is not a todo on this day.
 - Every subtask row carries `parentTaskItemId`, and `parentTitle` (the parent's title; omitted on root rows), even when the parent is off-day. A parent and its subtask can both be rows of the same day.
-- `childTaskCount` is the task's total subtasks; `openChildCount` is how many are not `Completed` (`Blocked` counts as open). `openChildCount` is only present on this endpoint.
+- `childTaskCount` is the task's total subtasks; `openChildCount` is how many are not `Completed` (`Blocked` counts as open). `openChildCount` is present on this endpoint and on `GET /api/v1/TaskItems`; it is omitted from single-task responses.
 - `currentJournalDate` is the task's **own linked day** (null when it was never linked), not the viewed day; `daysTagged` is derived from it. A task linked Monday and completed Wednesday appears on Wednesday with `currentJournalDate` = Monday.
 
 **Errors:** `400 Bad Request` when the offset is outside -720..840; `404 Not Found` when the entry does not exist.

@@ -33,7 +33,8 @@ public class TaskItemResponseDto
     public string? ParentTitle { get; set; }
 
     /// <summary>
-    /// Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint.
+    /// Count of subtasks that are not Completed (Blocked counts as open); set only by the journal todos endpoint
+    /// and by the list endpoint (GET TaskItems); null and omitted on single-task responses.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? OpenChildCount { get; set; }

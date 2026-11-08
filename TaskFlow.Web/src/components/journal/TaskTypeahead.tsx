@@ -36,6 +36,13 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const [inputValue, setInputValue] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
+  // A refetched task list can remove or reorder the highlighted option, so drop the highlight rather than
+  // let Enter select whatever now sits at that index.
+  const [seenTasks, setSeenTasks] = useState(tasks)
+  if (seenTasks !== tasks) {
+    setSeenTasks(tasks)
+    setActiveIndex(-1)
+  }
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const blurTimer = useRef<number | undefined>(undefined)

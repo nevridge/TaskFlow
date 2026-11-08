@@ -292,7 +292,7 @@ export function TasksPage() {
         if (searchId !== null && Number(t.id) === searchId) return true
         return matchesSearchWithAncestors(t, allById, debouncedSearch)
       })
-  }, [searchId,tasks, allById, statusOf, viewFilter, statusFilter, projectFilter, debouncedSearch])
+  }, [searchId, tasks, allById, statusOf, viewFilter, statusFilter, projectFilter, debouncedSearch])
 
   const compareWithinGroup = useCallback((a: TaskListModel, b: TaskListModel): number => {
     const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }

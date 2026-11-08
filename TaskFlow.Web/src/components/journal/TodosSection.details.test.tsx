@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { TaskItemResponseDto } from '@/api/journal'
 import { makeProviders } from '@/test/renderWithToast'
+import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 vi.mock('@/hooks/useJournal', () => ({
   journalKeys: { all: ['journal'], todos: (id: number) => ['journal', id, 'todos'], notes: (id: number) => ['journal', id, 'notes'] },
@@ -83,6 +84,8 @@ describe('TodosSection details link (#404)', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
+    __resetCoarsePointerCache()
     document.body.innerHTML = ''
   })
 
@@ -148,6 +151,72 @@ describe('TodosSection details link (#404)', () => {
     await userEvent.dblClick(screen.getByRole('button', { name: 'Write tests' }))
     expect(probe.seen.key).toBe(before)
     expect(document.querySelector('input.todo-edit')).not.toBeNull()
+  })
+
+  describe('title keeps its edit gestures and never navigates (AC6)', () => {
+    const titleButton = () => screen.getByRole('button', { name: 'Write tests' })
+
+    function expectEditingWithoutNavigation(before: string) {
+      const input = document.querySelector('input.todo-edit')
+      expect(input).not.toBeNull()
+      expect(input).toHaveFocus()
+      expect(probe.seen.pathname).toBe('/journal/11-07-2026')
+      expect(probe.seen.key).toBe(before)
+    }
+
+    it('Enter on the focused title opens inline edit', async () => {
+      renderAt()
+      const before = probe.seen.key
+      titleButton().focus()
+      await userEvent.keyboard('{Enter}')
+      expectEditingWithoutNavigation(before)
+    })
+
+    it('Space on the focused title opens inline edit', async () => {
+      renderAt()
+      const before = probe.seen.key
+      titleButton().focus()
+      await userEvent.keyboard(' ')
+      expectEditingWithoutNavigation(before)
+    })
+
+    it('a single tap on touch opens inline edit', () => {
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+        addListener: vi.fn(), removeListener: vi.fn(), onchange: null, dispatchEvent: vi.fn(),
+      }))
+      __resetCoarsePointerCache()
+      renderAt()
+      const before = probe.seen.key
+      fireEvent.pointerDown(titleButton(), { pointerType: 'touch' })
+      fireEvent.click(titleButton(), { detail: 1 })
+      expectEditingWithoutNavigation(before)
+    })
+
+    it('a single mouse click does not open inline edit', async () => {
+      renderAt()
+      await userEvent.click(titleButton())
+      expect(document.querySelector('input.todo-edit')).toBeNull()
+      expect(probe.seen.pathname).toBe('/journal/11-07-2026')
+    })
+  })
+
+  describe('subtask rows (AC8)', () => {
+    it('a child row link opens its own task with the journal day and its own focus id', async () => {
+      load([row({ id: 1, title: 'Parent', openChildCount: 1, childTaskCount: 1 }), sub(2)])
+      renderAt()
+      await userEvent.click(screen.getByRole('link', { name: 'Open details: Sub 2' }))
+      expect(probe.seen.pathname).toBe('/tasks/2')
+      expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 2 })
+    })
+
+    it('the header link above it carries only the journal day', async () => {
+      load([row({ id: 1, title: 'Parent', openChildCount: 1, childTaskCount: 1 }), sub(2)])
+      renderAt()
+      await userEvent.click(screen.getByRole('link', { name: /^Parent task/ }))
+      expect(probe.seen.pathname).toBe('/tasks/1')
+      expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026' })
+    })
   })
 
   describe('focus return', () => {

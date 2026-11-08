@@ -863,6 +863,18 @@ describe('TaskDetailPage', () => {
       expect(changeAsync).not.toHaveBeenCalled()
     })
 
+    it('an open-subtasks 422 shows the mapped message, keeps the field enabled and makes no clear or project call', async () => {
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_PLAN_HAS_OPEN_SUBTASKS' })
+      renderAt('/tasks/1?edit=1')
+      expect(screen.getByLabelText('Planned day')).toBeEnabled()
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: '2099-11-12' } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent("can't be planned on a day. Plan its subtasks instead. Nothing was saved.")
+      expect(screen.getByLabelText('Planned day')).toBeEnabled()
+      expect(removeJournalTodo).not.toHaveBeenCalled()
+      expect(changeAsync).not.toHaveBeenCalled()
+    })
+
     it('a failed clear reports the partial save, reverts the field to the stored day and skips the project change', async () => {
       vi.mocked(removeJournalTodo).mockRejectedValueOnce({ status: 404 })
       mockTask({ currentJournalDate: '2099-11-12', currentJournalEntryId: 3 })

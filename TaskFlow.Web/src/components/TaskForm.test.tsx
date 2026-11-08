@@ -754,6 +754,26 @@ describe('TaskForm parent picker', () => {
       expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
     })
 
+    it.each(['Blocked', 'Draft', 'InProgress'] as const)('is enabled and plans a %s task like any open task', async status => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, status, blockedReason: status === 'Blocked' ? 'waiting' : undefined }, onSubmit)
+      expect(screen.getByLabelText('Planned day')).toBeEnabled()
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: FUTURE } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit).plannedDay).toBe(FUTURE)
+    })
+
+    it('accepts today as the earliest plannable day', async () => {
+      const onSubmit = vi.fn()
+      const d = new Date()
+      const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      renderForm(existing, onSubmit)
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: today } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit).plannedDay).toBe(today)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
     it('resyncs to a refetched stored day and reverts to it when the revert token bumps', () => {
       const task = { ...existing, currentJournalDate: FUTURE }
       const { rerender } = renderForm(task)

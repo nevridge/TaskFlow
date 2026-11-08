@@ -137,6 +137,32 @@ These variables are read by `vite.preview.config.js` at container startup and ar
 - Database files differ by environment: `tasks.dev.db` vs `tasks.db`
 - For detailed volume configuration, see [VOLUMES.md](VOLUMES.md)
 
+#### Compose Project Name
+
+The real Docker volume names are `<project>_<key>`, where `<key>` is the volume key in the compose file. For example, with `COMPOSE_PROJECT_NAME=taskflowapi` the keys become `taskflowapi_taskflow-data`, `taskflowapi_taskflow-logs` and `taskflowapi_seq-data`.
+
+`COMPOSE_PROJECT_NAME` pins the project name so every checkout and git worktree shares one database volume. No compose file sets a top-level `name:`, so compose resolves the project name in this order:
+
+1. `-p <name>` on the command line
+2. `COMPOSE_PROJECT_NAME` (from the shell or the root `.env`)
+3. The basename of the directory containing the compose file
+
+> **Note:** The root `.env` is gitignored local setup, so it is absent from a fresh clone or git worktree. Without it, compose derives the name from the directory and creates a second, empty set of volumes. The database then looks lost, but it is intact under the pinned name.
+
+The live project name on a machine is whatever its `.env` sets. To see which volume sets exist:
+
+```bash
+docker volume ls --filter name=taskflow
+```
+
+An extra, unused set (for example `taskflow_*`) signals that compose was run without the pin. Leave unused sets alone unless you have confirmed they hold no data you need.
+
+The test stack is unaffected: `-p taskflow-test` always wins (see [Live vs Test Stack Workflow](#live-vs-test-stack-workflow)).
+
+**Possible later option:** a top-level `name:` in `docker-compose.yml`. It must match the existing live project name or it would orphan the volumes, and changing volume mappings needs the confirmation required by `CLAUDE.md`. Not done here.
+
+> **Note:** This describes local compose only. The production stack name lives in [nevridge/taskflow-deploy](https://github.com/nevridge/taskflow-deploy).
+
 ### Health Checks
 
 **Both environments use identical health check configuration:**
@@ -271,7 +297,7 @@ A disposable instance of TaskFlow runs alongside the live local stack, so a feat
 - Compose project: `taskflow-test` (file: `docker-compose.test.yml`, standalone, not an override)
 - Ports: web `3200`, API `8280`
 - Images: `taskflow-api:test` and `taskflow-web:test`
-- Volumes: `test-data` and `test-logs` (separate from the live `taskflow-data`, `taskflow-logs` and `seq-data`)
+- Volumes: `test-data` and `test-logs` (separate from the live volumes, keys `taskflow-data`, `taskflow-logs` and `seq-data` prefixed with the live project name; see [Compose Project Name](#compose-project-name))
 - No Seq. Config requires a valid OTLP endpoint, so the test API points at a closed local port (`http://127.0.0.1:9/ingest/otlp`); exports fail instantly and are harmless.
 
 ### Start
@@ -286,7 +312,7 @@ docker compose -p taskflow-test -f docker-compose.test.yml up -d --build
 docker compose -p taskflow-test -f docker-compose.test.yml down -v
 ```
 
-`-p taskflow-test` is mandatory. Without it compose falls back to the live project name (`taskflow` on this machine, or whatever the root `.env` sets via `COMPOSE_PROJECT_NAME`), and `down` could remove live containers.
+`-p taskflow-test` is mandatory. Without it compose falls back to the live project name (set by `COMPOSE_PROJECT_NAME` in the root `.env`, or the directory name if there is no `.env`; see [Compose Project Name](#compose-project-name)), and `down` could remove live containers.
 
 ### Pre-teardown check
 
@@ -296,7 +322,7 @@ Before running `down -v`, confirm it can only touch test volumes:
 docker compose -p taskflow-test -f docker-compose.test.yml config --volumes
 ```
 
-This prints volume keys. The output must be exactly `test-data` and `test-logs`. If anything else appears (for example `taskflow-data`, `taskflow-logs` or `seq-data`), do not run `down -v`.
+This prints volume keys. The output must be exactly `test-data` and `test-logs`. If anything else appears (for example the keys `taskflow-data`, `taskflow-logs` or `seq-data`), do not run `down -v`.
 
 ### Rule
 

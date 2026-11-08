@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
+import { useGlobalKeyboardShortcuts } from '@/hooks/useGlobalKeyboardShortcuts'
+import { useJournalKeyboardShortcuts } from '@/hooks/useJournalKeyboardShortcuts'
 import type { PrefsContextValue } from '@/context/PrefsContextDef'
 
 vi.mock('@/hooks/useTasks', () => ({
@@ -523,8 +525,9 @@ describe('TaskDetailPage', () => {
       renderPage()
       await userEvent.click(editBtn())
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      await waitFor(() => expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument())
-      expect(editBtn()).toHaveFocus()
+      // Closing is a URL change now, so focus lands in the effect after the form unmounts.
+      await waitFor(() => expect(editBtn()).toHaveFocus())
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
     })
 
     it('re-opening after a Save focuses the title again', async () => {
@@ -603,6 +606,279 @@ describe('TaskDetailPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
       await userEvent.click(editBtn())
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('edit mode from the URL (#421)', () => {
+    function LocationDisplay() {
+      const l = useLocation()
+      return (
+        <div>
+          <div data-testid="location">{l.pathname + l.search}</div>
+          <div data-testid="loc-state">{JSON.stringify(l.state)}</div>
+        </div>
+      )
+    }
+    function BackButton() {
+      const navigate = useNavigate()
+      return <button onClick={() => navigate(-1)}>history back</button>
+    }
+    interface ShortcutSpies {
+      home: () => void
+      tasks: () => void
+      help: () => void
+      journal: () => void
+    }
+    function Shortcuts({ spies }: { spies: ShortcutSpies }) {
+      useGlobalKeyboardShortcuts({ onGoHome: spies.home, onGoTasks: spies.tasks, onShowHelp: spies.help })
+      useJournalKeyboardShortcuts({
+        onNewTodo: spies.journal,
+        onNewLog: spies.journal,
+        onNewNote: spies.journal,
+        onPrevDay: spies.journal,
+        onNextDay: spies.journal,
+        onJumpToToday: spies.journal,
+      })
+      return null
+    }
+    type Entry = string | { pathname: string; search?: string; state?: unknown }
+    const tree = (entries: Entry[], spies?: ShortcutSpies) => (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+          <LocationDisplay />
+          <BackButton />
+          {spies && <Shortcuts spies={spies} />}
+          <Routes>
+            <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            <Route path="/tasks" element={<div>Tasks list</div>} />
+            <Route path="/journal/:date" element={<div>Journal day</div>} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const renderAt = (...entries: Entry[]) => render(tree(entries))
+    const titleBox = () => screen.getByRole('textbox', { name: /title/i })
+    const editBtn = () => screen.getByRole('button', { name: 'Edit' })
+    const where = () => screen.getByTestId('location')
+
+    it('?edit=1 opens the form with the title focused', () => {
+      renderAt('/tasks/1?edit=1')
+      expect(titleBox()).toHaveValue('Fix login bug')
+      expect(titleBox()).toHaveFocus()
+    })
+
+    it('a cold-cache deep link focuses the title once the task loads, not while loading', () => {
+      vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: true, error: null } as never)
+      const view = render(tree(['/tasks/1?edit=1']))
+      expect(screen.getByText('Loading…')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      mockTask()
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(titleBox()).toHaveFocus()
+    })
+
+    it('a background refetch does not steal focus or touch typed input', async () => {
+      const view = render(tree(['/tasks/1?edit=1']))
+      await userEvent.type(titleBox(), ' typed')
+      await userEvent.click(screen.getByLabelText(/description/i))
+      mockTask({ title: 'Refetched title' })
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(screen.getByLabelText(/description/i)).toHaveFocus()
+      expect(titleBox()).toHaveValue('Fix login bug typed')
+    })
+
+    it.each([
+      ['edit=0', '?edit=0'],
+      ['edit=true', '?edit=true'],
+      ['an empty edit', '?edit='],
+      ['two edit values', '?edit=1&edit=2'],
+      ['a capitalised key', '?Edit=1'],
+    ])('stays in read mode for %s', (_label, search) => {
+      renderAt(`/tasks/1${search}`)
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      expect(editBtn()).toBeInTheDocument()
+    })
+
+    it('shows Task not found and no form for a missing task with ?edit=1', () => {
+      vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: null } as never)
+      renderAt('/tasks/1?edit=1')
+      expect(screen.getByText('Task not found.')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+    })
+
+    it('shows the error view for a non-numeric id with ?edit=1', () => {
+      renderAt('/tasks/abc?edit=1')
+      expect(screen.getByText('Task not found.')).toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+    })
+
+    it('Save from a deep link returns to read mode, drops ?edit, focuses Edit and adds no history entry', async () => {
+      renderAt('/tasks', '/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(where()).toHaveTextContent(/^\/tasks\/1$/))
+      expect(editBtn()).toHaveFocus()
+      // Replace, not push: one history step back leaves the page instead of reopening the form.
+      await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+    })
+
+    it('Cancel from a deep link returns to read mode, drops ?edit, focuses Edit and adds no history entry', async () => {
+      renderAt('/tasks', '/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(where()).toHaveTextContent(/^\/tasks\/1$/)
+      expect(editBtn()).toHaveFocus()
+      await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+    })
+
+    it('the in-page Edit button sets ?edit=1 by replace and focuses the title', async () => {
+      renderAt('/tasks', '/tasks/1')
+      await userEvent.click(editBtn())
+      expect(where()).toHaveTextContent('/tasks/1?edit=1')
+      expect(titleBox()).toHaveFocus()
+      await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+    })
+
+    it('waits for the refetch of a cached task before opening the form, then keeps it open', () => {
+      const result = (isFetching: boolean, title: string) => ({
+        data: { data: { ...task, title } },
+        isLoading: false,
+        isFetching,
+        error: null,
+      }) as never
+      vi.mocked(useTaskQuery).mockReturnValue(result(true, 'Stale title'))
+      const view = render(tree(['/tasks/1?edit=1']))
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      vi.mocked(useTaskQuery).mockReturnValue(result(false, 'Fresh title'))
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(titleBox()).toHaveValue('Fresh title')
+      // A later background refetch must not unmount the form.
+      vi.mocked(useTaskQuery).mockReturnValue(result(true, 'Fresh title'))
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(titleBox()).toHaveValue('Fresh title')
+    })
+
+    it('does not navigate back to the task when the user leaves while a save is in flight', async () => {
+      let resolveSave!: (v: unknown) => void
+      updateAsync.mockReturnValue(new Promise(r => { resolveSave = r }))
+      renderAt('/tasks', '/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+      await act(async () => { resolveSave({}) })
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+    })
+
+    it('keeps other search params when opening and closing', async () => {
+      renderAt('/tasks/1?x=1')
+      await userEvent.click(editBtn())
+      expect(where()).toHaveTextContent(/^\/tasks\/1\?x=1&edit=1$/)
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(where()).toHaveTextContent(/^\/tasks\/1\?x=1$/)
+    })
+
+    it('keeps the journal origin state through save so Back to Journal still hands back the focus id', async () => {
+      renderAt({ pathname: '/tasks/1', search: '?edit=1', state: { from: '/journal/11-07-2026', focusTaskId: 7 } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(where()).toHaveTextContent(/^\/tasks\/1$/))
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual({
+        from: '/journal/11-07-2026',
+        focusTaskId: 7,
+      })
+      const back = screen.getByRole('link', { name: '← Back to Journal' })
+      expect(back).toHaveAttribute('href', '/journal/11-07-2026')
+      await userEvent.click(back)
+      expect(where()).toHaveTextContent('/journal/11-07-2026')
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual({ focusTaskId: 7 })
+    })
+
+    it('keeps the journal origin state through cancel', async () => {
+      renderAt({ pathname: '/tasks/1', search: '?edit=1', state: { from: '/journal/11-07-2026', focusTaskId: 7 } })
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual({
+        from: '/journal/11-07-2026',
+        focusTaskId: 7,
+      })
+    })
+
+    it('the journal back link is the same with and without ?edit=1 (origin comes from state only)', () => {
+      const state = { from: '/journal/11-07-2026', focusTaskId: 1 }
+      const { unmount } = renderAt({ pathname: '/tasks/1', state })
+      const plain = screen.getByRole('link', { name: /^← Back to/ }).getAttribute('href')
+      unmount()
+      renderAt({ pathname: '/tasks/1', search: '?edit=1', state })
+      expect(screen.getByRole('link', { name: /^← Back to/ })).toHaveAttribute('href', plain)
+    })
+
+    it('shows Back to Tasks for a ?edit=1 deep link without state', () => {
+      renderAt('/tasks/1?edit=1')
+      expect(screen.getByRole('link', { name: '← Back to Tasks' })).toHaveAttribute('href', '/tasks')
+    })
+
+    it('a journal-origin edit save sends only the form fields: no planned day or journal date', async () => {
+      renderAt({ pathname: '/tasks/1', search: '?edit=1', state: { from: '/journal/11-07-2026', focusTaskId: 1 } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      const sent = updateAsync.mock.calls[0][0].data
+      expect(Object.keys(sent).filter(k => /journal|planned/i.test(k))).toEqual([])
+    })
+
+    it('opens a derived task in edit mode with the status select disabled', () => {
+      const child = { ...task, id: 9, title: 'Child', status: 'InProgress', parentTaskItemId: 1 }
+      mockTask({ childTaskCount: 1 })
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data: [{ ...task, childTaskCount: 1 }, child] }, isLoading: false } as never)
+      renderAt('/tasks/1?edit=1')
+      expect(screen.getByRole('combobox', { name: 'Status' })).toBeDisabled()
+      expect(titleBox()).not.toBeDisabled()
+    })
+
+    it('Enter in the title field submits the form', async () => {
+      renderAt('/tasks/1?edit=1')
+      await userEvent.type(titleBox(), ' v2{Enter}')
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      expect(updateAsync.mock.calls[0][0].data.title).toBe('Fix login bug v2')
+    })
+
+    it('a failed save keeps the form and ?edit=1, announces the error in an alert and preserves input', async () => {
+      updateAsync.mockRejectedValue({ code: 'UNKNOWN_ERROR' })
+      renderAt('/tasks/1?edit=1')
+      await userEvent.type(titleBox(), ' keep')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(/unable to save task changes/i)
+      expect(where()).toHaveTextContent('/tasks/1?edit=1')
+      expect(titleBox()).toHaveValue('Fix login bug keep')
+      expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
+    })
+
+    it('a partial failure after a project change keeps the form and ?edit=1', async () => {
+      mockTask({ projectId: 1, projectName: 'Alpha' })
+      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      renderAt('/tasks/1?edit=1')
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toBeInTheDocument()
+      expect(where()).toHaveTextContent('/tasks/1?edit=1')
+      expect(titleBox()).toBeInTheDocument()
+    })
+
+    it('deleting does not move focus to the Edit button', async () => {
+      renderAt('/tasks/1')
+      await userEvent.click(screen.getByRole('button', { name: /delete task/i }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+      expect(document.activeElement?.textContent).not.toBe('Edit')
+    })
+
+    it('shortcuts and chords do not fire while the auto-focused title is typed into', async () => {
+      const spies = { home: vi.fn(), tasks: vi.fn(), help: vi.fn(), journal: vi.fn() }
+      render(tree(['/tasks/1?edit=1'], spies))
+      expect(titleBox()).toHaveFocus()
+      await userEvent.clear(titleBox())
+      // '[[' is user-event's escape for a literal '['.
+      await userEvent.keyboard('thgnjl[[]?')
+      expect(titleBox()).toHaveValue('thgnjl[]?')
+      expect(where()).toHaveTextContent('/tasks/1?edit=1')
+      for (const spy of Object.values(spies)) expect(spy).not.toHaveBeenCalled()
     })
   })
 

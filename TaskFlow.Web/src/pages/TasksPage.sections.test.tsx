@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TasksPage } from './TasksPage'
 
 vi.mock('@/hooks/useTasks', () => ({
@@ -56,10 +56,16 @@ const baseTask = {
 
 let queryClient: QueryClient
 
+function LocationDisplay() {
+  const l = useLocation()
+  return <div data-testid="location">{l.pathname + l.search}</div>
+}
+
 function page() {
   return (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
+        <LocationDisplay />
         <TasksPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -325,8 +331,8 @@ describe('TasksPage sections and context headers (#384)', () => {
       el => el.getAttribute('data-add-child-anchor'),
     )
     expect(new Set(anchors).size).toBe(anchors.length)
-    await userEvent.click(within(rowFor('Done kid')).getByRole('button', { name: 'Edit' }))
-    expect(screen.getByText('Edit Task')).toBeInTheDocument()
+    await userEvent.click(within(rowFor('Done kid')).getByRole('button', { name: 'Edit Done kid' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/tasks/2?edit=1')
   })
 
   it('a subtask whose parent is missing from the list is a standalone row', () => {

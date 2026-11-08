@@ -175,14 +175,6 @@ describe('TasksPage undoable delete (#321)', () => {
       expect(deleteButton('Low one')).toHaveFocus()
     })
 
-    it('closes the edit panel when the edited task is deleted', async () => {
-      await loadPage()
-      fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1])
-      expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument()
-      fireEvent.click(deleteButton('Bravo task'))
-      expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument()
-    })
-
     it('closes the add-subtask editor opened for the deleted task', async () => {
       await loadPage()
       fireEvent.click(screen.getAllByRole('button', { name: 'Add subtask' })[0])

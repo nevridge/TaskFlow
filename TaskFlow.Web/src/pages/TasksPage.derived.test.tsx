@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TasksPage } from './TasksPage'
 
 vi.mock('@/hooks/useTasks', () => ({
@@ -56,10 +56,16 @@ const baseTask = {
 
 let queryClient: QueryClient
 
+function LocationDisplay() {
+  const l = useLocation()
+  return <div data-testid="location">{l.pathname + l.search}</div>
+}
+
 function page() {
   return (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
+        <LocationDisplay />
         <TasksPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -180,19 +186,13 @@ describe('TasksPage derived parent status (#385)', () => {
     expect(taskMutations.mutate).not.toHaveBeenCalled()
   })
 
-  it('edits a locked parent with a disabled status select showing the derived status and the stored status submitted', async () => {
+  it('Edit on a locked parent navigates to the detail page in edit mode (the locked form is covered there)', async () => {
     useData(filteredChildFamily())
     renderPage()
     await hideChildren()
-    await userEvent.click(within(rowFor('Parent')).getByRole('button', { name: 'Edit' }))
-    const select = screen.getByRole('combobox', { name: 'Status' })
-    expect(select).toBeDisabled()
-    expect(select).toHaveValue('inprogress')
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalled())
-    const sent = taskMutations.mutateAsync.mock.calls[0][0].data
-    expect(sent.status).toBe('todo')
-    expect(sent).not.toHaveProperty('blockedReason')
+    await userEvent.click(within(rowFor('Parent')).getByRole('button', { name: 'Edit Parent' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/tasks/1?edit=1')
+    expect(screen.queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument()
   })
 
   it('counts a derived Blocked parent in the Blocked status total', () => {

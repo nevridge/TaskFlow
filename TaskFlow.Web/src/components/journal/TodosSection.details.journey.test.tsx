@@ -23,11 +23,12 @@ const todo = { id: 5, title: 'Write tests', status: 'Todo', priority: 'Low', des
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
-const seen: { pathname: string; state: unknown } = { pathname: '', state: null }
+const seen: { pathname: string; search: string; state: unknown } = { pathname: '', search: '', state: null }
 function Probe() {
   const l = useLocation()
   useEffect(() => {
     seen.pathname = l.pathname
+    seen.search = l.search
     seen.state = l.state
   })
   return null
@@ -90,11 +91,12 @@ describe('TodosSection details link, touch and optimistic flows (#404)', () => {
 
   it('touch: tapping the details link navigates', async () => {
     renderSection()
-    const link = await screen.findByRole('link', { name: 'Open details: Write tests' })
+    const link = await screen.findByRole('link', { name: 'Edit details: Write tests' })
     fireEvent.pointerDown(link, { pointerType: 'touch' })
     fireEvent.pointerUp(link, { pointerType: 'touch' })
     fireEvent.click(link, { detail: 1 })
     expect(seen.pathname).toBe('/tasks/5')
+    expect(seen.search).toBe('?edit=1')
     expect(seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 5 })
   })
 
@@ -104,8 +106,9 @@ describe('TodosSection details link, touch and optimistic flows (#404)', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mark not done' })).toBeInTheDocument())
     expect(sentMethods().filter(m => m !== 'GET')).toEqual(['PATCH'])
 
-    fireEvent.click(screen.getByRole('link', { name: 'Open details: Write tests' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Edit details: Write tests' }))
     expect(seen.pathname).toBe('/tasks/5')
+    expect(seen.search).toBe('?edit=1')
     expect(seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 5 })
     // The link adds no task-changing call, and the cache the detail page reads from holds the optimistic state.
     expect(sentMethods().filter(m => m !== 'GET')).toEqual(['PATCH'])

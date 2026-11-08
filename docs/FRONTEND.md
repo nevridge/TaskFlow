@@ -238,7 +238,7 @@ The task list page. Responsibilities:
 - Fetch all tasks via `useTasksQuery`
 - Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and title search
 - Sort by title, status, priority, or due date
-- Open create/edit modal inline (no separate route)
+- New Task opens inline; Edit navigates to `/tasks/:id?edit=1` (the task detail page in edit mode)
 - Delete is undoable: `useDeleteTaskUndoable` hides the task (pending key `task:<id>`) and sends the DELETE after a 10s Undo toast window; no confirm dialog. A parent with subtasks has an `aria-disabled` Delete ("Delete subtasks first (N)")
 
 The **Status** filter is a multi-select group of checkboxes (Draft, To-do, Completed) labelled "Status". It defaults to Draft and To-do selected, so completed tasks are hidden until Completed is checked. There is no "All" option: selecting all three shows everything, and an empty selection (all unchecked) applies no restriction and also shows every task. The selection is page state only (not persisted) and resets to Draft + To-do whenever the page is reopened. It does not affect the view chips, so the Completed history chip is empty until Completed is checked.
@@ -251,15 +251,15 @@ The task detail page. Responsibilities:
 - Parse and validate `id` from route params — renders an error state if `Number(id)` is not finite
 - Fetch task via `useTaskQuery(taskId)` (`enabled: Number.isFinite(taskId)`)
 - Fetch notes via `useNotesQuery(taskId)`
-- Inline edit task (replaces title/detail with `TaskForm`)
+- Edit task (replaces title/detail with `TaskForm`). Edit mode is driven by the `?edit=1` URL param, not local state; the in-page Edit button sets it too
 - Delete task — starts the undoable delete and navigates to `/tasks` at once (`replace`, with `state.focusNewTask` so New Task takes focus); the Undo toast persists across the navigation
 - Inline note creation and editing; note delete is undoable (pending key `tasknote:<id>`, 6s window)
 
 #### Origin state and back link (#404)
 
-Journal rows link to `/tasks/:id` with router state `{ from?: string, focusTaskId?: number }` (helpers in `src/lib/task-origin.ts`). The state lives only in `history.state`; nothing is read from the URL.
+Journal rows link to `/tasks/:id` with router state `{ from?: string, focusTaskId?: number }` (helpers in `src/lib/task-origin.ts`). The origin state lives only in `history.state`; nothing about the origin is read from the URL. The one URL input is the `edit` param (see below).
 
-- `from` is built from the journal's `isoDate` prop (`/journal/MM-DD-YYYY`), never from `location.pathname`. The context-header "Parent task" link carries `from` only. The Tasks page links carry no state.
+- `from` is built from the journal's `isoDate` prop (`/journal/MM-DD-YYYY`), never from `location.pathname`. The context-header "Parent task" link carries `from` only. The Tasks page links, including the Edit button (`/tasks/:id?edit=1`), carry no state.
 - `from` is valid only if it is a string starting `/journal/` containing no `//`, `\` or `:`.
 
 | State on `/tasks/:id` | Back link target | Label |
@@ -274,6 +274,19 @@ One-shot focus return: `TodosSection` reads `focusTaskId` once into `returnFocus
 The weekend-to-Friday redirect in `JournalPage` spreads the incoming `location.state` and sets `weekendRedirect: true` last, so `focusTaskId` survives it. Any future one-shot state key set on a weekend navigation survives it too.
 
 Shortcuts are unchanged: `t l n [ ] j` (journal) and the global `?` and `g` chord still fire while the details link is focused; `Enter` is unbound.
+
+#### Edit mode: `?edit=1` (#421)
+
+The URL is the single source of truth for edit mode on `/tasks/:id`; there is no local `editingTask` state. Helpers live in `src/lib/task-origin.ts` (`isEditRequested`, `withEditParam`, `withoutEditParam`, `taskEditPath`).
+
+- **Strict parsing:** edit mode is on only when `searchParams.getAll('edit')` is exactly `['1']`. `edit=0`, `edit=true`, `edit=`, `edit=1&edit=2` and `?Edit=1` stay in read mode. Other params are preserved.
+- **Entry points:** the Tasks page row Edit button (`navigate(taskEditPath(id))`, no state), the journal details link (`/tasks/:id?edit=1` with state `{ from, focusTaskId }`; its accessible name is "Edit details: <title>") and the in-page Edit button.
+- **Replace navigation:** the in-page Edit button, Save success and Cancel all use `setSearchParams(..., { replace: true, state: location.state })`, so opening and closing add no history entries, and Back and refresh never reopen a closed form. `state` is passed explicitly because router v7 would otherwise reset it to null and "Back to Journal" would lose `focusTaskId`. Refreshing while editing reopens the form.
+- **Independent of origin:** `readJournalOrigin` reads only state, so `?edit=1` does not change the back link.
+- **Focus:** the title is focused once the task has loaded and the form is open (a single `taskReady` source drives both the form render and the focus effect, so a deep link with a cold cache focuses after load and background refetches never re-steal focus). When the form closes, focus moves to the Edit button, except while a delete is leaving the page. The shortcut hooks ignore keystrokes in the focused title via `isInputFocused()`.
+- **Failed save:** the form and `?edit=1` stay, and the existing `role="alert"` message announces the error. A not-found id shows "Task not found." with no form. Derived or locked tasks open the form with the status select disabled.
+
+**Return to Tasks:** the Tasks page no longer restores focus, filters or scroll after an edit. Returning from the detail page lands on an unfiltered list at the top, with focus at the document start. This is accepted, not a bug. `data-task-edit-id` on the row Edit button is kept as a stable hook for a possible follow-up that restores them.
 
 ### Current Tasks + Journal behavior (May 2026)
 

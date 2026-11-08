@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useSyncExternalStore } from 'react'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { PrefsProvider } from '@/context/PrefsContext'
 import { COLLAPSED_GROUPS_KEY } from '@/hooks/useCollapsedGroups'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
@@ -100,12 +99,18 @@ const deleteMutate = vi.fn()
 let narrow = true
 const scrollIntoView = vi.fn()
 
+function LocationDisplay() {
+  const l = useLocation()
+  return <div data-testid="location">{l.pathname + l.search}</div>
+}
+
 function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui = (
     <QueryClientProvider client={client}>
       <PrefsProvider>
         <MemoryRouter>
+          <LocationDisplay />
           <TasksPage />
         </MemoryRouter>
       </PrefsProvider>
@@ -116,7 +121,6 @@ function renderPage() {
 
 const titles = () => Array.from(document.querySelectorAll('.t-task-link')).map(a => a.textContent)
 const groupHeader = (name: RegExp) => screen.getByRole('button', { name })
-const editButton = (id: number) => document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`) as HTMLElement
 const filtersToggle = () => screen.getByRole('button', { name: /^Filters/ })
 
 describe('TasksPage on mobile (#317)', () => {
@@ -318,31 +322,16 @@ describe('TasksPage on mobile (#317)', () => {
   })
 
   describe('edit and new panel (AC32-34)', () => {
-    it('scrolls the panel into view and focuses the title at <=820px', async () => {
+    it.each([
+      ['<=820px', true],
+      ['above 820px', false],
+    ])('Edit navigates to the detail page in edit mode at %s, with no inline panel and no scroll', async (_label, isNarrow) => {
+      narrow = isNarrow
       renderPage()
-      await userEvent.click(within(screen.getByText('Alpha task').closest('tr') as HTMLElement).getByRole('button', { name: 'Edit' }))
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
-      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveFocus()
-    })
-
-    it('does not scroll above 820px (AC33)', async () => {
-      narrow = false
-      renderPage()
-      await userEvent.click(editButton(2))
-      expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument()
+      await userEvent.click(within(screen.getByText('Alpha task').closest('tr') as HTMLElement).getByRole('button', { name: 'Edit Alpha task' }))
+      expect(screen.getByTestId('location')).toHaveTextContent('/tasks/2?edit=1')
+      expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument()
       expect(scrollIntoView).not.toHaveBeenCalled()
-      expect(screen.getByRole('textbox', { name: 'Title' })).not.toHaveFocus()
-    })
-
-    it('evaluates the viewport at click time', async () => {
-      narrow = false
-      renderPage()
-      await userEvent.click(editButton(2))
-      expect(scrollIntoView).not.toHaveBeenCalled()
-      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      narrow = true
-      await userEvent.click(editButton(2))
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
     })
 
     it('scrolls and focuses for New Task too', async () => {
@@ -350,110 +339,6 @@ describe('TasksPage on mobile (#317)', () => {
       await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
       expect(scrollIntoView).toHaveBeenCalledTimes(1)
       expect(screen.getByRole('textbox', { name: 'Title' })).toHaveFocus()
-    })
-
-    it('keeps the open panel when the viewport crosses a breakpoint mid-edit', async () => {
-      renderPage()
-      await userEvent.click(editButton(2))
-      narrow = false
-      expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument()
-      expect(scrollIntoView).toHaveBeenCalledTimes(1)
-    })
-
-    it('returns focus to the Edit button after Save (AC34)', async () => {
-      renderPage()
-      await userEvent.click(editButton(2))
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(editButton(2)).toHaveFocus())
-    })
-
-    it('returns focus to the Edit button after Cancel', async () => {
-      renderPage()
-      await userEvent.click(editButton(1))
-      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      expect(editButton(1)).toHaveFocus()
-    })
-
-    it('finds the Edit button after a priority change remounts the row', async () => {
-      updateAsync.mockImplementation(async () => {
-        setTasks(tasks.map(t => (t.id === 2 ? { ...t, priority: 'Low' } : t)))
-        return {}
-      })
-      renderPage()
-      const before = editButton(2)
-      await userEvent.click(before)
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument())
-      expect(editButton(2)).not.toBe(before)
-      expect(editButton(2)).toHaveFocus()
-    })
-
-    it('restores focus to the new Edit button when the refetch remounts the row after the panel closed', async () => {
-      const listeners = new Set<() => void>()
-      vi.mocked(useTasksQuery).mockImplementation((() => {
-        useSyncExternalStore(
-          cb => { listeners.add(cb); return () => { listeners.delete(cb) } },
-          () => queryResult,
-        )
-        return queryResult
-      }) as never)
-      renderPage()
-      const before = editButton(2)
-      await userEvent.click(before)
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument())
-      expect(editButton(2)).toHaveFocus()
-
-      // The refetch lands after the panel closed and moves the task to another group.
-      act(() => {
-        setTasks(tasks.map(t => (t.id === 2 ? { ...t, priority: 'Low' } : t)))
-        listeners.forEach(l => l())
-      })
-      const after = editButton(2)
-      expect(after).not.toBe(before)
-      expect(document.activeElement).toBe(after)
-      expect(after).toHaveAttribute('data-task-edit-id', '2')
-    })
-
-    it('does not steal focus on a later refetch once the user moved focus', async () => {
-      const listeners = new Set<() => void>()
-      vi.mocked(useTasksQuery).mockImplementation((() => {
-        useSyncExternalStore(
-          cb => { listeners.add(cb); return () => { listeners.delete(cb) } },
-          () => queryResult,
-        )
-        return queryResult
-      }) as never)
-      renderPage()
-      await userEvent.click(editButton(2))
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(editButton(2)).toHaveFocus())
-      await userEvent.click(document.body)
-      expect(document.activeElement).toBe(document.body)
-      act(() => {
-        setTasks(tasks.map(t => (t.id === 2 ? { ...t, priority: 'Low' } : t)))
-        listeners.forEach(l => l())
-      })
-      expect(document.activeElement).toBe(document.body)
-    })
-
-    it('keeps the panel open and does not steal focus when the save fails', async () => {
-      updateAsync.mockRejectedValue(new Error('boom'))
-      renderPage()
-      await userEvent.click(editButton(2))
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
-      expect(screen.getByRole('heading', { name: 'Edit Task' })).toBeInTheDocument()
-      expect(editButton(2)).not.toHaveFocus()
-    })
-
-    it('skips focus return silently when the row is gone', async () => {
-      renderPage()
-      await userEvent.click(editButton(4))
-      setTasks(tasks.filter(t => t.id !== 4))
-      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-      expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument()
-      expect(document.querySelector('[data-task-edit-id="4"]')).toBeNull()
     })
 
     it('returns focus to New Task after Save and Cancel', async () => {

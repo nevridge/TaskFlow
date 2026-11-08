@@ -232,24 +232,6 @@ describe('TasksPage acceptance (#317)', () => {
       await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'None')
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
-
-    it('edit: a rejected PUT shows the mapped message, refetches the task list, and clears on status change', async () => {
-      vi.mocked(putApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_PARENT_COMPLETED_NOT_ALLOWED' })
-      renderPage()
-      const row = (await screen.findByText('Bravo task')).closest('tr') as HTMLElement
-      await userEvent.click(within(row).getByRole('button', { name: 'Edit' }))
-      await userEvent.selectOptions(screen.getByLabelText('Parent Task'), 'Alpha task')
-      const fetchesBefore = vi.mocked(getApiV1TaskItems).mock.calls.length
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-      const alert = await screen.findByRole('alert')
-      expect(alert).toHaveTextContent(MESSAGE)
-      expect(screen.getAllByRole('alert')).toHaveLength(1)
-      await waitFor(() => expect(vi.mocked(getApiV1TaskItems).mock.calls.length).toBeGreaterThan(fetchesBefore))
-
-      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'draft')
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    })
   })
 
   describe('history sheet focus trap edges (AC35-36)', () => {

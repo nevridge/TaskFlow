@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TasksPage } from './TasksPage'
 
 vi.mock('@/hooks/useTasks', () => ({
@@ -127,10 +127,16 @@ function mockProjects(projects: typeof projectList | undefined, state: { isSucce
   } as never)
 }
 
+function LocationDisplay() {
+  const l = useLocation()
+  return <div data-testid="location">{l.pathname + l.search}</div>
+}
+
 function page() {
   return (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
+        <LocationDisplay />
         <TasksPage />
       </MemoryRouter>
     </QueryClientProvider>
@@ -741,106 +747,18 @@ describe('TasksPage', () => {
       expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes. Please try again.')
     })
 
-    it('edit save runs PUT then the assign call and closes the form', async () => {
+    it('Edit navigates to the detail page in edit mode and opens no inline panel', async () => {
       renderPage()
-      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
-      const select = document.getElementById('projectId') as HTMLSelectElement
-      expect(select).toHaveDisplayValue('Alpha')
-      await userEvent.selectOptions(select, 'Beta')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() =>
-        expect(changeAsync).toHaveBeenCalledWith({ taskId: 3, fromProjectId: 1, toProjectId: 2 }),
-      )
-      expect(taskMutations.mutateAsync.mock.calls[0][0].data).not.toHaveProperty('projectId')
-      await waitFor(() => expect(screen.queryByText('Edit Task')).not.toBeInTheDocument())
+      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit Alpha work' }))
+      expect(screen.getByTestId('location')).toHaveTextContent('/tasks/3?edit=1')
+      expect(screen.queryByRole('heading', { name: 'Edit Task' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'New Task' })).not.toBeInTheDocument()
     })
 
-    it('edit save with an untouched project makes no project call', async () => {
+    it('the title link opens the detail page in read mode, without the edit param', async () => {
       renderPage()
-      await expandSection('Completed')
-      await userEvent.click(within(rowFor('Beta finished')).getByRole('button', { name: 'Edit' }))
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalled())
-      expect(changeAsync).not.toHaveBeenCalled()
-    })
-
-    it('edit of a task in an archived project keeps it selected with the suffix', async () => {
-      renderPage()
-      await userEvent.click(within(rowFor('Legacy chore')).getByRole('button', { name: 'Edit' }))
-      expect(document.getElementById('projectId')).toHaveDisplayValue('Old (archived)')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalled())
-      expect(changeAsync).not.toHaveBeenCalled()
-    })
-
-    it('edit with a failed project call shows the partial failure message and keeps the form open', async () => {
-      changeAsync.mockRejectedValueOnce({ message: 'This task is already assigned to the project.' })
-      renderPage()
-      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
-      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'Beta')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Task saved, but the project change failed: This task is already in that project.',
-      )
-      expect(screen.getByText('Edit Task')).toBeInTheDocument()
-    })
-
-    function withTask3Project(projectId: number, projectName: string) {
-      vi.mocked(useTasksQuery).mockReturnValue({
-        data: { data: taskList.map(t => (t.id === 3 ? { ...t, projectId, projectName } : t)) },
-        isLoading: false,
-        error: null,
-      } as never)
-    }
-
-    it('after a 409 the refetched project reaches the form; the retry makes no further assign call and keeps edits', async () => {
-      changeAsync.mockRejectedValueOnce({ message: 'This task is already assigned to the project.' })
-      const view = renderPage()
-      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
-      await userEvent.type(screen.getByLabelText('Title'), ' edited')
-      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'Beta')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('This task is already in that project.')
-      expect(changeAsync).toHaveBeenCalledTimes(1)
-
-      // Another tab had already moved the task to Beta; the invalidation refetch reports it.
-      withTask3Project(2, 'Beta')
-      view.rerender(page())
-      expect(document.getElementById('projectId')).toHaveDisplayValue('Beta')
-      expect(screen.getByLabelText('Title')).toHaveValue('Alpha work edited')
-
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(taskMutations.mutateAsync).toHaveBeenCalledTimes(2))
-      expect(changeAsync).toHaveBeenCalledTimes(1)
-      await waitFor(() => expect(screen.queryByText('Edit Task')).not.toBeInTheDocument())
-    })
-
-    it('a "No project" retry after a refetch unassigns from the refetched project, not the stale one', async () => {
-      changeAsync.mockRejectedValueOnce({ status: 404 })
-      const view = renderPage()
-      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
-      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'No project')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await screen.findByRole('alert')
-      expect(changeAsync).toHaveBeenLastCalledWith({ taskId: 3, fromProjectId: 1, toProjectId: null })
-
-      withTask3Project(2, 'Beta')
-      view.rerender(page())
-      // The selection follows the server; the user chooses "No project" again and retries.
-      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'No project')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      await waitFor(() => expect(changeAsync).toHaveBeenCalledTimes(2))
-      expect(changeAsync).toHaveBeenLastCalledWith({ taskId: 3, fromProjectId: 2, toProjectId: null })
-    })
-
-    it('edit with a failed PUT makes no project call', async () => {
-      taskMutations.mutateAsync.mockRejectedValueOnce({ code: 'UNKNOWN' })
-      renderPage()
-      await userEvent.click(within(rowFor('Alpha work')).getByRole('button', { name: 'Edit' }))
-      await userEvent.selectOptions(document.getElementById('projectId') as HTMLSelectElement, 'Beta')
-      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes.')
-      expect(changeAsync).not.toHaveBeenCalled()
+      await userEvent.click(within(rowFor('Alpha work')).getByRole('link', { name: 'Alpha work' }))
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/tasks\/3$/)
     })
   })
 

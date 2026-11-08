@@ -409,7 +409,7 @@ describe('TaskListRow', () => {
         'Add subtask',
         'Block task: Fix login bug',
         'Task history',
-        'Edit',
+        'Edit Fix login bug',
         'Delete task: Fix login bug',
       ])
       actions.forEach(b => expect(b).toHaveTextContent(''))
@@ -417,7 +417,7 @@ describe('TaskListRow', () => {
 
     it('has four actions and no Block slot on non-Todo rows (AC7)', () => {
       renderFull({ ...baseTask, status: 'Completed' })
-      expect(rowActions().map(b => b.getAttribute('aria-label'))).toEqual(['Add subtask', 'Task history', 'Edit', 'Delete task: Fix login bug'])
+      expect(rowActions().map(b => b.getAttribute('aria-label'))).toEqual(['Add subtask', 'Task history', 'Edit Fix login bug', 'Delete task: Fix login bug'])
     })
 
     it('exposes table, row, cell and columnheader semantics (AC11)', () => {
@@ -442,7 +442,19 @@ describe('TaskListRow', () => {
 
     it('marks the Edit button with the task id for focus return', () => {
       renderFull(baseTask)
-      expect(screen.getByRole('button', { name: 'Edit' })).toHaveAttribute('data-task-edit-id', '42')
+      expect(screen.getByRole('button', { name: 'Edit Fix login bug' })).toHaveAttribute('data-task-edit-id', '42')
+    })
+
+    it('names the Edit button by title, falling back to "Edit task" for a blank title', () => {
+      const { unmount } = render(
+        <MemoryRouter>
+          <table><tbody><TaskListRow task={{ ...baseTask, title: '   ' }} onEdit={vi.fn()} onHistory={vi.fn()} onDelete={vi.fn()} onStatusCycle={vi.fn()} /></tbody></table>
+        </MemoryRouter>,
+      )
+      expect(screen.getByRole('button', { name: 'Edit task' })).toBeInTheDocument()
+      unmount()
+      renderFull(baseTask)
+      expect(screen.getByRole('button', { name: 'Edit Fix login bug' })).toBeInTheDocument()
     })
 
     it('gives the status control the tap-target class (AC13)', () => {

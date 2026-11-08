@@ -32,7 +32,7 @@ import {
 } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
-import { journalOriginPath, readFocusTaskId, stateWithoutFocusTaskId } from '@/lib/task-origin'
+import { journalOriginPath, readFocusTaskId, stateWithoutFocusTaskId, taskEditPath } from '@/lib/task-origin'
 import { getErrorCode, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 import {
   todayISO,
@@ -534,12 +534,12 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
             )}
 
             <Link
-              to={`/tasks/${id}`}
+              to={taskEditPath(id)}
               state={{ from: originPath, focusTaskId: id }}
               className="todo-details-link"
               data-todo-details={id}
-              aria-label={`Open details: ${td.title ?? ''}`}
-              title="Open details"
+              aria-label={`Edit details: ${td.title ?? ''}`}
+              title="Edit details"
             >
               <ChevronSvg />
             </Link>

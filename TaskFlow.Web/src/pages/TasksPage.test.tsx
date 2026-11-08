@@ -378,7 +378,7 @@ describe('TasksPage', () => {
     it('composes with search', async () => {
       renderPage()
       await userEvent.selectOptions(filterSelect(), 'No project')
-      await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'Child')
+      await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'Child')
       await waitFor(() => expect(screen.queryByText('Legacy chore')).not.toBeInTheDocument())
       expect(screen.getByText('Child task')).toBeInTheDocument()
       // The parent stays as context for the matching subtask, never as a work row
@@ -544,7 +544,7 @@ describe('TasksPage', () => {
       expect(screen.getByText('Done in Beta')).toBeInTheDocument()
       expect(screen.queryByText('Completed one')).not.toBeInTheDocument()
       await userEvent.selectOptions(filterSelect(), 'All projects')
-      await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'Completed')
+      await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'Completed')
       await waitFor(() => expect(screen.queryByText('Draft one')).not.toBeInTheDocument())
       expect(screen.getByText('Completed one')).toBeInTheDocument()
       expect(screen.queryByText('Done in Beta')).not.toBeInTheDocument()

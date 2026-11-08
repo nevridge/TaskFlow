@@ -305,7 +305,7 @@ describe('TasksPage on mobile (#317)', () => {
       renderPage()
       await userEvent.selectOptions(screen.getByLabelText('Project'), 'none')
       expect(filtersToggle()).toHaveAccessibleName('Filters (1)')
-      await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'alp')
+      await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'alp')
       await userEvent.click(screen.getByRole('button', { name: 'Active today' }))
       expect(filtersToggle()).toHaveAccessibleName('Filters (1)')
     })

@@ -688,6 +688,16 @@
   color: var(--accent);
 }
 
+/* Task ID before the title; inherits the option colour so it stays legible when active/selected */
+.journal-page .task-typeahead-id {
+  margin-right: 6px;
+  font-size: 0.75em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: inherit;
+  opacity: .7;
+}
+
 .task-typeahead-none {
   color: var(--muted);
   font-style: italic;

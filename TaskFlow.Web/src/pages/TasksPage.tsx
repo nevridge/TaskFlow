@@ -32,6 +32,7 @@ import {
   indexTasksById,
   matchesSearchWithAncestors,
 } from '@/lib/task-sections'
+import { parseTaskId } from '@/lib/task-id-search'
 import {
   STATUS_LABELS,
   STATUS_ORDER,
@@ -269,6 +270,7 @@ export function TasksPage() {
   const allById = useMemo(() => indexTasksById(tasks), [tasks])
 
   // Apply filters: view filter, status filter, project filter, search (a parent's title also matches its subtasks)
+  const searchId = useMemo(() => parseTaskId(debouncedSearch), [debouncedSearch])
   const visibleTasks = useMemo(() => {
     const allStatusesChecked = STATUS_OPTIONS.every(o => statusFilter.has(o.value))
     return tasks
@@ -285,8 +287,12 @@ export function TasksPage() {
         const taskProjectId = normalizeProjectId(t.projectId)
         return projectFilter === 'none' ? taskProjectId === null : taskProjectId === projectFilter
       })
-      .filter(t => !debouncedSearch || matchesSearchWithAncestors(t, allById, debouncedSearch))
-  }, [tasks, allById, statusOf, viewFilter, statusFilter, projectFilter, debouncedSearch])
+      .filter(t => {
+        if (!debouncedSearch.trim()) return true
+        if (searchId !== null && Number(t.id) === searchId) return true
+        return matchesSearchWithAncestors(t, allById, debouncedSearch)
+      })
+  }, [searchId, tasks, allById, statusOf, viewFilter, statusFilter, projectFilter, debouncedSearch])
 
   const compareWithinGroup = useCallback((a: TaskListModel, b: TaskListModel): number => {
     const PRIORITY_ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 }
@@ -626,7 +632,7 @@ export function TasksPage() {
             <input
               type="text"
               className="t-search-input"
-              placeholder="Search tasks..."
+              placeholder="Search title or #id…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />

@@ -15,6 +15,7 @@ vi.mock('@/hooks/useTasks', () => ({
 }))
 
 import { TaskTypeahead } from './TaskTypeahead'
+import { useTasksQuery } from '@/hooks/useTasks'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 function renderTypeahead(value: number | null, onChange = vi.fn()) {
@@ -55,9 +56,9 @@ describe('TaskTypeahead', () => {
     const options = screen.getAllByRole('option')
     // Should show "None" + "Write tests" only
     const optionTexts = options.map(o => o.textContent)
-    expect(optionTexts).toContain('Write tests')
-    expect(optionTexts).not.toContain('Fix login bug')
-    expect(optionTexts).not.toContain('Deploy to production')
+    expect(optionTexts).toContain('#2 Write tests')
+    expect(optionTexts.join('|')).not.toContain('Fix login bug')
+    expect(optionTexts.join('|')).not.toContain('Deploy to production')
   })
 
   it('calls onChange with null when None is selected', async () => {
@@ -325,6 +326,156 @@ describe('TaskTypeahead', () => {
       } finally {
         mockTasks.pop()
       }
+    })
+  })
+
+  describe('search by task ID (#423)', () => {
+    const originalTasks = [...mockTasks]
+    const optionNames = () => screen.getAllByRole('option').map(o => o.textContent)
+    const open = async () => {
+      const input = screen.getByRole('combobox')
+      await userEvent.click(input)
+      return input
+    }
+
+    afterEach(() => {
+      mockTasks.splice(0, mockTasks.length, ...originalTasks)
+      vi.mocked(useTasksQuery).mockImplementation(
+        () => ({ data: { data: mockTasks } }) as unknown as ReturnType<typeof useTasksQuery>,
+      )
+    })
+
+    it('shows #id, title and Blocked badge on each option, with accessible name "#4 Stuck task Blocked"', async () => {
+      mockTasks.push({ id: 4, title: 'Stuck task', status: 'Blocked' })
+      renderTypeahead(null)
+      await open()
+      expect(screen.getByRole('option', { name: '#4 Stuck task Blocked' })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: '#1 Fix login bug' })).toBeInTheDocument()
+    })
+
+    it.each(['2', '#2', '002'])('lists the ID match for "%s" and highlights it; Enter selects it', async text => {
+      const { onChange } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, text)
+      expect(optionNames()[1]).toContain('Write tests')
+      expect(screen.getAllByRole('option')[1]).toHaveClass('active')
+      expect(input).toHaveAttribute('aria-activedescendant', screen.getAllByRole('option')[1].id)
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).toHaveBeenCalledWith(2)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    })
+
+    it('puts the ID match first then title matches in list order, without duplicates', async () => {
+      mockTasks.push({ id: 5, title: 'Plan 1 thing', status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '1')
+      const names = optionNames()
+      expect(names[1]).toContain('Fix login bug')
+      expect(names[2]).toContain('Plan 1 thing')
+      expect(names.filter(n => n?.includes('Fix login bug'))).toHaveLength(1)
+    })
+
+    it('keeps the ID match first and the list at 10 options when 11 titles also match', async () => {
+      for (let i = 0; i < 11; i++) mockTasks.push({ id: 100 + i, title: `Item 42 number ${i}`, status: 'Todo' })
+      mockTasks.push({ id: 42, title: 'Fix login', status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '42')
+      const options = screen.getAllByRole('option')
+      expect(options).toHaveLength(11) // None + 10
+      expect(options[1]).toHaveTextContent('#42 Fix login')
+    })
+
+    it('does not match #142 for "42" and shows the empty state', async () => {
+      mockTasks.push({ id: 142, title: 'Hundred', status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '42')
+      expect(screen.getByText('No matching tasks')).toBeInTheDocument()
+    })
+
+    it('highlights nothing and Enter does nothing for an ID with no match, even with title matches', async () => {
+      mockTasks.push({ id: 6, title: 'Ticket 999 follow-up', status: 'Todo' })
+      const { onChange } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '999')
+      expect(screen.getByText(/Ticket 999 follow-up/)).toBeInTheDocument()
+      expect(screen.getAllByRole('option').some(o => o.classList.contains('active'))).toBe(false)
+      expect(input).not.toHaveAttribute('aria-activedescendant')
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('highlights nothing for non-ID text', async () => {
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, 'login')
+      expect(screen.getAllByRole('option').some(o => o.classList.contains('active'))).toBe(false)
+    })
+
+    it('arrow keys still move from the auto-highlighted ID match', async () => {
+      const { onChange } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '2')
+      await userEvent.keyboard('{ArrowUp}')
+      expect(screen.getByText('None')).toHaveClass('active')
+      await userEvent.keyboard('{ArrowDown}{Enter}')
+      expect(onChange).toHaveBeenCalledWith(2)
+    })
+
+    it('drops the ID highlight when a refetch removes the matched task, so Enter cannot select another', async () => {
+      mockTasks.push({ id: 7, title: 'Plan 2 items', status: 'Todo' })
+      const { onChange, rerender } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '2')
+      expect(screen.getAllByRole('option')[1]).toHaveClass('active')
+
+      // Refetch: task 2 is gone (new array identity), so index 1 now holds the title match "Plan 2 items".
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: mockTasks.filter(t => t.id !== 2) },
+      } as unknown as ReturnType<typeof useTasksQuery>)
+      rerender(<TaskTypeahead value={null} onChange={onChange} />)
+
+      expect(screen.getByText(/Plan 2 items/)).toBeInTheDocument()
+      expect(screen.getAllByRole('option').some(o => o.classList.contains('active'))).toBe(false)
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('matches a title containing "#2" for typed "#2" alongside the ID match', async () => {
+      mockTasks.push({ id: 9, title: 'Ref #2 doc', status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '#2')
+      const names = optionNames()
+      expect(names[1]).toContain('Write tests')
+      expect(names[2]).toContain('Ref #2 doc')
+    })
+
+    it('matches an ID delivered as a string and selects it as a number', async () => {
+      mockTasks.push({ id: '77' as unknown as number, title: 'String id task', status: 'Todo' })
+      const { onChange } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '#77')
+      expect(optionNames()[1]).toContain('String id task')
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).toHaveBeenCalledWith(77)
+    })
+
+    it('shows the first 10 tasks for whitespace-only input', async () => {
+      for (let i = 0; i < 12; i++) mockTasks.push({ id: 300 + i, title: `Extra ${i}`, status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '   ')
+      expect(screen.getAllByRole('option')).toHaveLength(11)
+    })
+
+    it('shows the first 10 tasks for empty input', async () => {
+      for (let i = 0; i < 12; i++) mockTasks.push({ id: 200 + i, title: `Extra ${i}`, status: 'Todo' })
+      renderTypeahead(null)
+      await open()
+      expect(screen.getAllByRole('option')).toHaveLength(11)
     })
   })
 })

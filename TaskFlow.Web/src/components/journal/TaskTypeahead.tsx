@@ -4,11 +4,26 @@ import type { TaskItemViewModel } from '@/hooks/useTasks'
 import { BlockIcon } from '@/components/BlockControls'
 import { isBlocked } from '@/lib/task-status'
 import { isCoarsePointer } from '@/lib/pointer'
+import { parseTaskId } from '@/lib/task-id-search'
 
 interface Props {
   value: number | null
   onChange: (id: number | null) => void
   onEscape?: () => void
+}
+
+function findIdMatch(tasks: TaskItemViewModel[], input: string): TaskItemViewModel | undefined {
+  const id = parseTaskId(input)
+  return id === null ? undefined : tasks.find(t => Number(t.id) === id)
+}
+
+// The ID match (if any) first, then case-insensitive title matches in list order, capped at 10.
+function filterTasks(tasks: TaskItemViewModel[], input: string): TaskItemViewModel[] {
+  if (!input.trim()) return tasks.slice(0, 10)
+  const idMatch = findIdMatch(tasks, input)
+  const needle = input.toLowerCase()
+  const titleMatches = tasks.filter(t => t !== idMatch && t.title.toLowerCase().includes(needle))
+  return (idMatch ? [idMatch, ...titleMatches] : titleMatches).slice(0, 10)
 }
 
 export function TaskTypeahead({ value, onChange, onEscape }: Props) {
@@ -21,6 +36,13 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const [inputValue, setInputValue] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
+  // A refetched task list can remove or reorder the highlighted option, so drop the highlight rather than
+  // let Enter select whatever now sits at that index.
+  const [seenTasks, setSeenTasks] = useState(tasks)
+  if (seenTasks !== tasks) {
+    setSeenTasks(tasks)
+    setActiveIndex(-1)
+  }
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const blurTimer = useRef<number | undefined>(undefined)
@@ -30,11 +52,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const selectedTitle = value == null ? '' : (tasks.find(t => Number(t.id) === value)?.title ?? '')
   const displayValue = open ? inputValue : selectedTitle
 
-  const filtered = inputValue.trim()
-    ? tasks
-        .filter(t => t.title.toLowerCase().includes(inputValue.toLowerCase()))
-        .slice(0, 10)
-    : tasks.slice(0, 10)
+  const filtered = filterTasks(tasks, inputValue)
 
   useEffect(() => () => window.clearTimeout(blurTimer.current), [])
 
@@ -48,8 +66,10 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   }, [open, activeIndex])
 
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setInputValue(e.target.value)
-    setActiveIndex(-1)
+    const next = e.target.value
+    setInputValue(next)
+    // An ID-form input with a matching task highlights it (index 1, below "None") so Enter selects it.
+    setActiveIndex(findIdMatch(tasks, next) ? 1 : -1)
     setOpen(true)
   }
 
@@ -167,11 +187,15 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
               aria-selected={Number(task.id) === value}
               onClick={() => handleSelect(task)}
             >
+              <span className="task-typeahead-id">#{task.id}</span>{' '}
               {task.title}
               {isBlocked(task.status) && (
-                <span className="task-typeahead-blocked">
-                  <BlockIcon size={10} /> Blocked
-                </span>
+                <>
+                  {' '}
+                  <span className="task-typeahead-blocked">
+                    <BlockIcon size={10} /> Blocked
+                  </span>
+                </>
               )}
             </li>
           ))}

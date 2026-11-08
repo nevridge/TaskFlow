@@ -189,6 +189,23 @@ describe('TasksPage search by task ID (#423)', () => {
     expect(screen.getByText('Fix login')).toBeInTheDocument()
   })
 
+  it('shows a subtask matched by ID under a Completed parent header even when Completed is unchecked', async () => {
+    useData([task(1, 'Done parent', { status: 'Completed' }), task(42, 'Open child', { parentTaskItemId: 1 })])
+    renderPage()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Completed' }))
+    await search('42')
+    expect(await screen.findByText('Open child')).toBeInTheDocument()
+    expect(screen.getByText('Done parent').closest('tr')).toHaveClass('t-context-header')
+    expect(screen.getByText('1 task')).toBeInTheDocument()
+  })
+
+  it('does not match an ID above the int range (2147483648) against a task', async () => {
+    useData([task(7, 'Other')])
+    renderPage()
+    await search('2147483648')
+    expect(await screen.findByText('No tasks match your filters.')).toBeInTheDocument()
+  })
+
   it('shows the empty state when no ID or title matches', async () => {
     useData([task(42, 'Fix login')])
     renderPage()

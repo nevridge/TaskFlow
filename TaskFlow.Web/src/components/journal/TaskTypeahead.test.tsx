@@ -430,6 +430,24 @@ describe('TaskTypeahead', () => {
       expect(names[2]).toContain('Ref #2 doc')
     })
 
+    it('matches an ID delivered as a string and selects it as a number', async () => {
+      mockTasks.push({ id: '77' as unknown as number, title: 'String id task', status: 'Todo' })
+      const { onChange } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '#77')
+      expect(optionNames()[1]).toContain('String id task')
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).toHaveBeenCalledWith(77)
+    })
+
+    it('shows the first 10 tasks for whitespace-only input', async () => {
+      for (let i = 0; i < 12; i++) mockTasks.push({ id: 300 + i, title: `Extra ${i}`, status: 'Todo' })
+      renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '   ')
+      expect(screen.getAllByRole('option')).toHaveLength(11)
+    })
+
     it('shows the first 10 tasks for empty input', async () => {
       for (let i = 0; i < 12; i++) mockTasks.push({ id: 200 + i, title: `Extra ${i}`, status: 'Todo' })
       renderTypeahead(null)

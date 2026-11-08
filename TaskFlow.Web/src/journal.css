@@ -394,7 +394,8 @@
   overflow-wrap: anywhere;
 }
 .journal-page .todo-x,
-.journal-page .todo-history {
+.journal-page .todo-history,
+.journal-page .todo-details-link {
   flex: 0 0 auto;
   width: 22px; height: 22px;
   display: inline-flex;
@@ -407,6 +408,10 @@
 }
 .journal-page .todo-x:hover { background: var(--danger-bg); color: var(--danger-ink); }
 .journal-page .todo-history:hover { background: var(--hover-soft); color: var(--ink); }
+/* Details link: same box as the sibling row actions; revealed with them, always visible on touch. */
+.journal-page .todo-details-link { text-decoration: none; }
+.journal-page .todo-details-link:hover { background: var(--hover-soft); color: var(--ink); }
+.journal-page .todo-details-link:focus-visible { opacity: 1; color: var(--ink); outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Row action groups: transparent to layout except on phones (see the 480px block). */
 .todo-subline,
@@ -1157,6 +1162,7 @@
 .journal-page .todo:focus-within .todo-history,
 .journal-page .todo:focus-within .todo-x,
 .journal-page .todo:focus-within .todo-block,
+.journal-page .todo:focus-within .todo-details-link,
 .journal-page .log-entry:focus-within .todo-x { opacity: 1; }
 
 .journal-page .todo-block {
@@ -1261,6 +1267,7 @@
   .journal-page .todo:hover .todo-x,
   .journal-page .todo:hover .todo-history,
   .journal-page .todo:hover .todo-block,
+  .journal-page .todo:hover .todo-details-link,
   .journal-page .log-entry:hover .todo-x { opacity: 1; }
 }
 
@@ -1271,6 +1278,7 @@
 @media (hover: none), (pointer: coarse) {
   .journal-page .todo-x,
   .journal-page .todo-history,
+  .journal-page .todo-details-link,
   .journal-page .todo-block {
     opacity: 1;
     width: 44px;

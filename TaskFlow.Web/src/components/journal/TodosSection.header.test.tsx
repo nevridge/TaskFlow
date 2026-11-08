@@ -71,7 +71,7 @@ describe('TodosSection context headers', () => {
   it('renders a parent with open subtasks as a header link with progress and no row controls', () => {
     load([parent(), sub(2), sub(3, { status: 'Completed' })])
     renderSection()
-    const link = screen.getByRole('link', { name: /Parent/ })
+    const link = screen.getByRole('link', { name: /^Parent task/ })
     expect(link).toHaveAttribute('href', '/tasks/1')
     expect(link).toHaveTextContent('Parent task: Parent')
     const header = link.closest('li') as HTMLElement
@@ -102,7 +102,7 @@ describe('TodosSection context headers', () => {
     renderSection()
     expect(screen.getByText('Parent', { selector: '.todo-text' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mark done' })).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Parent task/ })).not.toBeInTheDocument()
   })
 
   it('shows a Completed parent with Completed subtasks as a done row plus a header, subtasks after the header', () => {
@@ -112,7 +112,7 @@ describe('TodosSection context headers', () => {
     const parentLi = screen.getByText('Shipped', { selector: '.todo-text' }).closest('li') as HTMLElement
     expect(parentLi).toHaveClass('is-done')
     expect(parentLi).not.toHaveClass('todo-in-group')
-    const header = screen.getByRole('link', { name: /Shipped/ }).closest('li') as HTMLElement
+    const header = screen.getByRole('link', { name: /^Parent task/ }).closest('li') as HTMLElement
     expect(header).toHaveTextContent('2/2 subtasks complete')
     expect(parentLi.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(header.nextElementSibling).toBe(screen.getByText('Sub 2').closest('li'))
@@ -122,7 +122,7 @@ describe('TodosSection context headers', () => {
   it('builds a header from parentTitle for a subtask whose parent is not on the day, without an arrow prefix', () => {
     load([sub(2, { parentTaskItemId: 77, parentTitle: 'Elsewhere parent' })])
     renderSection()
-    expect(screen.getByRole('link', { name: /Elsewhere parent/ })).toHaveAttribute('href', '/tasks/77')
+    expect(screen.getByRole('link', { name: /^Parent task/ })).toHaveAttribute('href', '/tasks/77')
     expect(document.body.textContent).not.toContain('↳')
     expect(screen.getByText('Sub 2')).toBeInTheDocument()
   })
@@ -139,13 +139,13 @@ describe('TodosSection context headers', () => {
     const { rerender } = renderSection()
     const check = screen.getByRole('button', { name: 'Mark done' })
     check.focus()
-    expect(screen.getByRole('link', { name: /Parent/ }).closest('li')).toHaveTextContent('0/1 subtasks complete')
+    expect(screen.getByRole('link', { name: /^Parent task/ }).closest('li')).toHaveTextContent('0/1 subtasks complete')
 
     // Optimistic completion: the flat cache flips the row; the parent's openChildCount refreshes later.
     load([parent({ openChildCount: 1 }), sub(2, { status: 'Completed', completedAt: NOW_ISO })])
     rerender(<TodosSection entryId={10} isoDate={DAY} sort="manual" />)
 
-    expect(screen.getByRole('link', { name: /Parent/ }).closest('li')).toHaveTextContent('1/1 subtasks complete')
+    expect(screen.getByRole('link', { name: /^Parent task/ }).closest('li')).toHaveTextContent('1/1 subtasks complete')
     const done = screen.getByRole('button', { name: 'Mark not done' })
     expect(done).toBe(check)
     expect(done).toHaveFocus()
@@ -212,9 +212,9 @@ describe('TodosSection context headers', () => {
     it('removes the header in the same render when its last subtask row is hidden, and shows "No TODOs yet"', () => {
       load([sub(2, { parentTaskItemId: 77, parentTitle: 'Elsewhere parent' })])
       renderSection()
-      expect(screen.getByRole('link', { name: /Elsewhere parent/ })).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /^Parent task/ })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Remove from day' }))
-      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^Parent task/ })).not.toBeInTheDocument()
       expect(screen.getByText(/no todos yet/i)).toBeInTheDocument()
       // Focus fell back to the draft input, not a header
       expect(screen.getByPlaceholderText('Add a TODO and press Enter')).toHaveFocus()
@@ -224,7 +224,7 @@ describe('TodosSection context headers', () => {
       load([parent({ openChildCount: 1 }), sub(2)])
       renderSection()
       fireEvent.click(screen.getByRole('button', { name: 'Remove from day' }))
-      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /^Parent task/ })).not.toBeInTheDocument()
       expect(screen.getByText('Parent', { selector: '.todo-text' })).toBeInTheDocument()
       expect(screen.queryByText(/no todos yet/i)).not.toBeInTheDocument()
     })

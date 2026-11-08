@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
 import {
   useTaskQuery,
   useTasksQuery,
@@ -22,6 +22,7 @@ import { formatShort, formatStartedAt } from '@/lib/journal-utils'
 import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import { deriveTaskStatuses, getDerivedStatusTitle } from '@/lib/task-derived-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
+import { readJournalOrigin, readFocusTaskId } from '@/lib/task-origin'
 import '@/tasks.css'
 
 type TaskDetailModel = TaskItemViewModel
@@ -43,6 +44,9 @@ export function TaskDetailPage() {
   const { autoCompleteParentWhenChildrenDone } = usePrefs()
 
   const navigate = useNavigate()
+  const location = useLocation()
+  // Origin comes from router state only, validated on read; direct loads fall back to the Tasks list.
+  const journalOrigin = readJournalOrigin(location.state)
 
   const [editingTask, setEditingTask] = useState(false)
   // Set by a self-initiated delete so the frame between the pending filter and the navigation is empty,
@@ -170,7 +174,13 @@ export function TaskDetailPage() {
   return (
     <div className="tasks-page">
       <div className="t-shell t-shell--narrow">
-        <Link to="/tasks" className="t-back-link">← Back to Tasks</Link>
+        <Link
+          to={journalOrigin ?? '/tasks'}
+          state={journalOrigin ? { focusTaskId: readFocusTaskId(location.state) ?? taskId } : undefined}
+          className="t-back-link"
+        >
+          {journalOrigin ? '← Back to Journal' : '← Back to Tasks'}
+        </Link>
 
         <div className="t-panel">
           {editingTask ? (

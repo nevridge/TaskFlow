@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { useTapToEdit } from '@/hooks/useTapToEdit'
 import { removeJournalTodo } from '@/api/journal'
@@ -32,6 +32,7 @@ import {
 } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { TodoBadges } from '@/components/journal/TodoBadges'
+import { journalOriginPath, readFocusTaskId, stateWithoutFocusTaskId } from '@/lib/task-origin'
 import { getErrorCode, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 import {
   todayISO,
@@ -55,6 +56,12 @@ const HistorySvg = () => (
     <path d="M12 8v5l3 2"/>
     <path d="M3.05 11a9 9 0 1 1 .5 4"/>
     <path d="M3 4v7h7"/>
+  </svg>
+)
+
+const ChevronSvg = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <polyline points="9 6 15 12 9 18"/>
   </svg>
 )
 
@@ -126,6 +133,21 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 
   const [, setFocusTick] = useState(0)
 
+  // One-shot focus return from the task details page. Separate from pendingFocus: that one expires after 100ms
+  // and is cleared by keydown/pointerdown, but rows may render later and a keyboard user is mid-interaction.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const returnFocusRef = useRef<number | null>(readFocusTaskId(location.state))
+  const returnKeyRef = useRef(location.key)
+
+  // The section can persist across an in-place navigation (the weekend-to-Friday redirect), so a new
+  // location that carries a focus id is read once, as long as no earlier one is still waiting.
+  useEffect(() => {
+    if (returnKeyRef.current === location.key) return
+    returnKeyRef.current = location.key
+    if (returnFocusRef.current == null) returnFocusRef.current = readFocusTaskId(location.state)
+  }, [location.key, location.state])
+
   // Applied after every render while pending, because the optimistic update can re-sort the list a
   // moment after the action (and a moved row may lose focus). The request expires after 100ms.
   useEffect(() => {
@@ -189,6 +211,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   const isPastDay = isoDate < today
 
   const offset = getTimezoneOffsetMinutes()
+  const originPath = journalOriginPath(isoDate)
 
   // Rows are flat (roots and subtasks). Tiers (open, blocked, completed) apply only to the two tiered sort modes;
   // other modes keep server order. Context headers are placed by buildJournalBlocks, never sorted as todos.
@@ -203,6 +226,20 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     [todos, sort],
   )
   const workRows = useMemo(() => blocks.flatMap(b => b.rows), [blocks])
+
+  // Runs on the render where loading ends. A row that is gone (completed, deleted, moved, other day) abandons the
+  // request without forcing focus anywhere. Only the focus key is cleared so weekendRedirect survives a refresh.
+  useEffect(() => {
+    const id = returnFocusRef.current
+    if (id == null || isLoading) return
+    returnFocusRef.current = null
+    sectionRef.current
+      ?.querySelector<HTMLElement>(`[data-todo-details="${id}"]`)
+      ?.focus({ preventScroll: false })
+    if (readFocusTaskId(location.state) != null) {
+      navigate(location.pathname, { replace: true, state: stateWithoutFocusTaskId(location.state) })
+    }
+  }, [workRows, isLoading, location.key, location.pathname, location.state, navigate])
 
   // Counts come from the rendered work rows; headers are never counted.
   const remaining = openTodoCount(workRows)
@@ -495,6 +532,17 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                 <DeleteSvg />
               </button>
             )}
+
+            <Link
+              to={`/tasks/${id}`}
+              state={{ from: originPath, focusTaskId: id }}
+              className="todo-details-link"
+              data-todo-details={id}
+              aria-label={`Open details: ${td.title ?? ''}`}
+              title="Open details"
+            >
+              <ChevronSvg />
+            </Link>
           </div>
 
           <div className="todo-subline-meta">
@@ -566,7 +614,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   function renderContextHeader(header: JournalHeaderData) {
     return (
       <li key={`ctx:${header.parentId}`} className="todo todo-context-header">
-        <Link to={`/tasks/${header.parentId}`} className="todo-context-link">
+        <Link to={`/tasks/${header.parentId}`} state={{ from: originPath }} className="todo-context-link">
           <span className="sr-only">Parent task: </span>
           <span id={`todo-ctx-${header.parentId}`}>{header.title}</span>
         </Link>

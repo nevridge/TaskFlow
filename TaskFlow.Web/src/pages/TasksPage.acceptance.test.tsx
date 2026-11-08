@@ -120,7 +120,7 @@ describe('TasksPage acceptance (#317)', () => {
     it('does not fire shortcuts while typing in the search box', async () => {
       renderPage()
       await screen.findByText('Alpha task')
-      await userEvent.type(screen.getByPlaceholderText('Search tasks...'), '?')
+      await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), '?')
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })

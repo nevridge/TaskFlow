@@ -229,7 +229,7 @@ describe('TasksPage undoable delete (#321)', () => {
     it('Ctrl+Z and "u" are ignored while typing in the search field', async () => {
       await loadPage()
       fireEvent.click(deleteButton('Alpha task'))
-      const search = screen.getByPlaceholderText('Search tasks...')
+      const search = screen.getByPlaceholderText(/Search title or #id/)
       act(() => search.focus())
       fireEvent.keyDown(search, { key: 'u' })
       fireEvent.keyDown(search, { key: 'z', ctrlKey: true })
@@ -240,7 +240,7 @@ describe('TasksPage undoable delete (#321)', () => {
       await loadPage()
       fireEvent.click(deleteButton('Alpha task'))
       // The row is hidden by a search filter when Undo runs.
-      fireEvent.change(screen.getByPlaceholderText('Search tasks...'), { target: { value: 'Charlie' } })
+      fireEvent.change(screen.getByPlaceholderText(/Search title or #id/), { target: { value: 'Charlie' } })
       await advance(250)
       fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
       await advance(20)

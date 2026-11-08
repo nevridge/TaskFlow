@@ -357,7 +357,7 @@ describe('TasksPage sections and context headers (#384)', () => {
       { ...baseTask, id: 3, title: 'Unrelated', status: 'Todo', priority: 'High' },
     ])
     renderPage()
-    await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'trip')
+    await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'trip')
     await waitFor(() => expect(screen.queryByText('Unrelated')).not.toBeInTheDocument())
     expect(screen.getByText('Book flights')).toBeInTheDocument()
     expect(rowFor('Plan the trip')).toHaveClass('t-context-header')
@@ -384,8 +384,8 @@ describe('TasksPage sections and context headers (#384)', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
     await userEvent.selectOptions(filterSelect(), 'Alpha')
     await userEvent.click(screen.getByRole('button', { name: 'Active today' }))
-    await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'thing')
-    await waitFor(() => expect(screen.getByPlaceholderText('Search tasks...')).toHaveValue('thing'))
+    await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'thing')
+    await waitFor(() => expect(screen.getByPlaceholderText(/Search title or #id/)).toHaveValue('thing'))
     expect(setItem).not.toHaveBeenCalled()
   })
 
@@ -475,7 +475,7 @@ describe('TasksPage sections and context headers (#384)', () => {
     useData([{ ...baseTask, id: 1, title: 'Cycle me', status: 'Todo', priority: 'High' }])
     renderPage()
     await userEvent.click(within(rowFor('Cycle me')).getByRole('button', { name: /^Status:/ }))
-    const search = screen.getByPlaceholderText('Search tasks...')
+    const search = screen.getByPlaceholderText(/Search title or #id/)
     search.focus()
     act(() => settled())
     expect(document.activeElement).toBe(search)
@@ -488,7 +488,7 @@ describe('TasksPage sections and context headers (#384)', () => {
       { ...baseTask, id: 3, title: 'Book hotels', status: 'Blocked', priority: 'High', parentTaskItemId: 1 },
     ])
     renderPage()
-    await userEvent.type(screen.getByPlaceholderText('Search tasks...'), 'trip')
+    await userEvent.type(screen.getByPlaceholderText(/Search title or #id/), 'trip')
     await waitFor(() => expect(screen.getByText('Book flights')).toBeInTheDocument())
     expect(rowFor('Plan the trip')).toHaveClass('t-context-header')
     await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))

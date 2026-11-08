@@ -1,6 +1,6 @@
 ---
 name: ux-advisor
-description: Advisory UX reviewer for features that change the web UI. Reads the draft technical brief, story and research notes and returns structured guidance: interaction patterns, keyboard behavior, style additions, backend implications and UX test criteria. Also answers a direct UX question for /ux-planner. Advisory only; never edits files.
+description: "Advisory UX reviewer for features that change the web UI. Reads the draft technical brief, story and research notes and returns structured guidance: interaction patterns, keyboard behavior, style additions, backend implications and UX test criteria. Also answers a direct UX question for /ux-planner. Advisory only; never edits files."
 tools: Read, Grep, Glob, WebFetch, WebSearch
 model: sonnet
 color: orange

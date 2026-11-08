@@ -1,6 +1,6 @@
 ---
 name: test-verifier
-description: Verifies a feature against the approved user story and technical brief: writes acceptance tests for every acceptance criterion not already covered, probes for edge-case bugs the builders may have missed, runs the CI gates for each changed area, and classifies the result. Never modifies production code and never commits.
+description: "Verifies a feature against the approved user story and technical brief: writes acceptance tests for every acceptance criterion not already covered, probes for edge-case bugs the builders may have missed, runs the CI gates for each changed area, and classifies the result. Never modifies production code and never commits."
 tools: Glob, Grep, Read, Edit, Write, Bash
 model: sonnet
 color: yellow

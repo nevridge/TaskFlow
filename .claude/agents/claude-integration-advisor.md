@@ -1,6 +1,6 @@
 ---
 name: claude-integration-advisor
-description: Documentation-grounded advisor for changes to Claude integrations in the assistant: the MCP server (assistant/src/TaskFlow.Mcp), the Claude Code plugin and the Desktop chat skill. Fetches the current docs and returns cited recommendations. Advisory only; never edits files.
+description: "Documentation-grounded advisor for changes to Claude integrations in the assistant: the MCP server (assistant/src/TaskFlow.Mcp), the Claude Code plugin and the Desktop chat skill. Fetches the current docs and returns cited recommendations. Advisory only; never edits files."
 tools: Read, Glob, Grep, WebFetch, WebSearch
 model: sonnet
 color: cyan

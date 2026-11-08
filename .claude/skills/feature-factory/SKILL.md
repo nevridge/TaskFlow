@@ -48,7 +48,7 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Both get the draft brief, `story.md` and `research.md`. Write their replies to `advisories.md`. A `NO_UI_WORK` reply adds nothing.
 3. One more `spec-writer` pass folds `advisories.md` into the brief. A proposed package appears as "Proposed dependency (needs approval)". Write `brief.md`.
 
-**Stop 2** is skipped only for a groomed issue whose brief has no open questions, no advisor conflicts and no dependency proposal. Show any `SOURCE LIST NEEDS UPDATE: <entry>` line from the integration advisor at this stop.
+**Stop 2** is skipped only for a groomed issue whose brief has no open questions, no advisor conflicts, no dependency proposal and no `SOURCE LIST NEEDS UPDATE` line. Show any `SOURCE LIST NEEDS UPDATE: <entry>` line from the integration advisor at this stop.
 
 ## Stops 1 and 2
 

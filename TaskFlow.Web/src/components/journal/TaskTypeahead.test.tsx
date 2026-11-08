@@ -15,6 +15,7 @@ vi.mock('@/hooks/useTasks', () => ({
 }))
 
 import { TaskTypeahead } from './TaskTypeahead'
+import { useTasksQuery } from '@/hooks/useTasks'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
 
 function renderTypeahead(value: number | null, onChange = vi.fn()) {
@@ -339,6 +340,9 @@ describe('TaskTypeahead', () => {
 
     afterEach(() => {
       mockTasks.splice(0, mockTasks.length, ...originalTasks)
+      vi.mocked(useTasksQuery).mockImplementation(
+        () => ({ data: { data: mockTasks } }) as unknown as ReturnType<typeof useTasksQuery>,
+      )
     })
 
     it('shows #id, title and Blocked badge on each option, with accessible name "#4 Stuck task Blocked"', async () => {
@@ -418,6 +422,25 @@ describe('TaskTypeahead', () => {
       expect(screen.getByText('None')).toHaveClass('active')
       await userEvent.keyboard('{ArrowDown}{Enter}')
       expect(onChange).toHaveBeenCalledWith(2)
+    })
+
+    it('drops the ID highlight when a refetch removes the matched task, so Enter cannot select another', async () => {
+      mockTasks.push({ id: 7, title: 'Plan 2 items', status: 'Todo' })
+      const { onChange, rerender } = renderTypeahead(null)
+      const input = await open()
+      await userEvent.type(input, '2')
+      expect(screen.getAllByRole('option')[1]).toHaveClass('active')
+
+      // Refetch: task 2 is gone (new array identity), so index 1 now holds the title match "Plan 2 items".
+      vi.mocked(useTasksQuery).mockReturnValue({
+        data: { data: mockTasks.filter(t => t.id !== 2) },
+      } as unknown as ReturnType<typeof useTasksQuery>)
+      rerender(<TaskTypeahead value={null} onChange={onChange} />)
+
+      expect(screen.getByText(/Plan 2 items/)).toBeInTheDocument()
+      expect(screen.getAllByRole('option').some(o => o.classList.contains('active'))).toBe(false)
+      await userEvent.keyboard('{Enter}')
+      expect(onChange).not.toHaveBeenCalled()
     })
 
     it('matches a title containing "#2" for typed "#2" alongside the ID match', async () => {

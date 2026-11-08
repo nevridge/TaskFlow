@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getErrorCode, getTaskMutationErrorMessage } from './task-errors'
+import { getErrorCode, getPlanClearErrorMessage, getTaskMutationErrorMessage, getTaskPlanSaveErrorMessage } from './task-errors'
 import { PROJECT_CREATE_NOT_FOUND_MESSAGE } from './project-errors'
 
 describe('getErrorCode', () => {
@@ -47,5 +47,47 @@ describe('TASK_START_NOT_ALLOWED', () => {
   it('maps the 422 to the Set-to-Todo-first guidance', () => {
     expect(getTaskMutationErrorMessage({ code: 'TASK_START_NOT_ALLOWED' }))
       .toBe('Only Todo tasks can be moved to In Progress. Set it to Todo first.')
+  })
+})
+
+describe('getTaskPlanSaveErrorMessage', () => {
+  it.each([
+    ['TASK_CREATION_PAST_DAY_NOT_ALLOWED', 'You cannot plan a task on a past journal day. Nothing was saved.'],
+    [
+      'TASK_PLAN_HAS_OPEN_SUBTASKS',
+      "A task with open subtasks can't be planned on a day. Plan its subtasks instead. Nothing was saved.",
+    ],
+    [
+      'TASK_JOURNAL_ASSIGNMENT_CONFLICT',
+      "Another tab or device just changed this task's planned day. Your other edits were not saved. We've refreshed it. Try again.",
+    ],
+    ['TASK_PLAN_COMPLETED_NOT_ALLOWED', 'Completed tasks cannot be moved to another day. Reopen the task first.'],
+    ['TASK_PARENT_SELF_NOT_ALLOWED', 'A task cannot be set as its own parent.'],
+  ])('maps %s', (code, message) => {
+    expect(getTaskPlanSaveErrorMessage({ code })).toBe(message)
+  })
+
+  it('falls back to the generic save message', () => {
+    expect(getTaskPlanSaveErrorMessage(new Error('x'))).toBe('Unable to save task changes. Please try again.')
+  })
+
+  it('leaves the shared mapper saying "create" for the past-day code', () => {
+    expect(getTaskMutationErrorMessage({ code: 'TASK_CREATION_PAST_DAY_NOT_ALLOWED' }))
+      .toBe('You cannot create new tasks on a past journal day.')
+  })
+})
+
+describe('getPlanClearErrorMessage', () => {
+  it('maps a 404 to the no-longer-on-that-day message', () => {
+    expect(getPlanClearErrorMessage({ status: 404 })).toBe('The task is no longer on that day. Showing its current planned day.')
+  })
+
+  it('maps the completed code to the completed message', () => {
+    expect(getPlanClearErrorMessage({ code: 'TASK_PLAN_COMPLETED_NOT_ALLOWED' }))
+      .toBe('Completed tasks cannot be moved to another day. Reopen the task first.')
+  })
+
+  it.each([[{ status: 500 }], [new Error('boom')], [undefined]])('uses the generic message for %j', err => {
+    expect(getPlanClearErrorMessage(err)).toBe('Unable to remove the planned day. Please try again.')
   })
 })

@@ -187,6 +187,8 @@ export function useUpdateTaskMutation() {
           timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
           // Omitted unless the caller sends it, so the stored reason is kept (merge-on-null).
           ...(data.blockedReason != null && { blockedReason: data.blockedReason }),
+          // Omitted unless planning: the server keeps the stored day, and never receives null (clearing is a DELETE).
+          ...(data.journalDate != null && { journalDate: data.journalDate }),
         } as UpdateTaskItemDto,
         // Per call: the client only rejects on HTTP errors when this is set.
         throwOnError: true,
@@ -202,16 +204,22 @@ export function useUpdateTaskMutation() {
       rollbackTaskCache(qc, snapshot)
       // A derived-status or completed-parent 422 means this view was stale: refetch so it self-heals.
       const code = (err as { code?: unknown } | null)?.code
-      if (code === 'TASK_PARENT_STATUS_DERIVED' || code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED') {
+      if (
+        code === 'TASK_PARENT_STATUS_DERIVED' ||
+        code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED' ||
+        code === 'TASK_JOURNAL_ASSIGNMENT_CONFLICT'
+      ) {
         qc.invalidateQueries({ queryKey: taskKeys.all })
         qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
       }
     },
-    onSuccess: (_result, { id }) => {
+    onSuccess: (_result, { id, data }) => {
       qc.invalidateQueries({ queryKey: taskKeys.all })
       qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
       // Status changes alter the open/completed counts shown on project views.
       qc.invalidateQueries({ queryKey: projectKeys.all })
+      // Planning a task on a day changes that day's journal todos.
+      if (data.journalDate != null) qc.invalidateQueries({ queryKey: journalKeys.all })
     },
   })
 }

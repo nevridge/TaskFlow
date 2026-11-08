@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
@@ -17,6 +17,10 @@ vi.mock('@/hooks/useTasks', () => ({
     detail: (id: number) => ['tasks', id],
     history: (id: number) => ['tasks', id, 'history'],
   },
+}))
+
+vi.mock('@/api/journal', () => ({
+  removeJournalTodo: vi.fn(),
 }))
 
 vi.mock('@/hooks/useProjects', () => ({
@@ -43,6 +47,7 @@ vi.mock('@/components/TaskHistoryPanel', () => ({
   TaskHistoryPanel: () => <div data-testid="history-panel" />,
 }))
 
+import { removeJournalTodo } from '@/api/journal'
 import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
 import { useDeleteTaskUndoable, useDeleteNoteUndoable } from '@/hooks/useDeleteTaskUndoable'
 import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
@@ -816,12 +821,69 @@ describe('TaskDetailPage', () => {
       expect(screen.getByRole('link', { name: '← Back to Tasks' })).toHaveAttribute('href', '/tasks')
     })
 
-    it('a journal-origin edit save sends only the form fields: no planned day or journal date', async () => {
+    it('an untouched save (journal origin kept) sends neither journalDate nor plannedDay and never removes the todo', async () => {
       renderAt({ pathname: '/tasks/1', search: '?edit=1', state: { from: '/journal/11-07-2026', focusTaskId: 1 } })
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
       await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
       const sent = updateAsync.mock.calls[0][0].data
       expect(Object.keys(sent).filter(k => /journal|planned/i.test(k))).toEqual([])
+      expect(removeJournalTodo).not.toHaveBeenCalled()
+    })
+
+    it('a changed planned day is sent as journalDate on the PUT', async () => {
+      renderAt('/tasks/1?edit=1')
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: '2099-11-12' } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      const sent = updateAsync.mock.calls[0][0].data
+      expect(sent.journalDate).toBe('2099-11-12')
+      expect(sent).not.toHaveProperty('plannedDay')
+      expect(removeJournalTodo).not.toHaveBeenCalled()
+    })
+
+    it('clearing the planned day removes the todo from its entry after the PUT and leaves the field empty', async () => {
+      mockTask({ currentJournalDate: '2099-11-12', currentJournalEntryId: 3 })
+      renderAt('/tasks/1?edit=1')
+      expect(screen.getByLabelText('Planned day')).toHaveValue('2099-11-12')
+      await userEvent.click(screen.getByRole('button', { name: 'Clear planned day' }))
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(removeJournalTodo).toHaveBeenCalledWith(3, 1))
+      expect(updateAsync.mock.calls[0][0].data).not.toHaveProperty('journalDate')
+      expect(updateAsync.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(removeJournalTodo).mock.invocationCallOrder[0])
+    })
+
+    it('a failed PUT keeps the typed day and shows the planning message', async () => {
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_CREATION_PAST_DAY_NOT_ALLOWED' })
+      renderAt('/tasks/1?edit=1')
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: '2099-11-12' } })
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('You cannot plan a task on a past journal day. Nothing was saved.')
+      expect(screen.getByLabelText('Planned day')).toHaveValue('2099-11-12')
+      expect(removeJournalTodo).not.toHaveBeenCalled()
+      expect(changeAsync).not.toHaveBeenCalled()
+    })
+
+    it('a failed clear reports the partial save, reverts the field to the stored day and skips the project change', async () => {
+      vi.mocked(removeJournalTodo).mockRejectedValueOnce({ status: 404 })
+      mockTask({ currentJournalDate: '2099-11-12', currentJournalEntryId: 3 })
+      renderAt('/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: 'Clear planned day' }))
+      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), '2')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Task saved, but removing the planned day failed: The task is no longer on that day.',
+      )
+      expect(screen.getByLabelText('Planned day')).toHaveValue('2099-11-12')
+      expect(changeAsync).not.toHaveBeenCalled()
+    })
+
+    it('a stored day with no journal entry id clears without a remove call', async () => {
+      mockTask({ currentJournalDate: '2099-11-12', currentJournalEntryId: null })
+      renderAt('/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: 'Clear planned day' }))
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      expect(removeJournalTodo).not.toHaveBeenCalled()
     })
 
     it('opens a derived task in edit mode with the status select disabled', () => {

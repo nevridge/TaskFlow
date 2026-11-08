@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDateOnly } from '@/lib/utils'
-import { todayISO } from '@/lib/journal-utils'
+import { formatMonthDay, formatShort, todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
 import { COMPLETED_PARENT_ADD_SUBTASK_HINT } from '@/lib/parent-options'
 import { getDerivedStatusTitle } from '@/lib/task-derived-status'
@@ -143,6 +143,9 @@ export function TaskListRow({
   const daysTagged = task.daysTagged ?? 0
   const isCompleted = status === 'completed'
   const highDeferral = moveCount >= 3
+  // Informational only: no overdue styling, and hidden once completed (the stored plan is not shown for done tasks).
+  const plannedDay = task.currentJournalDate
+  const showPlanned = !!plannedDay && !isCompleted
   const showDeferral = moveCount > 0 || daysTagged > 1
   const boldTitle = isDueToday(task.dueDate) && priority === 'high'
 
@@ -223,9 +226,16 @@ export function TaskListRow({
                 {daysTagged > 1 && <>Tagged {daysTagged} days</>}
               </div>
             )}
-            {task.projectName && (
-              <div>
-                <span className="t-badge t-badge-project" title={task.projectName}>{task.projectName}</span>
+            {(task.projectName || showPlanned) && (
+              <div className="t-list-badges">
+                {task.projectName && (
+                  <span className="t-badge t-badge-project" title={task.projectName}>{task.projectName}</span>
+                )}
+                {showPlanned && plannedDay && (
+                  <span className="t-badge t-badge-planned" title={`Planned for ${formatShort(plannedDay)}`}>
+                    {`Planned for ${formatMonthDay(plannedDay)}`}
+                  </span>
+                )}
               </div>
             )}
           </div>

@@ -2,6 +2,9 @@ import { useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useUpdateTaskMutation, taskKeys, type UpdateTaskPayload } from '@/hooks/useTasks'
 import { useChangeTaskProject } from '@/hooks/useProjects'
+import { journalKeys } from '@/hooks/journalKeys'
+import { removeJournalTodo } from '@/api/journal'
+import { getPlanClearErrorMessage } from '@/lib/task-errors'
 import type { TaskFormPayload } from '@/components/TaskForm'
 import {
   getProjectErrorKind,
@@ -12,16 +15,22 @@ import {
 interface SaveTarget {
   id?: number | string
   projectId?: number | string | null
+  /** Journal entry the task is currently planned on; needed to clear the planned day. */
+  currentJournalEntryId?: number | string | null
 }
 
 /**
  * Shared edit-save sequence for TaskForm hosts (TasksPage, TaskDetailPage):
- * 1. PUT the task fields (full replace; the PUT never carries projectId).
- * 2. Only if the selected project differs from the task's current one, make one
+ * 1. PUT the task fields (full replace; the PUT never carries projectId). It carries
+ *    `journalDate` only when the form sets or changes the planned day.
+ * 2. Only when the form cleared the planned day (`plannedDay === null`) and the task is on a
+ *    journal entry, remove it from that day (the PUT cannot clear a plan).
+ * 3. Only if the selected project differs from the task's current one, make one
  *    assign/unassign call.
- * If the PUT fails no project call is made. If only the project call fails the
- * task fields are already saved, so a "Task saved, but..." message is produced and
- * a retry re-sends the idempotent PUT followed by the project call.
+ * Steps stop at the first failure. If the PUT fails nothing else runs and nothing was saved. If the
+ * clear or project call fails the task fields are already saved, so a "Task saved, but..." message is
+ * produced and a retry re-sends the idempotent PUT followed by the remaining steps.
+ * `plannedDayRevertToken` increments after a failed clear so the form snaps back to the stored day.
  */
 export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => string) {
   const qc = useQueryClient()
@@ -31,6 +40,7 @@ export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => 
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [projectInvalid, setProjectInvalid] = useState(false)
+  const [plannedDayRevertToken, setPlannedDayRevertToken] = useState(0)
 
   function clearError() {
     setError(null)
@@ -49,15 +59,35 @@ export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => 
     clearError()
     const taskId = Number(task.id)
     try {
-      const { projectId: selected, ...fields } = formData
+      const { projectId: selected, plannedDay, ...fields } = formData
       try {
         await updateTask.mutateAsync({
           id: taskId,
-          data: { ...(fields as UpdateTaskPayload), autoCompleteParentWhenChildrenDone },
+          data: {
+            ...(fields as UpdateTaskPayload),
+            ...(typeof plannedDay === 'string' && plannedDay !== '' && { journalDate: plannedDay }),
+            autoCompleteParentWhenChildrenDone,
+          },
         })
       } catch (err) {
         setError(getTaskErrorMessage(err))
         return false
+      }
+
+      if (plannedDay === null && task.currentJournalEntryId != null) {
+        try {
+          await removeJournalTodo(Number(task.currentJournalEntryId), taskId)
+          qc.invalidateQueries({ queryKey: taskKeys.all })
+          qc.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
+          qc.invalidateQueries({ queryKey: journalKeys.all })
+        } catch (err) {
+          setError(`Task saved, but removing the planned day failed: ${getPlanClearErrorMessage(err)}`)
+          setPlannedDayRevertToken(n => n + 1)
+          qc.invalidateQueries({ queryKey: taskKeys.all })
+          qc.invalidateQueries({ queryKey: taskKeys.detail(taskId) })
+          qc.invalidateQueries({ queryKey: journalKeys.all })
+          return false
+        }
       }
 
       const from = normalizeProjectId(task.projectId)
@@ -80,5 +110,5 @@ export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => 
     }
   }
 
-  return { save, isSaving, error, setError, projectInvalid, setProjectInvalid, clearError }
+  return { save, isSaving, error, setError, projectInvalid, setProjectInvalid, clearError, plannedDayRevertToken }
 }

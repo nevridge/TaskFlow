@@ -3,6 +3,7 @@ import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.
 import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
 import { isCompleted, normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
+import { todayISO } from '@/lib/journal-utils'
 import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
 import {
   COMPLETED_PARENT_STATUS_HINT,
@@ -19,6 +20,11 @@ export type TaskFormPayload = CreateTaskItemDto & {
   projectId?: number | null
   /** Only present while the status is Blocked. "" clears the reason; omitted keeps it (PUT semantics). */
   blockedReason?: string
+  /**
+   * Edit only. undefined = unchanged or not shown, 'YYYY-MM-DD' = set/change, null = clear the planned journal day.
+   * Never an empty string.
+   */
+  plannedDay?: string | null
 }
 
 export type { ProjectOption }
@@ -48,6 +54,8 @@ interface Props {
   displayStatus?: string | null
   /** Fires when the parent or status select changes, so the page can clear a stale save error. */
   onParentOrStatusChange?: () => void
+  /** Bump to snap the planned day field back to the stored day (e.g. after a failed clear). */
+  plannedDayRevertToken?: number
 }
 
 export function TaskForm({
@@ -64,6 +72,7 @@ export function TaskForm({
   statusLocked = false,
   displayStatus,
   onParentOrStatusChange,
+  plannedDayRevertToken = 0,
 }: Props) {
   const [title, setTitle] = useState(task?.title ?? '')
   const [description, setDescription] = useState(task?.description ?? '')
@@ -99,6 +108,22 @@ export function TaskForm({
     setSeenServerProjectId(serverProjectId)
     setProjectId(serverProjectId !== null ? String(serverProjectId) : '')
   }
+  // Planned journal day (edit only). Resyncs to the stored day when a refetch changes it or the revert token bumps.
+  const stored = task?.currentJournalDate ?? ''
+  const storedIsPast = stored !== '' && stored < todayISO()
+  const showPlannedDay = !!task && originalStatus !== 'Completed'
+  const plannedDisabled = showPlannedDay && normalizeStatus(status) === 'Completed'
+  const [plannedDay, setPlannedDay] = useState(stored)
+  const [plannedDayError, setPlannedDayError] = useState<string | null>(null)
+  const [seenStored, setSeenStored] = useState(stored)
+  const [seenToken, setSeenToken] = useState(plannedDayRevertToken)
+  if (stored !== seenStored || plannedDayRevertToken !== seenToken) {
+    setSeenStored(stored)
+    setSeenToken(plannedDayRevertToken)
+    setPlannedDay(stored)
+    setPlannedDayError(null)
+  }
+  const plannedRef = useRef<HTMLInputElement>(null)
   const projectRef = useRef<HTMLSelectElement>(null)
   useEffect(() => {
     if (projectInvalid) projectRef.current?.focus()
@@ -110,6 +135,12 @@ export function TaskForm({
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (isSaving) return
+    const planChanged = showPlannedDay && !plannedDisabled && plannedDay !== stored
+    if (planChanged && plannedDay !== '' && plannedDay < todayISO()) {
+      setPlannedDayError('Pick today or a later day.')
+      plannedRef.current?.focus()
+      return
+    }
     // While locked, local state may hold a stale user choice; send the stored status instead.
     const effectiveStatus = statusLocked ? (task?.status ?? status).toLowerCase() : status
     const normalized = normalizeStatus(effectiveStatus)
@@ -126,6 +157,8 @@ export function TaskForm({
       // A non-empty reason with a non-Blocked status is a 422, so it is only sent while Blocked.
       // Never while locked: the stored reason is left alone.
       ...(!statusLocked && status === toRequestStatus('Blocked') && { blockedReason: blockedReason.trim() }),
+      // Only a changed value is sent; an unchanged (even past) stored day leaves the key out.
+      ...(planChanged && { plannedDay: plannedDay || null }),
     })
   }
 
@@ -204,6 +237,39 @@ export function TaskForm({
         <label htmlFor="dueDate" className="t-label">Due Date</label>
         <input id="dueDate" type="date" className="t-input" value={dueDate} onChange={e => setDueDate(e.target.value)} />
       </div>
+      {showPlannedDay && (
+        <div className="t-field">
+          <label htmlFor="plannedDay" className="t-label">Planned day</label>
+          <div className="t-planned-day-row">
+            <input
+              id="plannedDay"
+              ref={plannedRef}
+              type="date"
+              className="t-input"
+              value={plannedDay}
+              disabled={plannedDisabled}
+              min={storedIsPast ? undefined : todayISO()}
+              aria-invalid={plannedDayError ? 'true' : undefined}
+              aria-describedby={plannedDayError ? 'plannedDay-hint plannedDay-error' : 'plannedDay-hint'}
+              onChange={e => { setPlannedDay(e.target.value); setPlannedDayError(null) }}
+            />
+            {plannedDay !== '' && !plannedDisabled && (
+              <button
+                type="button"
+                className="t-btn"
+                aria-label="Clear planned day"
+                onClick={() => { setPlannedDay(''); setPlannedDayError(null); plannedRef.current?.focus() }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p id="plannedDay-hint" className="t-detail-hint">
+            {plannedDisabled ? "Completed tasks can't be planned." : 'Journal day. Empty = not planned. Separate from Due Date.'}
+          </p>
+          {plannedDayError && <p id="plannedDay-error" className="t-inline-error" role="alert">{plannedDayError}</p>}
+        </div>
+      )}
       <div className="t-field">
         <label htmlFor="projectId" className="t-label">Project</label>
         <select

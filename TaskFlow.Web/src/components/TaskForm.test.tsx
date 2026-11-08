@@ -24,6 +24,11 @@ const existing = {
   id: 7, title: 'Existing task', description: 'Some desc', status: 'Todo' as const, priority: 'Medium' as const,
 }
 
+const FUTURE = '2099-01-01'
+const FUTURE_2 = '2099-02-02'
+const PAST = '2000-01-01'
+const PAST_2 = '2000-02-02'
+
 function projectSelect() {
   return screen.getByRole('combobox', { name: 'Project' })
 }
@@ -331,13 +336,33 @@ describe('TaskForm', () => {
       expect(screen.getByLabelText(/title/i)).toHaveValue('Existing task edited')
     })
 
-    it('tab order is Due Date, Project, Parent Task', async () => {
+    it('tab order is Due Date, Project, Parent Task on create (no Planned day)', async () => {
       renderForm(undefined, vi.fn(), vi.fn(), { projects })
       screen.getByLabelText('Due Date').focus()
       await userEvent.tab()
       expect(projectSelect()).toHaveFocus()
       await userEvent.tab()
       expect(screen.getByLabelText('Parent Task')).toHaveFocus()
+    })
+
+    it('tab order on edit is Due Date, Planned day, Project, Parent Task with Clear absent when unplanned', async () => {
+      renderForm(existing, vi.fn(), vi.fn(), { projects })
+      screen.getByLabelText('Due Date').focus()
+      await userEvent.tab()
+      expect(screen.getByLabelText('Planned day')).toHaveFocus()
+      await userEvent.tab()
+      expect(projectSelect()).toHaveFocus()
+      await userEvent.tab()
+      expect(screen.getByLabelText('Parent Task')).toHaveFocus()
+    })
+
+    it('tab order on edit puts Clear between Planned day and Project when a day is stored', async () => {
+      renderForm({ ...existing, currentJournalDate: FUTURE }, vi.fn(), vi.fn(), { projects })
+      screen.getByLabelText('Planned day').focus()
+      await userEvent.tab()
+      expect(screen.getByRole('button', { name: 'Clear planned day' })).toHaveFocus()
+      await userEvent.tab()
+      expect(projectSelect()).toHaveFocus()
     })
 
     it('works with no projects prop', () => {
@@ -605,5 +630,141 @@ describe('TaskForm parent picker', () => {
     await userEvent.selectOptions(screen.getByLabelText('Parent Task'), '1')
     await userEvent.selectOptions(screen.getByLabelText('Status'), 'draft')
     expect(onParentOrStatusChange).toHaveBeenCalledTimes(2)
+  })
+
+  describe('planned day', () => {
+    const submitted = (onSubmit: ReturnType<typeof vi.fn>) => onSubmit.mock.calls[0][0]
+
+    it('renders for an existing non-completed task and is absent on create', () => {
+      const { unmount } = renderForm(existing)
+      expect(screen.getByLabelText('Planned day')).toHaveAttribute('type', 'date')
+      unmount()
+      renderForm()
+      expect(screen.queryByLabelText('Planned day')).not.toBeInTheDocument()
+    })
+
+    it('is absent when the stored status is Completed', () => {
+      renderForm({ ...existing, status: 'Completed' })
+      expect(screen.queryByLabelText('Planned day')).not.toBeInTheDocument()
+    })
+
+    it('initializes from currentJournalDate and sends no plannedDay key when untouched', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: FUTURE }, onSubmit)
+      expect(screen.getByLabelText('Planned day')).toHaveValue(FUTURE)
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
+    })
+
+    it('sends the new day only after a change', async () => {
+      const onSubmit = vi.fn()
+      renderForm(existing, onSubmit)
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: FUTURE } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit).plannedDay).toBe(FUTURE)
+    })
+
+    it('sends plannedDay null after Clear and Save', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: FUTURE }, onSubmit)
+      await userEvent.click(screen.getByRole('button', { name: 'Clear planned day' }))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      expect(submitted(onSubmit).plannedDay).toBeNull()
+    })
+
+    it('treats a field emptied by backspacing a date segment (value "") as an intentional clear', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: FUTURE }, onSubmit)
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: '' } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit).plannedDay).toBeNull()
+    })
+
+    it('sends no plannedDay for an unplanned task left empty', async () => {
+      const onSubmit = vi.fn()
+      renderForm(existing, onSubmit)
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
+    })
+
+    it('does not tie Planned day and Due Date together', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: FUTURE, dueDate: '2099-05-05' }, onSubmit)
+      fireEvent.change(screen.getByLabelText('Due Date'), { target: { value: '2099-06-06' } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit).dueDate).toBe('2099-06-06')
+      expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
+      expect(screen.getByLabelText('Planned day')).toHaveValue(FUTURE)
+    })
+
+    it('Clear is only visible with a value, empties the field without submitting and refocuses it', async () => {
+      const onSubmit = vi.fn()
+      renderForm(existing, onSubmit)
+      expect(screen.queryByRole('button', { name: 'Clear planned day' })).not.toBeInTheDocument()
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: FUTURE } })
+      await userEvent.click(screen.getByRole('button', { name: 'Clear planned day' }))
+      expect(screen.getByLabelText('Planned day')).toHaveValue('')
+      expect(screen.getByLabelText('Planned day')).toHaveFocus()
+      expect(screen.queryByRole('button', { name: 'Clear planned day' })).not.toBeInTheDocument()
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
+    it('min is today normally and omitted while the stored day is past', () => {
+      const { unmount } = renderForm({ ...existing, currentJournalDate: FUTURE })
+      expect(screen.getByLabelText('Planned day')).toHaveAttribute('min')
+      unmount()
+      renderForm({ ...existing, currentJournalDate: PAST })
+      expect(screen.getByLabelText('Planned day')).not.toHaveAttribute('min')
+    })
+
+    it('an unchanged stored past day is never sent alongside unrelated edits', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: PAST }, onSubmit)
+      await userEvent.type(screen.getByLabelText(/title/i), ' edited')
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).toHaveBeenCalledTimes(1)
+      expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
+    })
+
+    it('a changed past day shows an inline error, sends nothing, and the error clears on change', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: PAST }, onSubmit)
+      const input = screen.getByLabelText('Planned day')
+      fireEvent.change(input, { target: { value: PAST_2 } })
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(onSubmit).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent('Pick today or a later day.')
+      expect(input).toHaveAttribute('aria-invalid', 'true')
+      expect(input).toHaveFocus()
+      fireEvent.change(input, { target: { value: FUTURE } })
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(input).not.toHaveAttribute('aria-invalid')
+    })
+
+    it('is disabled with a hint and sends no plannedDay while the live status is Completed', async () => {
+      const onSubmit = vi.fn()
+      renderForm({ ...existing, currentJournalDate: FUTURE }, onSubmit)
+      fireEvent.change(screen.getByLabelText('Planned day'), { target: { value: FUTURE_2 } })
+      await userEvent.selectOptions(screen.getByLabelText('Status'), 'completed')
+      expect(screen.getByLabelText('Planned day')).toBeDisabled()
+      expect(screen.getByText("Completed tasks can't be planned.")).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Clear planned day' })).not.toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(submitted(onSubmit)).not.toHaveProperty('plannedDay')
+    })
+
+    it('resyncs to a refetched stored day and reverts to it when the revert token bumps', () => {
+      const task = { ...existing, currentJournalDate: FUTURE }
+      const { rerender } = renderForm(task)
+      const input = screen.getByLabelText('Planned day')
+      rerender(<TaskForm task={{ ...task, currentJournalDate: FUTURE_2 }} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+      expect(input).toHaveValue(FUTURE_2)
+      fireEvent.change(input, { target: { value: '' } })
+      rerender(
+        <TaskForm task={{ ...task, currentJournalDate: FUTURE_2 }} plannedDayRevertToken={1} onSubmit={vi.fn()} onCancel={vi.fn()} />,
+      )
+      expect(input).toHaveValue(FUTURE_2)
+    })
   })
 })

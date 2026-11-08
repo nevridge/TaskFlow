@@ -43,15 +43,15 @@ function load(rows: TaskItemResponseDto[], isLoading = false) {
   vi.mocked(useJournalTodos).mockReturnValue({ data: isLoading ? undefined : { data: rows }, isLoading } as never)
 }
 
-const probe: { seen: { pathname: string; state: unknown; key: string }; go: ReturnType<typeof useNavigate> } = {
-  seen: { pathname: '', state: null, key: '' },
+const probe: { seen: { pathname: string; search: string; state: unknown; key: string }; go: ReturnType<typeof useNavigate> } = {
+  seen: { pathname: '', search: '', state: null, key: '' },
   go: (() => {}) as ReturnType<typeof useNavigate>,
 }
 function Probe() {
   const l = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    probe.seen = { pathname: l.pathname, state: l.state, key: l.key }
+    probe.seen = { pathname: l.pathname, search: l.search, state: l.state, key: l.key }
     probe.go = navigate
   })
   return null
@@ -91,12 +91,13 @@ describe('TodosSection details link (#404)', () => {
 
   it('links each row to its task, named by title, carrying the journal day and the row id', async () => {
     renderAt()
-    const link = screen.getByRole('link', { name: 'Open details: Write tests' })
-    expect(link).toHaveAttribute('href', '/tasks/5')
+    const link = screen.getByRole('link', { name: 'Edit details: Write tests' })
+    expect(link).toHaveAttribute('href', '/tasks/5?edit=1')
     expect(link.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
     expect(link).not.toHaveTextContent(/\S/)
     await userEvent.click(link)
     expect(probe.seen.pathname).toBe('/tasks/5')
+    expect(probe.seen.search).toBe('?edit=1')
     expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 5 })
   })
 
@@ -142,6 +143,7 @@ describe('TodosSection details link (#404)', () => {
     renderAt()
     await userEvent.click(screen.getByRole('link', { name: /^Parent task/ }))
     expect(probe.seen.pathname).toBe('/tasks/1')
+    expect(probe.seen.search).toBe('')
     expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026' })
   })
 
@@ -205,8 +207,9 @@ describe('TodosSection details link (#404)', () => {
     it('a child row link opens its own task with the journal day and its own focus id', async () => {
       load([row({ id: 1, title: 'Parent', openChildCount: 1, childTaskCount: 1 }), sub(2)])
       renderAt()
-      await userEvent.click(screen.getByRole('link', { name: 'Open details: Sub 2' }))
+      await userEvent.click(screen.getByRole('link', { name: 'Edit details: Sub 2' }))
       expect(probe.seen.pathname).toBe('/tasks/2')
+      expect(probe.seen.search).toBe('?edit=1')
       expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 2 })
     })
 

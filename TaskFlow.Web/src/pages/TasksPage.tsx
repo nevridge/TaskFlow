@@ -14,7 +14,6 @@ import {
 import { useProjectsQuery } from '@/hooks/useProjects'
 import { useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
 import { getErrorCode, getTaskMutationErrorMessage } from '@/lib/task-errors'
-import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
 import { normalizeProjectId, PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
 import { usePrefs } from '@/context/usePrefs'
 import { useCollapsedGroups } from '@/hooks/useCollapsedGroups'
@@ -25,6 +24,7 @@ import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
+import { taskEditPath } from '@/lib/task-origin'
 import { deriveTaskStatuses, getParentProgressLabel } from '@/lib/task-derived-status'
 import {
   buildTaskSections,
@@ -112,12 +112,8 @@ export function TasksPage() {
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
   const [createProjectInvalid, setCreateProjectInvalid] = useState(false)
   const projectsQuery = useProjectsQuery()
-  const saveWithProject = useSaveTaskWithProject(getTaskMutationErrorMessage)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  // The edited task is looked up in the query data by id (see editingTask below) so a
-  // refetch after a failed project change reaches the form and the retry.
-  const [editingSnapshot, setEditingSnapshot] = useState<TaskListModel | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -184,7 +180,7 @@ export function TasksPage() {
     }
   }, [historyTask])
 
-  // Edit / New on a phone or tablet: bring the top panel into view and focus its title.
+  // New on a phone or tablet: bring the top panel into view and focus its title.
   // Runs after the panel has mounted (effect), and only when a click requested it.
   useEffect(() => {
     if (panelFocusTick === 0) return
@@ -192,13 +188,9 @@ export function TasksPage() {
     titleRef.current?.focus({ preventScroll: true })
   }, [panelFocusTick])
 
-  // Panel closed (Save / Cancel): return focus to the control that opened it. Looked up at focus time
-  // because rows remount when a task changes priority group; if the row is gone, skip silently.
-  const panelKind = editingSnapshot ? `edit:${Number(editingSnapshot.id)}` : showCreate ? 'new' : null
+  // New Task panel closed (Save / Cancel): return focus to New Task.
+  const panelKind = showCreate ? 'new' : null
   const prevPanelKindRef = useRef<string | null>(null)
-  // Edit button id still waiting for focus: a save that changes priority closes the panel first and the
-  // refetch then remounts the row, discarding the button focused at close time. Re-applied after list changes.
-  const pendingFocusIdRef = useRef<string | null>(null)
   const tasks: TaskListModel[] = useMemo(
     () => (data?.data as TaskListModel[] | undefined) ?? [],
     [data],
@@ -213,45 +205,8 @@ export function TasksPage() {
   useEffect(() => {
     const prev = prevPanelKindRef.current
     prevPanelKindRef.current = panelKind
-    if (panelKind !== null) {
-      pendingFocusIdRef.current = null
-      return
-    }
-    if (prev === null) return
-    if (prev === 'new') newTaskBtnRef.current?.focus()
-    else {
-      const id = prev.slice(5)
-      pendingFocusIdRef.current = id
-      document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
-    }
+    if (panelKind === null && prev === 'new') newTaskBtnRef.current?.focus()
   }, [panelKind])
-
-  useEffect(() => {
-    const id = pendingFocusIdRef.current
-    if (id === null) return
-    const active = document.activeElement
-    if (active && active !== document.body && active.isConnected) {
-      // Focus is intact (or the user moved it elsewhere): nothing to restore.
-      return
-    }
-    document.querySelector<HTMLElement>(`[data-task-edit-id="${id}"]`)?.focus()
-  }, [tasks])
-
-  // Any user interaction ends the pending restore so a later refetch never steals focus.
-  useEffect(() => {
-    const clear = () => { pendingFocusIdRef.current = null }
-    window.addEventListener('pointerdown', clear)
-    window.addEventListener('keydown', clear)
-    return () => {
-      window.removeEventListener('pointerdown', clear)
-      window.removeEventListener('keydown', clear)
-    }
-  }, [])
-
-  const editingTask: TaskListModel | null = editingSnapshot
-    ? (tasks.find(t => Number(t.id) === Number(editingSnapshot.id)) ?? editingSnapshot)
-    : null
-  const setEditingTask = setEditingSnapshot
 
   const projects: ProjectOption[] = useMemo(
     () =>
@@ -298,8 +253,7 @@ export function TasksPage() {
   }
 
   function openEdit(task: TaskListModel) {
-    setEditingTask(task)
-    requestPanelFocus()
+    navigate(taskEditPath(Number(task.id)))
   }
 
   function openCreate() {
@@ -423,7 +377,6 @@ export function TasksPage() {
   function clearFormErrors() {
     setMutationError(null)
     setCreateProjectInvalid(false)
-    saveWithProject.clearError()
   }
 
   function handleCreate(formData: TaskFormPayload) {
@@ -440,13 +393,6 @@ export function TasksPage() {
         }
       },
     })
-  }
-
-  async function handleUpdate(formData: TaskFormPayload) {
-    if (!editingTask?.id) return
-    clearFormErrors()
-    const saved = await saveWithProject.save(editingTask, formData, autoCompleteParentWhenChildrenDone)
-    if (saved) setEditingTask(null)
   }
 
   function handleStatusCycle(task: TaskListModel) {
@@ -530,7 +476,6 @@ export function TasksPage() {
   }
 
   const parentOptions = tasks
-    .filter(t => !editingTask || Number(t.id) !== Number(editingTask.id))
     .map(t => ({ id: Number(t.id), title: t.title, status: t.status }))
 
   // Stored status on purpose (not statusOf): a Completed parent with an open child is still gated.
@@ -547,8 +492,6 @@ export function TasksPage() {
     const index = all.findIndex(el => el.dataset.taskDeleteId === String(id))
     const next = index >= 0 ? (all[index + 1] ?? all[index - 1]) : undefined
     ;(next ?? newTaskBtnRef.current)?.focus()
-    // An editor open for the deleted task would be left orphaned.
-    if (editingSnapshot && Number(editingSnapshot.id) === id) setEditingSnapshot(null)
     if (addingChild?.parentId === id) { setAddingChild(null); setChildDraftTitle('') }
     deleteTaskUndoable({ id, title: task.title }, () => {
       document.querySelector<HTMLElement>(`[data-task-delete-id="${id}"]`)?.focus()
@@ -600,7 +543,7 @@ export function TasksPage() {
     )
   }
 
-  const formError = mutationError ?? saveWithProject.error
+  const formError = mutationError
   const blockedTotal = tasks.filter(t => isBlocked(statusOf(t))).length
   const activeFilterCount = countActiveFilters(statusFilter, projectFilter)
   const totalFiltered = sections.reduce((sum, section) => sum + section.workRowCount, 0)
@@ -642,25 +585,21 @@ export function TasksPage() {
           <button ref={newTaskBtnRef} className="t-btn-primary" onClick={openCreate}>New Task</button>
         </div>
 
-        {(showCreate || editingTask) && (
+        {showCreate && (
           <div ref={panelRef} className="t-panel t-edit-panel">
-            <h2 className="t-panel-title">{editingTask ? 'Edit Task' : 'New Task'}</h2>
+            <h2 className="t-panel-title">New Task</h2>
             {formError && <p className="t-inline-error" role="alert">{formError}</p>}
             <TaskForm
-              // The stored task: the form must never submit a derived status.
-              task={editingTask ?? undefined}
-              statusLocked={editingTask ? isLocked(editingTask) : false}
-              displayStatus={editingTask ? statusOf(editingTask) : undefined}
               availableParents={parentOptions}
               projects={projects}
               // Preselect the filtered project when creating a task.
               defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
-              projectInvalid={createProjectInvalid || saveWithProject.projectInvalid}
-              onProjectChange={() => { setCreateProjectInvalid(false); saveWithProject.setProjectInvalid(false) }}
+              projectInvalid={createProjectInvalid}
+              onProjectChange={() => setCreateProjectInvalid(false)}
               onParentOrStatusChange={clearFormErrors}
-              isSaving={saveWithProject.isSaving || createMutation.isPending}
-              onSubmit={editingTask ? handleUpdate : handleCreate}
-              onCancel={() => { setShowCreate(false); setEditingTask(null); clearFormErrors() }}
+              isSaving={createMutation.isPending}
+              onSubmit={handleCreate}
+              onCancel={() => { setShowCreate(false); clearFormErrors() }}
               titleInputRef={titleRef}
             />
           </div>
@@ -768,7 +707,7 @@ export function TasksPage() {
         {/* Persistent polite live region for block/unblock announcements. */}
         <div role="status" className="sr-only">{liveMessage}</div>
 
-        {mutationError && !showCreate && !editingTask && <p className="t-inline-error" role="alert">{mutationError}</p>}
+        {mutationError && !showCreate && <p className="t-inline-error" role="alert">{mutationError}</p>}
 
         {totalFiltered === 0 ? (
           <p className="t-empty">No tasks match your filters.</p>

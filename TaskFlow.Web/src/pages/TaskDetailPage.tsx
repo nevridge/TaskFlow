@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
   useTaskQuery,
   useTasksQuery,
@@ -22,7 +22,13 @@ import { formatShort, formatStartedAt } from '@/lib/journal-utils'
 import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import { deriveTaskStatuses, getDerivedStatusTitle } from '@/lib/task-derived-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
-import { readJournalOrigin, readFocusTaskId } from '@/lib/task-origin'
+import {
+  readJournalOrigin,
+  readFocusTaskId,
+  isEditRequested,
+  withEditParam,
+  withoutEditParam,
+} from '@/lib/task-origin'
 import '@/tasks.css'
 
 type TaskDetailModel = TaskItemViewModel
@@ -48,7 +54,9 @@ export function TaskDetailPage() {
   // Origin comes from router state only, validated on read; direct loads fall back to the Tasks list.
   const journalOrigin = readJournalOrigin(location.state)
 
-  const [editingTask, setEditingTask] = useState(false)
+  // The URL is the single source of truth for edit mode.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const editing = isEditRequested(searchParams)
   // Set by a self-initiated delete so the frame between the pending filter and the navigation is empty,
   // not "Task not found".
   const [leaving, setLeaving] = useState(false)
@@ -93,12 +101,26 @@ export function TaskDetailPage() {
       projectSelectRef.current?.focus()
     }
   })
-  // Title takes focus when the form opens; Edit (remounted) takes it back when the form closes.
+  // One readiness source for both the form's render condition and the focus effect, so the title
+  // is always mounted when the effect runs (including deep links, where the task loads after mount).
+  const taskReady = !taskLoading && !taskError && !!task && !leaving
+  const formOpen = editing && taskReady
+  // Title takes focus when the form opens; Edit (remounted) takes it back when the form closes
+  // (not while leaving). Background refetches change neither value, so they never re-steal focus.
   useEffect(() => {
-    if (editingTask) titleRef.current?.focus()
-    else if (wasEditing.current) editButtonRef.current?.focus()
-    wasEditing.current = editingTask
-  }, [editingTask])
+    if (formOpen) titleRef.current?.focus()
+    else if (wasEditing.current && taskReady) editButtonRef.current?.focus()
+    wasEditing.current = formOpen
+  }, [formOpen, taskReady])
+
+  // Always pass the current state: router v7 replaces it with null otherwise and the journal
+  // back link would lose focusTaskId.
+  function closeEdit() {
+    setSearchParams(withoutEditParam(searchParams), { replace: true, state: location.state })
+  }
+  function openEdit() {
+    setSearchParams(withEditParam(searchParams), { replace: true, state: location.state })
+  }
 
   const parentOptions = allTasks
     .filter(t => Number(t.id) !== taskId)
@@ -112,7 +134,7 @@ export function TaskDetailPage() {
   async function handleUpdateTask(data: TaskFormPayload) {
     const saved = await saveWithProject.save(task!, data, autoCompleteParentWhenChildrenDone)
     if (saved) {
-      setEditingTask(false)
+      closeEdit()
     }
   }
 
@@ -183,7 +205,7 @@ export function TaskDetailPage() {
         </Link>
 
         <div className="t-panel">
-          {editingTask ? (
+          {formOpen ? (
             <>
               <h2 className="t-panel-title">Edit Task</h2>
               {saveWithProject.error && <p className="t-inline-error" role="alert">{saveWithProject.error}</p>}
@@ -199,7 +221,7 @@ export function TaskDetailPage() {
                 onParentOrStatusChange={saveWithProject.clearError}
                 isSaving={saveWithProject.isSaving}
                 onSubmit={handleUpdateTask}
-                onCancel={() => { setEditingTask(false); saveWithProject.clearError() }}
+                onCancel={() => { closeEdit(); saveWithProject.clearError() }}
               />
             </>
           ) : (
@@ -207,7 +229,7 @@ export function TaskDetailPage() {
               <div className="t-card-row">
                 <h1 className="t-detail-title">{task.title}</h1>
                 <div className="t-card-actions">
-                  <button ref={editButtonRef} className="t-btn" onClick={() => setEditingTask(true)}>Edit</button>
+                  <button ref={editButtonRef} className="t-btn" onClick={openEdit}>Edit</button>
                   {/* aria-disabled (never `disabled`) keeps it focusable; the `!` variants beat tasks.css hover/cursor. */}
                   <button
                     className="t-btn-danger aria-disabled:opacity-50 aria-disabled:cursor-not-allowed! aria-disabled:hover:bg-transparent!"

@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { journalOriginPath, readJournalOrigin, readFocusTaskId, stateWithoutFocusTaskId } from './task-origin'
+import {
+  journalOriginPath,
+  readJournalOrigin,
+  readFocusTaskId,
+  stateWithoutFocusTaskId,
+  isEditRequested,
+  withEditParam,
+  withoutEditParam,
+  taskEditPath,
+} from './task-origin'
 
 describe('task-origin', () => {
   it('builds the journal path from the ISO date, not the clock', () => {
@@ -30,5 +39,44 @@ describe('task-origin', () => {
   it('drops only the focus key and returns null when nothing is left', () => {
     expect(stateWithoutFocusTaskId({ focusTaskId: 1, weekendRedirect: true })).toEqual({ weekendRedirect: true })
     expect(stateWithoutFocusTaskId({ focusTaskId: 1 })).toBeNull()
+  })
+})
+
+describe('edit param helpers', () => {
+  it.each([
+    ['?edit=1', true],
+    ['?x=2&edit=1', true],
+    ['', false],
+    ['?edit=0', false],
+    ['?edit=true', false],
+    ['?edit=', false],
+    ['?edit', false],
+    ['?edit=1&edit=2', false],
+    ['?edit=1&edit=1', false],
+    ['?Edit=1', false],
+  ])('isEditRequested(%s) is %s', (search, expected) => {
+    expect(isEditRequested(new URLSearchParams(search))).toBe(expected)
+  })
+
+  it('withEditParam sets edit=1, keeps other params and does not mutate the input', () => {
+    const input = new URLSearchParams('x=2&edit=0')
+    expect(withEditParam(input).toString()).toBe('x=2&edit=1')
+    expect(input.toString()).toBe('x=2&edit=0')
+  })
+
+  it('withoutEditParam removes every edit, keeps other params and does not mutate the input', () => {
+    const input = new URLSearchParams('x=2&edit=1&edit=2')
+    expect(withoutEditParam(input).toString()).toBe('x=2')
+    expect(input.getAll('edit')).toEqual(['1', '2'])
+  })
+
+  it('taskEditPath builds the detail path in edit mode', () => {
+    expect(taskEditPath(7)).toBe('/tasks/7?edit=1')
+    expect(taskEditPath('7')).toBe('/tasks/7?edit=1')
+  })
+
+  it('readJournalOrigin ignores the edit param: the origin comes from state only', () => {
+    expect(readJournalOrigin({ from: '/journal/11-07-2026' })).toBe('/journal/11-07-2026')
+    expect(readJournalOrigin(null)).toBeNull()
   })
 })

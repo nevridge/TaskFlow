@@ -314,7 +314,7 @@ export function TaskListRow({
           <button className="t-btn-icon" aria-label="Task history" title="Task history" onClick={() => onHistory(task)}>
             <ClockIcon />
           </button>
-          <button className="t-btn-icon" aria-label="Edit" title="Edit" data-task-edit-id={task.id} onClick={() => onEdit(task)}>
+          <button className="t-btn-icon" aria-label={task.title.trim() ? `Edit ${task.title}` : 'Edit task'} title="Edit" data-task-edit-id={task.id} onClick={() => onEdit(task)}>
             <PencilIcon />
           </button>
           {/* aria-disabled (never `disabled`) keeps the button focusable so its reason can be read. The `!`

@@ -478,17 +478,31 @@ If you were previously using bind mounts (host directories `./data` and `./logs`
    docker compose down
    ```
 
-2. **Create the new named volumes:**
-
-   > **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the backup or restore runs against that.
-   ```bash
-   docker volume create <project>_taskflow-data
-   docker volume create <project>_taskflow-logs
+2. **Update docker-compose.yml** (if not already updated):
+   ```yaml
+   services:
+     taskflow-api:
+       volumes:
+         - taskflow-data:/app/data
+         - taskflow-logs:/app/logs
+   
+   volumes:
+     taskflow-data:
+       driver: local
+     taskflow-logs:
+       driver: local
    ```
 
-   Use the prefixed name. A volume named `taskflow-data` without the project prefix is not the one compose mounts, and compose would start with an empty database.
+3. **Create the new named volumes with Compose:**
+   ```bash
+   docker compose up --no-start
+   ```
 
-3. **Copy data from bind mounts to named volumes:**
+   Compose creates the volumes under their real names, `<project>_taskflow-data` and `<project>_taskflow-logs`, with the labels it expects. Do not create them by hand with `docker volume create`: Compose may then warn that the volume "was not created by Docker Compose". Check the names with `docker volume ls --filter name=taskflow`.
+
+4. **Copy data from bind mounts to named volumes:**
+
+   > **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the copy runs against that volume.
    ```bash
    # Copy database files to named volume
    docker run --rm \
@@ -503,28 +517,13 @@ If you were previously using bind mounts (host directories `./data` and `./logs`
      alpine sh -c "cp -a /source/. /dest/"
    ```
 
-4. **Verify data was copied:**
+5. **Verify data was copied:**
    ```bash
    # Check database volume
    docker run --rm -v <project>_taskflow-data:/data alpine ls -la /data
    
    # Check logs volume
    docker run --rm -v <project>_taskflow-logs:/data alpine ls -la /data
-   ```
-
-5. **Update docker-compose.yml** (if not already updated):
-   ```yaml
-   services:
-     taskflow-api:
-       volumes:
-         - taskflow-data:/app/data
-         - taskflow-logs:/app/logs
-   
-   volumes:
-     taskflow-data:
-       driver: local
-     taskflow-logs:
-       driver: local
    ```
 
 6. **Start with the new configuration:**

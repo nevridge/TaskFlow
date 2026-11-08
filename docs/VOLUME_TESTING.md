@@ -197,6 +197,9 @@ echo ""
 # Example: cd ~/projects/TaskFlow.Api
 cd "$(dirname "$0")/.."
 
+# Compose project name, so the volume checks ignore taskflow-test_* volumes
+PROJECT=$(docker compose config --format json | jq -r .name)
+
 echo "Step 1: Clean up..."
 docker compose down -v 2>/dev/null || true
 sleep 2
@@ -219,7 +222,7 @@ done
 
 echo ""
 echo "Step 4: Verify volumes exist..."
-docker volume ls --filter name=taskflow | grep -q taskflow || (echo "✗ Volumes not found" && exit 1)
+docker volume ls --filter "name=${PROJECT}_taskflow" | grep -q "${PROJECT}_taskflow" || (echo "✗ Volumes not found" && exit 1)
 echo "✓ Volumes created"
 
 echo ""
@@ -243,7 +246,7 @@ sleep 2
 
 echo ""
 echo "Step 8: Verify volumes persist..."
-docker volume ls --filter name=taskflow | grep -q taskflow || (echo "✗ Volumes disappeared" && exit 1)
+docker volume ls --filter "name=${PROJECT}_taskflow" | grep -q "${PROJECT}_taskflow" || (echo "✗ Volumes disappeared" && exit 1)
 echo "✓ Volumes still exist"
 
 echo ""
@@ -282,7 +285,7 @@ docker compose down
 ### Issue: Volumes not created
 
 **Symptoms:**
-- `docker volume ls` shows no taskflow volumes
+- `docker volume ls --filter name=<project>_taskflow` shows no volumes
 - Application fails to start
 
 **Solution:**

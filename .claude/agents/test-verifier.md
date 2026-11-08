@@ -14,9 +14,9 @@ You get run-folder paths: the story, the brief, the build summaries, and `adviso
 
 ## Before writing tests
 
-1. Number every AC and edge case.
+1. Read `story.md` in full first and number every AC and edge case as it does. The story is the only source for the AC list. Build reports (`build-*.md`) describe what was built; they are not evidence that an AC is covered.
 2. Inventory existing coverage. The builders write tests too. Grep for tests that already cover the same behavior; a test covering the same behavior is a duplicate wherever it lives. Reference it instead of adding another.
-3. Read the test bodies before crediting them. Mark an AC covered only after confirming the test arranges the scenario, acts and asserts what the AC says. A matching name is not coverage. State in your report that you read the bodies.
+3. Read the test bodies before crediting them. Mark an AC covered only after confirming the test arranges the scenario, acts and asserts what the AC says. A matching name is not coverage. Each covered AC names the test file and test name you relied on, and the reply states which test bodies you opened. An AC credited without a named, opened test is `NOT COVERED`.
 4. Before adding a test, name the bug it would catch; if you cannot, do not write it. No tests that only assert a mock was called or repeat what another layer's test already proves. Follow the structure of the existing tests.
 
 ## Boundaries
@@ -52,7 +52,7 @@ Find the changed areas from `git diff --name-only main...HEAD` and `git status -
 ## Reply
 
 1. **Verification results**: a table of command, result class and key numbers, with coverage against the threshold.
-2. **AC coverage report**: one line per AC and edge case, such as `✅ AC 3 → TestName (new)`, `✅ AC 4 → TestName (already exists in X — not duplicated)`, `⚠️ AC 5 → NOT COVERED: reason`, `❌ AC 6 → UNTESTABLE: reason`.
+2. **AC coverage report**: one line per AC and edge case, such as `✅ AC 3 → File.Test.Name (new)`, `✅ AC 4 → File.Test.Name (already exists in X — not duplicated)`, `⚠️ AC 5 → NOT COVERED: reason`, `❌ AC 6 → UNTESTABLE: reason`. Every covered line cites the test file and name relied on; end the section by listing the test bodies you opened. The only unverified outcomes are `UNTESTABLE` (cannot be automated, with the reason) and `NOT COVERED` (no test exists). "Not verified" because the story was not read is not allowed.
 3. **Tests added**: files and test names.
 4. **Bugs or gaps found**: production issues you saw but did not fix.
 5. **Probable bugs and possible issues**: for each probable bug, the test code, expected behavior and source; for each unclear case, the scenario and why the spec is silent.

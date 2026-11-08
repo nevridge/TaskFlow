@@ -281,6 +281,37 @@ describe('TaskDetailPage', () => {
       expect(backLink()).toHaveAttribute('href', '/tasks')
     })
 
+    function JournalProbe() {
+      const location = useLocation()
+      return <div data-testid="journal-route" data-path={location.pathname} data-state={JSON.stringify(location.state)} />
+    }
+    function renderWithJournalRoute(state: unknown) {
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[{ pathname: '/tasks/1', state }]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+              <Route path="/journal/:date" element={<JournalProbe />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      )
+    }
+
+    it('clicking the journal back link lands on that day and hands back the incoming focus id', async () => {
+      renderWithJournalRoute({ from: '/journal/11-07-2026', focusTaskId: 7 })
+      await userEvent.click(backLink())
+      const route = screen.getByTestId('journal-route')
+      expect(route).toHaveAttribute('data-path', '/journal/11-07-2026')
+      expect(JSON.parse(route.getAttribute('data-state') ?? 'null')).toEqual({ focusTaskId: 7 })
+    })
+
+    it('hands back the route task id when only from was supplied (context header link)', async () => {
+      renderWithJournalRoute({ from: '/journal/11-07-2026' })
+      await userEvent.click(backLink())
+      expect(JSON.parse(screen.getByTestId('journal-route').getAttribute('data-state') ?? 'null')).toEqual({ focusTaskId: 1 })
+    })
+
     it('falls back to the Tasks list with no state (direct load)', () => {
       renderPage()
       expect(backLink()).toHaveAttribute('href', '/tasks')

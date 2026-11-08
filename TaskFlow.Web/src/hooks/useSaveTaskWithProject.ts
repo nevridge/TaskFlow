@@ -29,7 +29,8 @@ interface SaveTarget {
  *    assign/unassign call.
  * Steps stop at the first failure. If the PUT fails nothing else runs and nothing was saved. If the
  * clear or project call fails the task fields are already saved, so a "Task saved, but..." message is
- * produced and a retry re-sends the idempotent PUT followed by the remaining steps.
+ * produced and a retry re-sends the idempotent PUT followed by the remaining steps. After a failed clear
+ * the form reverts to the stored day, so a retry does not re-run the clear: the user must clear again.
  * `plannedDayRevertToken` increments after a failed clear so the form snaps back to the stored day.
  */
 export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => string) {

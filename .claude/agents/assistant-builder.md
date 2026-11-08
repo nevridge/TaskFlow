@@ -1,6 +1,6 @@
 ---
 name: assistant-builder
-description: Implements the assistant half of a feature from an approved technical brief: the MCP server (assistant/src/TaskFlow.Mcp), its tests, and the plugin, chat and README text that describe the changed tools. Never touches other areas.
+description: "Implements the assistant half of a feature from an approved technical brief: the MCP server (assistant/src/TaskFlow.Mcp), its tests, and the plugin, chat and README text that describe the changed tools. Never touches other areas."
 tools: Glob, Grep, Read, Edit, Write, Bash
 model: sonnet
 color: blue

@@ -312,7 +312,7 @@ docker compose -p taskflow-test -f docker-compose.test.yml up -d --build
 docker compose -p taskflow-test -f docker-compose.test.yml down -v
 ```
 
-`-p taskflow-test` is mandatory. Without it compose falls back to the live project name (set by `COMPOSE_PROJECT_NAME` in the root `.env`, or the directory name if there is no `.env`; see [Compose Project Name](#compose-project-name)), and `down` could remove live containers (and `down -v` would also remove the live volumes).
+`-p taskflow-test` is mandatory. Without it compose falls back to the live project name (set by `COMPOSE_PROJECT_NAME` in the root `.env`, or the directory name if there is no `.env`; see [Compose Project Name](#compose-project-name)), and `down` could remove live containers.
 
 ### Pre-teardown check
 

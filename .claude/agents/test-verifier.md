@@ -40,7 +40,7 @@ After the AC tests, write up to about five probe tests on the changed behavior a
 
 ## Gates
 
-Find the changed areas from `git diff --name-only main...HEAD` and `git status --short`: api is `TaskFlow.Api*/`, web is `TaskFlow.Web/`, assistant is `assistant/`. Run only the gates `.github/workflows/ci.yml` runs for those areas, with its thresholds; CI is the source for commands. For assistant changes to `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`. Never lower or bypass a threshold; one top-up attempt if coverage is short because of new untested code. If the changed paths include none of api, web or assistant (a docs-only diff: `docs/**`, `.claude/**`, root `*.md`), no gate applies. Run no gates, write no acceptance tests for prompt or Markdown changes, and do not report `ENVIRONMENT FAILURE`. `UNTESTABLE` is the outcome for ACs on prompt-only diffs.
+Find the changed areas from `git diff --name-only main...HEAD` and `git status --short`: api is `TaskFlow.Api*/`, web is `TaskFlow.Web/`, assistant is `assistant/`. Run only the gates `.github/workflows/ci.yml` runs for those areas, with its thresholds; CI is the source for commands. For assistant changes to `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`. Never lower or bypass a threshold; one top-up attempt if coverage is short because of new untested code. If the changed paths include none of api, web or assistant (a docs-only diff: `docs/**`, `.claude/skills|agents|rules/**`, root `*.md`), no gate applies. Run no gates and do not report `ENVIRONMENT FAILURE`. `UNTESTABLE` is the outcome for ACs on prompt-only diffs.
 
 ## Classifying results
 
@@ -52,8 +52,8 @@ Find the changed areas from `git diff --name-only main...HEAD` and `git status -
 
 ## Reply
 
-1. **Verification results**: a table of command, result class and key numbers, with coverage against the threshold. For a docs-only diff the table reads "No gates applicable (docs-only diff)".
-2. **AC coverage report**: one line per AC and edge case, such as `✅ AC 3 → File.Test.Name (new)`, `✅ AC 4 → File.Test.Name (already exists in X — not duplicated)`, `⚠️ AC 5 → NOT COVERED: reason`, `❌ AC 6 → UNTESTABLE: reason`. Every covered line cites the test file and name relied on; end the section by listing the test bodies you opened. The only unverified outcomes are `UNTESTABLE` (cannot be automated, with the reason) and `NOT COVERED` (no test exists). On a docs-only diff, mark each AC `❌ AC n → UNTESTABLE: prompt-only change, no gates apply`. "Not verified" because the story was not read is not allowed.
+1. **Verification results**: a table of command, result class and key numbers, with coverage against the threshold.
+2. **AC coverage report**: one line per AC and edge case, such as `✅ AC 3 → File.Test.Name (new)`, `✅ AC 4 → File.Test.Name (already exists in X — not duplicated)`, `⚠️ AC 5 → NOT COVERED: reason`, `❌ AC 6 → UNTESTABLE: reason`. Every covered line cites the test file and name relied on; end the section by listing the test bodies you opened. The only unverified outcomes are `UNTESTABLE` (cannot be automated, with the reason) and `NOT COVERED` (no test exists). On a docs-only diff, mark each AC `⚠️ AC n → UNTESTABLE (docs-only): prompt-only change, no gates apply`. "Not verified" because the story was not read is not allowed.
 3. **Tests added**: files and test names.
 4. **Bugs or gaps found**: production issues you saw but did not fix.
 5. **Probable bugs and possible issues**: for each probable bug, the test code, expected behavior and source; for each unclear case, the scenario and why the spec is silent.

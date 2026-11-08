@@ -67,8 +67,8 @@ The `docs` agent prompt:
 - Allowlist: `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Web/` and `assistant/`.
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
 - Do not run `git add`, `git commit` or `git push`; the orchestrator commits.
-- After editing any `.claude/agents/` file: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`; fix any parse error before replying.
-- Reply with "Spec blockers" first (omit if none), then files changed, then verification results (the js-yaml outcome, or `not needed`).
+- After editing any `.claude/agents/` file: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
+- Reply with "Spec blockers" first (omit if none), then files changed, then verification results (the js-yaml outcome (`passed`, a parse error fixed, `check could not run`), or `not needed`).
 
 Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one commit after each area. `docs` gets one commit; its spec blockers and the respec budget work as for code areas, with no budget change. A builder spec blocker uses the respec budget: run `spec-writer` with the blocker, take the revised brief through stop 2 in full, then re-run the affected area and every later one. If the budget is spent, Halt. If `backend-builder` reports client regeneration FAILED, Halt.
 

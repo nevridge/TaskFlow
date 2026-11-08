@@ -210,6 +210,17 @@ describe('TasksPage derived parent status (#385)', () => {
     expect(screen.getByText('Waiting on Sam')).toBeInTheDocument()
   })
 
+  it('shows the server openChildCount badge unadjusted while "x/y" is client-derived (#447)', () => {
+    useData([
+      { ...baseTask, id: 1, title: 'Parent', status: 'Todo', priority: 'High', openChildCount: 2, childTaskCount: 1 },
+      { ...baseTask, id: 2, title: 'Child', status: 'Completed', priority: 'High', parentTaskItemId: 1 },
+    ])
+    renderPage()
+    const parent = within(rowFor('Parent'))
+    expect(parent.getByText('2 open subtasks')).toBeInTheDocument()
+    expect(parent.getByText('1/1 subtasks complete')).toBeInTheDocument()
+  })
+
   it('keeps the existing child progress text on rows', () => {
     useData([
       { ...baseTask, id: 1, title: 'Parent', status: 'Todo', priority: 'High' },

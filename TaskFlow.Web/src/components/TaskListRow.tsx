@@ -4,6 +4,7 @@ import { formatDateOnly } from '@/lib/utils'
 import { todayISO } from '@/lib/journal-utils'
 import { BlockIcon, BlockReasonInput, BlockedReasonText } from '@/components/BlockControls'
 import { COMPLETED_PARENT_ADD_SUBTASK_HINT } from '@/lib/parent-options'
+import { formatOpenSubtaskLabel } from '@/lib/open-subtask-label'
 import { getDerivedStatusTitle } from '@/lib/task-derived-status'
 import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
@@ -102,6 +103,10 @@ export function TaskListRow({
   // childTaskCount already excludes subtasks whose delete is pending.
   const childCount = Number(task.childTaskCount ?? 0)
   const deleteBlocked = childCount > 0
+  // Server-computed open direct subtasks from the list endpoint. Distinct from the `openChildCount` prop, which is
+  // client-derived and only feeds the locked-status tooltip.
+  const serverOpenCount = Number(task.openChildCount ?? 0)
+  const openSubtaskBadge = formatOpenSubtaskLabel(serverOpenCount)
   const deleteHint = `Delete subtasks first (${childCount})`
   const deleteHintId = `del-hint-${task.id}`
   const addSubtaskHintId = `add-hint-${task.id}`
@@ -205,6 +210,12 @@ export function TaskListRow({
               <Link ref={titleLinkRef} to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
                 {task.title}
               </Link>
+              {serverOpenCount > 0 && (
+                <span className="t-badge t-badge-open-subtasks" title={openSubtaskBadge.label}>
+                  <span aria-hidden="true">{openSubtaskBadge.text}</span>
+                  <span className="sr-only">{openSubtaskBadge.label}</span>
+                </span>
+              )}
             </div>
             {childProgress && <div className="t-deferral-line">{childProgress}</div>}
             {blocked && !statusLocked && !reasonEditing && (

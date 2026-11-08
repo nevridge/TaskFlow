@@ -458,6 +458,19 @@ button.t-badge-blocked { cursor: pointer; }
   margin-top: 4px;
 }
 
+/* Open-subtask count: passive, neutral pill after the title link. Declared after the other .t-badge-* rules so
+   source order wins. Never shrinks, so a long title wraps (overflow-wrap: anywhere) before the badge is pushed out. */
+.t-badge-open-subtasks {
+  flex-shrink: 0;
+  min-width: 2.4em;
+  padding: 1px 7px;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
 /* ─── Buttons ─────────────────────────────────────────────────────────────── */
 
 .t-btn {

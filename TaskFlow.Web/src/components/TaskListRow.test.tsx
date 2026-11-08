@@ -309,6 +309,131 @@ describe('TaskListRow', () => {
     })
   })
 
+  describe('open subtask badge (#447)', () => {
+    const withOpen = (openChildCount: unknown, extra: Record<string, unknown> = {}) =>
+      ({ ...baseTask, openChildCount, ...extra }) as TaskProp
+    const badgeOf = (container: HTMLElement) => container.querySelector<HTMLElement>('.t-badge-open-subtasks')
+    const tabStops = (root: HTMLElement) =>
+      root.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])').length
+
+    it('shows the count on the title line after the link, outside it, with the exact label exposed once', () => {
+      const { container } = renderRow(withOpen(2))
+      const badge = badgeOf(container)!
+      const link = screen.getByRole('link', { name: 'Fix login bug' })
+      expect(badge).toHaveAttribute('title', '2 open subtasks')
+      expect(badge.closest('.t-title-line')).not.toBeNull()
+      expect(link.contains(badge)).toBe(false)
+      expect(link.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(badge.querySelector('[aria-hidden="true"]')).toHaveTextContent('2')
+      expect(badge.querySelector('.sr-only')).toHaveTextContent('2 open subtasks')
+      expect(badge).not.toHaveAttribute('aria-label')
+      expect(screen.getAllByText(/open subtasks?$/)).toHaveLength(1)
+    })
+
+    it('uses the singular for one open subtask', () => {
+      const { container } = renderRow(withOpen(1))
+      expect(badgeOf(container)).toHaveAttribute('title', '1 open subtask')
+    })
+
+    it('shows the server count on a Completed parent', () => {
+      const { container } = renderRow(withOpen(3, { status: 'Completed' }))
+      expect(badgeOf(container)).toHaveTextContent('3')
+    })
+
+    it('reads the server value, not the client-derived openChildCount prop or childTaskCount', () => {
+      const { container } = render(
+        <MemoryRouter>
+          <table>
+            <tbody>
+              <TaskListRow
+                task={withOpen(4, { childTaskCount: 1 })}
+                openChildCount={9}
+                childProgress="0/1 subtasks complete"
+                onEdit={vi.fn()}
+                onHistory={vi.fn()}
+                onDelete={vi.fn()}
+                onStatusCycle={vi.fn()}
+              />
+            </tbody>
+          </table>
+        </MemoryRouter>,
+      )
+      expect(badgeOf(container)).toHaveAttribute('title', '4 open subtasks')
+      expect(screen.getByText('0/1 subtasks complete')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete task: Fix login bug' })).toHaveAttribute('title', 'Delete subtasks first (1)')
+    })
+
+    it.each([[0], [undefined], [null], ['0']])('renders no badge for %s', value => {
+      const { container } = renderRow(withOpen(value))
+      expect(badgeOf(container)).toBeNull()
+    })
+
+    it('coerces a string count from the generated client', () => {
+      const { container } = renderRow(withOpen('5'))
+      expect(badgeOf(container)).toHaveTextContent('5')
+    })
+
+    it('caps the visible text at 99+ but keeps the exact count in the tooltip and screen-reader text', () => {
+      const { container } = renderRow(withOpen(250))
+      const badge = badgeOf(container)!
+      expect(badge.querySelector('[aria-hidden="true"]')).toHaveTextContent('99+')
+      expect(badge).toHaveAttribute('title', '250 open subtasks')
+      expect(badge.querySelector('.sr-only')).toHaveTextContent('250 open subtasks')
+    })
+
+    it('is not focusable and leaves the tab stops unchanged', () => {
+      const withBadge = renderRow(withOpen(2))
+      const count = tabStops(withBadge.container)
+      expect(badgeOf(withBadge.container)!.matches('a, button, input, [tabindex]')).toBe(false)
+      withBadge.unmount()
+      expect(tabStops(renderRow(withOpen(0)).container)).toBe(count)
+    })
+
+    it('Tab from the title link still reaches the status control next', async () => {
+      renderRow(withOpen(2))
+      screen.getByRole('link', { name: 'Fix login bug' }).focus()
+      await userEvent.tab()
+      expect(screen.getByRole('button', { name: /^Status:/ })).toHaveFocus()
+    })
+
+    it('clicking the badge navigates nowhere and fires no row handler', async () => {
+      const onEdit = vi.fn()
+      const onStatusCycle = vi.fn()
+      const { container } = render(
+        <MemoryRouter initialEntries={['/tasks']}>
+          <LocationProbe />
+          <table>
+            <tbody>
+              <TaskListRow task={withOpen(2)} onEdit={onEdit} onHistory={vi.fn()} onDelete={vi.fn()} onStatusCycle={onStatusCycle} />
+            </tbody>
+          </table>
+        </MemoryRouter>,
+      )
+      await userEvent.click(badgeOf(container)!)
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/tasks$/)
+      expect(onEdit).not.toHaveBeenCalled()
+      expect(onStatusCycle).not.toHaveBeenCalled()
+    })
+
+    it('adds and removes the badge as the count changes across a refetch', () => {
+      const tree = (task: TaskProp) => (
+        <MemoryRouter>
+          <table>
+            <tbody>
+              <TaskListRow task={task} onEdit={vi.fn()} onHistory={vi.fn()} onDelete={vi.fn()} onStatusCycle={vi.fn()} />
+            </tbody>
+          </table>
+        </MemoryRouter>
+      )
+      const { container, rerender } = render(tree(withOpen(1)))
+      expect(badgeOf(container)).not.toBeNull()
+      rerender(tree(withOpen(0)))
+      expect(badgeOf(container)).toBeNull()
+      rerender(tree(withOpen(1)))
+      expect(badgeOf(container)).toHaveTextContent('1')
+    })
+  })
+
   describe('project badge', () => {
     it('shows the project name in the title cell without adding a column', () => {
       const { container } = renderRow({ ...baseTask, projectId: 3, projectName: 'Alpha Launch' })

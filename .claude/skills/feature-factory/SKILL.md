@@ -70,11 +70,11 @@ Write each reply to `build-<area>.md` and make one commit after each area. A bui
 
 ## Stage 6: Validate
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `TaskFlow.Contracts`, `Helpers/`), and that an API change cannot pass without the assistant step or a stated reason. Write `validation.md`.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`), and that an API change cannot pass without the assistant step or a stated reason. Write `validation.md`.
 
 ## Stage 7: Correct
 
-Send the validator's **Must fix** findings and the verifier's **probable bugs** to the area builder. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Commit, then repeat stages 5 and 6. Each pass spends one unit of the budget; Halt when it is spent and Must fix findings remain.
+Send the validator's **Must fix** findings, the verifier's **code failures** (with its diagnosis) and the verifier's **probable bugs** to the area builder. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Commit, then repeat stages 5 and 6. Each pass spends one unit of the budget; Halt when it is spent and Must fix findings remain or a gate is still failing.
 
 **Should fix** findings are not reworked. They go in the PR body as residual findings.
 

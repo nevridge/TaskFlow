@@ -20,44 +20,48 @@ Verify that Docker volumes are created and mounted correctly.
 
 1. **Start the application:**
    ```bash
-   cd /path/to/TaskFlow.Api
+   cd /path/to/TaskFlow   # repository root, where docker-compose.yml lives
    docker compose up -d
    ```
 
 2. **Check that volumes were created:**
    ```bash
-   docker volume ls | grep taskflow
+   docker volume ls --filter name=taskflow
    ```
    
    Expected output:
    ```
-   local     taskflowapi_taskflow-data
-   local     taskflowapi_taskflow-logs
+   local     <project>_taskflow-data
+   local     <project>_taskflow-logs
    ```
+
+   `<project>` is your compose project name; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name). Lines for the test stack (`taskflow-test_*`) may also appear.
 
 3. **Inspect volume details:**
    ```bash
-   docker volume inspect taskflowapi_taskflow-data
+   docker volume inspect <project>_taskflow-data
    ```
    
    Expected output should show mount point and driver:
    ```json
    [
        {
-           "CreatedAt": "2024-11-02T...",
+           "CreatedAt": "<timestamp>",
            "Driver": "local",
            "Labels": {
-               "com.docker.compose.project": "taskflowapi",
-               "com.docker.compose.version": "2.38.2",
+               "com.docker.compose.project": "<project>",
+               "com.docker.compose.version": "<compose version>",
                "com.docker.compose.volume": "taskflow-data"
            },
-           "Mountpoint": "/var/lib/docker/volumes/taskflowapi_taskflow-data/_data",
-           "Name": "taskflowapi_taskflow-data",
+           "Mountpoint": "/var/lib/docker/volumes/<project>_taskflow-data/_data",
+           "Name": "<project>_taskflow-data",
            "Options": null,
            "Scope": "local"
        }
    ]
    ```
+
+   Values in angle brackets are illustrative; yours will differ.
 
 4. **Verify files exist in volumes:**
    ```bash
@@ -123,7 +127,7 @@ Verify that data persists even when the container is removed and recreated.
 
 4. **Verify volumes still exist:**
    ```bash
-   docker volume ls | grep taskflow
+   docker volume ls --filter name=taskflow
    ```
    
    Expected: Both volumes should still be listed.
@@ -152,16 +156,18 @@ Verify that data persists even when the container is removed and recreated.
 Verify that volumes can be removed when needed.
 
 1. **Stop and remove containers and volumes:**
+
+   > **Warning:** this deletes your data permanently.
    ```bash
    docker compose down -v
    ```
 
 2. **Verify volumes were removed:**
    ```bash
-   docker volume ls | grep taskflow
+   docker volume ls --filter name=<project>_taskflow
    ```
    
-   Expected: No taskflow volumes should be listed.
+   Expected: no `<project>_taskflow-data` or `<project>_taskflow-logs` volumes are listed. Volumes from other projects (such as `taskflow-test_*`) may still appear and are not a failure.
 
 3. **Start fresh:**
    ```bash
@@ -213,7 +219,7 @@ done
 
 echo ""
 echo "Step 4: Verify volumes exist..."
-docker volume ls | grep taskflow || (echo "✗ Volumes not found" && exit 1)
+docker volume ls --filter name=taskflow | grep -q taskflow || (echo "✗ Volumes not found" && exit 1)
 echo "✓ Volumes created"
 
 echo ""
@@ -237,7 +243,7 @@ sleep 2
 
 echo ""
 echo "Step 8: Verify volumes persist..."
-docker volume ls | grep taskflow || (echo "✗ Volumes disappeared" && exit 1)
+docker volume ls --filter name=taskflow | grep -q taskflow || (echo "✗ Volumes disappeared" && exit 1)
 echo "✓ Volumes still exist"
 
 echo ""
@@ -346,7 +352,7 @@ Docker named volumes store data in Docker's internal storage area (typically `/v
 
 2. **Use temporary container to access volume:**
    ```bash
-   docker run --rm -v taskflowapi_taskflow-data:/data alpine ls -la /data
+   docker run --rm -v <project>_taskflow-data:/data alpine ls -la /data
    ```
 
 3. **If you need direct host access, switch to bind mounts:**
@@ -362,10 +368,12 @@ Docker named volumes store data in Docker's internal storage area (typically `/v
 1. **Never use `-v` flag with `docker compose down` in production** unless you intentionally want to delete all data
 
 2. **Regular backups:**
+
+   > **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the backup or restore runs against that.
    ```bash
    # Backup volumes
    docker run --rm \
-     -v taskflowapi_taskflow-data:/data \
+     -v <project>_taskflow-data:/data \
      -v $(pwd)/backups:/backup \
      alpine tar czf /backup/db-$(date +%Y%m%d).tar.gz -C /data .
    ```

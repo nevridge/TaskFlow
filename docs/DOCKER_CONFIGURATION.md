@@ -68,7 +68,7 @@ A two-stage Node build. The build stage runs `npm run build`. The API client use
 | **Image Tag** | `taskflow-api:dev` | `taskflow-api:prod` |
 | **Environment** | `Development` | `Production` |
 | **Auto Migrations** | `Database__MigrateOnStartup=true` | `Database__MigrateOnStartup=true` |
-| **Volumes** | Named Docker volumes | Named Docker volumes |
+| **Volumes** | Named Docker volumes (keys `taskflow-data`, `taskflow-logs`, `seq-data`) | Named Docker volumes (keys `taskflow-data-prod`, `taskflow-logs-prod`) |
 | **Health Check** | Enabled (40s start period) | Enabled (40s start period) |
 | **Port Mapping** | `8080:8080` | `8080:8080` |
 
@@ -124,12 +124,14 @@ These variables are read by `vite.preview.config.js` at container startup and ar
 
 ### Volume Mounts
 
-**Both environments use named Docker volumes:**
+Both environments use named Docker volumes. The table lists compose **keys**; the real Docker volume name is `<project>_<key>` (see [Compose Project Name](#compose-project-name)).
 
-| Volume Name | Container Path | Purpose |
-|-------------|---------------|---------|
-| `taskflow-data` | `/app/data` | Persist SQLite database |
-| `taskflow-logs` | `/app/logs` | Persist application logs |
+| Compose Key | Environment | Container Path | Purpose |
+|-------------|-------------|---------------|---------|
+| `taskflow-data` | Dev (`docker-compose.yml`) | `/app/data` | Persist SQLite database |
+| `taskflow-data-prod` | Prod harness (`docker-compose.prod.yml`) | `/app/data` | Persist SQLite database |
+| `taskflow-logs` | Dev (`docker-compose.yml`) | `/app/logs` | Persist application logs |
+| `taskflow-logs-prod` | Prod harness (`docker-compose.prod.yml`) | `/app/logs` | Persist application logs |
 
 **Important Notes:**
 - Named volumes are managed by Docker and not tied to a host directory
@@ -139,7 +141,7 @@ These variables are read by `vite.preview.config.js` at container startup and ar
 
 #### Compose Project Name
 
-The real Docker volume names are `<project>_<key>`, where `<key>` is the volume key in the compose file. For example, with `COMPOSE_PROJECT_NAME=taskflowapi` the keys become `taskflowapi_taskflow-data`, `taskflowapi_taskflow-logs` and `taskflowapi_seq-data`.
+The real Docker volume names are `<project>_<key>`, where `<key>` is the volume key in the compose file. Write `<project>` as a placeholder in commands and substitute your own project name. Example only: with `COMPOSE_PROJECT_NAME=taskflowapi` the keys become `taskflowapi_taskflow-data`, `taskflowapi_taskflow-logs` and `taskflowapi_seq-data`.
 
 `COMPOSE_PROJECT_NAME` pins the project name so every checkout and git worktree shares one database volume. No compose file sets a top-level `name:`, so compose resolves the project name in this order:
 
@@ -156,6 +158,8 @@ docker volume ls --filter name=taskflow
 ```
 
 An extra, unused set (for example `taskflow_*`) signals that compose was run without the pin. Leave unused sets alone unless you have confirmed they hold no data you need.
+
+This filter also matches the test stack's `taskflow-test_*` volumes.
 
 The test stack is unaffected: `-p taskflow-test` always wins (see [Live vs Test Stack Workflow](#live-vs-test-stack-workflow)).
 

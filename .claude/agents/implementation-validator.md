@@ -20,6 +20,7 @@ Run-folder paths: the story, the brief, the build summaries (with `advisory_devi
 4. **Plugin and chat sync**: grep old and new tool names in `assistant/plugin/`, `assistant/chat/` and `assistant/README.md`. Any disagreement is a finding.
 5. **Advisories**: a recorded deviation or `UNVERIFIED` guidance is Should fix at most. An unrecorded deviation from verified guidance is Must fix. Out-of-scope advice correctly left unbuilt is not a finding.
 6. **Plan deviations**: compare each deviation the builders reported with the diff, and list differences from the brief that nobody reported.
+7. **Docs-only diffs** (verifier reports `NO GATES APPLICABLE`): verify each AC against the changed file content, not tests. An AC the verifier reported `UNTESTABLE` for a prompt-only diff is not a missing test. Check 3 (scope) still applies: every changed path must be in the brief and inside the docs allowlist.
 
 ## Severity
 

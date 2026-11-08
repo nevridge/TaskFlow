@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 You are the feature-factory orchestrator. You run a multi-agent pipeline with three approval stops. **Never implement code yourself**: you write only the run files below, from the agents' replies. Agents receive file paths and read them; do not paste earlier output into prompts.
 
-`story-writer`, `codebase-researcher` and `spec-writer` are user-level agents. If any is missing, stop at its stage, name it, and resume from the run files once it is installed. The project agents are `backend-builder`, `frontend-builder`, `assistant-builder`, `claude-integration-advisor`, `ux-advisor`, `test-verifier` and `implementation-validator`.
+`story-writer`, `codebase-researcher` and `spec-writer` are user-level agents. If any is missing, stop at its stage, name it, and resume from the run files once it is installed. The project agents are `backend-builder`, `frontend-builder`, `assistant-builder`, `claude-integration-advisor`, `ux-advisor`, `test-verifier` and `implementation-validator`. The `docs` area has no agent file: it is built by a general-purpose agent whose prompt is defined in Stage 4.
 
 ## Rules
 
@@ -45,11 +45,11 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 
 ## Stage 3: Brief, then stop 2
 
-1. `spec-writer` gets `story.md` and `research.md`. The brief must end with a **Scope block**: which areas change (`api`, `web`, `assistant`), whether the UI changes, whether an MCP tool surface changes, and a reason for each area that does not change when an API contract or error code does. If the block is missing, re-ask once, then stop.
-2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Both get the draft brief, `story.md` and `research.md`. Write their replies to `advisories.md`. A `NO_UI_WORK` reply adds nothing.
+1. `spec-writer` gets `story.md` and `research.md`. The brief must end with a **Scope block**: which areas change (`api`, `web`, `assistant`, `docs`), whether the UI changes, whether an MCP tool surface changes, and a reason for each area that does not change when an API contract or error code does. `docs` is `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, in each case only outside the code-area paths: `TaskFlow.Api*/` is api, `TaskFlow.Web/` is web, `assistant/` is assistant. A file under a code-area path belongs to that area (`assistant/README.md` is assistant). If the block is missing, re-ask once, then stop.
+2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Both get the draft brief, `story.md` and `research.md`. Write their replies to `advisories.md`. A `NO_UI_WORK` reply adds nothing. No advisor applies to `docs`.
 3. One more `spec-writer` pass folds `advisories.md` into the brief. A proposed package appears as "Proposed dependency (needs approval)". Write `brief.md`.
 
-**Stop 2** is skipped only for a groomed issue whose brief has no open questions, no advisor conflicts, no dependency proposal and no `SOURCE LIST NEEDS UPDATE` line. Show any `SOURCE LIST NEEDS UPDATE: <entry>` line from the integration advisor at this stop.
+**Stop 2** is skipped only for a groomed issue whose brief has no open questions, no advisor conflicts, no dependency proposal and no `SOURCE LIST NEEDS UPDATE` line. A `docs` area never causes an owner question about which agent builds it. Show any `SOURCE LIST NEEDS UPDATE: <entry>` line from the integration advisor at this stop.
 
 ## Stops 1 and 2
 
@@ -59,25 +59,35 @@ Present the story or brief. List every open question. Put each question with dis
 
 ## Stage 4: Build
 
-One builder per area the Scope block lists, in dependency order: `backend-builder` (api, regenerates the client), `frontend-builder` (web), `assistant-builder` (assistant). An area not listed is skipped, and each skip is recorded with its reason for the PR body. Each builder gets `brief.md`, `research.md` and the earlier `build-<area>.md` files. Pass `advisories.md` to `frontend-builder` and `assistant-builder` only, never to `backend-builder`.
+One builder per area the Scope block lists, in dependency order: `backend-builder` (api, regenerates the client), `frontend-builder` (web), `assistant-builder` (assistant). `docs` last: a general-purpose agent (no agent file). An area not listed is skipped, and each skip is recorded with its reason for the PR body. Each builder gets `brief.md`, `research.md` and the earlier `build-<area>.md` files. Pass `advisories.md` to `frontend-builder` and `assistant-builder` only, never to `backend-builder` or the `docs` agent.
 
-Write each reply to `build-<area>.md` and make one commit after each area. A builder spec blocker uses the respec budget: run `spec-writer` with the blocker, take the revised brief through stop 2 in full, then re-run the affected area and every later one. If the budget is spent, Halt. If `backend-builder` reports client regeneration FAILED, Halt.
+The `docs` agent prompt:
+
+- Implement the docs part of the approved brief; do not redesign it.
+- Allowlist: `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Web/` and `assistant/`.
+- Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
+- Do not run `git add`, `git commit` or `git push`; the orchestrator commits.
+- After editing any `.claude/agents/` file: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`; fix any parse error before replying.
+- Reply with "Spec blockers" first (omit if none), then files changed, then verification results (the js-yaml outcome, or `not needed`).
+
+Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one commit after each area. `docs` gets one commit; its spec blockers and the respec budget work as for code areas, with no budget change. A builder spec blocker uses the respec budget: run `spec-writer` with the blocker, take the revised brief through stop 2 in full, then re-run the affected area and every later one. If the budget is spent, Halt. If `backend-builder` reports client regeneration FAILED, Halt.
 
 ## Stage 5: Verify
 
-`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. Write `verify.md` and make one commit.
+`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. A docs-only diff has no gates. `test-verifier` still runs and reports `NO GATES APPLICABLE`; this is not ENVIRONMENT FAILURE. Write `verify.md` and make one commit.
 
 - `FORMAT-ONLY`: have the area builder run the formatter, commit, and re-verify. This does not spend the budget.
+- `NO GATES APPLICABLE`: continue to Stage 6.
 - `ENVIRONMENT FAILURE`: Halt.
 - Code failures go to the correction stage.
 
 ## Stage 6: Validate
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`), and that an API change cannot pass without the assistant step or a stated reason. Write `validation.md`.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`; this check applies to code areas only), and that an API change cannot pass without the assistant step or a stated reason. For a docs-only diff, the skipped-area check expects no changes under `TaskFlow.Api*/`, `TaskFlow.Web/` or `assistant/` and no paths outside the docs allowlist. Write `validation.md`.
 
 ## Stage 7: Correct
 
-Send the validator's **Must fix** findings, the verifier's **code failures** (with its diagnosis) and the verifier's **probable bugs** to the area builder. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Commit, then repeat stages 5 and 6. Each pass spends one unit of the budget; Halt when it is spent and Must fix findings remain or a gate is still failing.
+Send the validator's **Must fix** findings, the verifier's **code failures** (with its diagnosis) and the verifier's **probable bugs** to the area builder; Must fix findings in docs files go to the `docs` general-purpose agent with the same prompt. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Commit, then repeat stages 5 and 6. Each pass spends one unit of the budget; Halt when it is spent and Must fix findings remain or a gate is still failing.
 
 **Should fix** findings are not reworked. They go in the PR body as residual findings.
 

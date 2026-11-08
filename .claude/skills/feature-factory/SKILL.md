@@ -15,6 +15,7 @@ You are the feature-factory orchestrator. You run a multi-agent pipeline with th
 - One shared correction budget of 2 for the whole run, and one respec budget of 1.
 - Spec blockers from a builder go back to `spec-writer`, never to another builder.
 - Every `git add` is plain `git add -A`; `.feature-factory/` and `.playwright-mcp/` are gitignored.
+- Every decision put to the owner (blockers, resume, stops 1 to 3) uses the AskUserQuestion tool (or a plain-text list if it is unavailable). Free-form questions stay as plain text.
 
 ## Run folder
 
@@ -27,9 +28,9 @@ Stop on any failure; nothing has changed yet.
 1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description and ask for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
 2. **Branch.** On `main`, create a branch first. Any other branch is used as is.
 3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in.
-4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). Any open blocker stops the run and is named. Continue only on an explicit "proceed anyway", covering only the blockers listed then.
+4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). Any open blocker stops the run and is named. Ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then; any blocker found later needs a new question.
 5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete this run's folder.
-6. **Resume.** If a folder for this issue or slug exists, show which files it has and offer to resume from the latest stage or start over.
+6. **Resume.** If a folder for this issue or slug exists, show which files it has, then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Resume from the latest stage** and **Start over**.
 
 ## Stage 1: Research
 
@@ -52,7 +53,9 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 
 ## Stops 1 and 2
 
-Present the story or brief. List every open question and wait for answers; re-run the agent with the answers and repeat until none remain. Then offer **Approved**, **Changes requested** (re-run with the feedback and present again) or **Rejected** (stop; the files stay).
+Present the story or brief. List every open question. Put each question with discrete answers to the owner through AskUserQuestion (or a plain-text list if it is unavailable): 2 to 4 options per question, at most 4 questions per call, batched across calls when there are more. Free-form questions stay as plain text. Re-run the agent with the answers and repeat until no open questions remain. Then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Approved**, **Changes requested** and **Rejected**.
+- **Changes requested:** take the owner's free-text feedback from the tool's "Other" answer; if none was given, ask a follow-up plain-text prompt for it. Re-run with the feedback and present again.
+- **Rejected:** stop; the files stay.
 
 ## Stage 4: Build
 
@@ -82,7 +85,7 @@ Send the validator's **Must fix** findings, the verifier's **code failures** (wi
 
 ## Stage 8: Finish, stop 3
 
-Draft the implementation notes from the run files only. Show them at **stop 3** with the validator report, residual Should fix findings, skipped areas and the gate results, then ask whether to open the PR. Stop 3 is never skipped and has no override.
+Draft the implementation notes from the run files only. Show them at **stop 3** with the validator report, residual Should fix findings, skipped areas and the gate results, then ask whether to open the PR with AskUserQuestion (or a plain-text list if it is unavailable), offering **Yes** and **No**. Stop 3 is never skipped and has no override.
 
 On **No**, post nothing and leave the branch as it is. On **Yes**:
 

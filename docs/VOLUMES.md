@@ -54,6 +54,8 @@ TaskFlow.Api supports two types of volume mounting:
 | `taskflow-data` | `/app/data` | Persists SQLite database |
 | `taskflow-logs` | `/app/logs` | Persists application logs |
 
+**Naming:** these are compose **keys**. The real Docker volume name is `<project>_<key>` (for example `<project>_taskflow-data`), where `<project>` is your compose project name; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name). Compose configuration uses the key; every `docker volume ...` or `docker run -v ...` command uses `<project>_<key>`. Find the real names with `docker volume ls --filter name=taskflow`.
+
 ## Environment Variables
 
 ### ConnectionStrings__DefaultConnection
@@ -115,7 +117,7 @@ volumes:
 ```
 
 This configuration:
-- Creates Docker-managed named volumes `taskflow-data` and `taskflow-logs`
+- Creates Docker-managed named volumes from the keys `taskflow-data` and `taskflow-logs` (real names `<project>_taskflow-data` and `<project>_taskflow-logs`)
 - Volumes are created automatically on first `docker-compose up`
 - Mounts them to the corresponding paths in the container
 - Data persists across container removal, recreation, and `docker-compose down`
@@ -129,16 +131,16 @@ This configuration:
    ```bash
    docker-compose up
    ```
-   This automatically creates and mounts the named volumes `taskflow-data` and `taskflow-logs`.
+   This automatically creates and mounts named volumes from the keys `taskflow-data` and `taskflow-logs` (real names `<project>_taskflow-data` and `<project>_taskflow-logs`).
 
 2. **Verify volumes were created:**
    ```bash
-   # List all Docker volumes
-   docker volume ls | grep taskflow
+   # List TaskFlow volumes (also matches taskflow-test_* volumes if the test stack exists)
+   docker volume ls --filter name=taskflow
    
    # Inspect volume details
-   docker volume inspect taskflow-data
-   docker volume inspect taskflow-logs
+   docker volume inspect <project>_taskflow-data
+   docker volume inspect <project>_taskflow-logs
    ```
 
 3. **View data inside volumes:**
@@ -170,6 +172,8 @@ This configuration:
    ```
 
 2. **Option A: Run with Docker named volumes (recommended):**
+
+   These are standalone volumes created by hand with `docker volume create`. They are separate from the compose volumes `<project>_<key>` and do not share data with the compose stack or the prod harness.
    ```bash
    # Create named volumes
    docker volume create taskflow-prod-data
@@ -197,7 +201,7 @@ This configuration:
 4. **Verify volumes:**
    ```bash
    # List volumes
-   docker volume ls | grep taskflow
+   docker volume ls --filter name=taskflow-prod
    
    # Inspect volume
    docker volume inspect taskflow-prod-data
@@ -225,10 +229,10 @@ When deploying with Docker Compose to an on-premises Docker Host (via Portainer 
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-> **Note:** `docker-compose.prod.yml` is a local prod-like harness. Production is defined in `docker-compose.yml` in nevridge/taskflow-deploy, which uses volumes `taskflow-data` and `taskflow-logs`; see that repo for current values.
+> **Note:** `docker-compose.prod.yml` is a local prod-like harness. Production is defined in `docker-compose.yml` in nevridge/taskflow-deploy, which uses the keys `taskflow-data` and `taskflow-logs`; see that repo for current values.
 
 This configuration automatically:
-- Creates and manages named volumes. The local harness creates `taskflow-data-prod` and `taskflow-logs-prod`; production uses `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values).
+- Creates and manages named volumes from compose keys. The local harness uses the keys `taskflow-data-prod` and `taskflow-logs-prod` (real names `<project>_taskflow-data-prod`, `<project>_taskflow-logs-prod`); production uses the keys `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values).
 - Persists data across container restarts
 - Provides consistent paths across environments
 - Supports backup and restore operations
@@ -240,21 +244,24 @@ This configuration automatically:
 # List all volumes
 docker volume ls
 
-# List TaskFlow volumes
-docker volume ls | grep taskflow
+# List TaskFlow volumes (also matches taskflow-test_* volumes if the test stack exists)
+docker volume ls --filter name=taskflow
 ```
 
 ### Inspect volume details
 ```bash
 # View volume configuration and mount point
-docker volume inspect taskflow-data
-docker volume inspect taskflow-logs
+docker volume inspect <project>_taskflow-data
+docker volume inspect <project>_taskflow-logs
 ```
 
 ### Remove volumes
+
+> **Warning:** this deletes your data permanently.
+
 ```bash
 # Remove specific volume (container must be stopped first)
-docker volume rm taskflow-data
+docker volume rm <project>_taskflow-data
 
 # Remove all unused volumes
 docker volume prune
@@ -266,31 +273,37 @@ docker compose down -v
 ### Backup and restore volumes
 
 **Backup a volume:**
+
+> **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the backup or restore runs against that.
+
 ```bash
 # Create backup directory
 mkdir -p backups
 
 # Backup database volume
 docker run --rm \
-  -v taskflow-data:/data \
+  -v <project>_taskflow-data:/data \
   -v $(pwd)/backups:/backup \
   alpine tar czf /backup/taskflow-data-$(date +%Y%m%d).tar.gz -C /data .
 
 # Backup logs volume
 docker run --rm \
-  -v taskflow-logs:/data \
+  -v <project>_taskflow-logs:/data \
   -v $(pwd)/backups:/backup \
   alpine tar czf /backup/taskflow-logs-$(date +%Y%m%d).tar.gz -C /data .
 ```
 
 **Restore a volume:**
+
+> **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the backup or restore runs against that.
+
 ```bash
 # Stop the application
 docker compose down
 
 # Restore database volume
 docker run --rm \
-  -v taskflow-data:/data \
+  -v <project>_taskflow-data:/data \
   -v $(pwd)/backups:/backup \
   alpine tar xzf /backup/taskflow-data-20240101.tar.gz -C /data
 
@@ -306,8 +319,9 @@ docker compose up -d
 docker cp taskflow-api:/app/data/tasks.db ./tasks-backup.db
 
 # Using temporary container
+# See the warning above: use the real, prefixed volume name
 docker run --rm \
-  -v taskflow-data:/data \
+  -v <project>_taskflow-data:/data \
   -v $(pwd):/backup \
   alpine cp /data/tasks.db /backup/tasks-backup.db
 ```
@@ -319,12 +333,14 @@ docker run --rm \
 1. **Use Docker named volumes**: The default docker-compose.yml uses named volumes for better Docker integration
 
 2. **Clean up volumes**: Remove volumes when you want to start fresh:
+   > **Warning:** this deletes your data permanently.
+
    ```bash
    # Stop and remove containers and volumes
    docker compose down -v
    
    # Or remove specific volumes (after stopping containers)
-   docker volume rm taskflowapi_taskflow-data taskflowapi_taskflow-logs
+   docker volume rm <project>_taskflow-data <project>_taskflow-logs
    ```
 
 3. **Inspect running container**: Check volume mounts and paths:
@@ -379,7 +395,7 @@ docker compose logs taskflow-api
 docker inspect taskflow-api | grep -A 10 Mounts
 
 # Check volume exists
-docker volume ls | grep taskflow
+docker volume ls --filter name=taskflow
 ```
 
 **Solutions:**
@@ -413,7 +429,7 @@ docker inspect taskflow-api | grep -A 10 Mounts
   docker compose exec taskflow-api ls -la /app/data
   
   # Or inspect volume contents directly
-  docker run --rm -v taskflowapi_taskflow-data:/data alpine ls -la /data
+  docker run --rm -v <project>_taskflow-data:/data alpine ls -la /data
   ```
 
 ### Permission denied errors
@@ -462,37 +478,7 @@ If you were previously using bind mounts (host directories `./data` and `./logs`
    docker compose down
    ```
 
-2. **Create the new named volumes:**
-   ```bash
-   docker volume create taskflow-data
-   docker volume create taskflow-logs
-   ```
-
-3. **Copy data from bind mounts to named volumes:**
-   ```bash
-   # Copy database files to named volume
-   docker run --rm \
-     -v $(pwd)/data:/source \
-     -v taskflow-data:/dest \
-     alpine sh -c "cp -a /source/. /dest/"
-   
-   # Copy log files to named volume
-   docker run --rm \
-     -v $(pwd)/logs:/source \
-     -v taskflow-logs:/dest \
-     alpine sh -c "cp -a /source/. /dest/"
-   ```
-
-4. **Verify data was copied:**
-   ```bash
-   # Check database volume
-   docker run --rm -v taskflow-data:/data alpine ls -la /data
-   
-   # Check logs volume
-   docker run --rm -v taskflow-logs:/data alpine ls -la /data
-   ```
-
-5. **Update docker-compose.yml** (if not already updated):
+2. **Update docker-compose.yml** (if not already updated):
    ```yaml
    services:
      taskflow-api:
@@ -505,6 +491,39 @@ If you were previously using bind mounts (host directories `./data` and `./logs`
        driver: local
      taskflow-logs:
        driver: local
+   ```
+
+3. **Create the new named volumes with Compose:**
+   ```bash
+   docker compose up --no-start
+   ```
+
+   Compose creates the volumes under their real names, `<project>_taskflow-data` and `<project>_taskflow-logs`, with the labels it expects. Do not create them by hand with `docker volume create`: Compose may then warn that the volume "was not created by Docker Compose". Check the names with `docker volume ls --filter name=taskflow`.
+
+4. **Copy data from bind mounts to named volumes:**
+
+   > **Warning:** use the real, prefixed volume name (`<project>_<key>`; see [Compose Project Name](DOCKER_CONFIGURATION.md#compose-project-name), and run `docker volume ls --filter name=taskflow` to find it). A wrong name does not fail: Docker silently creates a new, empty volume and the copy runs against that volume.
+   ```bash
+   # Copy database files to named volume
+   docker run --rm \
+     -v $(pwd)/data:/source \
+     -v <project>_taskflow-data:/dest \
+     alpine sh -c "cp -a /source/. /dest/"
+   
+   # Copy log files to named volume
+   docker run --rm \
+     -v $(pwd)/logs:/source \
+     -v <project>_taskflow-logs:/dest \
+     alpine sh -c "cp -a /source/. /dest/"
+   ```
+
+5. **Verify data was copied:**
+   ```bash
+   # Check database volume
+   docker run --rm -v <project>_taskflow-data:/data alpine ls -la /data
+   
+   # Check logs volume
+   docker run --rm -v <project>_taskflow-logs:/data alpine ls -la /data
    ```
 
 6. **Start with the new configuration:**
@@ -577,8 +596,8 @@ The new configuration will create Docker named volumes automatically.
 Docker Host (Portainer GitOps) uses Docker Compose with named volumes, but with different volume names than development to prevent data conflicts:
 
 **Volume Names:**
-- **Development** (docker-compose.yml): `taskflow-data`, `taskflow-logs`
-- **Local prod-like harness** (docker-compose.prod.yml): `taskflow-data-prod`, `taskflow-logs-prod` (real production uses `taskflow-data` and `taskflow-logs`)
+- **Development** (docker-compose.yml): keys `taskflow-data`, `taskflow-logs` (real names `<project>_<key>`)
+- **Local prod-like harness** (docker-compose.prod.yml): keys `taskflow-data-prod`, `taskflow-logs-prod` (real names `<project>_<key>`; real production uses the keys `taskflow-data` and `taskflow-logs`)
 
 **Configuration:**
 1. **Configuration is automatic** - the compose file (local harness or production GitOps) creates and manages volumes
@@ -592,8 +611,8 @@ Your data in volumes will automatically persist when using the compose file for 
 
 - **Volume Type**: Docker named volumes (default) or bind mounts (alternative)
 - **Default container paths**: `/app/logs` for logs, `/app/data` for database
-- **Development volumes**: `taskflow-data` and `taskflow-logs` (docker-compose.yml)
-- **Local harness volumes**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml); production uses `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values)
+- **Development volume keys**: `taskflow-data` and `taskflow-logs` (docker-compose.yml); real names are `<project>_<key>`
+- **Local harness volume keys**: `taskflow-data-prod` and `taskflow-logs-prod` (docker-compose.prod.yml); production uses the keys `taskflow-data` and `taskflow-logs` (see nevridge/taskflow-deploy for current values)
 - **Environment variables**: `LOG_PATH` and `ConnectionStrings__DefaultConnection` for customization
 - **Persistence**: Data persists across container removal/recreation until volumes are explicitly deleted
 - **Management**: Use `docker volume` commands to manage, backup, and restore volumes

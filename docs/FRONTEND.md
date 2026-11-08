@@ -255,6 +255,26 @@ The task detail page. Responsibilities:
 - Delete task — starts the undoable delete and navigates to `/tasks` at once (`replace`, with `state.focusNewTask` so New Task takes focus); the Undo toast persists across the navigation
 - Inline note creation and editing; note delete is undoable (pending key `tasknote:<id>`, 6s window)
 
+#### Origin state and back link (#404)
+
+Journal rows link to `/tasks/:id` with router state `{ from?: string, focusTaskId?: number }` (helpers in `src/lib/task-origin.ts`). The state lives only in `history.state`; nothing is read from the URL.
+
+- `from` is built from the journal's `isoDate` prop (`/journal/MM-DD-YYYY`), never from `location.pathname`. The context-header "Parent task" link carries `from` only. The Tasks page links carry no state.
+- `from` is valid only if it is a string starting `/journal/` containing no `//`, `\` or `:`.
+
+| State on `/tasks/:id` | Back link target | Label |
+| --- | --- | --- |
+| valid `from` | `from` (plain `<Link>`, state `{ focusTaskId }`) | "← Back to Journal" |
+| missing or invalid (direct load, Tasks page) | `/tasks` | "← Back to Tasks" |
+
+Computed synchronously on first render, so a refresh keeps the origin. Deleting from the detail page still navigates to `/tasks` with `{ replace: true, state: { focusNewTask: true } }`.
+
+One-shot focus return: `TodosSection` reads `focusTaskId` once into `returnFocusRef` (separate from `pendingFocus`, which expires after 100ms and is cleared by key and pointer events). When loading ends it focuses `[data-todo-details="<id>"]` if the row exists, and abandons the request without forcing focus if it does not. It then clears only the focus key (`navigate(pathname, { replace: true, state: rest or null })`), so `weekendRedirect` survives and a refresh does not refocus.
+
+The weekend-to-Friday redirect in `JournalPage` spreads the incoming `location.state` and sets `weekendRedirect: true` last, so `focusTaskId` survives it. Any future one-shot state key set on a weekend navigation survives it too.
+
+Shortcuts are unchanged: `t l n [ ] j` (journal) and the global `?` and `g` chord still fire while the details link is focused; `Enter` is unbound.
+
 ### Current Tasks + Journal behavior (May 2026)
 
 Recent UX additions that are now part of the app flow:

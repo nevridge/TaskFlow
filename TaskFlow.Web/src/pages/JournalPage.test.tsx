@@ -239,6 +239,27 @@ describe('JournalPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026', { replace: true, state: { weekendRedirect: true } })
   })
 
+  it('keeps focusTaskId and from through the weekend redirect, with weekendRedirect set last (#404)', () => {
+    mockOutletContext.weekdaysOnly = true
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: '/journal/05-30-2026',
+          state: { from: '/journal/05-30-2026', focusTaskId: 7, weekendRedirect: false },
+        }]}
+      >
+        <Routes>
+          <Route path="/journal/:date" element={<JournalPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(mockNavigate).toHaveBeenCalledTimes(1)
+    expect(mockNavigate).toHaveBeenCalledWith('/journal/05-29-2026', {
+      replace: true,
+      state: { from: '/journal/05-30-2026', focusTaskId: 7, weekendRedirect: true },
+    })
+  })
+
   describe('keyboard shortcut weekdaysOnly navigation', () => {
     it('pressing [ skips to previous weekday when weekdaysOnly=true', async () => {
       mockOutletContext.weekdaysOnly = true

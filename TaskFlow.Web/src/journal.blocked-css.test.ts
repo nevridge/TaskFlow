@@ -59,11 +59,19 @@ describe('journal touch and responsive styles', () => {
     expect(journalCss.slice(touchAt).match(/@media/g)).toHaveLength(1)
   })
 
-  it('makes todo-x, todo-history and todo-block always visible at 44x44 with gaps of at least 8px', () => {
+  it('makes todo-x, todo-history, todo-details-link and todo-block always visible at 44x44 with gaps of at least 8px', () => {
     const t = touch()
-    expect(t).toMatch(/\.journal-page \.todo-x,\s*\.journal-page \.todo-history,\s*\.journal-page \.todo-block \{[^}]*opacity:\s*1;[^}]*width:\s*44px;[^}]*height:\s*44px/)
+    expect(t).toMatch(/\.journal-page \.todo-x,\s*\.journal-page \.todo-history,\s*\.journal-page \.todo-details-link,\s*\.journal-page \.todo-block \{[^}]*opacity:\s*1;[^}]*width:\s*44px;[^}]*height:\s*44px/)
     expect(t).toMatch(/\.todo-subline-actions \{\s*gap:\s*8px/)
     expect(t).toMatch(/\.journal-page \.todo-x \{\s*margin-left:\s*8px/)
+  })
+
+  it('reveals the details link with the other row actions: focus-within, fine-pointer hover, and always on touch', () => {
+    expect(journalCss).toMatch(/\.journal-page \.todo:focus-within \.todo-details-link,/)
+    expect(journalCss).toMatch(/\.journal-page \.todo:hover \.todo-details-link,/)
+    expect(rule('.journal-page .todo-details-link:focus-visible')).toMatch(/opacity:\s*1/)
+    // Shares the 22px action box, so the phone subline flex row places it with the sibling actions.
+    expect(journalCss).toMatch(/\.journal-page \.todo-history,\s*\.journal-page \.todo-details-link \{\s*flex: 0 0 auto;/)
   })
 
   it('scopes every journal button rule as .journal-page .classname', () => {

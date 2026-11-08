@@ -104,7 +104,7 @@ function TasksProbe() {
   return <div data-testid="tasks-route" data-state={JSON.stringify(location.state)}>Tasks list</div>
 }
 
-function renderPage(path = '/tasks/1') {
+function renderPage(path: string | { pathname: string; state?: unknown } = '/tasks/1') {
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={[path]}>
@@ -240,6 +240,51 @@ describe('TaskDetailPage', () => {
   it('renders back link', () => {
     renderPage()
     expect(screen.getByRole('link', { name: /back to tasks/i })).toBeInTheDocument()
+  })
+
+  describe('back link origin (#404)', () => {
+    const backLink = () => screen.getByRole('link', { name: /^← Back to/ })
+
+    it('returns to the journal day it came from, on the first render, passing the focus id', () => {
+      renderPage({ pathname: '/tasks/1', state: { from: '/journal/11-07-2026', focusTaskId: 1 } })
+      expect(backLink()).toHaveTextContent('← Back to Journal')
+      expect(backLink()).toHaveAttribute('href', '/journal/11-07-2026')
+    })
+
+    it('keeps the journal back link when the same history state is rendered again (refresh)', () => {
+      const { rerender } = renderPage({ pathname: '/tasks/1', state: { from: '/journal/11-07-2026' } })
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[{ pathname: '/tasks/1', state: { from: '/journal/11-07-2026' } }]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      )
+      expect(backLink()).toHaveAttribute('href', '/journal/11-07-2026')
+    })
+
+    it.each([
+      ['a non-journal path', '/tasks'],
+      ['an absolute url', 'https://evil.example'],
+      ['a protocol-relative url', '//evil'],
+      ['a double slash', '/journal//x'],
+      ['a backslash', '/journal/\\x'],
+      ['a colon', '/journal/a:b'],
+      ['an empty string', ''],
+      ['a number', 42],
+      ['null', null],
+    ])('falls back to the Tasks list when from is %s', (_label, from) => {
+      renderPage({ pathname: '/tasks/1', state: { from } })
+      expect(backLink()).toHaveTextContent('← Back to Tasks')
+      expect(backLink()).toHaveAttribute('href', '/tasks')
+    })
+
+    it('falls back to the Tasks list with no state (direct load)', () => {
+      renderPage()
+      expect(backLink()).toHaveAttribute('href', '/tasks')
+    })
   })
 
   it('edit button renders TaskForm with pre-populated title', async () => {

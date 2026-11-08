@@ -17,6 +17,7 @@ import '@/journal.css'
 export function JournalPage() {
   const { date: urlDate } = useParams<{ date: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const isoDate = useMemo(
     () => (urlDate ? urlDateToISO(urlDate) : todayISO()),
@@ -41,11 +42,11 @@ export function JournalPage() {
     if (!weekdaysOnly) return
     const friday = prevWeekday(effectiveDate)
     if (friday !== effectiveDate) {
-      navigate(`/journal/${isoToUrlDate(friday)}`, { replace: true, state: { weekendRedirect: true } })
+      // Keep any incoming one-shot state (e.g. focusTaskId from the details page); weekendRedirect is set last.
+      navigate(`/journal/${isoToUrlDate(friday)}`, { replace: true, state: { ...(location.state ?? {}), weekendRedirect: true } })
     }
-  }, [effectiveDate, weekdaysOnly, navigate])
+  }, [effectiveDate, weekdaysOnly, navigate, location.state])
 
-  const location = useLocation()
   const [notificationMsg, setNotificationMsg] = useState<string | null>(() =>
     location.state?.weekendRedirect ? 'Weekdays only — redirected to Friday' : null
   )

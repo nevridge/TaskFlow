@@ -37,7 +37,7 @@ export function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const taskId = Number(id)
 
-  const { data: taskData, isLoading: taskLoading, error: taskError } = useTaskQuery(taskId)
+  const { data: taskData, isLoading: taskLoading, isFetching: taskFetching, error: taskError } = useTaskQuery(taskId)
   const { data: allTasksData } = useTasksQuery()
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
   const { data: projectsData } = useProjectsQuery()
@@ -104,7 +104,24 @@ export function TaskDetailPage() {
   // One readiness source for both the form's render condition and the focus effect, so the title
   // is always mounted when the effect runs (including deep links, where the task loads after mount).
   const taskReady = !taskLoading && !taskError && !!task && !leaving
-  const formOpen = editing && taskReady
+  // TaskForm copies the task into its fields once, so it must not open on a stale cached task while
+  // a refetch is running: wait for the visit's first fetch to settle, then stay open (a later
+  // background refetch must not unmount a form the user is typing in). Resets when edit mode ends.
+  const [formSettled, setFormSettled] = useState(false)
+  const wantsForm = editing && taskReady
+  if (wantsForm && !taskFetching && !formSettled) setFormSettled(true)
+  if (!wantsForm && formSettled) setFormSettled(false)
+  const formOpen = wantsForm && formSettled
+  // Tracks whether the page is still on the location Save was clicked from.
+  const locationKey = useRef(location.key)
+  useEffect(() => {
+    locationKey.current = location.key
+  }, [location.key])
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   // Title takes focus when the form opens; Edit (remounted) takes it back when the form closes
   // (not while leaving). Background refetches change neither value, so they never re-steal focus.
   useEffect(() => {
@@ -132,8 +149,10 @@ export function TaskDetailPage() {
   if (taskError || !task) return <div className="tasks-page"><div className="t-shell"><p className="t-error">Task not found.</p></div></div>
 
   async function handleUpdateTask(data: TaskFormPayload) {
+    const startKey = locationKey.current
     const saved = await saveWithProject.save(task!, data, autoCompleteParentWhenChildrenDone)
-    if (saved) {
+    // closeEdit navigates from render-time params: if the user left mid-save it would pull them back.
+    if (saved && mounted.current && locationKey.current === startKey) {
       closeEdit()
     }
   }

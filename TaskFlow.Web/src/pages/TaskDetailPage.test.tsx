@@ -740,6 +740,36 @@ describe('TaskDetailPage', () => {
       expect(where()).toHaveTextContent(/^\/tasks$/)
     })
 
+    it('waits for the refetch of a cached task before opening the form, then keeps it open', () => {
+      const result = (isFetching: boolean, title: string) => ({
+        data: { data: { ...task, title } },
+        isLoading: false,
+        isFetching,
+        error: null,
+      }) as never
+      vi.mocked(useTaskQuery).mockReturnValue(result(true, 'Stale title'))
+      const view = render(tree(['/tasks/1?edit=1']))
+      expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      vi.mocked(useTaskQuery).mockReturnValue(result(false, 'Fresh title'))
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(titleBox()).toHaveValue('Fresh title')
+      // A later background refetch must not unmount the form.
+      vi.mocked(useTaskQuery).mockReturnValue(result(true, 'Fresh title'))
+      view.rerender(tree(['/tasks/1?edit=1']))
+      expect(titleBox()).toHaveValue('Fresh title')
+    })
+
+    it('does not navigate back to the task when the user leaves while a save is in flight', async () => {
+      let resolveSave!: (v: unknown) => void
+      updateAsync.mockReturnValue(new Promise(r => { resolveSave = r }))
+      renderAt('/tasks', '/tasks/1?edit=1')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+      await act(async () => { resolveSave({}) })
+      expect(where()).toHaveTextContent(/^\/tasks$/)
+    })
+
     it('keeps other search params when opening and closing', async () => {
       renderAt('/tasks/1?x=1')
       await userEvent.click(editBtn())

@@ -539,7 +539,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
               className="todo-details-link"
               data-todo-details={id}
               aria-label={`Edit details: ${td.title ?? ''}`}
-              title="Open details"
+              title="Edit details"
             >
               <ChevronSvg />
             </Link>

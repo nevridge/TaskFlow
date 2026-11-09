@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, within, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { PrefsProvider } from '@/context/PrefsContext'
 import { Layout } from './Layout'
 import type { GlobalShortcutHandlers } from '@/hooks/useGlobalKeyboardShortcuts'
@@ -143,5 +143,25 @@ describe('Layout', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true }))
     })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('the g t handler goes to plain /tasks from a filtered list (intended: filters reset, #469)', () => {
+    function Where() {
+      const l = useLocation()
+      return <div data-testid="where">{l.pathname + l.search}</div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/tasks?q=foo&status=todo']}>
+        <PrefsProvider>
+          <Layout />
+          <Where />
+        </PrefsProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('where')).toHaveTextContent('/tasks?q=foo&status=todo')
+    act(() => {
+      capturedHandlers?.onGoTasks()
+    })
+    expect(screen.getByTestId('where').textContent).toBe('/tasks')
   })
 })

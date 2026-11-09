@@ -7,6 +7,7 @@ import { COMPLETED_PARENT_ADD_SUBTASK_HINT } from '@/lib/parent-options'
 import { getDerivedStatusTitle } from '@/lib/task-derived-status'
 import { canBlock, getStatusLabel, isBlocked as isBlockedStatus, nextCycleStatus } from '@/lib/task-status'
 import type { TaskItemResponseDto } from '@/api/client/types.gen'
+import type { TaskOriginState } from '@/lib/task-origin'
 
 type TaskRowModel = TaskItemResponseDto & {
   currentJournalDate?: string | null
@@ -31,6 +32,8 @@ interface Props {
   isAddingChild?: boolean
   /** True when the STORED status is Completed: Add subtask stays focusable but does nothing. */
   addSubtaskDisabled?: boolean
+  /** Router state for the title link (the Tasks page passes its origin so the detail back link returns to the filtered list). */
+  detailState?: TaskOriginState
   onEdit: (task: TaskRowModel) => void
   onHistory: (task: TaskRowModel) => void
   onDelete: (task: TaskRowModel) => void
@@ -79,6 +82,7 @@ export function TaskListRow({
   onAddChild,
   isAddingChild = false,
   addSubtaskDisabled = false,
+  detailState,
   onEdit,
   onHistory,
   onDelete,
@@ -205,7 +209,7 @@ export function TaskListRow({
               {task.id !== undefined && task.id !== null && (
                 <span className="t-task-id" aria-label={`Task ${task.id}`} role="img">#{task.id}</span>
               )}
-              <Link ref={titleLinkRef} to={`/tasks/${task.id}`} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
+              <Link ref={titleLinkRef} to={`/tasks/${task.id}`} state={detailState} className={`t-task-link${boldTitle ? ' t-title-bold' : ''}`}>
                 {task.title}
               </Link>
             </div>

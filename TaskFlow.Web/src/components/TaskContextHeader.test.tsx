@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TaskContextHeader } from './TaskContextHeader'
 
 function renderHeader(addSubtaskDisabled: boolean, onAddChild = vi.fn()) {
@@ -24,6 +24,38 @@ function renderHeader(addSubtaskDisabled: boolean, onAddChild = vi.fn()) {
   )
   return onAddChild
 }
+
+function StateProbe() {
+  const location = useLocation()
+  return <div data-testid="state">{JSON.stringify(location.state)}</div>
+}
+
+describe('TaskContextHeader parent link (#469)', () => {
+  it('links to the parent and passes linkState', async () => {
+    render(
+      <MemoryRouter>
+        <StateProbe />
+        <table>
+          <tbody>
+            <TaskContextHeader
+              path={[{ id: 5, title: 'Parent task' }]}
+              parentId={5}
+              anchor="ctx:active:5"
+              sectionLabel="Active"
+              isAdding={false}
+              onAddChild={vi.fn()}
+              linkState={{ from: '/tasks?q=a' }}
+            />
+          </tbody>
+        </table>
+      </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'Parent task' })
+    expect(link).toHaveAttribute('href', '/tasks/5')
+    await userEvent.click(link)
+    expect(screen.getByTestId('state')).toHaveTextContent('{"from":"/tasks?q=a"}')
+  })
+})
 
 describe('TaskContextHeader', () => {
   beforeEach(() => {

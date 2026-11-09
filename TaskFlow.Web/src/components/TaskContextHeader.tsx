@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { HeaderPathSegment } from '@/lib/task-sections'
 import { COMPLETED_PARENT_ADD_SUBTASK_HINT } from '@/lib/parent-options'
+import type { TaskOriginState } from '@/lib/task-origin'
 
 interface Props {
   path: HeaderPathSegment[]
@@ -15,10 +16,12 @@ interface Props {
   addSubtaskDisabled?: boolean
   /** Direct-subtask progress, e.g. "1 of 4 done · 1 in progress". Omitted when the parent has no subtasks. */
   progressLabel?: string
+  /** Router state for the parent link (the Tasks page passes its origin so the detail back link returns to the filtered list). */
+  linkState?: TaskOriginState
 }
 
 /** Context row above subtasks: the path to the nearest parent, a link to it and an Add subtask button. */
-export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAdding, onAddChild, addSubtaskDisabled = false, progressLabel }: Props) {
+export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAdding, onAddChild, addSubtaskDisabled = false, progressLabel, linkState }: Props) {
   const upper = path.slice(0, -1)
   const nearest = path[path.length - 1]
   const nearestTitle = nearest?.title ?? ''
@@ -35,7 +38,7 @@ export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAddi
                 <span aria-hidden="true" className="t-context-sep">{' › '}</span>
               </span>
             ))}
-            <Link to={`/tasks/${parentId}`} className="t-context-link">{nearestTitle}</Link>
+            <Link to={`/tasks/${parentId}`} state={linkState} className="t-context-link">{nearestTitle}</Link>
           </span>
           {progressLabel && <span className="t-context-progress">{progressLabel}</span>}
           <button

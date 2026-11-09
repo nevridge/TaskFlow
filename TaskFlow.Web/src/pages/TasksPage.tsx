@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   useTasksQuery,
   useCreateTaskMutation,
@@ -24,7 +24,13 @@ import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
-import { taskEditPath } from '@/lib/task-origin'
+import { taskEditPath, tasksOriginPath, type TaskOriginState } from '@/lib/task-origin'
+import {
+  buildTaskFiltersSearch,
+  parseTaskFilters,
+  type ProjectFilter,
+  type TaskFilters,
+} from '@/lib/task-filters-url'
 import { deriveTaskStatuses, getParentProgressLabel } from '@/lib/task-derived-status'
 import {
   buildTaskSections,
@@ -52,8 +58,7 @@ const STATUS_OPTIONS: Array<{ value: StatusValue; label: string }> = STATUS_ORDE
   label: STATUS_LABELS[status],
 }))
 const DEFAULT_STATUS_FILTER: StatusValue[] = ['draft', 'todo', 'inProgress', 'blocked', 'completed']
-type ViewFilter = 'all' | 'activeToday' | 'scheduledFuture' | 'completedHistory'
-type ProjectFilter = 'all' | 'none' | number
+type ViewFilter = TaskFilters['view']
 
 type TaskListModel = TaskItemViewModel
 
@@ -101,20 +106,44 @@ export function TasksPage() {
     autoCompleteParentWhenChildrenDone,
   } = usePrefs()
 
-  const [statusFilter, setStatusFilter] = useState<Set<StatusValue>>(() => new Set(DEFAULT_STATUS_FILTER))
-  const toggleStatus = (v: StatusValue) =>
-    setStatusFilter(prev => {
-      const next = new Set(prev)
-      if (next.has(v)) next.delete(v)
-      else next.add(v)
-      return next
-    })
-  const [viewFilter, setViewFilter] = useState<ViewFilter>('all')
-  const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
+  // The URL is the single source of truth for status, view, project and search text (see lib/task-filters-url).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const paramsKey = searchParams.toString()
+  const filters = useMemo(() => parseTaskFilters(new URLSearchParams(paramsKey)), [paramsKey])
+  // Parsed once: seeds the search input and the mobile panel on first render and never changes.
+  const [initialFilters] = useState(() => parseTaskFilters(searchParams))
+  const statusFilter = filters.statuses
+  const viewFilter = filters.view
+  const urlProject = filters.project
+
+  // Filter changes replace the entry, so Back does not step through filter states.
+  function writeFilters(next: TaskFilters) {
+    setSearchParams(buildTaskFiltersSearch(next), { replace: true, state: location.state })
+  }
+  const toggleStatus = (v: StatusValue) => {
+    const next = new Set(statusFilter)
+    if (next.has(v)) next.delete(v)
+    else next.add(v)
+    writeFilters({ ...filters, statuses: next })
+  }
+  const setViewFilter = (view: ViewFilter) => writeFilters({ ...filters, view })
+  const setProjectFilter = (project: ProjectFilter) => writeFilters({ ...filters, project })
   const [createProjectInvalid, setCreateProjectInvalid] = useState(false)
   const projectsQuery = useProjectsQuery()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // Local text keeps typing instant; the URL is written from the debounce below.
+  const [searchQuery, setSearchQuery] = useState(initialFilters.search)
+  const [debouncedSearch, setDebouncedSearch] = useState(initialFilters.search)
+  // Last URL `q` seen, and the last `q` this page wrote. A URL `q` we did not write (Back, Nav, `g t`) re-syncs the input.
+  const [seenUrlSearch, setSeenUrlSearch] = useState(initialFilters.search)
+  const [wroteSearch, setWroteSearch] = useState(initialFilters.search)
+  if (filters.search !== seenUrlSearch) {
+    setSeenUrlSearch(filters.search)
+    if (filters.search !== wroteSearch) {
+      setWroteSearch(filters.search)
+      setSearchQuery(filters.search)
+      setDebouncedSearch(filters.search)
+    }
+  }
   const [historyTask, setHistoryTask] = useState<TaskListModel | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
@@ -131,9 +160,12 @@ export function TasksPage() {
   const titleRef = useRef<HTMLInputElement | null>(null)
   const newTaskBtnRef = useRef<HTMLButtonElement | null>(null)
   const [panelFocusTick, setPanelFocusTick] = useState(0)
-  // Seed: open on first render only when the initial (default) filters already differ from "no filters".
-  // Never re-derived afterwards, so changing or clearing a filter inside the panel keeps it open/closed as the user left it.
-  const [filtersOpen, setFiltersOpen] = useState(() => countActiveFilters(new Set(DEFAULT_STATUS_FILTER), 'all') > 0)
+  // Seed: open on first render only when a filter inside the panel (status or project) restored from the URL is
+  // non-default. Search and view sit outside the panel. Never re-derived afterwards, so changing or clearing a
+  // filter, or a URL update, keeps the panel open/closed as the user left it.
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => countActiveFilters(initialFilters.statuses, initialFilters.project) > 0,
+  )
   // Status control to re-focus after a status change moves its row (survives the optimistic move and the rollback).
   const pendingStatusFocusRef = useRef<{ id: number; settled: boolean; announced: boolean } | null>(null)
   const [focusTick, setFocusTick] = useState(0)
@@ -145,7 +177,7 @@ export function TasksPage() {
   // Clear the route state on mount whether or not the button ever renders (e.g. on a load error).
   useEffect(() => {
     if (!focusNewTaskRef.current) return
-    navigate(location.pathname, { replace: true, state: null })
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -156,9 +188,22 @@ export function TasksPage() {
     newTaskBtnRef.current.focus()
   }, [isLoading, error])
 
-  // Debounce search input
+  // Latest values for the debounce timer, which outlives the render that scheduled it.
+  const latestRef = useRef({ filters, writeFilters })
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 200)
+    latestRef.current = { filters, writeFilters }
+  })
+
+  // Debounce search input; the URL gets the text once it settles.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      const latest = latestRef.current
+      if (searchQuery !== latest.filters.search) {
+        setWroteSearch(searchQuery)
+        latest.writeFilters({ ...latest.filters, search: searchQuery })
+      }
+    }, 200)
     return () => clearTimeout(timer)
   }, [searchQuery])
 
@@ -221,18 +266,19 @@ export function TasksPage() {
     [projects],
   )
 
-  // A filter pointing at a project that no longer exists would hide every task. Only
-  // reset once the projects query has succeeded: loading or errored fetches are not
-  // evidence that the project is gone.
-  // Adjusted during render (not in an effect) so the stale value never paints and is
-  // actually discarded, so it cannot come back if a project with that id reappears.
-  if (
-    projectsQuery.isSuccess &&
-    typeof projectFilter === 'number' &&
-    !projects.some(p => p.id === projectFilter)
-  ) {
-    setProjectFilter('all')
-  }
+  // A filter pointing at a project that no longer exists would hide every task. Only treat it as stale once
+  // the projects query has succeeded: loading or errored fetches are not evidence that the project is gone.
+  const projectIsStale =
+    projectsQuery.isSuccess && typeof urlProject === 'number' && !projects.some(p => p.id === urlProject)
+  // Until the effect below strips it from the URL, a stale project counts as "all" so nothing flickers.
+  const projectFilter: ProjectFilter = projectIsStale ? 'all' : urlProject
+
+  useEffect(() => {
+    if (!projectIsStale) return
+    const next = new URLSearchParams(searchParams)
+    next.delete('project')
+    setSearchParams(next, { replace: true, state: location.state })
+  }, [projectIsStale, searchParams, setSearchParams, location.state])
 
   function handleSortClick(key: TaskSortKey) {
     if (key === taskSortKey) {
@@ -253,8 +299,11 @@ export function TasksPage() {
     if (isNarrowViewport()) setPanelFocusTick(t => t + 1)
   }
 
+  // Carried by Edit, the title link and the parent link so the detail page can return to this filtered list.
+  const originState: TaskOriginState = { from: tasksOriginPath(location.search) }
+
   function openEdit(task: TaskListModel) {
-    navigate(taskEditPath(Number(task.id)))
+    navigate(taskEditPath(Number(task.id)), { state: originState })
   }
 
   function openCreate() {
@@ -775,6 +824,7 @@ export function TasksPage() {
                               onAddChild={() => beginAddChild(header.parentId, anchor)}
                               addSubtaskDisabled={isParentCompleted(header.parentId)}
                               progressLabel={headerInfo && headerInfo.directTotal > 0 ? getParentProgressLabel(headerInfo) : undefined}
+                              linkState={originState}
                             />,
                           )
                           if (addingHeader) items.push(renderChildEditor(`${section.key}:ctx-editor:${header.parentId}`))
@@ -798,6 +848,7 @@ export function TasksPage() {
                                 onAddChild={t => beginAddChild(Number(t.id), 'row')}
                                 isAddingChild={addingHere}
                                 addSubtaskDisabled={isCompleted(task.status)}
+                                detailState={originState}
                                 onEdit={openEdit}
                                 onHistory={setHistoryTask}
                                 onDelete={handleDelete}

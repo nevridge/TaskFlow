@@ -88,6 +88,37 @@ describe('TaskListRow', () => {
     })
   })
 
+  describe('detail link state (#469)', () => {
+    function LinkState() {
+      const location = useLocation()
+      return <div data-testid="state">{JSON.stringify(location.state)}</div>
+    }
+
+    it('passes detailState to the title link and keeps the href', async () => {
+      render(
+        <MemoryRouter>
+          <LinkState />
+          <table>
+            <tbody>
+              <TaskListRow
+                task={baseTask}
+                detailState={{ from: '/tasks?q=a' }}
+                onEdit={vi.fn()}
+                onHistory={vi.fn()}
+                onDelete={vi.fn()}
+                onStatusCycle={vi.fn()}
+              />
+            </tbody>
+          </table>
+        </MemoryRouter>,
+      )
+      const link = screen.getByRole('link', { name: 'Fix login bug' })
+      expect(link).toHaveAttribute('href', '/tasks/42')
+      await userEvent.click(link)
+      expect(screen.getByTestId('state')).toHaveTextContent('{"from":"/tasks?q=a"}')
+    })
+  })
+
   describe('task id', () => {
     it('shows #id with an accessible label before the title', () => {
       renderRow()

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ProjectDetailPage } from './ProjectDetailPage'
 import type { ProjectResponseDto, ProjectTaskDto } from '@/api/projects'
 
@@ -59,6 +59,24 @@ describe('ProjectDetailPage', () => {
     vi.mocked(useUpdateProjectMutation).mockReturnValue({ mutateAsync: updateAsync, isPending: false } as never)
     mockProject({ data: { data: project } })
     mockTasks({ data: { data: [] } })
+  })
+
+  it('task links carry no origin state, so the detail back link stays on /tasks (#469)', async () => {
+    mockTasks({ data: { data: [task({ id: 1, title: 'Task one' })] } })
+    function DetailProbe() {
+      const location = useLocation()
+      return <div data-testid="detail-state">{JSON.stringify(location.state)}</div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/projects/7']}>
+        <Routes>
+          <Route path="/projects/:id" element={<ProjectDetailPage />} />
+          <Route path="/tasks/:id" element={<DetailProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('link', { name: 'Task one' }))
+    expect(screen.getByTestId('detail-state')).toHaveTextContent('null')
   })
 
   it('renders the project header with counts and description', () => {

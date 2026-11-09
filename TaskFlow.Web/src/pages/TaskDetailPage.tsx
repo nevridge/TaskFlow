@@ -23,6 +23,7 @@ import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import { deriveTaskStatuses, getDerivedStatusTitle } from '@/lib/task-derived-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
 import {
+  readBackOrigin,
   readJournalOrigin,
   readFocusTaskId,
   isEditRequested,
@@ -52,6 +53,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   // Origin comes from router state only, validated on read; direct loads fall back to the Tasks list.
+  const origin = readBackOrigin(location.state)
   const journalOrigin = readJournalOrigin(location.state)
 
   // The URL is the single source of truth for edit mode.
@@ -184,7 +186,7 @@ export function TaskDetailPage() {
       document.querySelector<HTMLElement>(`[data-task-delete-id="${taskId}"]`)?.focus()
     })
     setLeaving(true)
-    navigate('/tasks', { replace: true, state: { focusNewTask: true } })
+    navigate(origin ?? '/tasks', { replace: true, state: { focusNewTask: true } })
   }
 
   function handleDeleteNote(note: NoteResponseDto) {
@@ -216,7 +218,7 @@ export function TaskDetailPage() {
     <div className="tasks-page">
       <div className="t-shell t-shell--narrow">
         <Link
-          to={journalOrigin ?? '/tasks'}
+          to={origin ?? '/tasks'}
           state={journalOrigin ? { focusTaskId: readFocusTaskId(location.state) ?? taskId } : undefined}
           className="t-back-link"
         >

@@ -104,12 +104,12 @@ function LocationDisplay() {
   return <div data-testid="location">{l.pathname + l.search}</div>
 }
 
-function renderPage() {
+function renderPage(entry = '/tasks') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const ui = (
     <QueryClientProvider client={client}>
       <PrefsProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[entry]}>
           <LocationDisplay />
           <TasksPage />
         </MemoryRouter>
@@ -318,6 +318,62 @@ describe('TasksPage on mobile (#317)', () => {
       expect(filtersToggle()).toHaveAttribute('aria-expanded', 'false')
       expect(filtersToggle()).toHaveAccessibleName('Filters (1)')
       expect(document.getElementById('t-filter-fields')).toHaveAttribute('data-collapsed', 'true')
+    })
+  })
+
+  describe('panel seeded from the URL (#469)', () => {
+    const panel = () => document.getElementById('t-filter-fields')
+
+    it.each([
+      ['a non-default status', '/tasks?status=todo', 'Filters (1)'],
+      ['a non-default project', '/tasks?project=none', 'Filters (1)'],
+      ['status and project', '/tasks?status=todo&project=1', 'Filters (2)'],
+      ['status mixed with search', '/tasks?q=foo&status=todo', 'Filters (1)'],
+      ['an empty status set (status=none differs from the default)', '/tasks?status=none', 'Filters (1)'],
+    ])('opens on first paint for %s', (_label, entry, name) => {
+      renderPage(entry)
+      expect(filtersToggle()).toHaveAttribute('aria-expanded', 'true')
+      expect(filtersToggle()).toHaveAccessibleName(name)
+      expect(panel()).toHaveAttribute('data-collapsed', 'false')
+    })
+
+    it.each([
+      ['defaults', '/tasks'],
+      ['search only', '/tasks?q=foo'],
+      ['view only', '/tasks?view=activeToday'],
+      ['search and view', '/tasks?q=foo&view=activeToday'],
+    ])('starts closed with no badge count for %s (search and view sit outside the panel)', (_label, entry) => {
+      renderPage(entry)
+      expect(filtersToggle()).toHaveAttribute('aria-expanded', 'false')
+      expect(filtersToggle()).toHaveAccessibleName('Filters')
+    })
+
+    it('shows restored search text and view outside a closed panel', () => {
+      renderPage('/tasks?q=alpha&view=all')
+      expect(screen.getByPlaceholderText(/Search title or #id/)).toHaveValue('alpha')
+      expect(titles()).toEqual(['Alpha task'])
+    })
+
+    it('?status=none shows zero checked boxes and every task', () => {
+      renderPage('/tasks?status=none')
+      screen.getAllByRole('checkbox').forEach(box => expect(box).not.toBeChecked())
+      expect(titles()).toHaveLength(4)
+    })
+
+    it('stays open while the user changes a filter and the URL updates', async () => {
+      renderPage('/tasks?status=todo')
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+      expect(screen.getByTestId('location')).toHaveTextContent('/tasks?status=draft&status=todo')
+      expect(filtersToggle()).toHaveAttribute('aria-expanded', 'true')
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Draft' }))
+      await userEvent.click(screen.getByRole('checkbox', { name: 'To-do' }))
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/tasks\?status=none$/)
+      expect(filtersToggle()).toHaveAttribute('aria-expanded', 'true')
+    })
+
+    it('does not move focus on load', () => {
+      renderPage('/tasks?status=todo')
+      expect(document.body).toHaveFocus()
     })
   })
 

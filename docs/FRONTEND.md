@@ -238,12 +238,36 @@ The task list page. Responsibilities:
 - Fetch all tasks via `useTasksQuery`
 - Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and search. Search matches the title (or an ancestor's title, case-insensitive) or, for input like `42` or `#42`, the task with exactly that ID; the ID match still respects the other filters. Whitespace-only input counts as empty
 - Sort by title, status, priority, or due date
-- New Task opens inline; Edit navigates to `/tasks/:id?edit=1` (the task detail page in edit mode)
+- New Task opens inline; Edit navigates to `/tasks/:id?edit=1` (the task detail page in edit mode) with the filtered list as origin (see "Tasks filters in the URL" below)
 - Delete is undoable: `useDeleteTaskUndoable` hides the task (pending key `task:<id>`) and sends the DELETE after a 10s Undo toast window; no confirm dialog. A parent with subtasks has an `aria-disabled` Delete ("Delete subtasks first (N)")
 
-The **Status** filter is a multi-select group of checkboxes (Draft, To-do, Completed) labelled "Status". It defaults to Draft and To-do selected, so completed tasks are hidden until Completed is checked. There is no "All" option: selecting all three shows everything, and an empty selection (all unchecked) applies no restriction and also shows every task. The selection is page state only (not persisted) and resets to Draft + To-do whenever the page is reopened. It does not affect the view chips, so the Completed history chip is empty until Completed is checked.
+The **Status** filter is a multi-select group of five checkboxes (Draft, To-do, In progress, Blocked, Completed) labelled "Status". All five are checked by default, so every task shows. There is no "All" option: an empty selection (all unchecked) applies no restriction and also shows every task. It does not affect the view chips, so the Completed history chip is empty until Completed is checked. Status, view, project and search text live in the URL (see below); nothing is written to localStorage.
 
-Status values are lowercase in the filter (`draft`, `todo`, `completed`) while API values are PascalCase (`Draft`, `Todo`, `Completed`). Normalisation (`.toLowerCase()`) happens at the filter comparison site, not in the hook or component props.
+#### Tasks filters in the URL (#469)
+
+Filters are read from the `/tasks` query string (`parseTaskFilters` / `buildTaskFiltersSearch` in `src/lib/task-filters-url.ts`), so they survive reload, can be bookmarked and are restored when you come back from a task. The URL is the single source of truth; defaults are omitted, so an unfiltered list is plain `/tasks`.
+
+| Param | Values | Default (param omitted) |
+| --- | --- | --- |
+| `q` | search text, exactly one value, not trimmed (`#` and `&` are percent-encoded) | empty |
+| `status` | repeated lowercase keys: `draft`, `todo`, `inProgress`, `blocked`, `completed`; or `none` | all five |
+| `view` | `all`, `activeToday`, `scheduledFuture`, `completedHistory` | `all` |
+| `project` | `none` (no project) or a positive integer project id | all projects |
+
+- **Empty status set:** `status=none` is the only way to express it. It shows every task (same as the unrestricted behaviour above). `status=none` mixed with other `status` values is invalid and falls back to all five.
+- **Silent fallback:** each filter falls back to its default independently when its value is invalid (unknown view or status key, `project=abc`, `0` or `-1`, a repeated `q`, `view` or `project`). There is no toast or banner.
+- **Stale project:** a numeric `project` that is not in the successfully loaded projects list is treated as "all" at once and then removed from the URL (replace navigation, no history entry, no toast). Nothing is removed while the projects query is loading or has errored.
+- **History:** every filter change is a `replace` navigation that keeps `location.state`, so Back does not step through filter states; one Back from the list leaves the list.
+- **Search input:** typing is instant (local text); the URL `q` is written from the existing 200ms debounce. The input re-syncs from the URL only when `q` changes externally (browser Back, Nav, `g t`), so the caret never jumps while typing.
+- **Nav and `g t` reset filters by design:** the Nav "Tasks" link and the `g t` chord go to plain `/tasks`, which clears status, view, project and the search box. This is intended, not a gap.
+
+Opening a task: the Edit button (`/tasks/:id?edit=1`), the row title link (`/tasks/:id`) and the context-header parent link all pass router state `{ from: '/tasks' + location.search }`. The detail page's back link or the browser Back returns to `/tasks?...` with the filters restored. `ProjectDetailPage` links carry no state, so their back link is plain `/tasks`.
+
+On mobile (narrow viewport) only the Status checkboxes and Project select sit in the collapsible "Filters (n)" panel; the search box and view chips are always visible. The panel opens on first paint only when status or project is non-default (including `status=none`, which counts as non-default); search text and view alone do not open it. The seed is computed once and the panel does not collapse when the URL updates.
+
+**Known limitation:** the debounce is not flushed on navigation. A click on a row title, Edit or the parent link within 200ms of the last keystroke carries the previous debounced `q`, so the back link restores that earlier text.
+
+Status values are lowercase in the filter (`draft`, `todo`, `inProgress`, `blocked`, `completed`) while API values are PascalCase (`Draft`, `Todo`, `InProgress`, `Blocked`, `Completed`). Normalisation (`.toLowerCase()`) happens at the filter comparison site, not in the hook or component props.
 
 The search box placeholder is "Search title or #id…". Input is parsed by `parseTaskId` in `src/lib/task-id-search.ts` (`42`, `#42` and `042` all mean ID 42; non-numeric or out-of-range input is not an ID and is matched as title text only).
 
@@ -256,22 +280,25 @@ The task detail page. Responsibilities:
 - Fetch task via `useTaskQuery(taskId)` (`enabled: Number.isFinite(taskId)`)
 - Fetch notes via `useNotesQuery(taskId)`
 - Edit task (replaces title/detail with `TaskForm`). Edit mode is driven by the `?edit=1` URL param, not local state; the in-page Edit button sets it too
-- Delete task — starts the undoable delete and navigates to `/tasks` at once (`replace`, with `state.focusNewTask` so New Task takes focus); the Undo toast persists across the navigation
+- Delete task — starts the undoable delete and navigates at once (`replace`) to the validated origin (the filtered `/tasks?...` list, else `/tasks`) with `state.focusNewTask` so New Task takes focus; the Undo toast persists across the navigation
 - Inline note creation and editing; note delete is undoable (pending key `tasknote:<id>`, 6s window)
 
 #### Origin state and back link (#404)
 
-Journal rows link to `/tasks/:id` with router state `{ from?: string, focusTaskId?: number }` (helpers in `src/lib/task-origin.ts`). The origin state lives only in `history.state`; nothing about the origin is read from the URL. The one URL input is the `edit` param (see below).
+Journal rows and the Tasks page link to `/tasks/:id` with router state `{ from?: string, focusTaskId?: number }` (helpers in `src/lib/task-origin.ts`). The origin state lives only in `history.state`; nothing about the origin is read from the URL. The one URL input is the `edit` param (see below).
 
-- `from` is built from the journal's `isoDate` prop (`/journal/MM-DD-YYYY`), never from `location.pathname`. The context-header "Parent task" link carries `from` only. The Tasks page links, including the Edit button (`/tasks/:id?edit=1`), carry no state.
-- `from` is valid only if it is a string starting `/journal/` containing no `//`, `\` or `:`.
+- `from` is built from the journal's `isoDate` prop (`/journal/MM-DD-YYYY`), never from `location.pathname`. The context-header "Parent task" link carries `from` only. The Tasks page row Edit button (`/tasks/:id?edit=1`), row title link and parent link carry `from: '/tasks' + location.search` (`tasksOriginPath`); `ProjectDetailPage` links carry no state.
+- A journal `from` is valid (`readJournalOrigin`) only if it is a string starting `/journal/` containing no `//`, `\` or `:`.
+- A Tasks `from` is valid (`readTasksOrigin`) only if it is a string that is exactly `/tasks` or starts `/tasks?`, containing no `//`, `\`, `:` or `#`. `/tasksX`, `/tasks/5` and `/tasks#x` are rejected. This is a separate rule; `readJournalOrigin` still rejects `/tasks`.
+- `readBackOrigin` = `readTasksOrigin ?? readJournalOrigin`; the detail page uses it for the back link and for delete.
 
 | State on `/tasks/:id` | Back link target | Label |
 | --- | --- | --- |
-| valid `from` | `from` (plain `<Link>`, state `{ focusTaskId }`) | "← Back to Journal" |
-| missing or invalid (direct load, Tasks page) | `/tasks` | "← Back to Tasks" |
+| valid journal `from` | `from` (plain `<Link>`, state `{ focusTaskId }`) | "← Back to Journal" |
+| valid Tasks `from` (`/tasks` or `/tasks?...`) | `from` | "← Back to Tasks" |
+| missing or invalid (direct load, Project page) | `/tasks` | "← Back to Tasks" |
 
-Computed synchronously on first render, so a refresh keeps the origin. Deleting from the detail page still navigates to `/tasks` with `{ replace: true, state: { focusNewTask: true } }`.
+Computed synchronously on first render, so a refresh keeps the origin. Deleting from the detail page navigates to the validated origin (else `/tasks`) with `{ replace: true, state: { focusNewTask: true } }`; the state shape is exactly that. `TasksPage` captures `focusNewTask` in a ref on mount and clears it with a replace navigation that keeps the query string, so the filters stay applied.
 
 One-shot focus return: `TodosSection` reads `focusTaskId` once into `returnFocusRef` (separate from `pendingFocus`, which expires after 100ms and is cleared by key and pointer events). When loading ends it focuses `[data-todo-details="<id>"]` if the row exists, and abandons the request without forcing focus if it does not. It then clears only the focus key (`navigate(pathname, { replace: true, state: rest or null })`), so `weekendRedirect` survives and a refresh does not refocus.
 
@@ -284,15 +311,15 @@ Shortcuts are unchanged: `t l n [ ] j` (journal) and the global `?` and `g` chor
 The URL is the single source of truth for edit mode on `/tasks/:id`; there is no local `editingTask` state. Helpers live in `src/lib/task-origin.ts` (`isEditRequested`, `withEditParam`, `withoutEditParam`, `taskEditPath`).
 
 - **Strict parsing:** edit mode is on only when `searchParams.getAll('edit')` is exactly `['1']`. `edit=0`, `edit=true`, `edit=`, `edit=1&edit=2` and `?Edit=1` stay in read mode. Other params are preserved.
-- **Entry points:** the Tasks page row Edit button (`navigate(taskEditPath(id))`, no state), the journal details link (`/tasks/:id?edit=1` with state `{ from, focusTaskId }`; its accessible name is "Edit details: <title>") and the in-page Edit button.
+- **Entry points:** the Tasks page row Edit button (`navigate(taskEditPath(id), { state: { from: tasksOriginPath(location.search) } })`), the journal details link (`/tasks/:id?edit=1` with state `{ from, focusTaskId }`; its accessible name is "Edit details: <title>") and the in-page Edit button.
 - **Replace navigation:** the in-page Edit button, Save success and Cancel all use `setSearchParams(..., { replace: true, state: location.state })`, so opening and closing add no history entries, and Back and refresh never reopen a closed form. `state` is passed explicitly because router v7 would otherwise reset it to null and "Back to Journal" would lose `focusTaskId`. Refreshing while editing reopens the form.
-- **Independent of origin:** `readJournalOrigin` reads only state, so `?edit=1` does not change the back link.
+- **Independent of origin:** `readBackOrigin` reads only state, so `?edit=1` does not change the back link.
 - **Focus:** the title is focused once the task has loaded and the form is open (a single `taskReady` source drives both the form render and the focus effect, so a deep link with a cold cache focuses after load and background refetches never re-steal focus). When the form closes, focus moves to the Edit button, except while a delete is leaving the page. The shortcut hooks ignore keystrokes in the focused title via `isInputFocused()`.
 - **Planned day (#424):** for an existing task whose stored status is not Completed, the form shows a "Planned day" date field between Due Date and Project, with a "Clear" button (accessible name "Clear planned day") and the hint "Journal day. Empty = not planned. Separate from Due Date." It is initialised from `currentJournalDate`, resyncs when that value changes, and is independent of the due date. A stored Completed task has no field. If the live status select is set to Completed, the field is disabled with the hint "Completed tasks can't be planned." and no planned-day change is sent. Clear only empties the field; nothing is requested until Save. Parents with open subtasks, Blocked and Draft tasks can be planned.
 - **Save order (#424):** `useSaveTaskWithProject` runs PUT, then clear, then project change, and stops at the first failure. The PUT carries `journalDate` only when the day is set or changed (never `null`). The clear step calls `removeJournalTodo(currentJournalEntryId, taskId)` only when the form cleared the day and the task has an entry id, then invalidates `taskKeys` and `journalKeys.all`. A failed PUT shows the planning-aware message from `getTaskPlanSaveErrorMessage` (past day, open subtasks, 409 conflict, each ending "Nothing was saved." except the conflict) and the form keeps the typed value. A failed clear shows "Task saved, but removing the planned day failed: <reason>" (`getPlanClearErrorMessage`), skips the project step, and bumps `plannedDayRevertToken` so the field snaps back to the stored day; a retry re-sends the idempotent PUT and the project change, but does not re-run the clear (the field is back on the stored day, so nothing changed); the user must clear the day again. A changed past day is rejected client-side with an inline field error and no request.
 - **Failed save:** the form and `?edit=1` stay, and the existing `role="alert"` message announces the error. A not-found id shows "Task not found." with no form. Derived or locked tasks open the form with the status select disabled.
 
-**Return to Tasks:** the Tasks page no longer restores focus, filters or scroll after an edit. Returning from the detail page lands on an unfiltered list at the top, with focus at the document start. This is accepted, not a bug. `data-task-edit-id` on the row Edit button is kept as a stable hook for a possible follow-up that restores them.
+**Return to Tasks:** the back link or browser Back returns to `/tasks?...` and the filters (status, view, project, search) are restored from the URL. Focusing the edited row and restoring scroll are not restored; that is tracked in #479. `data-task-edit-id` on the row Edit button is kept as a stable hook for it.
 
 ### Current Tasks + Journal behavior (May 2026)
 

@@ -8,10 +8,11 @@ TaskFlow is a personal task and daily journal app: a .NET 10 REST API (`TaskFlow
 - Single backend test (Microsoft.Testing.Platform): `dotnet test --project TaskFlow.Api.Tests --filter-method "<Namespace.Class.Method>"`.
 - `npm run gen:api` regenerates the typed client from the live OpenAPI spec, so the API must be running.
 - Isolated test stack (3200 web / 8280 API, beside the live stack; for feature branches and `/ux-test`): `docker compose -p taskflow-test -f docker-compose.test.yml up -d --build`. `-p taskflow-test` is mandatory on every command, including `down -v`. Rebuild the live stack only from `main`. Details in `docs/DOCKER_CONFIGURATION.md` ("Live vs Test Stack Workflow").
+- MCP client against the real API (hosts TaskFlow.Api in-process on a temp SQLite database, runs in CI on every PR): `dotnet test --project TaskFlow.Mcp.Integration.Tests`.
 
 ## Assistant (`assistant/`)
 
-The Claude work-assistant MCP server, plugin and Chat skill live in `assistant/`, with their own solution, `Directory.Build.props` and `.editorconfig`. The root solution and commands do not touch it. See `assistant/CLAUDE.md`.
+The Claude work-assistant MCP server, plugin and Chat skill live in `assistant/`, with their own solution, `Directory.Build.props` and `.editorconfig`. The root solution references the assistant only through `TaskFlow.Mcp.Integration.Tests`, which references `TaskFlow.Mcp` to run its client against the real API. This is the intended first link as the two codebases move closer together. See `assistant/CLAUDE.md`.
 
 ## Safe Change Rules
 

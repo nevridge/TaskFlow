@@ -26,6 +26,12 @@ function filterTasks(tasks: TaskItemViewModel[], input: string): TaskItemViewMod
   return (idMatch ? [idMatch, ...titleMatches] : titleMatches).slice(0, 10)
 }
 
+// setSelectionRange rather than select(): one primitive for both paths. Skipped for an empty value, where there is
+// nothing to select (and jsdom would queue a needless select event).
+function selectAll(el: HTMLInputElement) {
+  if (el.value.length > 0) el.setSelectionRange(0, el.value.length)
+}
+
 export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const { data: queryResult } = useTasksQuery()
   const tasks = useMemo(
@@ -46,6 +52,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
   const blurTimer = useRef<number | undefined>(undefined)
+  const selectOnClick = useRef(false)
   const listboxId = useId()
   const optionId = (i: number) => `${listboxId}-opt-${i}`
 
@@ -80,17 +87,34 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
     setActiveIndex(-1)
   }
 
-  function handleFocus() {
+  // Runs before focus and before the open change applies: true when unfocused or when focused with the list
+  // closed (after a selection); false when the list is open, so a second click places the caret.
+  function handleMouseDown() {
+    selectOnClick.current = !open
+  }
+
+  // Selects the prefilled title so the first keystroke replaces it. On a mouse click the browser places the
+  // caret after focus and overwrites this; handleClick re-selects.
+  function handleFocus(e: React.FocusEvent<HTMLInputElement>) {
     window.clearTimeout(blurTimer.current)
     setInputValue(selectedTitle)
     setOpen(true)
+    selectAll(e.currentTarget)
   }
 
   // After a selection the input keeps focus, so tapping it again fires no focus event: reopen on click.
-  function handleClick() {
-    if (open) return
-    setInputValue(selectedTitle)
-    setOpen(true)
+  function handleClick(e: React.MouseEvent<HTMLInputElement>) {
+    const el = e.currentTarget
+    const wantSelect = selectOnClick.current
+    selectOnClick.current = false
+    if (!open) {
+      setInputValue(selectedTitle)
+      setOpen(true)
+    }
+    // Only a collapsed selection (caret placement) becomes select-all, so a drag or double-click selection survives.
+    if (wantSelect && el.selectionStart === el.selectionEnd) {
+      selectAll(el)
+    }
   }
 
   function handleBlur() {
@@ -144,6 +168,7 @@ export function TaskTypeahead({ value, onChange, onEscape }: Props) {
         placeholder="Link to task…"
         value={displayValue}
         onChange={handleInputChange}
+        onMouseDown={handleMouseDown}
         onFocus={handleFocus}
         onClick={handleClick}
         onBlur={handleBlur}

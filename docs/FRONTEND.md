@@ -271,7 +271,7 @@ Status values are lowercase in the filter (`draft`, `todo`, `inProgress`, `block
 
 The search box placeholder is "Search title or #id…". Input is parsed by `parseTaskId` in `src/lib/task-id-search.ts` (`42`, `#42` and `042` all mean ID 42; non-numeric or out-of-range input is not an ID and is matched as title text only).
 
-The journal "Link to task" typeahead (`TaskTypeahead`) also accepts an ID: the ID match is listed first and highlighted, every option shows its `#id`, and the list is capped at 10.
+The journal "Link to task" typeahead (`TaskTypeahead`) also accepts an ID: the ID match is listed first and highlighted, every option shows its `#id`, and the list is capped at 10. Focusing or clicking the input on a linked row selects the prefilled title so the first keystroke replaces it; clicking again while the list is open places the caret.
 
 ### TaskDetailPage (`/tasks/:id`)
 

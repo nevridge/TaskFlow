@@ -375,6 +375,16 @@ describe('TaskTypeahead', () => {
       expect(getInput()).toHaveValue('42')
     })
 
+    it('filters by the typed ID over the selected title so the ID match is listed first (AC 3)', async () => {
+      renderTypeahead(1) // linked to "Fix login bug"; type task 2's ID
+      await userEvent.tab()
+      await userEvent.keyboard('2')
+      expect(getInput()).toHaveValue('2')
+      const options = screen.getAllByRole('option')
+      expect(options).toHaveLength(2) // None + the ID match only
+      expect(options[1]).toHaveTextContent('#2 Write tests')
+    })
+
     it('replaces the title with the first typed character after click-in', async () => {
       renderTypeahead(2)
       await userEvent.click(getInput())

@@ -100,6 +100,8 @@ Every `docker` command in this skill, Step 10 included, uses one compose variant
 - **B:** `docker compose -p taskflow-test -f docker-compose.test.yml`
 - **L:** `docker compose -p taskflow-test -f docker-compose.test.yml -f docker-compose.test.local.yml`
 
+The `allowed-tools` list has one exact entry per variant and command, not a `yml*` wildcard, because a wildcard would also pre-approve extra `-f` or `-p` arguments, and exact entries keep the live stack out of reach.
+
 1. Run the plain Bash command `test -f docker-compose.test.local.yml`. Exit 0 means use L; non-zero (file absent) means use B.
 2. Run `<variant> config --volumes`. It prints volume keys; accept only the exact lines `test-data` and `test-logs`. Otherwise stop with `Volume check failed: <output>` and run no `down`. Go to Step 10.
 3. Run `<variant> down -v` to clear a stale test project from a crashed earlier run.

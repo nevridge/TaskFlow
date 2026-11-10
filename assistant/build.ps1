@@ -79,9 +79,24 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # 4. Verify staging.
-if (-not (Test-Path (Join-Path $staging 'TaskFlow.Mcp.dll'))) {
+$stagingProblem = $null
+foreach ($required in 'TaskFlow.Mcp.dll', 'TaskFlow.Contracts.dll') {
+    if (-not $stagingProblem -and -not (Test-Path (Join-Path $staging $required))) {
+        $stagingProblem = "$required is missing from the staging directory"
+    }
+}
+if (-not $stagingProblem) {
+    # The MCP server must not drag in the API or its web/database stack through TaskFlow.Contracts.
+    $forbidden = @(Get-ChildItem $staging -Filter '*.dll' | Where-Object {
+            $_.Name -like 'Microsoft.EntityFrameworkCore*' -or $_.Name -like 'Microsoft.AspNetCore*' -or $_.Name -eq 'TaskFlow.Api.dll'
+        } | Select-Object -First 1)
+    if ($forbidden.Count -gt 0) {
+        $stagingProblem = "the staging directory contains $($forbidden[0].Name), which must not ship in the plugin"
+    }
+}
+if ($stagingProblem) {
     try { Remove-Item $staging -Recurse -Force -ErrorAction Stop } catch { Write-Warning "Could not remove ${staging}: $($_.Exception.Message)" }
-    throw 'dotnet publish succeeded but TaskFlow.Mcp.dll is missing from the staging directory. plugin/bin was not changed.'
+    throw "dotnet publish succeeded but $stagingProblem. plugin/bin was not changed."
 }
 
 # 5. Swap staging into plugin/bin.

@@ -1,5 +1,6 @@
 using System.Net;
 using ModelContextProtocol;
+using TaskFlow.Contracts;
 using TaskFlow.Mcp.Api;
 
 namespace TaskFlow.Mcp.Tools;
@@ -11,6 +12,27 @@ namespace TaskFlow.Mcp.Tools;
 /// </summary>
 internal static class ToolGuard
 {
+    private static readonly IReadOnlyDictionary<string, string> Guidance = new Dictionary<string, string>
+    {
+        [ErrorCodes.BlockDraftNotAllowed] = "Only Todo or InProgress tasks can be blocked. Make the task Todo first (status=todo), then block it.",
+        [ErrorCodes.BlockCompletedNotAllowed] = "Only Todo or InProgress tasks can be blocked. Reopen the task first (complete=false), then block it.",
+        [ErrorCodes.BlockedReasonRequiresBlockedStatus] = "A blockedReason needs status=blocked on a Todo or InProgress task; pass status=blocked with it, or omit blockedReason.",
+        [ErrorCodes.StartNotAllowed] = "Only Todo tasks can be started. If the task is Draft, set status=todo first; if it is Completed, reopen it first (complete=false); then set status=inprogress.",
+        [ErrorCodes.CreationPastDayNotAllowed] = "journalDate must be today or later; pass today, tomorrow or a future yyyy-MM-dd, or omit journalDate.",
+        [ErrorCodes.PlanHasOpenSubtasks] = "A task with open subtasks cannot be planned on a day. Plan its subtasks instead, using update_task or update_tasks with journalDate, or set_journal_todos (find them with list_tasks).",
+        [ErrorCodes.ParentCompletedNotAllowed] = "An open task cannot sit under a Completed parent. Reopen the parent first (update_task on the parent with complete=false), or keep the child completed, or detach it (parentTaskId).",
+        [ErrorCodes.ParentStatusDerived] = "A parent's status follows its subtasks. Change the status of its subtasks with update_task or update_tasks instead of the parent's.",
+        [ErrorCodes.PlanCompletedNotAllowed] = "A completed task cannot be planned onto a different day. Omit journalDate, or reopen the task first (complete=false) and then plan it.",
+        [ErrorCodes.ProjectNotFound] = "`project` did not match an existing project; find the right one with list_projects, or omit project.",
+        [ErrorCodes.ReopenPastDayNotAllowed] = "A task completed on a past day cannot be reopened, so do not pass complete=false; record the follow-up work as a new task with create_tasks.",
+        [ErrorCodes.ParentNotFound] = "parentTaskId does not match an existing task; look the parent up with list_tasks, or omit parentTaskId.",
+        [ErrorCodes.ParentSelfNotAllowed] = "A task cannot be its own parent; pass a different parentTaskId, or omit it.",
+        [ErrorCodes.ParentDepthNotAllowed] = "Only one subtask level is supported, so parentTaskId must name a top-level task, and a task that already has subtasks cannot become a subtask (check with get_task).",
+        [ErrorCodes.ParentCompleteBlockedByChildren] = "A parent with open subtasks cannot be completed; complete its subtasks first with update_task or update_tasks (complete=true), then complete the parent.",
+        [ErrorCodes.ParentDeleteBlockedByChildren] = "A task with subtasks cannot be deleted; delete the subtasks with delete_task or detach them with update_task (parentTaskId=0), then delete the parent.",
+        [ErrorCodes.AssignmentPastDayNotAllowed] = "set_journal_todos can only plan tasks on today or a later day; pass date as today, tomorrow or a future yyyy-MM-dd.",
+    };
+
     public static async Task<string> RunAsync(TaskFlowApiClient api, CancellationToken ct, Func<Task<string>> action)
     {
         try
@@ -46,21 +68,7 @@ internal static class ToolGuard
             return ex.Message;
         }
 
-        var guidance = ex.Code switch
-        {
-            "TASK_BLOCK_DRAFT_NOT_ALLOWED" => "Only Todo or InProgress tasks can be blocked. Make the task Todo first (status=todo), then block it.",
-            "TASK_BLOCK_COMPLETED_NOT_ALLOWED" => "Only Todo or InProgress tasks can be blocked. Reopen the task first (complete=false), then block it.",
-            "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS" => "A blockedReason needs status=blocked on a Todo or InProgress task; pass status=blocked with it, or omit blockedReason.",
-            "TASK_START_NOT_ALLOWED" => "Only Todo tasks can be started. If the task is Draft, set status=todo first; if it is Completed, reopen it first (complete=false); then set status=inprogress.",
-            "TASK_CREATION_PAST_DAY_NOT_ALLOWED" => "journalDate must be today or later; pass today, tomorrow or a future yyyy-MM-dd, or omit journalDate.",
-            "TASK_PLAN_HAS_OPEN_SUBTASKS" => "A task with open subtasks cannot be planned on a day. Plan its subtasks instead, using update_task or update_tasks with journalDate, or set_journal_todos (find them with list_tasks).",
-            "TASK_PARENT_COMPLETED_NOT_ALLOWED" => "An open task cannot sit under a Completed parent. Reopen the parent first (update_task on the parent with complete=false), or keep the child completed, or detach it (parentTaskId).",
-            "TASK_PARENT_STATUS_DERIVED" => "A parent's status follows its subtasks. Change the status of its subtasks with update_task or update_tasks instead of the parent's.",
-            "TASK_PLAN_COMPLETED_NOT_ALLOWED" => "A completed task cannot be planned onto a different day. Omit journalDate, or reopen the task first (complete=false) and then plan it.",
-            _ => null,
-        };
-
-        return guidance is null ? ex.Message : ex.Message + "\n" + guidance;
+        return Guidance.TryGetValue(ex.Code, out var guidance) ? ex.Message + "\n" + guidance : ex.Message;
     }
 
     public static McpException Invalid(string message) => new(message);

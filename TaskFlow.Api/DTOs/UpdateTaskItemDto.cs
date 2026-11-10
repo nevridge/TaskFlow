@@ -1,4 +1,5 @@
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.DTOs;
 

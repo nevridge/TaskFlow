@@ -1,5 +1,6 @@
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Tests.Helpers;
 

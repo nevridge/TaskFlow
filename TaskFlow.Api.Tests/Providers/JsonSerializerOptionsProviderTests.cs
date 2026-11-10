@@ -2,6 +2,7 @@ using System.Text.Json;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Providers;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Tests.Providers;
 

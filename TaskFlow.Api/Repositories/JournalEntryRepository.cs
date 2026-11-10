@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Repositories;
 

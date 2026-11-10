@@ -11,6 +11,7 @@ using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Providers;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Tests.Extensions;
 

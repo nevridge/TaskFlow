@@ -5,6 +5,7 @@ using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Controllers.V1;
 
@@ -20,20 +21,6 @@ public class TaskItemsController(
     IValidator<UpdateTaskItemDto> updateDtoValidator,
     IValidator<PatchTaskItemDto> patchDtoValidator) : ControllerBase
 {
-    private const string ProjectNotFoundErrorCode = "TASK_PROJECT_NOT_FOUND";
-    private const string TaskCreationPastDayErrorCode = "TASK_CREATION_PAST_DAY_NOT_ALLOWED";
-    private const string JournalAssignmentConflictErrorCode = "TASK_JOURNAL_ASSIGNMENT_CONFLICT";
-    private const string ReopenPastDayErrorCode = "TASK_REOPEN_PAST_DAY_NOT_ALLOWED";
-    private const string ParentTaskNotFoundErrorCode = "TASK_PARENT_NOT_FOUND";
-    private const string ParentSelfNotAllowedErrorCode = "TASK_PARENT_SELF_NOT_ALLOWED";
-    private const string ParentDepthNotAllowedErrorCode = "TASK_PARENT_DEPTH_NOT_ALLOWED";
-    private const string ParentCompleteBlockedByChildrenErrorCode = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN";
-    private const string ParentDeleteBlockedByChildrenErrorCode = "TASK_PARENT_DELETE_BLOCKED_BY_CHILDREN";
-    private const string BlockDraftNotAllowedErrorCode = "TASK_BLOCK_DRAFT_NOT_ALLOWED";
-    private const string BlockCompletedNotAllowedErrorCode = "TASK_BLOCK_COMPLETED_NOT_ALLOWED";
-    private const string BlockedReasonRequiresBlockedStatusErrorCode = "TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS";
-    private const string CreateBlockedNotAllowedErrorCode = "TASK_CREATE_BLOCKED_NOT_ALLOWED";
-    private const string StartNotAllowedErrorCode = "TASK_START_NOT_ALLOWED";
     private readonly ITaskRepository _repo = repo;
     private readonly IValidator<TaskItem> _validator = validator;
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
@@ -123,7 +110,7 @@ public class TaskItemsController(
         {
             return UnprocessableEntity(new
             {
-                code = CreateBlockedNotAllowedErrorCode,
+                code = ErrorCodes.CreateBlockedNotAllowed,
                 message = "New tasks cannot be created as Blocked. Create the task first, then block it.",
                 details = new { status = createDto.Status.ToString() }
             });
@@ -143,7 +130,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = TaskCreationPastDayErrorCode,
+                    code = ErrorCodes.CreationPastDayNotAllowed,
                     message = "You cannot create new tasks on a past journal day.",
                     details = new { journalDate = createDto.JournalDate }
                 });
@@ -157,7 +144,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentTaskNotFoundErrorCode,
+                    code = ErrorCodes.ParentNotFound,
                     message = "The selected parent task was not found.",
                     details = new { parentTaskItemId = createDto.ParentTaskItemId }
                 });
@@ -167,7 +154,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentDepthNotAllowedErrorCode,
+                    code = ErrorCodes.ParentDepthNotAllowed,
                     message = "Only one subtask level is supported.",
                     details = new { parentTaskItemId = createDto.ParentTaskItemId }
                 });
@@ -183,7 +170,7 @@ public class TaskItemsController(
         {
             return UnprocessableEntity(new
             {
-                code = ProjectNotFoundErrorCode,
+                code = ErrorCodes.ProjectNotFound,
                 message = "The selected project was not found.",
                 details = new { projectId = createDto.ProjectId }
             });
@@ -388,7 +375,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentSelfNotAllowedErrorCode,
+                    code = ErrorCodes.ParentSelfNotAllowed,
                     message = "A task cannot be its own parent.",
                     details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
@@ -400,7 +387,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentTaskNotFoundErrorCode,
+                    code = ErrorCodes.ParentNotFound,
                     message = "The selected parent task was not found.",
                     details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
@@ -410,7 +397,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentDepthNotAllowedErrorCode,
+                    code = ErrorCodes.ParentDepthNotAllowed,
                     message = "Only one subtask level is supported.",
                     details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
@@ -420,7 +407,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ParentDepthNotAllowedErrorCode,
+                    code = ErrorCodes.ParentDepthNotAllowed,
                     message = "Only one subtask level is supported.",
                     details = new { parentTaskItemId = changes.ParentTaskItemId }
                 });
@@ -440,7 +427,7 @@ public class TaskItemsController(
         {
             return UnprocessableEntity(new
             {
-                code = StartNotAllowedErrorCode,
+                code = ErrorCodes.StartNotAllowed,
                 message = "Only Todo tasks can be moved to In Progress.",
                 details = new { status = existing.Status.ToString() }
             });
@@ -483,7 +470,7 @@ public class TaskItemsController(
         {
             return UnprocessableEntity(new
             {
-                code = ParentCompleteBlockedByChildrenErrorCode,
+                code = ErrorCodes.ParentCompleteBlockedByChildren,
                 message = "Parent tasks cannot be completed while child tasks are still open."
             });
         }
@@ -511,7 +498,7 @@ public class TaskItemsController(
             {
                 return UnprocessableEntity(new
                 {
-                    code = ReopenPastDayErrorCode,
+                    code = ErrorCodes.ReopenPastDayNotAllowed,
                     message = "Completed tasks assigned to past days cannot be reopened.",
                     details = new { assignedDate = completionDay }
                 });
@@ -638,7 +625,7 @@ public class TaskItemsController(
             {
                 return (UnprocessableEntity(new
                 {
-                    code = BlockCompletedNotAllowedErrorCode,
+                    code = ErrorCodes.BlockCompletedNotAllowed,
                     message = "Completed tasks cannot be blocked.",
                     details = new { status = was.ToString() }
                 }), default!);
@@ -648,7 +635,7 @@ public class TaskItemsController(
             {
                 return (UnprocessableEntity(new
                 {
-                    code = BlockDraftNotAllowedErrorCode,
+                    code = ErrorCodes.BlockDraftNotAllowed,
                     message = "Only Todo or In Progress tasks can be blocked.",
                     details = new { status = was.ToString() }
                 }), default!);
@@ -685,7 +672,7 @@ public class TaskItemsController(
         {
             return (UnprocessableEntity(new
             {
-                code = BlockedReasonRequiresBlockedStatusErrorCode,
+                code = ErrorCodes.BlockedReasonRequiresBlockedStatus,
                 message = "A blocked reason can only be set on a blocked task.",
                 details = new { status = next.ToString() }
             }), default!);
@@ -745,7 +732,7 @@ public class TaskItemsController(
         {
             return UnprocessableEntity(new
             {
-                code = ParentDeleteBlockedByChildrenErrorCode,
+                code = ErrorCodes.ParentDeleteBlockedByChildren,
                 message = "This task has subtasks. Remove or reassign subtasks before deleting."
             });
         }
@@ -791,7 +778,7 @@ public class TaskItemsController(
     private ActionResult PastDayPlanningError(DateOnly journalDate) =>
         UnprocessableEntity(new
         {
-            code = TaskCreationPastDayErrorCode,
+            code = ErrorCodes.CreationPastDayNotAllowed,
             message = "You cannot plan a task on a past journal day.",
             details = new { journalDate }
         });
@@ -806,7 +793,7 @@ public class TaskItemsController(
         AddTodoResult.PastDayNotAllowed => PastDayPlanningError(journalDate),
         AddTodoResult.AlreadyLinked => Conflict(new
         {
-            code = JournalAssignmentConflictErrorCode,
+            code = ErrorCodes.JournalAssignmentConflict,
             message = "The task was planned on this day by another request."
         }),
         AddTodoResult.TaskNotFound => NotFound(),

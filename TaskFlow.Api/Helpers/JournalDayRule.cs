@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Helpers;
 

@@ -41,6 +41,8 @@ Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-co
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskFlow.Mcp.Integration.Tests", "TaskFlow.Mcp.Integration.Tests\TaskFlow.Mcp.Integration.Tests.csproj", "{3C66F83E-07D9-4EE2-BCC9-0A2D64329E9D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskFlow.Contracts", "TaskFlow.Contracts\TaskFlow.Contracts.csproj", "{DDCE6C28-3908-43F6-A290-8489F55AD9F4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,6 +95,18 @@ Global
 		{3C66F83E-07D9-4EE2-BCC9-0A2D64329E9D}.Release|x64.Build.0 = Release|Any CPU
 		{3C66F83E-07D9-4EE2-BCC9-0A2D64329E9D}.Release|x86.ActiveCfg = Release|Any CPU
 		{3C66F83E-07D9-4EE2-BCC9-0A2D64329E9D}.Release|x86.Build.0 = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|x64.Build.0 = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Debug|x86.Build.0 = Debug|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|x64.ActiveCfg = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|x64.Build.0 = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|x86.ActiveCfg = Release|Any CPU
+		{DDCE6C28-3908-43F6-A290-8489F55AD9F4}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

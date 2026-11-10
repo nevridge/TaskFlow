@@ -1,4 +1,4 @@
-namespace TaskFlow.Api.Models;
+namespace TaskFlow.Contracts;
 
 public enum Priority
 {

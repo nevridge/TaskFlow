@@ -13,6 +13,7 @@ using TaskFlow.Api.Extensions;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
 using TaskFlow.Api.Validators;
+using TaskFlow.Contracts;
 using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;

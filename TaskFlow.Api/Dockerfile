@@ -26,9 +26,11 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY ["Directory.Build.props", "./"]
+COPY ["TaskFlow.Contracts/TaskFlow.Contracts.csproj", "TaskFlow.Contracts/"]
 COPY ["TaskFlow.Api/TaskFlow.Api.csproj", "TaskFlow.Api/"]
 RUN dotnet restore "TaskFlow.Api/TaskFlow.Api.csproj"
 
+COPY TaskFlow.Contracts/ TaskFlow.Contracts/
 COPY TaskFlow.Api/ TaskFlow.Api/
 WORKDIR /src/TaskFlow.Api
 RUN dotnet publish "TaskFlow.Api.csproj" -c Release -o /app/publish \

@@ -5,6 +5,7 @@ using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Controllers.V1;
 

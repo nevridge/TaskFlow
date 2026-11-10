@@ -6,6 +6,7 @@ using TaskFlow.Api.Controllers.V1;
 using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 

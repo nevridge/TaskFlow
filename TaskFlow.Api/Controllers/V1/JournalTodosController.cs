@@ -5,6 +5,7 @@ using TaskFlow.Api.DTOs;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Controllers.V1;
 
@@ -16,7 +17,6 @@ public class JournalTodosController(
     IValidator<AddJournalTodoDto> validator,
     IValidator<JournalDayQueryDto> queryValidator) : ControllerBase
 {
-    private const string AssignmentPastDayErrorCode = "TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED";
     private readonly IJournalEntryRepository _journalRepo = journalRepo;
     private readonly IValidator<AddJournalTodoDto> _validator = validator;
     private readonly IValidator<JournalDayQueryDto> _queryValidator = queryValidator;
@@ -80,7 +80,7 @@ public class JournalTodosController(
             AddTodoResult.AlreadyLinked => Conflict(new { message = "This task is already linked to the journal entry." }),
             AddTodoResult.PastDayNotAllowed => UnprocessableEntity(new
             {
-                code = AssignmentPastDayErrorCode,
+                code = ErrorCodes.AssignmentPastDayNotAllowed,
                 message = "This task cannot be assigned to a past day."
             }),
             _ => throw new InvalidOperationException(

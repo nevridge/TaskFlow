@@ -1,5 +1,6 @@
 using FluentValidation;
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Validators;
 

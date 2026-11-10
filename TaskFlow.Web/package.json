@@ -13,8 +13,8 @@
     "gen:api": "openapi-ts"
   },
   "dependencies": {
-    "@tailwindcss/vite": "^4.3.4",
-    "@tanstack/react-query": "^5.106.1",
+    "@tailwindcss/vite": "^4.3.5",
+    "@tanstack/react-query": "^5.107.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5",

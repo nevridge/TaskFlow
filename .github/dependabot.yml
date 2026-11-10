@@ -33,8 +33,9 @@ updates:
           - "vitest"
           - "@vitest/*"
 
-  # Backend dependencies (TaskFlow.sln at the root references both projects;
-  # assistant/ has its own solution, which the root solution does not reference)
+  # Backend dependencies (TaskFlow.sln at the root references the API and its tests, plus
+  # TaskFlow.Mcp.Integration.Tests, which project-references assistant/src/TaskFlow.Mcp;
+  # assistant/ has its own solution, which the root solution does not list)
   - package-ecosystem: "nuget"
     directories:
       - "/"

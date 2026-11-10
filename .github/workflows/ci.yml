@@ -52,6 +52,17 @@ jobs:
         run: reportgenerator -reports:"**/TestResults/coverage.cobertura*.xml" -targetdir:"coveragereport" -reporttypes:"TextSummary;Html"
       - name: Display coverage summary
         run: cat coveragereport/Summary.txt
+  mcp-integration:
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test --project TaskFlow.Mcp.Integration.Tests --configuration Release --results-directory ./mcp-integration-results
   assistant:
     runs-on: ubuntu-latest
     permissions:

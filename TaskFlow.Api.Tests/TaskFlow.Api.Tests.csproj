@@ -16,7 +16,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Moq" Version="4.21.0" />
-    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <PackageReference Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 
   <ItemGroup>

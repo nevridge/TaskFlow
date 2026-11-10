@@ -53,17 +53,17 @@ const json = (status: number, body?: unknown) =>
 
 let server: Row[]
 let qc: QueryClient
-let locationSeen: { pathname: string; state: unknown }
+let locationSeen: { pathname: string; search: string; state: unknown }
 
 function LocationProbe() {
   const location = useLocation()
   useEffect(() => {
-    locationSeen = { pathname: location.pathname, state: location.state }
+    locationSeen = { pathname: location.pathname, search: location.search, state: location.state }
   })
   return null
 }
 
-function renderPage(initialEntry: string | { pathname: string; state: unknown } = '/tasks') {
+function renderPage(initialEntry: string | { pathname: string; search?: string; state: unknown } = '/tasks') {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const Providers = makeProviders(qc)
   return render(
@@ -399,6 +399,18 @@ describe('TasksPage undoable delete (#321)', () => {
       const newTask = await screen.findByRole('button', { name: 'New Task' })
       await waitFor(() => expect(newTask).toHaveFocus())
       await waitFor(() => expect(locationSeen.state).toBeNull())
+    })
+
+    it('keeps the query string and applies the filters when it clears the state (#469)', async () => {
+      server = [row(1, 'Alpha task'), row(2, 'Bravo task')]
+      renderPage({ pathname: '/tasks', search: '?q=alpha', state: { focusNewTask: true } })
+      const newTask = await screen.findByRole('button', { name: 'New Task' })
+      await waitFor(() => expect(newTask).toHaveFocus())
+      await waitFor(() => expect(locationSeen.state).toBeNull())
+      expect(locationSeen.search).toBe('?q=alpha')
+      expect(screen.getByPlaceholderText('Search title or #id…')).toHaveValue('alpha')
+      expect(screen.getByText('Alpha task')).toBeInTheDocument()
+      expect(screen.queryByText('Bravo task')).not.toBeInTheDocument()
     })
 
     it('clears the navigation state even when the list fails to load (no button)', async () => {

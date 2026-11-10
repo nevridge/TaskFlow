@@ -56,12 +56,12 @@ interface Note {
 
 let tasks: Task[]
 let notes: Note[]
-let locationSeen: { pathname: string; state: unknown }
+let locationSeen: { pathname: string; search: string; state: unknown }
 
 function LocationProbe() {
   const location = useLocation()
   useEffect(() => {
-    locationSeen = { pathname: location.pathname, state: location.state }
+    locationSeen = { pathname: location.pathname, search: location.search, state: location.state }
   })
   return null
 }
@@ -71,7 +71,7 @@ function GoToTask() {
   return <button onClick={() => navigate('/tasks/1')}>Go to task 1</button>
 }
 
-function renderApp(path = '/tasks/1') {
+function renderApp(path: string | { pathname: string; state: unknown } = '/tasks/1') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const Providers = makeProviders(qc)
   const utils = render(
@@ -132,7 +132,7 @@ describe('TaskDetailPage undoable delete (#321)', () => {
     document.body.innerHTML = ''
   })
 
-  async function loadDetail(path?: string) {
+  async function loadDetail(path?: Parameters<typeof renderApp>[0]) {
     const utils = renderApp(path)
     await screen.findByRole('heading', { name: 'Fix login bug' })
     vi.useFakeTimers()
@@ -154,6 +154,19 @@ describe('TaskDetailPage undoable delete (#321)', () => {
       expect(screen.getByText('Task deleted: "Fix login bug"')).toBeInTheDocument()
       expect(deleteTaskCalls()).toHaveLength(0)
       confirm.mockRestore()
+    })
+
+    it('from a filtered origin lands on that filtered list with New Task focused and the filters applied (#469)', async () => {
+      await loadDetail({ pathname: '/tasks/1', state: { from: '/tasks?q=other' } })
+      fireEvent.click(screen.getByRole('button', { name: /delete task/i }))
+      expect(locationSeen.pathname).toBe('/tasks')
+      expect(locationSeen.search).toBe('?q=other')
+      await advance(0)
+      expect(locationSeen.search).toBe('?q=other')
+      expect(locationSeen.state).toBeNull()
+      expect(screen.getByPlaceholderText('Search title or #id…')).toHaveValue('other')
+      expect(screen.getByRole('link', { name: 'Other task' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'New Task' })).toHaveFocus()
     })
 
     it('after navigating, Undo restores the task in the list and stays on /tasks', async () => {

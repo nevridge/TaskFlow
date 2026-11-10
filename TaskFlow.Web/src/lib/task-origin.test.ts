@@ -8,6 +8,9 @@ import {
   withEditParam,
   withoutEditParam,
   taskEditPath,
+  readTasksOrigin,
+  readBackOrigin,
+  tasksOriginPath,
 } from './task-origin'
 
 describe('task-origin', () => {
@@ -78,5 +81,31 @@ describe('edit param helpers', () => {
   it('readJournalOrigin ignores the edit param: the origin comes from state only', () => {
     expect(readJournalOrigin({ from: '/journal/11-07-2026' })).toBe('/journal/11-07-2026')
     expect(readJournalOrigin(null)).toBeNull()
+  })
+
+  describe('Tasks origin (#469)', () => {
+    it.each(['/tasks', '/tasks?q=a%23b', '/tasks?status=todo&status=draft', '/tasks?project=none'])(
+      'accepts from=%s',
+      from => expect(readTasksOrigin({ from })).toBe(from),
+    )
+
+    it.each([
+      '/tasksX', '/tasks/5', '/tasks#x', '/tasks?q=a#b', '//evil', '/tasks?x=//y', String.raw`/tasks\x`, '/tasks?u=http:x',
+      '/journal/11-07-2026', 'https://evil.example', '', 42, null, undefined,
+    ])('rejects from=%s', from => {
+      expect(readTasksOrigin({ from })).toBeNull()
+    })
+
+    it('builds the origin path from the query string', () => {
+      expect(tasksOriginPath('')).toBe('/tasks')
+      expect(tasksOriginPath('?q=foo')).toBe('/tasks?q=foo')
+    })
+
+    it('readBackOrigin takes a Tasks origin, else a journal origin, else null; the journal rule is unchanged', () => {
+      expect(readBackOrigin({ from: '/tasks?q=a' })).toBe('/tasks?q=a')
+      expect(readBackOrigin({ from: '/journal/11-07-2026' })).toBe('/journal/11-07-2026')
+      expect(readBackOrigin({ from: '/tasksX' })).toBeNull()
+      expect(readJournalOrigin({ from: '/tasks?q=a' })).toBeNull()
+    })
   })
 })

@@ -108,7 +108,15 @@ const deleteNote = vi.fn()
 /** Stands in for the /tasks route: shows where the delete navigated to and with which state. */
 function TasksProbe() {
   const location = useLocation()
-  return <div data-testid="tasks-route" data-state={JSON.stringify(location.state)}>Tasks list</div>
+  return (
+    <div
+      data-testid="tasks-route"
+      data-path={location.pathname + location.search}
+      data-state={JSON.stringify(location.state)}
+    >
+      Tasks list
+    </div>
+  )
 }
 
 function renderPage(path: string | { pathname: string; state?: unknown } = '/tasks/1') {
@@ -273,7 +281,12 @@ describe('TaskDetailPage', () => {
     })
 
     it.each([
-      ['a non-journal path', '/tasks'],
+      ['a path that only starts with /tasks', '/tasksX'],
+      ['a task detail path', '/tasks/5'],
+      ['a tasks path with a fragment', '/tasks#x'],
+      ['a tasks query with a double slash', '/tasks?x=//y'],
+      ['a tasks query with a colon', '/tasks?u=http:x'],
+      ['a tasks query with a backslash', String.raw`/tasks?x=\y`],
       ['an absolute url', 'https://evil.example'],
       ['a protocol-relative url', '//evil'],
       ['a double slash', '/journal//x'],
@@ -287,6 +300,15 @@ describe('TaskDetailPage', () => {
       expect(backLink()).toHaveTextContent('← Back to Tasks')
       expect(backLink()).toHaveAttribute('href', '/tasks')
     })
+
+    it.each(['/tasks', '/tasks?q=foo&status=todo', '/tasks?q=a%23b'])(
+      'returns to the filtered Tasks list at %s (#469)',
+      from => {
+        renderPage({ pathname: '/tasks/1', state: { from } })
+        expect(backLink()).toHaveTextContent('← Back to Tasks')
+        expect(backLink()).toHaveAttribute('href', from)
+      },
+    )
 
     function JournalProbe() {
       const location = useLocation()
@@ -360,7 +382,22 @@ describe('TaskDetailPage', () => {
     expect(confirmSpy).not.toHaveBeenCalled()
     const route = screen.getByTestId('tasks-route')
     expect(route).toHaveAttribute('data-state', JSON.stringify({ focusNewTask: true }))
+    expect(route).toHaveAttribute('data-path', '/tasks')
     confirmSpy.mockRestore()
+  })
+
+  it('Delete lands on the filtered Tasks list the page came from, with exactly { focusNewTask: true } (#469)', async () => {
+    renderPage({ pathname: '/tasks/1', state: { from: '/tasks?q=foo&status=todo&view=activeToday&project=2' } })
+    await userEvent.click(screen.getByRole('button', { name: /delete task/i }))
+    const route = screen.getByTestId('tasks-route')
+    expect(route).toHaveAttribute('data-path', '/tasks?q=foo&status=todo&view=activeToday&project=2')
+    expect(route).toHaveAttribute('data-state', JSON.stringify({ focusNewTask: true }))
+  })
+
+  it('Delete ignores a hostile origin and lands on plain /tasks (#469)', async () => {
+    renderPage({ pathname: '/tasks/1', state: { from: '/tasks?u=http:x' } })
+    await userEvent.click(screen.getByRole('button', { name: /delete task/i }))
+    expect(screen.getByTestId('tasks-route')).toHaveAttribute('data-path', '/tasks')
   })
 
   it('shows an empty shell, not "Task not found", while leaving after a self-initiated delete', async () => {
@@ -796,6 +833,23 @@ describe('TaskDetailPage', () => {
       await userEvent.click(back)
       expect(where()).toHaveTextContent('/journal/11-07-2026')
       expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual({ focusTaskId: 7 })
+    })
+
+    it('keeps a Tasks origin through Edit, Save and Cancel, and the back link stays on the filtered list (#469)', async () => {
+      const state = { from: '/tasks?status=todo' }
+      renderAt({ pathname: '/tasks/1', state })
+      const backHref = () => screen.getByRole('link', { name: '← Back to Tasks' }).getAttribute('href')
+      await userEvent.click(editBtn())
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(state)
+      expect(backHref()).toBe('/tasks?status=todo')
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(state)
+      expect(backHref()).toBe('/tasks?status=todo')
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(where()).toHaveTextContent(/^\/tasks\/1$/))
+      expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(state)
+      expect(backHref()).toBe('/tasks?status=todo')
     })
 
     it('keeps the journal origin state through cancel', async () => {

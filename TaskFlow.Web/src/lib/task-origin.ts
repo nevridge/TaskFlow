@@ -27,6 +27,25 @@ export function readJournalOrigin(state: unknown): string | null {
   return from
 }
 
+/** `/tasks` plus the Tasks page query string (`search` is '' or starts with '?'). */
+export function tasksOriginPath(search: string): string {
+  return `/tasks${search}`
+}
+
+/** The origin when it is the Tasks list itself (`/tasks` or `/tasks?...`), else null. Separate rule from the journal one. */
+export function readTasksOrigin(state: unknown): string | null {
+  const from = asRecord(state)?.from
+  if (typeof from !== 'string') return null
+  if (from !== '/tasks' && !from.startsWith('/tasks?')) return null
+  if (from.includes('//') || from.includes('\\') || from.includes(':') || from.includes('#')) return null
+  return from
+}
+
+/** Back target for the detail page: a validated Tasks origin, else a validated journal origin, else null. */
+export function readBackOrigin(state: unknown): string | null {
+  return readTasksOrigin(state) ?? readJournalOrigin(state)
+}
+
 /** The task id to return focus to, when it is a positive integer. */
 export function readFocusTaskId(state: unknown): number | null {
   const id = asRecord(state)?.focusTaskId

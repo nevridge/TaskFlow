@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { Nav } from './Nav'
 
 function renderNav(initialPath: string) {
@@ -117,5 +117,21 @@ describe('Nav', () => {
   it('Tasks link points to /tasks', () => {
     renderNav('/')
     expect(screen.getByRole('link', { name: /tasks/i })).toHaveAttribute('href', '/tasks')
+  })
+
+  it('Tasks link from a filtered list goes to plain /tasks (intended: Nav resets the Tasks filters, #469)', async () => {
+    function Where() {
+      const l = useLocation()
+      return <div data-testid="where">{l.pathname + l.search}</div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/tasks?q=foo&status=todo']}>
+        <Nav onMenuClick={vi.fn()} />
+        <Where />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('where')).toHaveTextContent('/tasks?q=foo&status=todo')
+    await userEvent.click(screen.getByRole('link', { name: /^tasks$/i }))
+    expect(screen.getByTestId('where').textContent).toBe('/tasks')
   })
 })

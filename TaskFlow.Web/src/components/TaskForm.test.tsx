@@ -204,6 +204,13 @@ describe('TaskForm', () => {
       expect(onCancel).not.toHaveBeenCalled()
     })
 
+    it('ignores Safari composition-ending Escape (keyCode 229, isComposing false)', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Escape', keyCode: 229, isComposing: false })
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
     it('does not cancel on other keys', () => {
       const onCancel = vi.fn()
       renderForm(undefined, vi.fn(), onCancel)

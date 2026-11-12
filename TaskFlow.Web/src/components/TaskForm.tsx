@@ -168,7 +168,8 @@ export function TaskForm({
   function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
     if (e.key !== 'Escape') return
     if (e.defaultPrevented) return
-    if (e.nativeEvent.isComposing) return
+    // Safari's composition-ending Escape reports isComposing=false but keyCode 229.
+    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
     if (isSaving) return
     if (e.target instanceof HTMLTextAreaElement) return
     e.preventDefault()

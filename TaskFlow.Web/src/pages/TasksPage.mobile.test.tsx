@@ -438,6 +438,19 @@ describe('TasksPage on mobile (#317)', () => {
         expect(newTaskBtn()).toHaveFocus()
       })
 
+      it('Escape clears a create error instead of leaving it behind on the page (AC1)', async () => {
+        createMutate.mockImplementation((_data, opts: { onError?: (e: unknown) => void }) => opts.onError?.({ code: 'UNKNOWN_ERROR' }))
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.type(titleBox(), 'Will fail')
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        expect(await screen.findByRole('alert')).toBeInTheDocument()
+        titleBox().focus()
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+
       it('the visible Cancel button still closes the panel by click', async () => {
         renderPage()
         await userEvent.click(newTaskBtn())

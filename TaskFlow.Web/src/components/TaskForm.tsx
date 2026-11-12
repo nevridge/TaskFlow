@@ -1,4 +1,4 @@
-import { type FormEvent, type Ref, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, type Ref, useEffect, useRef, useState } from 'react'
 import type { TaskItemResponseDto, CreateTaskItemDto } from '@/api/client/types.gen'
 import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
@@ -162,8 +162,22 @@ export function TaskForm({
     })
   }
 
+  // Escape cancels like the Cancel button. Guards are ordered cheapest first.
+  // The textarea is exempt (content-independent rule) so Escape never discards typed text there.
+  // stopPropagation keeps document/window Escape listeners (settings, help, history) from also reacting.
+  function handleKeyDown(e: KeyboardEvent<HTMLFormElement>) {
+    if (e.key !== 'Escape') return
+    if (e.defaultPrevented) return
+    if (e.nativeEvent.isComposing) return
+    if (isSaving) return
+    if (e.target instanceof HTMLTextAreaElement) return
+    e.preventDefault()
+    e.stopPropagation()
+    onCancel()
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="t-form">
+    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="t-form">
       <div className="t-field">
         <label htmlFor="title" className="t-label">Title</label>
         <input id="title" ref={titleInputRef} className="t-input" value={title} onChange={e => setTitle(e.target.value)} required />

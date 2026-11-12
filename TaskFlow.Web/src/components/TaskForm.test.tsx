@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createRef } from 'react'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { createEvent, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TaskForm } from './TaskForm'
 
@@ -128,6 +128,126 @@ describe('TaskForm', () => {
     renderForm(undefined, vi.fn(), onCancel)
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onCancel).toHaveBeenCalled()
+  })
+
+  describe('Escape cancels (#470)', () => {
+    const withPlanned = { ...existing, currentJournalDate: '2099-01-01' } as Props['task']
+
+    it('cancels once from the title input', async () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      await userEvent.click(screen.getByLabelText(/title/i))
+      await userEvent.keyboard('{Escape}')
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('cancels from the status select, due date, Planned day Clear, Save and Cancel', () => {
+      const onCancel = vi.fn()
+      renderForm(withPlanned, vi.fn(), onCancel)
+      const targets = [
+        screen.getByLabelText('Status'),
+        screen.getByLabelText('Due Date'),
+        screen.getByRole('button', { name: 'Clear planned day' }),
+        screen.getByRole('button', { name: /save/i }),
+        screen.getByRole('button', { name: /cancel/i }),
+      ]
+      for (const el of targets) fireEvent.keyDown(el, { key: 'Escape' })
+      expect(onCancel).toHaveBeenCalledTimes(targets.length)
+    })
+
+    it('still cancels once when the Cancel button is clicked', async () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('a held Escape (repeat) cancels once', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      const title = screen.getByLabelText(/title/i)
+      fireEvent.keyDown(title, { key: 'Escape', repeat: true })
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not let a document keydown listener see the handled Escape', () => {
+      const onCancel = vi.fn()
+      const spy = vi.fn()
+      document.addEventListener('keydown', spy)
+      renderForm(undefined, vi.fn(), onCancel)
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Escape' })
+      document.removeEventListener('keydown', spy)
+      expect(onCancel).toHaveBeenCalledTimes(1)
+      expect(spy).not.toHaveBeenCalled()
+    })
+
+    it('ignores Escape while saving', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel, { isSaving: true })
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Escape' })
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('ignores an Escape that is already defaultPrevented', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      const event = createEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Escape' })
+      event.preventDefault()
+      fireEvent(screen.getByLabelText(/title/i), event)
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('ignores Escape while an IME composition is active', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Escape', isComposing: true })
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('does not cancel on other keys', () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'Enter' })
+      fireEvent.keyDown(screen.getByLabelText(/title/i), { key: 'a' })
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it('ignores Escape dispatched outside the form', () => {
+      const onCancel = vi.fn()
+      render(
+        <>
+          <button>Sibling</button>
+          <TaskForm onSubmit={vi.fn()} onCancel={onCancel} />
+        </>,
+      )
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Sibling' }), { key: 'Escape' })
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      expect(onCancel).not.toHaveBeenCalled()
+    })
+
+    it.each([['with text', 'Some desc'], ['empty', '']])('keeps the form open on Escape in the textarea (%s)', async (_l, text) => {
+      const onCancel = vi.fn()
+      renderForm({ ...existing, description: text }, vi.fn(), onCancel)
+      const area = screen.getByLabelText(/description/i)
+      await userEvent.click(area)
+      await userEvent.keyboard('{Escape}')
+      expect(onCancel).not.toHaveBeenCalled()
+      expect(area).toHaveValue(text)
+      expect(area).toHaveFocus()
+      await userEvent.tab()
+      await userEvent.keyboard('{Escape}')
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    })
+
+    it('cancels from the title after description text was typed', async () => {
+      const onCancel = vi.fn()
+      renderForm(undefined, vi.fn(), onCancel)
+      await userEvent.type(screen.getByLabelText(/description/i), 'draft')
+      await userEvent.tab({ shift: true })
+      expect(screen.getByLabelText(/title/i)).toHaveFocus()
+      await userEvent.keyboard('{Escape}')
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    })
   })
 
   describe('project select', () => {

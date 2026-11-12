@@ -226,11 +226,12 @@ export function TasksPage() {
     }
   }, [historyTask])
 
-  // New on a phone or tablet: bring the top panel into view and focus its title.
+  // New Task: focus the title on every viewport so Escape works from the keyboard (#470);
+  // bring the top panel into view only on a phone or tablet.
   // Runs after the panel has mounted (effect), and only when a click requested it.
   useEffect(() => {
     if (panelFocusTick === 0) return
-    panelRef.current?.scrollIntoView({ block: 'start' })
+    if (isNarrowViewport()) panelRef.current?.scrollIntoView({ block: 'start' })
     titleRef.current?.focus({ preventScroll: true })
   }, [panelFocusTick])
 
@@ -296,7 +297,7 @@ export function TasksPage() {
   }
 
   function requestPanelFocus() {
-    if (isNarrowViewport()) setPanelFocusTick(t => t + 1)
+    setPanelFocusTick(t => t + 1)
   }
 
   // Carried by Edit, the title link and the parent link so the detail page can return to this filtered list.

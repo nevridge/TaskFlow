@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -411,6 +411,106 @@ describe('TasksPage on mobile (#317)', () => {
       expect(createMutate).toHaveBeenCalled()
       await waitFor(() => expect(newTask).toHaveFocus())
     })
+
+    describe('Escape cancels the New Task panel (#470)', () => {
+      const newTaskBtn = () => screen.getByRole('button', { name: 'New Task' })
+      const titleBox = () => screen.getByRole('textbox', { name: 'Title' })
+
+      it('narrow: Escape from the title closes the panel, skips the save and focuses New Task', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        expect(scrollIntoView).toHaveBeenCalledTimes(1)
+        expect(titleBox()).toHaveFocus()
+        await userEvent.type(titleBox(), 'Draft title')
+        await userEvent.tab() // description (Escape-exempt)
+        await userEvent.tab() // status select
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        expect(createMutate).not.toHaveBeenCalled()
+        expect(newTaskBtn()).toHaveFocus()
+      })
+
+      it('a held Escape leaves the panel closed with focus on New Task', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.keyboard('{Escape>2/}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        expect(newTaskBtn()).toHaveFocus()
+      })
+
+      it('Escape clears a create error instead of leaving it behind on the page (AC1)', async () => {
+        createMutate.mockImplementation((_data, opts: { onError?: (e: unknown) => void }) => opts.onError?.({ code: 'UNKNOWN_ERROR' }))
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.type(titleBox(), 'Will fail')
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        expect(await screen.findByRole('alert')).toBeInTheDocument()
+        titleBox().focus()
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+
+      it('the visible Cancel button still closes the panel by click', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+      })
+
+      it('discards description text left behind: Shift+Tab to the title, Escape, reopen is empty', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.type(titleBox(), 'Keep?')
+        await userEvent.tab()
+        await userEvent.keyboard('typed notes')
+        await userEvent.tab({ shift: true })
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        await userEvent.click(newTaskBtn())
+        expect(titleBox()).toHaveValue('')
+        expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('')
+      })
+
+      it('does not steal focus back to the title when the page re-renders', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        const description = screen.getByRole('textbox', { name: 'Description' })
+        description.focus()
+        // Changing the sort re-renders TasksPage without moving focus.
+        fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'dueDate' } })
+        expect(titleBox()).not.toHaveFocus()
+        expect(description).toHaveFocus()
+      })
+
+      it('keeps the panel open on Escape in the description', async () => {
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.type(titleBox(), 'Stay')
+        await userEvent.tab()
+        await userEvent.keyboard('some text{Escape}')
+        expect(titleBox()).toHaveValue('Stay')
+        expect(screen.getByRole('textbox', { name: 'Description' })).toHaveFocus()
+      })
+
+      it.each([
+        ['narrow', true],
+        ['desktop', false],
+      ])('history sheet over the open panel (%s): Escape closes only the sheet, then Escape in the panel cancels it', async (_l, isNarrow) => {
+        narrow = isNarrow
+        renderPage()
+        await userEvent.click(newTaskBtn())
+        await userEvent.click(screen.getAllByRole('button', { name: 'Task history' })[0])
+        expect(screen.getByRole('dialog', { name: 'Task history' })).toBeInTheDocument()
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(titleBox()).toBeInTheDocument()
+        titleBox().focus()
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+        expect(newTaskBtn()).toHaveFocus()
+      })
+    })
   })
 
   describe('history sheet (AC35-36)', () => {
@@ -452,6 +552,37 @@ describe('TasksPage on mobile (#317)', () => {
   describe('desktop behaviour (AC40)', () => {
     beforeEach(() => {
       narrow = false
+    })
+
+    it('opening New Task focuses the empty title without scrolling or selecting (#470)', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      const title = screen.getByRole('textbox', { name: 'Title' })
+      expect(title).toHaveFocus()
+      expect(title).toHaveValue('')
+      expect(scrollIntoView).not.toHaveBeenCalled()
+    })
+
+    it('keyboard only: Enter on New Task, type, Escape closes, focus returns, reopen is empty (#470)', async () => {
+      renderPage()
+      const newTask = screen.getByRole('button', { name: 'New Task' })
+      newTask.focus()
+      await userEvent.keyboard('{Enter}')
+      await userEvent.keyboard('Half typed')
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Half typed')
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+      expect(newTask).toHaveFocus()
+      await userEvent.keyboard('{Enter}')
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('')
+    })
+
+    it('Escape right after opening, with no click in the panel, closes it (#470)', async () => {
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'New Task' })).toHaveFocus()
     })
 
     it('keeps header sort, inline filter fields and status cycling', async () => {

@@ -773,6 +773,62 @@ describe('TaskDetailPage', () => {
       expect(where()).toHaveTextContent(/^\/tasks$/)
     })
 
+    describe('Escape cancels the edit form (#470)', () => {
+      it('Escape in the title closes the form, sends no update, clears the save error and focuses Edit', async () => {
+        updateAsync.mockRejectedValueOnce({ code: 'UNKNOWN_ERROR' })
+        renderAt('/tasks/1')
+        await userEvent.click(editBtn())
+        await userEvent.click(screen.getByRole('button', { name: /save/i }))
+        expect(await screen.findByRole('alert')).toBeInTheDocument()
+        updateAsync.mockClear()
+        titleBox().focus()
+        await userEvent.keyboard('{Escape}')
+        expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+        expect(updateAsync).not.toHaveBeenCalled()
+        expect(editBtn()).toHaveFocus()
+        await userEvent.click(editBtn())
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      })
+
+      it('from a ?edit=1 deep link: drops edit by replace and keeps route state', async () => {
+        const state = { from: '/tasks?x=1', focusTaskId: 1 }
+        renderAt('/tasks', { pathname: '/tasks/1', search: '?edit=1', state })
+        await userEvent.keyboard('{Escape}')
+        expect(where()).toHaveTextContent(/^\/tasks\/1$/)
+        expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(state)
+        expect(editBtn()).toHaveFocus()
+        // Replace, not push: one step back leaves the page.
+        await userEvent.click(screen.getByRole('button', { name: 'history back' }))
+        expect(where()).toHaveTextContent(/^\/tasks$/)
+      })
+
+      it('is ignored while a save is pending; the form then closes on success', async () => {
+        let resolveSave!: (v: unknown) => void
+        updateAsync.mockReturnValue(new Promise(r => { resolveSave = r }))
+        renderAt('/tasks/1?edit=1')
+        await userEvent.click(screen.getByRole('button', { name: /save/i }))
+        await userEvent.keyboard('{Escape}')
+        expect(titleBox()).toBeInTheDocument()
+        expect(where()).toHaveTextContent('/tasks/1?edit=1')
+        await act(async () => { resolveSave({}) })
+        await waitFor(() => expect(editBtn()).toHaveFocus())
+        expect(screen.queryByRole('textbox', { name: /title/i })).not.toBeInTheDocument()
+      })
+
+      it('is ignored while a save is pending; after a failure the error shows and the form stays', async () => {
+        let rejectSave!: (e: unknown) => void
+        updateAsync.mockReturnValue(new Promise((_r, rej) => { rejectSave = rej }))
+        renderAt('/tasks/1?edit=1')
+        await userEvent.click(screen.getByRole('button', { name: /save/i }))
+        await userEvent.keyboard('{Escape}')
+        expect(titleBox()).toBeInTheDocument()
+        await act(async () => { rejectSave({ code: 'UNKNOWN_ERROR' }) })
+        expect(await screen.findByRole('alert')).toBeInTheDocument()
+        expect(titleBox()).toBeInTheDocument()
+        expect(where()).toHaveTextContent('/tasks/1?edit=1')
+      })
+    })
+
     it('the in-page Edit button sets ?edit=1 by replace and focuses the title', async () => {
       renderAt('/tasks', '/tasks/1')
       await userEvent.click(editBtn())

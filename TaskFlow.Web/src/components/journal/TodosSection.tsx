@@ -171,7 +171,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     openFocusedTodo: () => {
       const id = focusedRowId()
       if (id == null) return false
-      openTodo(id)
+      // A key press is never a drag-select, so a page selection must not swallow it.
+      goToTodo(id)
       return true
     },
     toggleFocusedTodo: () => {
@@ -304,6 +305,10 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   function openTodo(id: number) {
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
+    goToTodo(id)
+  }
+
+  function goToTodo(id: number) {
     navigate(taskEditPath(id), { state: { from: originPath, focusTaskId: id } })
   }
 
@@ -509,7 +514,8 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           type="button"
           className="todo-text"
           data-todo-title={id}
-          onClick={() => openTodo(id)}
+          // detail 0 = Enter or Space, which is never a drag-select, so it skips the selection guard.
+          onClick={e => (e.detail === 0 ? goToTodo(id) : openTodo(id))}
         >
           {td.title ?? ''}
         </button>

@@ -119,6 +119,18 @@ describe('TodosSection keyboard handle (#468)', () => {
     expect(path).toMatch(/^\/tasks\/2/)
   })
 
+  it('e opens the focused todo even while text is selected elsewhere on the page', () => {
+    const ref = setup()
+    const range = document.createRange()
+    range.selectNodeContents(screen.getByTestId('outside'))
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    title(2).focus()
+    act(() => { expect(ref.current?.openFocusedTodo()).toBe(true) })
+    expect(path).toMatch(/^\/tasks\/2/)
+    window.getSelection()?.removeAllRanges()
+  })
+
   it('c clicks the focused row check and keeps focus on the same control', () => {
     const ref = setup()
     title(2).focus()

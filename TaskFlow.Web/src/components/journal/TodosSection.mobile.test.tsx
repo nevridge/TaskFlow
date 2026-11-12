@@ -162,12 +162,23 @@ describe('TodosSection row click opens the todo (#468)', () => {
     range.selectNodeContents(titleButton())
     window.getSelection()?.removeAllRanges()
     window.getSelection()?.addRange(range)
-    fireEvent.click(meta)
-    fireEvent.click(titleButton())
+    fireEvent.click(meta, { detail: 1 })
+    fireEvent.click(titleButton(), { detail: 1 })
     expect(opens()).toHaveLength(0)
     window.getSelection()?.removeAllRanges()
     fireEvent.click(meta)
     expect(opens()).toHaveLength(1)
+  })
+
+  it('Enter or Space on the title (a click with detail 0) opens the todo even while text is selected', () => {
+    renderSection()
+    const range = document.createRange()
+    range.selectNodeContents(document.querySelector('.todo-subline-meta') as HTMLElement)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    fireEvent.click(titleButton(), { detail: 0 })
+    expect(opens()).toHaveLength(1)
+    window.getSelection()?.removeAllRanges()
   })
 
   it('Enter in the add input still adds the todo', async () => {

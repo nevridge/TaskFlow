@@ -1,3 +1,5 @@
+using TaskFlow.Contracts;
+
 namespace TaskFlow.Api.Models;
 
 public class TaskItem

@@ -5,6 +5,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using TaskFlow.Contracts;
 using TaskFlow.Mcp.Api;
 using TaskFlow.Mcp.Extensions;
 using TaskFlow.Mcp.Tools;
@@ -424,17 +425,17 @@ public class ToolGuardTests
     }
 
     [Theory]
-    [InlineData("TASK_BLOCK_DRAFT_NOT_ALLOWED", "Make the task Todo first (status=todo), then block it.")]
-    [InlineData("TASK_BLOCK_COMPLETED_NOT_ALLOWED", "Reopen the task first (complete=false), then block it.")]
-    [InlineData("TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS", "omit blockedReason")]
-    [InlineData("TASK_START_NOT_ALLOWED", "set status=todo first")]
-    [InlineData("TASK_START_NOT_ALLOWED", "reopen it first (complete=false)")]
-    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "or omit journalDate")]
-    [InlineData("TASK_CREATION_PAST_DAY_NOT_ALLOWED", "journalDate must be today or later")]
-    [InlineData("TASK_PLAN_HAS_OPEN_SUBTASKS", "Plan its subtasks instead")]
-    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "Reopen the parent first")]
-    [InlineData("TASK_PARENT_STATUS_DERIVED", "Change the status of its subtasks")]
-    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "Omit journalDate")]
+    [InlineData(ErrorCodes.BlockDraftNotAllowed, "Make the task Todo first (status=todo), then block it.")]
+    [InlineData(ErrorCodes.BlockCompletedNotAllowed, "Reopen the task first (complete=false), then block it.")]
+    [InlineData(ErrorCodes.BlockedReasonRequiresBlockedStatus, "omit blockedReason")]
+    [InlineData(ErrorCodes.StartNotAllowed, "set status=todo first")]
+    [InlineData(ErrorCodes.StartNotAllowed, "reopen it first (complete=false)")]
+    [InlineData(ErrorCodes.CreationPastDayNotAllowed, "or omit journalDate")]
+    [InlineData(ErrorCodes.CreationPastDayNotAllowed, "journalDate must be today or later")]
+    [InlineData(ErrorCodes.PlanHasOpenSubtasks, "Plan its subtasks instead")]
+    [InlineData(ErrorCodes.ParentCompletedNotAllowed, "Reopen the parent first")]
+    [InlineData(ErrorCodes.ParentStatusDerived, "Change the status of its subtasks")]
+    [InlineData(ErrorCodes.PlanCompletedNotAllowed, "Omit journalDate")]
     public async Task UnprocessableBlockCodes_GetOneLineOfGuidance(string code, string expectedGuidance)
     {
         var api = Fixtures.Client(new StubHandler());
@@ -447,10 +448,10 @@ public class ToolGuardTests
     }
 
     [Theory]
-    [InlineData("TASK_PLAN_HAS_OPEN_SUBTASKS", "update_task")]
-    [InlineData("TASK_PARENT_COMPLETED_NOT_ALLOWED", "update_task")]
-    [InlineData("TASK_PARENT_STATUS_DERIVED", "update_tasks")]
-    [InlineData("TASK_PLAN_COMPLETED_NOT_ALLOWED", "journalDate")]
+    [InlineData(ErrorCodes.PlanHasOpenSubtasks, "update_task")]
+    [InlineData(ErrorCodes.ParentCompletedNotAllowed, "update_task")]
+    [InlineData(ErrorCodes.ParentStatusDerived, "update_tasks")]
+    [InlineData(ErrorCodes.PlanCompletedNotAllowed, "journalDate")]
     public void WithGuidance_ForTheNewCodes_NamesAToolOrParameter_AndNoSubtaskId(string code, string expectedName)
     {
         var ex = new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, code, $"Nope. [{code}]");

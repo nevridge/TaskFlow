@@ -11,6 +11,7 @@ using TaskFlow.Api.Models;
 using TaskFlow.Api.Providers;
 using TaskFlow.Api.Repositories;
 using TaskFlow.Api.Validators;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Tests.Controllers.V1;
 

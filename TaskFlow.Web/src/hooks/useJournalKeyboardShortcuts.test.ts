@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createElement } from 'react'
 import { renderHook, act, screen } from '@testing-library/react'
 import { ToastProvider } from '@/context/ToastContext'
+import { CHORD_WINDOW_MS } from '@/lib/keyboard-utils'
 import { useToast } from '@/context/useToast'
 import { useJournalKeyboardShortcuts } from './useJournalKeyboardShortcuts'
 import type { JournalShortcutHandlers } from './useJournalKeyboardShortcuts'
@@ -13,12 +14,17 @@ function makeHandlers(): JournalShortcutHandlers {
     onNewNote: vi.fn(),
     onPrevDay: vi.fn(),
     onNextDay: vi.fn(),
-    onJumpToToday: vi.fn(),
+    onTodoNext: vi.fn(),
+    onTodoPrev: vi.fn(),
+    onTodoOpen: vi.fn(),
+    onTodoToggle: vi.fn(),
   }
 }
 
 function fireKey(key: string, options: KeyboardEventInit = {}) {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...options }))
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options })
+  ;(document.activeElement ?? document.body).dispatchEvent(event)
+  return event
 }
 
 describe('useJournalKeyboardShortcuts', () => {
@@ -64,10 +70,43 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNextDay).toHaveBeenCalledOnce()
   })
 
-  it('fires onJumpToToday when j is pressed with no input focused', () => {
+  it('maps j, k, e and c to the todo handlers', () => {
     renderHook(() => useJournalKeyboardShortcuts(handlers))
     fireKey('j')
-    expect(handlers.onJumpToToday).toHaveBeenCalledOnce()
+    fireKey('k')
+    fireKey('e')
+    fireKey('c')
+    expect(handlers.onTodoNext).toHaveBeenCalledOnce()
+    expect(handlers.onTodoPrev).toHaveBeenCalledOnce()
+    expect(handlers.onTodoOpen).toHaveBeenCalledOnce()
+    expect(handlers.onTodoToggle).toHaveBeenCalledOnce()
+  })
+
+  it('allows j and k to repeat but ignores a held e or c', () => {
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    fireKey('j', { repeat: true })
+    fireKey('k', { repeat: true })
+    fireKey('e', { repeat: true })
+    fireKey('c', { repeat: true })
+    expect(handlers.onTodoNext).toHaveBeenCalledOnce()
+    expect(handlers.onTodoPrev).toHaveBeenCalledOnce()
+    expect(handlers.onTodoOpen).not.toHaveBeenCalled()
+    expect(handlers.onTodoToggle).not.toHaveBeenCalled()
+  })
+
+  it('only prevents the default when the handler acted', () => {
+    vi.mocked(handlers.onTodoNext).mockReturnValue(false)
+    vi.mocked(handlers.onTodoOpen).mockReturnValue(true)
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    expect(fireKey('j').defaultPrevented).toBe(false)
+    expect(fireKey('e').defaultPrevented).toBe(true)
+    expect(fireKey('t').defaultPrevented).toBe(true)
+  })
+
+  it('never binds Space or Enter', () => {
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    expect(fireKey(' ').defaultPrevented).toBe(false)
+    expect(fireKey('Enter').defaultPrevented).toBe(false)
   })
 
   it('does not fire shortcuts when an input is focused', () => {
@@ -82,13 +121,19 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('[')
     fireKey(']')
     fireKey('j')
+    fireKey('k')
+    fireKey('e')
+    fireKey('c')
 
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
     expect(handlers.onNewLog).not.toHaveBeenCalled()
     expect(handlers.onNewNote).not.toHaveBeenCalled()
     expect(handlers.onPrevDay).not.toHaveBeenCalled()
     expect(handlers.onNextDay).not.toHaveBeenCalled()
-    expect(handlers.onJumpToToday).not.toHaveBeenCalled()
+    expect(handlers.onTodoNext).not.toHaveBeenCalled()
+    expect(handlers.onTodoPrev).not.toHaveBeenCalled()
+    expect(handlers.onTodoOpen).not.toHaveBeenCalled()
+    expect(handlers.onTodoToggle).not.toHaveBeenCalled()
   })
 
   it('still fires l and n when a role=button edit trigger or a Save button is focused', () => {
@@ -126,8 +171,10 @@ describe('useJournalKeyboardShortcuts', () => {
     fireKey('j', { ctrlKey: true })
     fireKey('j', { altKey: true })
     fireKey('j', { metaKey: true })
+    fireKey('c', { ctrlKey: true })
     expect(handlers.onNewTodo).not.toHaveBeenCalled()
-    expect(handlers.onJumpToToday).not.toHaveBeenCalled()
+    expect(handlers.onTodoNext).not.toHaveBeenCalled()
+    expect(handlers.onTodoToggle).not.toHaveBeenCalled()
   })
 
   it('does not start a chord when g is pressed', () => {
@@ -139,6 +186,100 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNewNote).not.toHaveBeenCalled()
     expect(handlers.onPrevDay).not.toHaveBeenCalled()
     expect(handlers.onNextDay).not.toHaveBeenCalled()
+  })
+
+  it.each(['t', 'l', 'n', '[', ']', 'j', 'k', 'e', 'c'])('is silent for %s inside a dialog or with a modal open', key => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const inside = document.createElement('button')
+    dialog.appendChild(inside)
+    document.body.appendChild(dialog)
+    inside.focus()
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+
+    expect(fireKey(key).defaultPrevented).toBe(false)
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.focus()
+    expect(fireKey(key).defaultPrevented).toBe(false)
+    dialog.remove()
+    const drawer = document.createElement('div')
+    drawer.className = 'settings-drawer is-open'
+    document.body.appendChild(drawer)
+    expect(fireKey(key).defaultPrevented).toBe(false)
+    drawer.remove()
+    // Works again once closed.
+    expect(fireKey(key).defaultPrevented).toBe(true)
+  })
+
+  it('is silent when contentEditable or a select has focus', () => {
+    const editable = document.createElement('div')
+    editable.tabIndex = 0
+    Object.defineProperty(editable, 'isContentEditable', { value: true })
+    const select = document.createElement('select')
+    document.body.append(editable, select)
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    editable.focus()
+    fireKey('j')
+    select.focus()
+    fireKey('c')
+    expect(handlers.onTodoNext).not.toHaveBeenCalled()
+    expect(handlers.onTodoToggle).not.toHaveBeenCalled()
+  })
+
+  describe('g chord', () => {
+    beforeEach(() => {
+      renderHook(() => useJournalKeyboardShortcuts(handlers))
+    })
+
+    it.each(['t', 'l', 'n', '[', ']', 'j', 'k', 'e', 'c'])('the key %s right after g does nothing', key => {
+      fireKey('g')
+      fireKey(key)
+      for (const handler of Object.values(handlers)) expect(handler).not.toHaveBeenCalled()
+    })
+
+    it('a later key works once the chord is consumed', () => {
+      fireKey('g')
+      fireKey('t')
+      fireKey('t')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+    })
+
+    it('works again after the chord window passes', () => {
+      fireKey('g')
+      vi.advanceTimersByTime(CHORD_WINDOW_MS + 1)
+      fireKey('j')
+      expect(handlers.onTodoNext).toHaveBeenCalledOnce()
+    })
+
+    it('still belongs to the chord at the end of the window', () => {
+      fireKey('g')
+      vi.advanceTimersByTime(CHORD_WINDOW_MS)
+      fireKey('j')
+      expect(handlers.onTodoNext).not.toHaveBeenCalled()
+    })
+
+    it('an unrelated key after g cancels it, so the next key acts', () => {
+      fireKey('g')
+      fireKey('x')
+      fireKey('t')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+    })
+
+    it('g typed in an input does not arm the chord', () => {
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+      fireKey('g')
+      input.blur()
+      fireKey('t')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+    })
+
+    it.each([{ ctrlKey: true }, { altKey: true }, { metaKey: true }])('g with %o does not arm the chord', mods => {
+      fireKey('g', mods)
+      fireKey('t')
+      expect(handlers.onNewTodo).toHaveBeenCalledOnce()
+    })
   })
 
   it('removes the keydown listener on unmount', () => {
@@ -181,7 +322,7 @@ describe('useJournalKeyboardShortcuts', () => {
       expect(handlers.onNewTodo).toHaveBeenCalledOnce()
       expect(handlers.onNewLog).toHaveBeenCalledOnce()
       expect(handlers.onNewNote).toHaveBeenCalledOnce()
-      expect(handlers.onJumpToToday).toHaveBeenCalledOnce()
+      expect(handlers.onTodoNext).toHaveBeenCalledOnce()
       expect(handlers.onPrevDay).toHaveBeenCalledOnce()
       expect(handlers.onNextDay).toHaveBeenCalledOnce()
     })
@@ -193,7 +334,7 @@ describe('useJournalKeyboardShortcuts', () => {
       expect(handlers.onNewTodo).not.toHaveBeenCalled()
       expect(handlers.onNewLog).not.toHaveBeenCalled()
       expect(handlers.onNewNote).not.toHaveBeenCalled()
-      expect(handlers.onJumpToToday).not.toHaveBeenCalled()
+      expect(handlers.onTodoNext).not.toHaveBeenCalled()
       expect(handlers.onPrevDay).not.toHaveBeenCalled()
       expect(handlers.onNextDay).not.toHaveBeenCalled()
       // Shortcuts keep working afterwards.

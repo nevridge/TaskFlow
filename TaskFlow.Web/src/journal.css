@@ -345,7 +345,7 @@
   border-color: var(--accent);
   color: #fff;
 }
-/* The title is a <button> (tap/Enter/Space to edit): reset it to look like plain text.
+/* The title is a <button> (click/tap/Enter/Space to open): reset it to look like plain text.
    Scoped .journal-page .todo-text (0-2-0) to beat `.journal-page button` (0-1-1). */
 .journal-page .todo-text {
   flex: 1;
@@ -359,7 +359,7 @@
   border: 0;
   padding: 0;
   text-align: left;
-  cursor: text;
+  cursor: pointer;
 }
 .journal-page .todo-text:focus-visible {
   outline: 2px solid var(--accent);
@@ -367,6 +367,12 @@
   border-radius: 3px;
 }
 .card.todos:focus { outline: none; }
+/* The whole row opens the todo; controls keep their own cursors. */
+.journal-page .todo[data-todo-row] { cursor: pointer; }
+/* Row focus tint (#468): a subtle background when anything in the row has keyboard focus, so j/k position is
+   easy to find. Extends the story's out-of-scope "selected-row styling" by owner decision. The title ring
+   above stays the primary indicator; without :has() support only the ring shows. */
+.journal-page .todo[data-todo-row]:has(:focus-visible) { background: var(--hover-soft); }
 .journal-page .todo-id {
   flex: none;
   min-width: var(--todo-id-w);
@@ -381,17 +387,6 @@
   text-decoration: line-through;
   text-decoration-color: var(--muted-2);
   text-decoration-thickness: 1.5px;
-}
-.todo-edit {
-  flex: 1;
-  border: 0;
-  border-bottom: 1.5px solid var(--accent);
-  background: transparent;
-  outline: none;
-  padding: 2px 0;
-  font-size: 14.5px;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 .journal-page .todo-x,
 .journal-page .todo-history,
@@ -553,7 +548,7 @@
   line-height: 1.45;
   cursor: text;
 }
-/* Inline editor for the log text, in place of .log-text (same look as .todo-edit). */
+/* Inline editor for the log text, in place of .log-text. */
 .journal-page .log-edit {
   min-width: 0;
   width: 100%;
@@ -956,12 +951,6 @@
     align-items: center;
     gap: 8px;
   }
-  .journal-page .todo-edit {
-    flex: 1 1 0;
-    width: 100%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
 
   /* Log row on two lines. Line 1: time, text, delete. Line 2: task chip and relink typeahead, under the text.
      .log-body stops generating a box so its children place directly on the entry grid. */
@@ -1282,7 +1271,7 @@
 }
 
 /* Touch. Declared LAST so it wins over the desktop rules above on hybrid devices: a touchscreen laptop
-   with a mouse matches `(pointer: coarse)` too, and gets always-visible actions and tap-to-edit (accepted).
+   with a mouse matches `(pointer: coarse)` too, and gets always-visible actions and tap-to-open (accepted).
    There is no hover to reveal anything, so history, block and delete are always visible with 44px hit areas
    at least 8px apart (delete gets 16px). Interaction and sizing live here, never in the width-only blocks. */
 @media (hover: none), (pointer: coarse) {
@@ -1297,6 +1286,11 @@
   .journal-page .todo-subline-actions { gap: 8px; }
   .journal-page .todo-x { margin-left: 8px; }
   .journal-page .todo { --todo-gap: 14px; }
+  /* Pressed feedback for tapping a row open (the tint replaces the default tap flash). */
+  .journal-page .todo[data-todo-row] {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .journal-page .todo[data-todo-row]:active { background: var(--hover-soft); }
 
   /* Check: 44x44 hit area. Absolute insets are measured from the PADDING box, so the 1.5px border is added
      to the inset: 18px box -> 15px padding box + 2 * 14.5px = 44px (15px child -> 12px + 2 * 16px = 44px).

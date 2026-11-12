@@ -555,6 +555,16 @@ describe('TaskDetailPage', () => {
       expect(titleBox()).toHaveFocus()
     })
 
+    it('Edit click selects the whole title so typing replaces it (#468)', async () => {
+      mockTask({ title: 'Rename me' })
+      renderPage()
+      await userEvent.click(editBtn())
+      const box = titleBox() as HTMLInputElement
+      expect(box).toHaveFocus()
+      expect(box.selectionStart).toBe(0)
+      expect(box.selectionEnd).toBe('Rename me'.length)
+    })
+
     it('Cancel closes the form and focuses the Edit button', async () => {
       renderPage()
       await userEvent.click(editBtn())
@@ -679,7 +689,10 @@ describe('TaskDetailPage', () => {
         onNewNote: spies.journal,
         onPrevDay: spies.journal,
         onNextDay: spies.journal,
-        onJumpToToday: spies.journal,
+        onTodoNext: spies.journal,
+        onTodoPrev: spies.journal,
+        onTodoOpen: spies.journal,
+        onTodoToggle: spies.journal,
       })
       return null
     }

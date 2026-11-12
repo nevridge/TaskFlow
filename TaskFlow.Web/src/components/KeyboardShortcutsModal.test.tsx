@@ -36,14 +36,19 @@ describe('KeyboardShortcutsModal', () => {
     expect(screen.getByText('Focus notes')).toBeInTheDocument()
   })
 
-  it('renders the j shortcut in the Journal — Actions group', () => {
+  it('lists the todo keys in the Journal — Actions group and no longer j for today', () => {
     renderModal()
-    expect(screen.getByText('Go to today')).toBeInTheDocument()
-    const journalActionsGroup = screen.getByText('Journal — Actions').closest('.kb-group')
-    expect(journalActionsGroup).not.toBeNull()
-    const kbds = journalActionsGroup!.querySelectorAll('kbd')
-    const jKbd = Array.from(kbds).find(kbd => kbd.textContent === 'j')
-    expect(jKbd).toBeDefined()
+    const group = screen.getByText('Journal — Actions').closest('.kb-group') as HTMLElement
+    expect(group).not.toBeNull()
+    const keys = Array.from(group.querySelectorAll('kbd')).map(kbd => kbd.textContent)
+    expect(keys).toEqual(expect.arrayContaining(['j / k', 'e', 'c']))
+    expect(keys).not.toContain('j')
+    expect(screen.getByText('Move between todos')).toBeInTheDocument()
+    expect(screen.getByText('Open todo (when a todo is focused)')).toBeInTheDocument()
+    expect(screen.getByText('Toggle complete (when a todo is focused)')).toBeInTheDocument()
+    // Go to today is the global g h chord only.
+    expect(screen.getAllByText('Go to today (home)')).toHaveLength(1)
+    expect(screen.queryByText('Go to today')).not.toBeInTheDocument()
   })
 
   it('renders the Inputs — All Pages group with Esc shortcut', () => {

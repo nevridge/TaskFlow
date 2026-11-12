@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, within, fireEvent, waitFor } from '@testing-library/react'
 import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
+import { useLocation } from 'react-router-dom'
 import type { TaskItemResponseDto } from '@/api/journal'
 import { __resetCoarsePointerCache } from '@/lib/pointer'
 
@@ -63,156 +65,109 @@ function setTouch(touch: boolean) {
   __resetCoarsePointerCache()
 }
 
-const renderSection = () => render(<TodosSection entryId={10} isoDate="2026-05-28" sort="manual" />)
+// Every location the router visits. The section stays mounted here (no routes), so its focus-return effect adds a
+// replace entry without the query string after a navigation: tests look for the full path, not the last entry.
+const seen: { visits: { path: string; state: unknown }[] } = { visits: [] }
+function Probe() {
+  const l = useLocation()
+  useEffect(() => {
+    seen.visits.push({ path: l.pathname + l.search, state: l.state })
+  }, [l])
+  return null
+}
+const sectionUi = () => (
+  <>
+    <Probe />
+    <TodosSection entryId={10} isoDate="2026-05-28" sort="manual" />
+  </>
+)
+const renderSection = () => render(sectionUi())
+const opens = () => seen.visits.filter(v => v.path === opened.path)
 const titleButton = (name = 'Write tests') => screen.getByRole('button', { name })
+const opened = { path: '/tasks/1?edit=1', state: { from: '/journal/05-28-2026', focusTaskId: 1 } }
 
-describe('TodosSection title tap-to-edit', () => {
+describe('TodosSection row click opens the todo (#468)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetCoarsePointerCache()
+    seen.visits = []
     load([row({})])
   })
   afterEach(() => {
     Reflect.deleteProperty(window, 'matchMedia')
     __resetCoarsePointerCache()
+    window.getSelection()?.removeAllRanges()
     document.body.innerHTML = ''
   })
 
-  it('renders the title as button.edit-trigger.todo-text', () => {
+  it('renders the title as a plain button with no edit-trigger affordance', () => {
     renderSection()
     const btn = titleButton()
-    expect(btn.tagName).toBe('BUTTON')
-    expect(btn).toHaveClass('edit-trigger', 'todo-text')
+    expect(btn).toHaveClass('todo-text')
+    expect(btn).not.toHaveClass('edit-trigger')
     expect(btn).toHaveAttribute('type', 'button')
+    expect(btn).toHaveAttribute('data-todo-title', '1')
   })
 
-  it('touch: a single tap enters edit mode once, even for a double-tap', async () => {
-    setTouch(true)
+  it.each([
+    ['empty row space', () => document.querySelector('li.todo') as HTMLElement],
+    ['the meta line', () => document.querySelector('.todo-subline-meta') as HTMLElement],
+    ['the #id', () => screen.getByLabelText('Task 1')],
+  ])('clicking %s opens the edit page with the journal origin', async (_name, target) => {
     renderSection()
-    await userEvent.dblClick(titleButton())
-    expect(screen.getAllByDisplayValue('Write tests')).toHaveLength(1)
+    await userEvent.click(target())
+    expect(opens()).toHaveLength(1)
+    expect(opens()[0].state).toEqual(opened.state)
   })
 
-  it('desktop: a single click does nothing and a double-click edits', async () => {
-    setTouch(false)
+  it.each([true, false])('a title click navigates exactly once (touch=%s)', async touch => {
+    setTouch(touch)
     renderSection()
     await userEvent.click(titleButton())
-    expect(screen.queryByDisplayValue('Write tests')).not.toBeInTheDocument()
-    await userEvent.dblClick(titleButton())
-    expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
+    // Exactly one navigation: the title handler and the row handler must not both fire.
+    expect(opens()).toHaveLength(1)
   })
 
-  it.each([true, false])('Enter and Space on the focused title edit (touch=%s)', async touch => {
-    setTouch(touch)
+  it('Enter and Space on the focused title open the todo', async () => {
     renderSection()
     titleButton().focus()
     await userEvent.keyboard('{Enter}')
-    expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
-    await userEvent.keyboard('{Escape}')
+    expect(opens()).toHaveLength(1)
     titleButton().focus()
     await userEvent.keyboard(' ')
-    expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
+    expect(opens()).toHaveLength(2)
   })
 
-  it('tapping the check or a row button does not enter edit mode', async () => {
-    setTouch(true)
+  it('double-clicking the title opens the todo and never an inline editor or a PATCH', async () => {
+    renderSection()
+    await userEvent.dblClick(titleButton())
+    expect(document.querySelector('.todo-edit')).toBeNull()
+    expect(editTodoMutate).not.toHaveBeenCalled()
+  })
+
+  it('the controls act for themselves and do not open the todo', async () => {
     renderSection()
     await userEvent.click(screen.getByRole('button', { name: 'Mark done' }))
     await userEvent.click(screen.getByRole('button', { name: 'History' }))
     await userEvent.click(screen.getByRole('button', { name: 'Close' }))
     await userEvent.click(screen.getByRole('button', { name: 'Block' }))
-    expect(document.querySelector('.todo-edit')).toBeNull()
+    expect(toggleTodoMutate).toHaveBeenCalledOnce()
+    expect(opens()).toHaveLength(0)
   })
 
-  it('Enter saves exactly once even with a following blur, and focus returns to the title', async () => {
-    setTouch(false)
+  it('a click while text is selected does not navigate; a plain click after clearing does', () => {
     renderSection()
-    await userEvent.dblClick(titleButton())
-    const input = screen.getByDisplayValue('Write tests')
-    await userEvent.clear(input)
-    await userEvent.type(input, '  New title {Enter}')
-    fireEvent.blur(input)
-    expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'New title' }, expect.any(Object))
-    await waitFor(() => expect(titleButton()).toHaveFocus())
-  })
-
-  it('Enter on a row that then re-sorts (non-manual sort) still ends with focus on that title', async () => {
-    setTouch(false)
-    const alpha = row({ id: 1, title: 'Alpha' })
-    const beta = row({ id: 2, title: 'Beta' })
-    load([alpha, beta])
-    const view = render(<TodosSection entryId={10} isoDate="2026-05-28" sort="open first" />)
-    await userEvent.dblClick(titleButton('Alpha'))
-    await userEvent.type(screen.getByDisplayValue('Alpha'), '{Enter}')
-    // The optimistic update lands after the Enter: Alpha becomes Completed and moves below Beta.
-    load([{ ...alpha, status: 'Completed' } as TaskItemResponseDto, beta])
-    view.rerender(<TodosSection entryId={10} isoDate="2026-05-28" sort="open first" />)
-    const titles = Array.from(document.querySelectorAll('[data-todo-title]')).map(el => el.textContent)
-    expect(titles).toEqual(['Beta', 'Alpha'])
-    await waitFor(() => expect(titleButton('Alpha')).toHaveFocus())
-  })
-
-  it('a newer title focus request wins over a pending check focus request on another row', async () => {
-    setTouch(false)
-    load([row({ id: 1, title: 'Alpha' }), row({ id: 2, title: 'Waiting', status: 'Blocked', blockedReason: 'r' })])
-    renderSection()
-    // Unblock requests focus on row 2's check; the later Enter on row 1 then requests focus on its title.
-    fireEvent.click(screen.getByRole('button', { name: 'Unblock task' }))
-    await userEvent.dblClick(titleButton('Alpha'))
-    await userEvent.type(screen.getByDisplayValue('Alpha'), '{Enter}')
-    await waitFor(() => expect(titleButton('Alpha')).toHaveFocus())
-    await new Promise(r => setTimeout(r, 150))
-    expect(titleButton('Alpha')).toHaveFocus()
-  })
-
-  it('Escape then blur does not save, and focus returns to the title', async () => {
-    setTouch(false)
-    renderSection()
-    await userEvent.dblClick(titleButton())
-    const input = screen.getByDisplayValue('Write tests')
-    await userEvent.type(input, ' changed{Escape}')
-    fireEvent.blur(input)
-    expect(editTodoMutate).not.toHaveBeenCalled()
-    await waitFor(() => expect(titleButton()).toHaveFocus())
-  })
-
-  it('blur commits once when neither Enter nor Escape fired', async () => {
-    setTouch(true)
-    renderSection()
-    await userEvent.click(titleButton())
-    await userEvent.type(screen.getByDisplayValue('Write tests'), '!')
-    await userEvent.click(screen.getByPlaceholderText('Add a TODO and press Enter'))
-    expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests!' }, expect.any(Object))
-  })
-
-  it('an empty or whitespace title is not saved', async () => {
-    setTouch(false)
-    renderSection()
-    await userEvent.dblClick(titleButton())
-    const input = screen.getByDisplayValue('Write tests')
-    await userEvent.clear(input)
-    await userEvent.type(input, '   {Enter}')
-    expect(editTodoMutate).not.toHaveBeenCalled()
-    expect(titleButton()).toBeInTheDocument()
-  })
-
-  it('a second edit after a cancelled one can still save (guard resets)', async () => {
-    setTouch(false)
-    renderSection()
-    await userEvent.dblClick(titleButton())
-    await userEvent.keyboard('{Escape}')
-    await userEvent.dblClick(titleButton())
-    await userEvent.type(screen.getByDisplayValue('Write tests'), '2{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 1, title: 'Write tests2' }, expect.any(Object))
-  })
-
-  it('the edit input asks for a Done key on soft keyboards', async () => {
-    setTouch(true)
-    renderSection()
-    await userEvent.click(titleButton())
-    expect(screen.getByDisplayValue('Write tests')).toHaveAttribute('enterkeyhint', 'done')
+    const meta = document.querySelector('.todo-subline-meta') as HTMLElement
+    const range = document.createRange()
+    range.selectNodeContents(titleButton())
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+    fireEvent.click(meta)
+    fireEvent.click(titleButton())
+    expect(opens()).toHaveLength(0)
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(meta)
+    expect(opens()).toHaveLength(1)
   })
 
   it('Enter in the add input still adds the todo', async () => {
@@ -425,7 +380,7 @@ describe('TodosSection history sheet', () => {
     const { rerender } = renderSection()
     await openSheet()
     load([])
-    rerender(<TodosSection entryId={10} isoDate="2026-05-28" sort="manual" />)
+    rerender(sectionUi())
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(document.querySelector('section.todos')).toHaveFocus()

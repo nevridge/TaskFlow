@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect, useRef, forwardRef, useImperativeHandle }
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
-import { useTapToEdit } from '@/hooks/useTapToEdit'
 import { removeJournalTodo } from '@/api/journal'
 import type { TaskItemResponseDto } from '@/api/journal'
 import type { SortMode } from '@/lib/prefs'
@@ -22,7 +21,6 @@ import {
   useJournalTodos,
   useCreateTodoMutation,
   useToggleTodoMutation,
-  useEditTodoMutation,
   useBlockTodoMutation,
   useUnblockTodoMutation,
   useEditBlockedReasonTodoMutation,
@@ -71,6 +69,9 @@ function truncateTitle(title: string): string {
   return title.length > MAX_TOAST_TITLE ? `${title.slice(0, MAX_TOAST_TITLE)}…` : title
 }
 
+// A click on any of these acts for itself and never opens the todo.
+const ROW_CONTROLS = 'button, a, input, textarea, select, [data-row-no-nav]'
+
 const todoKey = (entryId: number, id: number | string | undefined) => `todo:${entryId}:${id}`
 
 const DeleteSvg = () => (
@@ -79,29 +80,20 @@ const DeleteSvg = () => (
   </svg>
 )
 
-/** Title as a text-like button: tap (touch), double-click (mouse) or Enter/Space (keyboard) starts editing. */
-function TodoTitle({ id, title, onEdit }: { id: number; title: string; onEdit: () => void }) {
-  const tap = useTapToEdit(onEdit)
-  return (
-    <button
-      type="button"
-      {...tap}
-      className={`todo-text ${tap.className}`}
-      data-todo-title={id}
-    >
-      {title}
-    </button>
-  )
-}
-
 interface Props {
   entryId: number
   isoDate: string
   sort: SortMode
 }
 
+/** The todo methods return whether they acted, so the keyboard hook only swallows keys that did something. */
 export interface TodosSectionHandle {
   focusDraftInput: () => void
+  focusFirstTodo: () => boolean
+  focusLastTodo: () => boolean
+  focusAdjacentTodo: (dir: 'next' | 'prev') => boolean
+  openFocusedTodo: () => boolean
+  toggleFocusedTodo: () => boolean
 }
 
 export const TodosSection = forwardRef<TodosSectionHandle, Props>(function TodosSection({ entryId, isoDate, sort }, ref) {
@@ -116,7 +108,6 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
 
   const createTodo = useCreateTodoMutation(entryId, isoDate)
   const toggleTodo = useToggleTodoMutation(entryId, isoDate)
-  const editTodo = useEditTodoMutation(entryId)
   const blockTodo = useBlockTodoMutation(entryId)
   const unblockTodo = useUnblockTodoMutation(entryId)
   const editReason = useEditBlockedReasonTodoMutation(entryId)
@@ -166,22 +157,36 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }
 
   const [draft, setDraft] = useState('')
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editingText, setEditingText] = useState('')
-  const editingIdRef = useRef<number | null>(null)
-  useEffect(() => {
-    editingIdRef.current = editingId
-  })
   const [actionError, setActionError] = useState<string | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskItemResponseDto | null>(null)
   const historyCloseRef = useRef<HTMLButtonElement | null>(null)
   const modalRef = useRef<HTMLDivElement>(null)
   const draftInputRef = useRef<HTMLInputElement>(null)
-  // Set once the title edit has been committed or cancelled, so a following blur does nothing.
-  const committedRef = useRef(false)
 
   useImperativeHandle(ref, () => ({
     focusDraftInput: () => draftInputRef.current?.focus(),
+    focusFirstTodo: () => focusTitleAt('first'),
+    focusLastTodo: () => focusTitleAt('last'),
+    focusAdjacentTodo,
+    openFocusedTodo: () => {
+      const id = focusedRowId()
+      if (id == null) return false
+      openTodo(id)
+      return true
+    },
+    toggleFocusedTodo: () => {
+      const row = focusedRow()
+      const check = row?.querySelector<HTMLButtonElement>('[data-todo-check]')
+      // A reopen-blocked check is disabled: it does nothing, same as clicking it.
+      if (!row || !check || check.disabled) return false
+      // Re-sorting a row can drop focus: ask for it back on the same control.
+      const active = document.activeElement
+      const id = Number(row.dataset.todoRow)
+      if (active instanceof HTMLElement && active.hasAttribute('data-todo-title')) requestFocus(id, 'title')
+      else if (active === check) requestFocus(id, 'check')
+      check.click()
+      return true
+    },
   }))
 
   // Declared before the effect that moves focus into the sheet, so the opener is captured first.
@@ -295,13 +300,74 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     )
   }
 
-  /** If the row's check button has focus, hands it to the next row's check (previous, else the add input). */
+  /** Opens the todo on its edit page, unless the user is selecting text (a drag-select must not navigate). */
+  function openTodo(id: number) {
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed) return
+    navigate(taskEditPath(id), { state: { from: originPath, focusTaskId: id } })
+  }
+
+  function focusedRow(): HTMLElement | null {
+    const active = document.activeElement
+    const section = sectionRef.current
+    if (!(active instanceof HTMLElement) || !section) return null
+    const row = active.closest<HTMLElement>('[data-todo-row]')
+    return row && section.contains(row) ? row : null
+  }
+
+  function focusedRowId(): number | null {
+    const row = focusedRow()
+    return row ? Number(row.dataset.todoRow) : null
+  }
+
+  function titles(): HTMLElement[] {
+    return Array.from(sectionRef.current?.querySelectorAll<HTMLElement>('[data-todo-title]') ?? [])
+  }
+
+  function focusTitle(el: HTMLElement): boolean {
+    // A fast keypress supersedes a pending focus request (the section's capture handler only sees keys inside it).
+    pendingFocus.current = null
+    returnFocusRef.current = null
+    el.focus()
+    return true
+  }
+
+  function focusTitleAt(which: 'first' | 'last'): boolean {
+    const all = titles()
+    const target = which === 'first' ? all[0] : all[all.length - 1]
+    return target ? focusTitle(target) : false
+  }
+
+  /** j / k: relative to the focused element. Rows' titles in DOM order, headers skipped, ends clamp. */
+  function focusAdjacentTodo(dir: 'next' | 'prev'): boolean {
+    const all = titles()
+    if (all.length === 0) return false
+    const active = document.activeElement
+    const list = sectionRef.current?.querySelector('.todo-list')
+    if (!(active instanceof HTMLElement) || !list || !list.contains(active)) {
+      return focusTitleAt(dir === 'next' ? 'first' : 'last')
+    }
+    const own = focusedRow()?.querySelector<HTMLElement>('[data-todo-title]')
+    let target: HTMLElement | undefined
+    if (own) {
+      target = all[all.indexOf(own) + (dir === 'next' ? 1 : -1)]
+    } else if (dir === 'next') {
+      target = all.find(t => active.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)
+    } else {
+      target = [...all].reverse().find(t => active.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_PRECEDING)
+    }
+    // At either end there is nowhere to go: stay put.
+    return target ? focusTitle(target) : true
+  }
+
+  /** If the row's check button or title has focus, hands it to the same control on the next row (previous, else the add input). */
   function moveFocusAwayFrom(id: number) {
     const section = sectionRef.current
-    const button = section?.querySelector<HTMLElement>(`[data-todo-check="${id}"]`)
+    const kind = document.activeElement?.hasAttribute('data-todo-title') ? 'title' : 'check'
+    const button = section?.querySelector<HTMLElement>(`[data-todo-${kind}="${id}"]`)
     if (!section || !button || document.activeElement !== button) return
     const row = button.closest('li')
-    const checks = Array.from(section.querySelectorAll<HTMLElement>('[data-todo-check]'))
+    const checks = Array.from(section.querySelectorAll<HTMLElement>(`[data-todo-${kind}]`))
     const at = checks.indexOf(button)
     const usable = (el: HTMLElement) => !(el as HTMLButtonElement).disabled && !row?.contains(el)
     const target =
@@ -366,41 +432,6 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     requestFocus(id, 'check')
     if (reason === (todo.blockedReason ?? '')) return
     editReason.mutate({ id, reason }, { onError: err => setActionError(getTaskActionErrorMessage(err)) })
-  }
-
-  function startEdit(todo: TaskItemResponseDto) {
-    committedRef.current = false
-    setEditingId(Number(todo.id))
-    setEditingText(todo.title ?? '')
-  }
-
-  function finishEdit(via: 'enter' | 'escape' | 'blur') {
-    if (committedRef.current || editingId == null) return
-    committedRef.current = true
-    const id = editingId
-    const text = editingText.trim()
-    if (via !== 'escape' && text) {
-      setActionError(null)
-      editTodo.mutate(
-        { id, title: text },
-        {
-          onError: err => {
-            // Re-open the editor with the typed text so nothing is lost, unless another edit has started since.
-            if (editingIdRef.current == null) {
-              committedRef.current = false
-              setEditingId(id)
-              setEditingText(text)
-            }
-            setActionError(getTaskActionErrorMessage(err))
-          },
-        },
-      )
-    }
-    setEditingId(null)
-    setEditingText('')
-    // Enter and Escape return focus to the title; a blur leaves focus where the user put it. Deferred so the
-    // still-pending keypress of this Enter cannot land on the freshly mounted title button and re-activate it.
-    if (via !== 'blur') window.setTimeout(() => requestFocus(id, 'title'), 0)
   }
 
   /** Hides the row at once and removes it from the day after the undo window. */
@@ -474,22 +505,14 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           <span className="todo-id" aria-label={`Task ${td.id}`} role="img">#{td.id}</span>
         )}
 
-        {editingId === id ? (
-          <input
-            className="todo-edit"
-            value={editingText}
-            autoFocus
-            enterKeyHint="done"
-            onChange={e => setEditingText(e.target.value)}
-            onBlur={() => finishEdit('blur')}
-            onKeyDown={e => {
-              if (e.key === 'Enter') finishEdit('enter')
-              if (e.key === 'Escape') finishEdit('escape')
-            }}
-          />
-        ) : (
-          <TodoTitle id={id} title={td.title ?? ''} onEdit={() => startEdit(td)} />
-        )}
+        <button
+          type="button"
+          className="todo-text"
+          data-todo-title={id}
+          onClick={() => openTodo(id)}
+        >
+          {td.title ?? ''}
+        </button>
 
         {/* Two lines on phones (actions left, badges right). Above 480px .todo-subline and .todo-subline-actions are
             display: contents, while .todo-subline-meta is a display: flex full-width line beneath the title. */}
@@ -656,8 +679,15 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
               ? [renderContextHeader(block.header)]
               : []),
             ...block.rows.map(td => (
+              // The whole row opens the todo on click. It is not focusable itself: the title button is the keyboard and
+              // screen-reader equivalent, so a row role or tab stop would only duplicate it.
               <li
                 key={td.id}
+                data-todo-row={td.id}
+                onClick={e => {
+                  if (e.target instanceof Element && e.target.closest(ROW_CONTROLS)) return
+                  openTodo(Number(td.id))
+                }}
                 className={
                   'todo' +
                   // Subtask rows keep the compact .todo-child sizing; .todo-in-group adds the indent and rule.

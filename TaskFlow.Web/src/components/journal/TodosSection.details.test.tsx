@@ -147,58 +147,57 @@ describe('TodosSection details link (#404)', () => {
     expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026' })
   })
 
-  it('does not navigate when the title is double-clicked (inline edit still opens)', async () => {
-    renderAt()
-    const before = probe.seen.key
-    await userEvent.dblClick(screen.getByRole('button', { name: 'Write tests' }))
-    expect(probe.seen.key).toBe(before)
-    expect(document.querySelector('input.todo-edit')).not.toBeNull()
-  })
-
-  describe('title keeps its edit gestures and never navigates (AC6)', () => {
+  describe('row and title open the edit page (#468)', () => {
     const titleButton = () => screen.getByRole('button', { name: 'Write tests' })
 
-    function expectEditingWithoutNavigation(before: string) {
-      const input = document.querySelector('input.todo-edit')
-      expect(input).not.toBeNull()
-      expect(input).toHaveFocus()
-      expect(probe.seen.pathname).toBe('/journal/11-07-2026')
-      expect(probe.seen.key).toBe(before)
+    function expectOpened() {
+      expect(probe.seen.pathname).toBe('/tasks/5')
+      expect(probe.seen.search).toBe('?edit=1')
+      expect(probe.seen.state).toEqual({ from: '/journal/11-07-2026', focusTaskId: 5 })
     }
 
-    it('Enter on the focused title opens inline edit', async () => {
+    it('a title click opens the todo', async () => {
       renderAt()
-      const before = probe.seen.key
+      await userEvent.click(titleButton())
+      expectOpened()
+    })
+
+    it('Enter on the focused title opens the todo', async () => {
+      renderAt()
       titleButton().focus()
       await userEvent.keyboard('{Enter}')
-      expectEditingWithoutNavigation(before)
+      expectOpened()
     })
 
-    it('Space on the focused title opens inline edit', async () => {
+    it('Space on the focused title opens the todo', async () => {
       renderAt()
-      const before = probe.seen.key
       titleButton().focus()
       await userEvent.keyboard(' ')
-      expectEditingWithoutNavigation(before)
+      expectOpened()
     })
 
-    it('a single tap on touch opens inline edit', () => {
+    it('a touch tap on the title opens the todo and no inline editor appears', () => {
       vi.stubGlobal('matchMedia', (query: string) => ({
         matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
         addListener: vi.fn(), removeListener: vi.fn(), onchange: null, dispatchEvent: vi.fn(),
       }))
       __resetCoarsePointerCache()
       renderAt()
-      const before = probe.seen.key
       fireEvent.pointerDown(titleButton(), { pointerType: 'touch' })
       fireEvent.click(titleButton(), { detail: 1 })
-      expectEditingWithoutNavigation(before)
+      expectOpened()
+      expect(document.querySelector('input.todo-edit')).toBeNull()
     })
 
-    it('a single mouse click does not open inline edit', async () => {
+    it('a tap on empty row space opens the todo', () => {
       renderAt()
-      await userEvent.click(titleButton())
-      expect(document.querySelector('input.todo-edit')).toBeNull()
+      fireEvent.click(document.querySelector('.todo-subline-meta') as HTMLElement)
+      expectOpened()
+    })
+
+    it('the history button does not open the todo', async () => {
+      renderAt()
+      await userEvent.click(screen.getByRole('button', { name: 'History' }))
       expect(probe.seen.pathname).toBe('/journal/11-07-2026')
     })
   })

@@ -572,8 +572,9 @@ describe('TaskTypeahead', () => {
       expect(input.selectionStart).toBe(input.selectionEnd)
     }
 
-    // Real timers: RTL's async helpers hang under vitest fake timers. Waits past the delayed value update.
-    const settle = () => act(async () => { await new Promise(r => setTimeout(r, 80)) })
+    // Deterministic stand-in for the async save: the test decides when the new value lands (no timers).
+    type Gate = { apply?: () => void }
+    const release = (gate: Gate) => act(async () => { gate.apply?.() })
 
     // Sync stand-in for the add form: value lands in the same render as the choice.
     function Controlled({ onChange, initial = null }: { onChange: (id: number | null) => void; initial?: number | null }) {
@@ -589,14 +590,15 @@ describe('TaskTypeahead', () => {
       )
     }
 
-    // Row-picker stand-in: value lands later (or never, for a rolled-back save).
+    // Row-picker stand-in: the choice is recorded in `gate` and lands only when the test calls `release(gate)`
+    // (never, for a rolled-back save).
     function DelayedControlled({
       onChange,
-      delayMs = 30,
+      gate,
       apply = true,
     }: {
       onChange: (id: number | null) => void
-      delayMs?: number
+      gate: Gate
       apply?: boolean
     }) {
       const [value, setValue] = useState<number | null>(2)
@@ -605,7 +607,7 @@ describe('TaskTypeahead', () => {
           value={value}
           onChange={id => {
             onChange(id)
-            if (apply) setTimeout(() => setValue(id), delayMs)
+            if (apply) gate.apply = () => setValue(id)
           }}
         />
       )
@@ -669,12 +671,13 @@ describe('TaskTypeahead', () => {
 
     it('selects the new title once a delayed value arrives, not the old one (AC 5)', async () => {
       const user = userEvent.setup({ delay: null })
-      render(<DelayedControlled onChange={vi.fn()} delayMs={30} />)
+      const gate: Gate = {}
+      render(<DelayedControlled onChange={vi.fn()} gate={gate} />)
       await chooseDeploy(user, true)
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
       expect(getInput()).toHaveValue('Write tests')
       expectNotSelected()
-      await settle()
+      await release(gate)
       expectSelected(DEPLOY)
       await user.keyboard('x')
       expect(getInput()).toHaveValue('x')
@@ -682,20 +685,22 @@ describe('TaskTypeahead', () => {
 
     it('a keystroke while the update is pending clears the request: nothing selected when the title arrives', async () => {
       const user = userEvent.setup({ delay: null })
-      render(<DelayedControlled onChange={vi.fn()} delayMs={30} />)
+      const gate: Gate = {}
+      render(<DelayedControlled onChange={vi.fn()} gate={gate} />)
       await chooseDeploy(user, true)
       await user.keyboard('z')
       expect(getInput()).toHaveValue('Write testsz') // old title shown, character appended as before
-      await settle()
+      await release(gate)
       expect(getInput()).toHaveValue('Write testsz')
       expectNotSelected()
     })
 
     it('a rolled-back save selects nothing stale and leaves typing and ArrowDown normal', async () => {
       const user = userEvent.setup({ delay: null })
-      render(<DelayedControlled onChange={vi.fn()} apply={false} />)
+      const gate: Gate = {}
+      render(<DelayedControlled onChange={vi.fn()} gate={gate} apply={false} />)
       await chooseDeploy(user, true)
-      await settle()
+      await release(gate) // nothing was recorded: the save is rolled back
       expect(getInput()).toHaveValue('Write tests')
       expectNotSelected()
       await user.keyboard('{ArrowDown}')

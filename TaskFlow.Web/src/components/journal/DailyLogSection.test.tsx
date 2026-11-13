@@ -318,6 +318,28 @@ describe('DailyLogSection', () => {
         }
       })
 
+      it('focuses the input once the add has settled, even though it was disabled when onSuccess ran', async () => {
+        const first = { ...baseEntry, id: 1 }
+        const { rerender } = renderSection([first])
+        const options = await submit('slow')
+        const mutation = (isPending: boolean) =>
+          vi.mocked(useAddLogEntryMutation).mockReturnValue({ mutate: addLogMutate, isPending } as never)
+        try {
+          // While the add is pending the field is disabled, so focus() in onSuccess cannot take effect.
+          mutation(true)
+          rerender(<DailyLogSection entryId={10} logEntries={[first]} />)
+          expect(screen.getByRole('textbox')).toBeDisabled()
+          act(() => options.onSuccess())
+          // Browsers ignore focus() on a disabled field (jsdom does not), so drop focus as they would.
+          ;(document.activeElement as HTMLElement).blur()
+          mutation(false)
+          rerender(<DailyLogSection entryId={10} logEntries={[first]} />)
+          expect(screen.getByRole('textbox')).toHaveFocus()
+        } finally {
+          vi.mocked(useAddLogEntryMutation).mockReturnValue({ mutate: addLogMutate, isPending: false } as never)
+        }
+      })
+
       it('does not leave the scroll pending when the refetch landed before onSuccess', async () => {
         const first = { ...baseEntry, id: 1 }
         const { rerender } = renderSection([first])

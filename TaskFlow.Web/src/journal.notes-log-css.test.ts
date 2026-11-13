@@ -167,6 +167,12 @@ describe('journal notes, log and typeahead styles', () => {
       expect(override).toBeGreaterThan(base)
     })
 
+    it('keeps the list out of the card height, and gives the phone layout its natural height back', () => {
+      // Basis 0: a long log must not make the card taller than a short one (Notes stays put).
+      expect(rule('.log-scroll')).toMatch(/flex:\s*1 1 0(px)?;/)
+      expect(inBlock(mediaBlock(STACKED_QUERY), '.log-scroll')).toMatch(/flex:\s*1 1 auto/)
+    })
+
     it('leaves .log-list (shared with the notes list) uncapped', () => {
       expect(rule('.log-list')).not.toMatch(/max-height|overflow/)
     })

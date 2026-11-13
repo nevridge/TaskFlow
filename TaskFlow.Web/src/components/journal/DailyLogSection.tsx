@@ -67,6 +67,9 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   const scrollRef = useRef<HTMLDivElement>(null)
   // Set after a successful add until the new newest entry has rendered and the list has been scrolled to the top.
   const scrollToTopPending = useRef(false)
+  // The input is disabled while an add is pending (desktop), and focus() on a disabled field does nothing, so
+  // the focus the callbacks ask for is repeated once the mutation has settled and the field is enabled again.
+  const refocusInput = useRef(false)
   const stacked = useStackedLayout()
   // Latest props for event handlers: a relink and a text edit are both full-row PUTs, so each must send the
   // other field's current value, not one captured when the row rendered.
@@ -95,6 +98,13 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     scrollRef.current.scrollTop = 0
     scrollToTopPending.current = false
   }, [newestId])
+
+  const addPending = addLog.isPending
+  useEffect(() => {
+    if (addPending || !refocusInput.current) return
+    refocusInput.current = false
+    inputRef.current?.focus()
+  }, [addPending])
 
   // The region stops being focusable when the layout stacks; keep focus from dropping to the page.
   useLayoutEffect(() => {
@@ -127,6 +137,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
           // has already run, so a flag set now would only fire on some later, unrelated change.
           scrollToTopPending.current = logEntriesRef.current[0]?.id === newestAtSubmit
           if (scrollRef.current) scrollRef.current.scrollTop = 0
+          refocusInput.current = true
           inputRef.current?.focus()
         },
         // Put the text and link back if the save failed, unless something was typed since
@@ -135,6 +146,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
           setDraft(current => current || text)
           if (!draftRef.current) {
             setDraftTaskItemId(linkedTaskId)
+            refocusInput.current = true
             inputRef.current?.focus()
           }
         },

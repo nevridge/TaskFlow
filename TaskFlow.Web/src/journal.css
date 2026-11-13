@@ -522,7 +522,9 @@
 /* Scrolls the Daily Log list inside its card. Wraps the list because NotesSection shares .log-list. Capped only
    * above the stacked-layout width; the 820px block below lifts the cap so phones never get a nested scroller. */
 .log-scroll {
-  flex: 1 1 auto;
+  /* Basis 0 keeps the list out of the card's height: the card stays at its normal height however long the log is
+     (so Notes does not move) and the list fills what is left, up to the cap. */
+  flex: 1 1 0;
   min-height: 0;
   max-height: 60vh;
   overflow-y: auto;
@@ -909,7 +911,7 @@
   .hdr-date-block { text-align: left; }
 
   .card { min-height: 0; }
-  .log-scroll { max-height: none; overflow-y: visible; }
+  .log-scroll { flex: 1 1 auto; max-height: none; overflow-y: visible; }
   .journal-page {
     padding-inline: var(--page-pad);
     padding-bottom: 80px;

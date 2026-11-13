@@ -748,6 +748,18 @@ describe('TasksPage', () => {
       expect(screen.queryByText('Open today')).not.toBeInTheDocument()
     })
 
+    it('a completed task with no completedAt and no linked day is in no date chip but is in All', async () => {
+      useRows([row(9, 'Orphan done', { status: 'Completed', completedAt: null, currentJournalDate: null })])
+      renderPage()
+      for (const name of ['Active today', 'Scheduled future', 'Completed history']) {
+        await chip(name)
+        expect(screen.queryByText('Orphan done')).not.toBeInTheDocument()
+      }
+      await chip('All')
+      await expandSection('Completed')
+      expect(screen.getByText('Orphan done')).toBeInTheDocument()
+    })
+
     it('All shows both the Completed and Planned for badges', async () => {
       useRows(rows)
       renderPage()

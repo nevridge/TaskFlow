@@ -80,6 +80,15 @@ describe('completedDayOf / journalDayOf (#472)', () => {
   it('accepts a lowercase stored status', () => {
     expect(completedDayOf({ ...done, status: 'completed' }, 0)).toBe('2026-06-04')
   })
+
+  it('reads a completedAt without a zone suffix as UTC (story edge case)', () => {
+    expect(completedDayOf({ ...done, completedAt: '2026-06-05T02:00:00' }, -300)).toBe('2026-06-04')
+    expect(completedDayOf({ ...done, completedAt: '2026-06-05T02:00:00' }, 0)).toBe('2026-06-05')
+  })
+
+  it('has no day for a task with no status, completion or link', () => {
+    expect(journalDayOf({}, 0)).toBeNull()
+  })
 })
 
 describe('journal-utils date parsing', () => {

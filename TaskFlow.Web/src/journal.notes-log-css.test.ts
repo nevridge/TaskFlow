@@ -160,6 +160,13 @@ describe('journal notes, log and typeahead styles', () => {
       expect(journalCss).not.toMatch(/min-width:\s*821px/)
     })
 
+    it('declares the stacked-layout override after the base .log-scroll rule so it wins the cascade', () => {
+      const base = journalCss.indexOf('.log-scroll {')
+      const override = journalCss.indexOf(`@media ${STACKED_QUERY} {`)
+      expect(base).toBeGreaterThan(-1)
+      expect(override).toBeGreaterThan(base)
+    })
+
     it('leaves .log-list (shared with the notes list) uncapped', () => {
       expect(rule('.log-list')).not.toMatch(/max-height|overflow/)
     })

@@ -170,6 +170,15 @@ describe('DailyLogSection', () => {
       expect(texts()).toEqual(['two', 'one'])
     })
 
+    it('orders by absolute instant when createdAt carries different UTC offsets', () => {
+      // 10:00+02:00 is 08:00Z, earlier than 09:00Z even though its clock text is later.
+      renderSection([
+        entry(1, 'earlier', '2026-05-28T10:00:00+02:00'),
+        entry(2, 'later', '2026-05-28T09:00:00Z'),
+      ])
+      expect(texts()).toEqual(['later', 'earlier'])
+    })
+
     it('does not reorder the array it was given', () => {
       const input = [entry(1, 'a', '2026-05-28T09:00:00Z'), entry(2, 'b', '2026-05-28T10:00:00Z')]
       renderSection(input)

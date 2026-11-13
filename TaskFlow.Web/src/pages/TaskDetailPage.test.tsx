@@ -871,6 +871,15 @@ describe('TaskDetailPage', () => {
       expect(editBtn()).toHaveFocus()
     })
 
+    it('editing and saving from read mode lands on Edit and never refocuses the heading', async () => {
+      render(tree())
+      const counter = countHeadingFocus()
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(editBtn()).toHaveFocus())
+      expect(counter.count).toBe(0)
+    })
+
     it('navigating to another task focuses its heading once; refetch does not refocus', () => {
       perIdTasks()
       const counter = countHeadingFocus()

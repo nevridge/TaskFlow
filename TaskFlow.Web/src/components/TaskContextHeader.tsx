@@ -38,7 +38,7 @@ export function TaskContextHeader({ path, parentId, anchor, sectionLabel, isAddi
                 <span aria-hidden="true" className="t-context-sep">{' › '}</span>
               </span>
             ))}
-            <Link to={`/tasks/${parentId}`} state={linkState} className="t-context-link">{nearestTitle}</Link>
+            <Link to={`/tasks/${parentId}`} state={linkState} className="t-context-link" data-task-header-id={parentId}>{nearestTitle}</Link>
           </span>
           {progressLabel && <span className="t-context-progress">{progressLabel}</span>}
           <button

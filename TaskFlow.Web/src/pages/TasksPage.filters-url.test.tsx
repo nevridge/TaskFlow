@@ -94,7 +94,7 @@ function renderPage(entries: string[] = ['/tasks'], index?: number) {
 }
 
 const useData = (data: unknown[]) =>
-  vi.mocked(useTasksQuery).mockReturnValue({ data: { data }, isLoading: false, error: null } as never)
+  vi.mocked(useTasksQuery).mockReturnValue({ data: { data }, isLoading: false, isFetching: false, error: null } as never)
 const searchBox = () => screen.getByPlaceholderText('Search title or #id…')
 const where = () => screen.getByTestId('location').textContent
 const titles = () => Array.from(document.querySelectorAll('.t-task-link')).map(a => a.textContent)
@@ -208,19 +208,19 @@ describe('TasksPage filters in the URL (#469)', () => {
     renderPage(['/tasks?q=foo&status=todo'])
     await userEvent.click(screen.getByRole('button', { name: 'Edit Foo one' }))
     expect(screen.getByTestId('detail-path')).toHaveTextContent('/tasks/1?edit=1')
-    expect(detailState()).toEqual({ from: '/tasks?q=foo&status=todo' })
+    expect(detailState()).toEqual({ from: '/tasks?q=foo&status=todo', focusTaskId: 1 })
   })
 
   it('the title link carries the filtered list as origin state (AC2)', async () => {
     renderPage(['/tasks?q=foo&status=todo'])
     await userEvent.click(screen.getByRole('link', { name: 'Foo one' }))
-    expect(detailState()).toEqual({ from: '/tasks?q=foo&status=todo' })
+    expect(detailState()).toEqual({ from: '/tasks?q=foo&status=todo', focusTaskId: 1 })
   })
 
   it('a list with no filters carries /tasks as origin', async () => {
     renderPage(['/tasks'])
     await userEvent.click(screen.getByRole('link', { name: 'Bar three' }))
-    expect(detailState()).toEqual({ from: '/tasks' })
+    expect(detailState()).toEqual({ from: '/tasks', focusTaskId: 3 })
   })
 
   it('the parent link in a context header carries the origin state (AC3)', async () => {
@@ -228,7 +228,7 @@ describe('TasksPage filters in the URL (#469)', () => {
     renderPage(['/tasks?q=child'])
     await userEvent.click(screen.getByRole('link', { name: 'Parent task' }))
     expect(screen.getByTestId('detail-path')).toHaveTextContent('/tasks/10')
-    expect(detailState()).toEqual({ from: '/tasks?q=child' })
+    expect(detailState()).toEqual({ from: '/tasks?q=child', focusTaskId: 10 })
   })
 
   it('browser Back from detail restores the typed search and rows', async () => {

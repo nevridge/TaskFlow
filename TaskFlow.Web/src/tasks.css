@@ -1078,6 +1078,12 @@ html.is-dark .t-input option { background: var(--paper); }
    (about 48px plus the iOS safe-area inset) and a small gap. Manual check: no clipping under the nav. */
 .tasks-page .t-edit-panel { scroll-margin-top: calc(64px + env(safe-area-inset-top)); }
 
+/* Returning from a task's detail page focuses one of these controls (#479). Native focus() honours the focused
+   element's own scroll-margin, not its ancestors', so the room for the sticky .app-nav goes on the targets. */
+.tasks-page [data-task-edit-id],
+.tasks-page [data-task-header-id],
+.tasks-page [data-section-toggle] { scroll-margin-top: calc(64px + env(safe-area-inset-top)); }
+
 .tasks-page .t-history-subtitle { overflow-wrap: anywhere; }
 
 /* 481-820px: keep the table; overflow scrolls inside the list container, never the page. */

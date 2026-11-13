@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildTaskSections,
   findSectionOfTask,
+  findSectionShowingTask,
   getOpenParentIds,
   indexTasksById,
   matchesSearchWithAncestors,
@@ -300,5 +301,22 @@ describe('getOpenParentIds', () => {
   it('ignores rows without a parent and returns an empty set for nothing visible', () => {
     expect(getOpenParentIds([task(1, 'Todo')]).size).toBe(0)
     expect(getOpenParentIds([]).size).toBe(0)
+  })
+})
+
+describe('findSectionShowingTask', () => {
+  it('finds a work row, a header-only parent, the first of several sections, and nothing for an absent id', () => {
+    const all = [
+      t(1, 'Parent', 'Todo', 'High'),
+      t(2, 'Low child', 'Todo', 'Low', 1),
+      t(3, 'High child', 'Todo', 'High', 1),
+      t(4, 'Solo', 'Completed', 'High'),
+    ]
+    const sections = build(all)
+    expect(findSectionShowingTask(sections, 4)?.key).toBe('completed')
+    expect(findSectionShowingTask(sections, 2)?.key).toBe('low')
+    // The parent has no row; it heads blocks in both high and low, and high comes first.
+    expect(findSectionShowingTask(sections, 1)?.key).toBe('high')
+    expect(findSectionShowingTask(sections, 99)).toBeUndefined()
   })
 })

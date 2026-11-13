@@ -215,6 +215,17 @@ export function buildTaskSections<T extends SectionTaskLike>({
   return sections
 }
 
+/** The first section (in display order) showing the task as a work row or as a context header's parent, if any. */
+export function findSectionShowingTask<T extends SectionTaskLike>(
+  sections: readonly TaskSection<T>[],
+  id: number,
+): TaskSection<T> | undefined {
+  const order = (key: SectionKey) => SECTION_ORDER.indexOf(key)
+  return [...sections]
+    .sort((a, b) => order(a.key) - order(b.key))
+    .find(s => s.blocks.some(b => b.header?.parentId === id || b.rows.some(r => toId(r.id) === id)))
+}
+
 /** The section holding the task as a work row, if any. */
 export function findSectionOfTask<T extends SectionTaskLike>(
   sections: readonly TaskSection<T>[],

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay, getTimezoneOffsetMinutes, isReopenBlocked, isCompletedHere, userDayOf, parseApiTimestamp } from './journal-utils'
+import { urlDateToISO, isValidISODate, todayISO, formatTime, prevWeekday, addWeekdays, dayWeekWeekdaysOnly, dayWeek, formatMonthDay, getTimezoneOffsetMinutes, isReopenBlocked, isCompletedHere, completedDayOf, journalDayOf, userDayOf, parseApiTimestamp } from './journal-utils'
 
 describe('isReopenBlocked / isCompletedHere (#350 mirror)', () => {
   const NOW = Date.parse('2026-06-05T15:00:00Z')
@@ -48,6 +48,37 @@ describe('isReopenBlocked / isCompletedHere (#350 mirror)', () => {
     expect(isCompletedHere(done('2026-06-06T02:00:00Z'), '2026-06-06', -300)).toBe(false)
     expect(isCompletedHere(done(null, '2026-06-05'), '2026-06-05', 0)).toBe(false)
     expect(isCompletedHere({ status: 'Todo', completedAt: '2026-06-05T12:00:00Z' }, '2026-06-05', 0)).toBe(false)
+  })
+})
+
+describe('completedDayOf / journalDayOf (#472)', () => {
+  const done = { status: 'Completed', completedAt: '2026-06-04T12:00:00Z', currentJournalDate: '2026-06-01' }
+
+  it('uses the completedAt day for a stored-Completed task, not the linked day', () => {
+    expect(completedDayOf(done, 0)).toBe('2026-06-04')
+    expect(journalDayOf(done, 0)).toBe('2026-06-04')
+  })
+
+  it('is null without completedAt or with an unparseable one; journalDayOf then uses the linked day', () => {
+    expect(completedDayOf({ ...done, completedAt: null }, 0)).toBeNull()
+    expect(completedDayOf({ ...done, completedAt: 'garbage' }, 0)).toBeNull()
+    expect(journalDayOf({ ...done, completedAt: null }, 0)).toBe('2026-06-01')
+  })
+
+  it('ignores completedAt on a task that is not stored Completed', () => {
+    expect(completedDayOf({ ...done, status: 'Todo' }, 0)).toBeNull()
+    expect(journalDayOf({ ...done, status: 'Blocked' }, 0)).toBe('2026-06-01')
+    expect(journalDayOf({ status: 'Todo', completedAt: null, currentJournalDate: null }, 0)).toBeNull()
+  })
+
+  it('applies the offset: 23:30 at UTC-5 is the same user day, 02:00 UTC at UTC-5 is the previous day', () => {
+    expect(completedDayOf({ ...done, completedAt: '2026-06-05T04:30:00Z' }, -300)).toBe('2026-06-04')
+    expect(completedDayOf({ ...done, completedAt: '2026-06-05T02:00:00Z' }, -300)).toBe('2026-06-04')
+    expect(completedDayOf({ ...done, completedAt: '2026-06-04T23:30:00Z' }, 60)).toBe('2026-06-05')
+  })
+
+  it('accepts a lowercase stored status', () => {
+    expect(completedDayOf({ ...done, status: 'completed' }, 0)).toBe('2026-06-04')
   })
 })
 

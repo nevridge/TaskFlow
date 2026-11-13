@@ -691,6 +691,103 @@ describe('TasksPage', () => {
     })
   })
 
+  describe('view chips file completed tasks by completion day (#472)', () => {
+    // Thursday; the test TZ is UTC so the browser offset is 0.
+    const TODAY = '2026-11-12'
+    const row = (id: number, title: string, extra: Record<string, unknown>) => ({ ...baseTask, id, title, ...extra })
+    const useRows = (rows: unknown[]) =>
+      vi.mocked(useTasksQuery).mockReturnValue({ data: { data: rows }, isLoading: false, error: null } as never)
+    const chip = (name: string) => userEvent.click(screen.getByRole('button', { name }))
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date('2026-11-12T12:00:00Z'))
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    const rows = [
+      row(1, 'Open today', { status: 'Todo', currentJournalDate: TODAY }),
+      row(2, 'Open future', { status: 'Todo', currentJournalDate: '2026-11-20' }),
+      row(3, 'Done today, linked earlier', { status: 'Completed', completedAt: '2026-11-12T09:00:00Z', currentJournalDate: '2026-11-05' }),
+      row(4, 'Done yesterday, linked future', { status: 'Completed', completedAt: '2026-11-11T09:00:00Z', currentJournalDate: '2026-11-20' }),
+      row(5, 'Done no link', { status: 'Completed', completedAt: '2026-11-03T09:00:00Z', currentJournalDate: null }),
+      row(6, 'Done no completedAt, linked past', { status: 'Completed', currentJournalDate: '2026-11-02' }),
+      row(7, 'Done no completedAt, linked future', { status: 'Completed', currentJournalDate: '2026-11-20' }),
+    ]
+
+    it('Active today holds open tasks linked today and no completed ones', async () => {
+      useRows(rows)
+      renderPage()
+      await chip('Active today')
+      expect(screen.getByText('Open today')).toBeInTheDocument()
+      expect(screen.queryByText('Done today, linked earlier')).not.toBeInTheDocument()
+      expect(screen.queryByText('Open future')).not.toBeInTheDocument()
+    })
+
+    it('Scheduled future never lists completed tasks, even ones linked to a future day', async () => {
+      useRows(rows)
+      renderPage()
+      await chip('Scheduled future')
+      expect(screen.getByText('Open future')).toBeInTheDocument()
+      expect(screen.queryByText('Done yesterday, linked future')).not.toBeInTheDocument()
+      expect(screen.queryByText('Done no completedAt, linked future')).not.toBeInTheDocument()
+    })
+
+    it('Completed history lists tasks completed today (<=) and by completion day, falling back to a past linked day', async () => {
+      useRows(rows)
+      renderPage()
+      await chip('Completed history')
+      await expandSection('Completed')
+      expect(screen.getByText('Done today, linked earlier')).toBeInTheDocument()
+      expect(screen.getByText('Done yesterday, linked future')).toBeInTheDocument()
+      expect(screen.getByText('Done no link')).toBeInTheDocument()
+      expect(screen.getByText('Done no completedAt, linked past')).toBeInTheDocument()
+      expect(screen.queryByText('Done no completedAt, linked future')).not.toBeInTheDocument()
+      expect(screen.queryByText('Open today')).not.toBeInTheDocument()
+    })
+
+    it('All shows both the Completed and Planned for badges', async () => {
+      useRows(rows)
+      renderPage()
+      await expandSection('Completed')
+      expect(within(rowFor('Done today, linked earlier')).getByText('Completed Nov 12')).toBeInTheDocument()
+      expect(within(rowFor('Open future')).getByText('Planned for Nov 20')).toBeInTheDocument()
+      expect(within(rowFor('Done no completedAt, linked past')).queryByText(/^Planned for|^Completed [A-Z]/)).toBeNull()
+    })
+
+    it('a Blocked task with stored Completed and completedAt counts as not completed, filed by its linked day', async () => {
+      useRows([row(8, 'Blocked one', { status: 'Blocked', completedAt: '2026-11-01T09:00:00Z', currentJournalDate: TODAY })])
+      renderPage()
+      await chip('Completed history')
+      expect(screen.queryByText('Blocked one')).not.toBeInTheDocument()
+      await chip('Active today')
+      await expandSection('Blocked')
+      expect(screen.getByText('Blocked one')).toBeInTheDocument()
+    })
+
+    it('completing a task moves it from Active today to Completed history, and reopening moves it back', async () => {
+      useRows([row(1, 'Mover', { status: 'InProgress', currentJournalDate: TODAY })])
+      const view = renderPage()
+      await chip('Active today')
+      expect(screen.getByText('Mover')).toBeInTheDocument()
+
+      useRows([row(1, 'Mover', { status: 'Completed', completedAt: '2026-11-12T10:00:00Z', currentJournalDate: TODAY })])
+      view.rerender(page())
+      expect(screen.queryByText('Mover')).not.toBeInTheDocument()
+      await chip('Completed history')
+      await expandSection('Completed')
+      expect(screen.getByText('Mover')).toBeInTheDocument()
+
+      useRows([row(1, 'Mover', { status: 'Todo', completedAt: null, currentJournalDate: TODAY })])
+      view.rerender(page())
+      expect(screen.queryByText('Mover')).not.toBeInTheDocument()
+      await chip('Active today')
+      expect(screen.getByText('Mover')).toBeInTheDocument()
+    })
+  })
+
   describe('create and edit forms', () => {
     it('create passes the chosen projectId to the create mutation', async () => {
       renderPage()

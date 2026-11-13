@@ -219,6 +219,42 @@ describe('TaskDetailPage', () => {
     expect(screen.queryByText(/Started:/)).not.toBeInTheDocument()
   })
 
+  describe('Completed / Assigned day line (#472)', () => {
+    it('shows "Completed:" with the completedAt day instead of Assigned for a Completed task', () => {
+      mockTask({ status: 'Completed', completedAt: '2026-11-10T15:00:00Z', currentJournalDate: '2026-11-01' })
+      renderPage()
+      expect(screen.getByText(/Completed:/)).toHaveTextContent('Completed: 11-10-2026')
+      expect(screen.queryByText(/Assigned:/)).not.toBeInTheDocument()
+    })
+
+    it('shows "Assigned:" for an open task with a linked day', () => {
+      mockTask({ status: 'Todo', currentJournalDate: '2026-11-01' })
+      renderPage()
+      expect(screen.getByText(/Assigned:/)).toHaveTextContent('Assigned: 11-1-2026')
+      expect(screen.queryByText(/Completed:/)).not.toBeInTheDocument()
+    })
+
+    it('falls back to "Assigned:" for a Completed task with no completedAt', () => {
+      mockTask({ status: 'Completed', completedAt: null, currentJournalDate: '2026-11-01' })
+      renderPage()
+      expect(screen.getByText(/Assigned:/)).toBeInTheDocument()
+      expect(screen.queryByText(/Completed:/)).not.toBeInTheDocument()
+    })
+
+    it('shows neither for an unlinked task without a completion day', () => {
+      mockTask({ status: 'Todo', currentJournalDate: null })
+      renderPage()
+      expect(screen.queryByText(/Assigned:/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Completed:/)).not.toBeInTheDocument()
+    })
+
+    it('shows neither for a Blocked task with a stale completedAt and no linked day', () => {
+      mockTask({ status: 'Blocked', completedAt: '2026-11-10T15:00:00Z', currentJournalDate: null })
+      renderPage()
+      expect(screen.queryByText(/Completed:/)).not.toBeInTheDocument()
+    })
+  })
+
   it('shows "Due:" followed by an em dash when there is no due date', () => {
     renderPage()
     const strong = screen.getByText('—', { selector: 'strong' })

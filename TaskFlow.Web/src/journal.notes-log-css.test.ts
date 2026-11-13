@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { STACKED_QUERY } from '@/hooks/useStackedLayout'
 
 // A variable (not a literal) so Vite does not rewrite `new URL('./x', import.meta.url)` into an asset import.
 const read = (name: string) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf-8')
@@ -140,6 +141,48 @@ describe('journal notes, log and typeahead styles', () => {
     it('wraps the notes add form so the actions take their own line inside it', () => {
       expect(rule('.journal-page .note-actions')).toMatch(/flex:\s*0 0 100%/)
       expect(journalCss).toMatch(/\.notes-section \.add-row \{ flex-wrap: wrap; \}/)
+    })
+  })
+
+  describe('daily log scroll region', () => {
+    it('caps the log list at 60vh and scrolls it inside the card', () => {
+      const r = rule('.log-scroll')
+      expect(r).toMatch(/max-height:\s*60vh/)
+      expect(r).toMatch(/overflow-y:\s*auto/)
+      expect(r).toMatch(/min-height:\s*0/)
+    })
+
+    it('lifts the cap in the same media query the stacked-layout hook uses', () => {
+      const r = inBlock(mediaBlock(STACKED_QUERY), '.log-scroll')
+      expect(r).toMatch(/max-height:\s*none/)
+      expect(r).toMatch(/overflow-y:\s*visible/)
+      // No second, drifting boundary for the cap.
+      expect(journalCss).not.toMatch(/min-width:\s*821px/)
+    })
+
+    it('declares the stacked-layout override after the base .log-scroll rule so it wins the cascade', () => {
+      const base = journalCss.indexOf('.log-scroll {')
+      const override = journalCss.indexOf(`@media ${STACKED_QUERY} {`)
+      expect(base).toBeGreaterThan(-1)
+      expect(override).toBeGreaterThan(base)
+    })
+
+    it('keeps the list out of the card height, and gives the phone layout its natural height back', () => {
+      // Basis 0: a long log must not make the card taller than a short one (Notes stays put).
+      expect(rule('.log-scroll')).toMatch(/flex:\s*1 1 0(px)?;/)
+      expect(inBlock(mediaBlock(STACKED_QUERY), '.log-scroll')).toMatch(/flex:\s*1 1 auto/)
+    })
+
+    it('leaves .log-list (shared with the notes list) uncapped', () => {
+      expect(rule('.log-list')).not.toMatch(/max-height|overflow/)
+    })
+
+    it('puts no top margin on the add row that now sits above the list', () => {
+      expect(rule('.add-row.log-add-row')).toMatch(/margin-top:\s*0/)
+    })
+
+    it('shows a focus ring on the keyboard-focusable region', () => {
+      expect(journalCss).toMatch(/\.journal-page \.log-scroll:focus-visible \{[^}]*outline:\s*2px solid var\(--accent\)/)
     })
   })
 

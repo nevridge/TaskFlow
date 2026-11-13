@@ -53,7 +53,7 @@ describe('DailyLogSection with the real update mutation', () => {
     // Focusing the typeahead blurs the edit input, which commits the text.
     fireEvent.blur(screen.getByRole('textbox', { name: 'Edit log entry' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Fixed the bug!' })).toBeInTheDocument())
-    await userEvent.click(screen.getAllByTestId('task-typeahead')[0])
+    await userEvent.click(screen.getAllByTestId('task-typeahead')[1])
     await waitFor(() => expect(journalApi.updateLogEntry).toHaveBeenCalledTimes(2))
     expect(journalApi.updateLogEntry).toHaveBeenNthCalledWith(1, 10, 1, 'Fixed the bug!', 7)
     expect(journalApi.updateLogEntry).toHaveBeenNthCalledWith(2, 10, 1, 'Fixed the bug!', 99)

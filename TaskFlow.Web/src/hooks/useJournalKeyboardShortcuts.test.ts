@@ -153,6 +153,17 @@ describe('useJournalKeyboardShortcuts', () => {
     expect(handlers.onNewNote).toHaveBeenCalledOnce()
   })
 
+  it('still fires l when the focusable Daily log scroll region is focused', () => {
+    const region = document.createElement('div')
+    region.setAttribute('role', 'region')
+    region.tabIndex = 0
+    document.body.append(region)
+    renderHook(() => useJournalKeyboardShortcuts(handlers))
+    region.focus()
+    fireKey('l')
+    expect(handlers.onNewLog).toHaveBeenCalledOnce()
+  })
+
   it('does not fire shortcuts when a textarea is focused', () => {
     const ta = document.createElement('textarea')
     document.body.appendChild(ta)

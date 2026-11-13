@@ -73,7 +73,10 @@ function Harness() {
     onNewNote,
     onPrevDay: vi.fn(),
     onNextDay: vi.fn(),
-    onJumpToToday: vi.fn(),
+    onTodoNext: vi.fn(),
+    onTodoPrev: vi.fn(),
+    onTodoOpen: vi.fn(),
+    onTodoToggle: vi.fn(),
   })
   return (
     <>

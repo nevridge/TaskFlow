@@ -140,43 +140,6 @@ describe('TodosSection', () => {
     expect(toggleTodoMutate).toHaveBeenCalledWith({ id: 2, done: false }, expect.any(Object))
   })
 
-  it('renaming a completed todo sends only id and title (no status)', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Fix bug'))
-    const editInput = screen.getByDisplayValue('Fix bug')
-    await userEvent.clear(editInput)
-    await userEvent.type(editInput, 'Fix bug properly')
-    await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledTimes(1)
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 2, title: 'Fix bug properly' }, expect.any(Object))
-    expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('status')
-  })
-
-  it('renaming a subtask sends only id and title (no parentTaskItemId)', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: family }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Sub A'))
-    const editInput = screen.getByDisplayValue('Sub A')
-    await userEvent.clear(editInput)
-    await userEvent.type(editInput, 'Sub B')
-    await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub B' }, expect.any(Object))
-    expect(editTodoMutate.mock.calls[0][0]).not.toHaveProperty('parentTaskItemId')
-  })
-
-  it('renaming a subtask whose parent is not in the loaded list (shown top-level) sends no parentTaskItemId', async () => {
-    // The child is not nested under any loaded todo, so the old code could not look it up and sent parentTaskItemId: null
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [childTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Sub A'))
-    const editInput = screen.getByDisplayValue('Sub A')
-    await userEvent.clear(editInput)
-    await userEvent.type(editInput, 'Sub C')
-    await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith({ id: 99, title: 'Sub C' }, expect.any(Object))
-  })
-
   it('toggle rejected with TASK_REOPEN_PAST_DAY_NOT_ALLOWED shows the past-days message and task stays completed', async () => {
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [doneTodo] }, isLoading: false } as never)
     toggleTodoMutate.mockImplementation((_vars, opts) => opts.onError({ code: 'TASK_REOPEN_PAST_DAY_NOT_ALLOWED' }))
@@ -309,37 +272,6 @@ describe('TodosSection', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
-  it('double-clicking todo text enters edit mode', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Write tests'))
-    const editInput = screen.getByDisplayValue('Write tests')
-    expect(editInput).toBeInTheDocument()
-  })
-
-  it('pressing Enter in edit input calls editTodo.mutate', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Write tests'))
-    const editInput = screen.getByDisplayValue('Write tests')
-    await userEvent.clear(editInput)
-    await userEvent.type(editInput, 'Updated task')
-    await userEvent.keyboard('{Enter}')
-    expect(editTodoMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 1, title: 'Updated task' }),
-      expect.any(Object)
-    )
-  })
-
-  it('pressing Escape in edit input returns to read mode without mutate', async () => {
-    vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Write tests'))
-    await userEvent.keyboard('{Escape}')
-    expect(screen.getByText('Write tests')).toBeInTheDocument()
-    expect(editTodoMutate).not.toHaveBeenCalled()
-  })
-
   it('focusDraftInput() via ref focuses the add input', () => {
     const ref = createRef<TodosSectionHandle>()
     renderSection(undefined, ref)
@@ -387,14 +319,6 @@ describe('TodosSection', () => {
       const id = screen.getByRole('img', { name: 'Task 2' })
       expect(id).toHaveTextContent('#2')
       expect(id.closest('.todo-text')).toBeNull()
-    })
-
-    it('keeps the id while editing and the input holds the title only', async () => {
-      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [openTodo] }, isLoading: false } as never)
-      renderSection()
-      await userEvent.dblClick(screen.getByText('Write tests'))
-      expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
-      expect(screen.getByRole('img', { name: 'Task 1' })).toBeInTheDocument()
     })
 
     it('toggle still works and the id is unchanged', async () => {
@@ -585,15 +509,6 @@ describe('TodosSection', () => {
     const parentBadges = rowBadges('Write tests')!
     expect(parentBadges).toHaveTextContent('low')
     expect(parentBadges).toHaveTextContent('Parent Proj')
-  })
-
-  it('badges stay visible in edit mode', async () => {
-    mockTodos([{ ...openTodo, priority: 'High', projectName: 'Alpha' } as TaskItemResponseDto])
-    renderSection()
-    await userEvent.dblClick(screen.getByText('Write tests'))
-    expect(screen.getByDisplayValue('Write tests')).toBeInTheDocument()
-    expect(screen.getByText('high')).toBeInTheDocument()
-    expect(screen.getByText('Alpha')).toBeInTheDocument()
   })
 
   it('completed row keeps badges outside .todo-text', () => {

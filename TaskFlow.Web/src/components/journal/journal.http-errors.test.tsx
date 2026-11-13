@@ -104,19 +104,6 @@ describe('journal sections against real HTTP errors (#232)', () => {
   })
 
   describe('edit failures (HTTP 500): typed text is kept or the original restored', () => {
-    it('todo edit: shows the error and re-opens the editor with the typed title', async () => {
-      renderWith(<TodosSection entryId={10} isoDate="2099-01-01" sort="manual" />)
-      await screen.findByText('Write tests')
-      await userEvent.dblClick(screen.getByText('Write tests'))
-      const input = screen.getByDisplayValue('Write tests')
-      fireEvent.change(input, { target: { value: 'Write more tests' } })
-      fireEvent.keyDown(input, { key: 'Enter' })
-
-      await waitFor(() => expect(sentMethods()).toContain('PATCH'))
-      expect(await screen.findByRole('alert')).toHaveTextContent('Unable to save task changes')
-      expect(screen.getByDisplayValue('Write more tests')).toBeInTheDocument()
-    })
-
     it('note edit: re-opens the editor with the typed text and keeps the saved note', async () => {
       renderWith(<NotesSection entryId={10} />)
       await userEvent.dblClick(await screen.findByText('A note'))

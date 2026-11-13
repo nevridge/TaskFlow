@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { isEditableTarget, isModalOpen } from '@/lib/keyboard-utils'
 import { ToastContext } from './ToastContextDef'
 import type { PendingDeleteInput, ToastContextValue } from './ToastContextDef'
 
@@ -38,18 +39,6 @@ function clearTimer(entry: Entry) {
     window.clearTimeout(entry.timerId)
     entry.timerId = undefined
   }
-}
-
-function isEditableTarget(el: EventTarget | null): boolean {
-  if (!(el instanceof HTMLElement)) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-}
-
-/** True while a modal dialog or the open settings drawer is on screen. */
-function isModalOpen(target: EventTarget | null): boolean {
-  if (target instanceof Element && target.closest('[role="dialog"]')) return true
-  return !!document.querySelector('[role="dialog"][aria-modal="true"], .settings-drawer.is-open')
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {

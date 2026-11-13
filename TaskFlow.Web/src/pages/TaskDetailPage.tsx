@@ -127,7 +127,11 @@ export function TaskDetailPage() {
   // Title takes focus when the form opens; Edit (remounted) takes it back when the form closes
   // (not while leaving). Background refetches change neither value, so they never re-steal focus.
   useEffect(() => {
-    if (formOpen) titleRef.current?.focus()
+    if (formOpen) {
+      titleRef.current?.focus()
+      // Select the title so typing replaces it: the journal's `e` then rename is one step.
+      titleRef.current?.select()
+    }
     else if (wasEditing.current && taskReady) editButtonRef.current?.focus()
     wasEditing.current = formOpen
   }, [formOpen, taskReady])

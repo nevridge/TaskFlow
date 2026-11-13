@@ -75,7 +75,7 @@ describe('TodosSection details link, touch and optimistic flows (#404)', () => {
     return qc
   }
 
-  it('touch: a single tap on the title opens inline edit and does not navigate', async () => {
+  it('touch: a single tap on the title opens the todo, with no inline editor', async () => {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: true, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
       addListener: vi.fn(), removeListener: vi.fn(), onchange: null, dispatchEvent: vi.fn(),
@@ -85,8 +85,9 @@ describe('TodosSection details link, touch and optimistic flows (#404)', () => {
     const title = await screen.findByRole('button', { name: 'Write tests' })
     fireEvent.pointerDown(title, { pointerType: 'touch' })
     fireEvent.click(title, { detail: 1 })
-    expect(document.querySelector('input.todo-edit')).not.toBeNull()
-    expect(seen.pathname).toBe('/journal/11-07-2026')
+    expect(document.querySelector('input.todo-edit')).toBeNull()
+    expect(seen.pathname).toBe('/tasks/5')
+    expect(seen.search).toBe('?edit=1')
   })
 
   it('touch: tapping the details link navigates', async () => {

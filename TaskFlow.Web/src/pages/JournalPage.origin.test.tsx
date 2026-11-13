@@ -5,7 +5,6 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ToastProvider } from '@/context/ToastContext'
 import type { TaskItemResponseDto } from '@/api/journal'
-import { todayUrlDate } from '@/lib/journal-utils'
 
 // Real JournalPage + real TodosSection + real router: the details link, shortcuts and weekend redirect together (#404).
 vi.mock('@/hooks/useJournal', () => ({
@@ -159,10 +158,15 @@ describe('JournalPage with the details link (#404)', () => {
       expect(seen.pathname).toBe('/journal/12-14-2099')
     })
 
-    it('j jumps to today', () => {
+    it('j moves focus to the next row title and k back, without navigating', () => {
+      vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [task(4, 'Before'), task(5, 'Write tests'), task(6, 'After')] }, isLoading: false } as never)
       const link = focusLink()
       fireEvent.keyDown(link, { key: 'j' })
-      expect(seen.pathname).toBe(`/journal/${todayUrlDate()}`)
+      expect(document.querySelector('[data-todo-title="6"]')).toHaveFocus()
+      fireEvent.keyDown(document.activeElement as Element, { key: 'k' })
+      fireEvent.keyDown(document.activeElement as Element, { key: 'k' })
+      expect(document.querySelector('[data-todo-title="4"]')).toHaveFocus()
+      expect(seen.pathname).toBe('/journal/12-15-2099')
     })
 
     it('t focuses the add input and does not navigate', () => {

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { isInputFocused } from '@/lib/keyboard-utils'
+import { CHORD_WINDOW_MS, isInputFocused } from '@/lib/keyboard-utils'
 
 export interface GlobalShortcutHandlers {
   onGoHome: () => void
@@ -73,7 +73,7 @@ export function useGlobalKeyboardShortcuts(
           // Start chord; wait up to 1.5s for the second key
           e.preventDefault()
           pendingChordRef.current = 'g'
-          chordTimerRef.current = setTimeout(clearChord, 1500)
+          chordTimerRef.current = setTimeout(clearChord, CHORD_WINDOW_MS)
           break
       }
     }

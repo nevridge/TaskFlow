@@ -220,6 +220,11 @@ describe('DailyLogSection', () => {
     })
   })
 
+  it('points the empty state at the add input above the list', () => {
+    renderSection([])
+    expect(screen.getByText(/capture what you worked on above/)).toBeInTheDocument()
+  })
+
   describe('scroll region', () => {
     afterEach(() => {
       Reflect.deleteProperty(window, 'matchMedia')
@@ -311,6 +316,20 @@ describe('DailyLogSection', () => {
           expect(region().scrollTop).toBe(0)
           newest = added
         }
+      })
+
+      it('does not leave the scroll pending when the refetch landed before onSuccess', async () => {
+        const first = { ...baseEntry, id: 1 }
+        const { rerender } = renderSection([first])
+        const options = await submit('quick')
+        // The refetch renders the new entry first, then the mutation callback runs.
+        const added = { ...baseEntry, id: 2, content: 'n2', createdAt: '2026-05-29T09:00:00Z' }
+        rerender(<DailyLogSection entryId={10} logEntries={[first, added]} />)
+        act(() => options.onSuccess())
+        region().scrollTop = 60
+        // A later change of the newest entry must not jump the list.
+        rerender(<DailyLogSection entryId={10} logEntries={[first, { ...added, id: 3, createdAt: '2026-05-29T10:00:00Z' }]} />)
+        expect(region().scrollTop).toBe(60)
       })
 
       it('a failed add keeps the draft and a later newest entry does not scroll the list', async () => {

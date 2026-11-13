@@ -118,11 +118,14 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     const text = draft.trim()
     if (!text) return
     const linkedTaskId = draftTaskItemId
+    const newestAtSubmit = logEntriesRef.current[0]?.id
     addLog.mutate(
       { content: text, taskItemId: linkedTaskId },
       {
         onSuccess: () => {
-          scrollToTopPending.current = true
+          // The refetch can land before this runs; then the newest id has already changed and the effect below
+          // has already run, so a flag set now would only fire on some later, unrelated change.
+          scrollToTopPending.current = logEntriesRef.current[0]?.id === newestAtSubmit
           if (scrollRef.current) scrollRef.current.scrollTop = 0
           inputRef.current?.focus()
         },
@@ -247,7 +250,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
       >
       <ol className="log-list">
         {logEntries.length === 0 && (
-          <li className="j-empty">No log entries yet — capture what you worked on below.</li>
+          <li className="j-empty">No log entries yet — capture what you worked on above.</li>
         )}
         {logEntries.map(en => (
           <li key={en.id} className="log-entry">

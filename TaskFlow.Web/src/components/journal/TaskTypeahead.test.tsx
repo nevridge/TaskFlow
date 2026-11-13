@@ -558,6 +558,261 @@ describe('TaskTypeahead', () => {
     })
   })
 
+  describe('keyboard choice (#484)', () => {
+    const DEPLOY = 'Deploy to production' // task 3
+    const getInput = () => screen.getByRole('combobox') as HTMLInputElement
+    const expectSelected = (value: string) => {
+      const input = getInput()
+      expect(input).toHaveValue(value)
+      expect(input.selectionStart).toBe(0)
+      expect(input.selectionEnd).toBe(value.length)
+    }
+    const expectNotSelected = () => {
+      const input = getInput()
+      expect(input.selectionStart).toBe(input.selectionEnd)
+    }
+
+    // Real timers: RTL's async helpers hang under vitest fake timers. Waits past the delayed value update.
+    const settle = () => act(async () => { await new Promise(r => setTimeout(r, 80)) })
+
+    // Sync stand-in for the add form: value lands in the same render as the choice.
+    function Controlled({ onChange, initial = null }: { onChange: (id: number | null) => void; initial?: number | null }) {
+      const [value, setValue] = useState<number | null>(initial)
+      return (
+        <TaskTypeahead
+          value={value}
+          onChange={id => {
+            onChange(id)
+            setValue(id)
+          }}
+        />
+      )
+    }
+
+    // Row-picker stand-in: value lands later (or never, for a rolled-back save).
+    function DelayedControlled({
+      onChange,
+      delayMs = 30,
+      apply = true,
+    }: {
+      onChange: (id: number | null) => void
+      delayMs?: number
+      apply?: boolean
+    }) {
+      const [value, setValue] = useState<number | null>(2)
+      return (
+        <TaskTypeahead
+          value={value}
+          onChange={id => {
+            onChange(id)
+            if (apply) setTimeout(() => setValue(id), delayMs)
+          }}
+        />
+      )
+    }
+
+    // Tab in, then pick task 3 with the keyboard.
+    async function chooseDeploy(user: ReturnType<typeof userEvent.setup>, initialLinked: boolean) {
+      await user.tab()
+      if (initialLinked) await user.keyboard('{Backspace}') // clear filter so task 3 is listed
+      // None = 0, tasks in list order: 1, 2, 3
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{Enter}')
+    }
+
+    it('keeps the chosen title selected after Enter, list closed, focus kept (AC 1)', async () => {
+      const onChange = vi.fn()
+      const user = userEvent.setup()
+      render(<Controlled onChange={onChange} />)
+      await chooseDeploy(user, false)
+      expect(onChange).toHaveBeenCalledWith(3)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(document.activeElement).toBe(getInput())
+      expectSelected(DEPLOY)
+    })
+
+    it('the first keystroke replaces the title and filters on it alone (AC 2)', async () => {
+      const user = userEvent.setup()
+      render(<Controlled onChange={vi.fn()} />)
+      await chooseDeploy(user, false)
+      await user.keyboard('2')
+      expect(getInput()).toHaveValue('2')
+      const options = screen.getAllByRole('option')
+      expect(options).toHaveLength(2)
+      expect(options[1]).toHaveTextContent('#2 Write tests')
+    })
+
+    it('ArrowDown reopens with the title selected, filtered, nothing highlighted; typing replaces it (AC 3, 4)', async () => {
+      const user = userEvent.setup()
+      render(<Controlled onChange={vi.fn()} />)
+      await chooseDeploy(user, false)
+      await user.keyboard('{ArrowDown}')
+      expect(screen.getByRole('listbox')).toBeInTheDocument()
+      expectSelected(DEPLOY)
+      const options = screen.getAllByRole('option')
+      expect(options).toHaveLength(2)
+      expect(options[1]).toHaveTextContent('#3 Deploy to production')
+      expect(options.some(o => o.classList.contains('active'))).toBe(false)
+      expect(getInput()).not.toHaveAttribute('aria-activedescendant')
+      await user.keyboard('x')
+      expect(getInput()).toHaveValue('x')
+    })
+
+    it('ArrowDown then Enter right after a keyboard choice does not unlink the task', async () => {
+      const onChange = vi.fn()
+      const user = userEvent.setup()
+      render(<Controlled onChange={onChange} />)
+      await chooseDeploy(user, false)
+      onChange.mockClear()
+      await user.keyboard('{ArrowDown}{Enter}')
+      expect(onChange).not.toHaveBeenCalled()
+    })
+
+    it('selects the new title once a delayed value arrives, not the old one (AC 5)', async () => {
+      const user = userEvent.setup({ delay: null })
+      render(<DelayedControlled onChange={vi.fn()} delayMs={30} />)
+      await chooseDeploy(user, true)
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expect(getInput()).toHaveValue('Write tests')
+      expectNotSelected()
+      await settle()
+      expectSelected(DEPLOY)
+      await user.keyboard('x')
+      expect(getInput()).toHaveValue('x')
+    })
+
+    it('a keystroke while the update is pending clears the request: nothing selected when the title arrives', async () => {
+      const user = userEvent.setup({ delay: null })
+      render(<DelayedControlled onChange={vi.fn()} delayMs={30} />)
+      await chooseDeploy(user, true)
+      await user.keyboard('z')
+      expect(getInput()).toHaveValue('Write testsz') // old title shown, character appended as before
+      await settle()
+      expect(getInput()).toHaveValue('Write testsz')
+      expectNotSelected()
+    })
+
+    it('a rolled-back save selects nothing stale and leaves typing and ArrowDown normal', async () => {
+      const user = userEvent.setup({ delay: null })
+      render(<DelayedControlled onChange={vi.fn()} apply={false} />)
+      await chooseDeploy(user, true)
+      await settle()
+      expect(getInput()).toHaveValue('Write tests')
+      expectNotSelected()
+      await user.keyboard('{ArrowDown}')
+      expectSelected('Write tests') // normal reopen selection, not a stale request
+      await user.keyboard('q')
+      expect(getInput()).toHaveValue('q')
+    })
+
+    it('Escape with a caller that keeps focus selects the title so typing replaces it (AC 7)', async () => {
+      const onEscape = vi.fn()
+      const user = userEvent.setup()
+      render(<TaskTypeahead value={2} onChange={vi.fn()} onEscape={onEscape} />)
+      await user.tab()
+      await user.keyboard('x')
+      await user.keyboard('{Escape}')
+      expect(onEscape).toHaveBeenCalled()
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expectSelected('Write tests')
+      await user.keyboard('{Escape}')
+      expectSelected('Write tests')
+      await user.keyboard('y')
+      expect(getInput()).toHaveValue('y')
+    })
+
+    it('Escape with a caller that moves focus leaves no pending selection (AC 8)', async () => {
+      const user = userEvent.setup()
+      render(
+        <>
+          <button>other</button>
+          <TaskTypeahead
+            value={2}
+            onChange={vi.fn()}
+            onEscape={() => screen.getByRole('button', { name: 'other' }).focus()}
+          />
+        </>,
+      )
+      await user.tab()
+      await user.tab()
+      await user.keyboard('{Escape}')
+      expect(screen.getByRole('button', { name: 'other' })).toHaveFocus()
+      expect(getInput()).toHaveValue('Write tests')
+    })
+
+    it('re-choosing the already linked task keeps the title selected', async () => {
+      const user = userEvent.setup()
+      render(<Controlled onChange={vi.fn()} initial={2} />)
+      await user.tab()
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}') // filtered by "Write tests": None, #2
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+      expectSelected('Write tests')
+    })
+
+    it('choosing None leaves the input empty with focus kept', async () => {
+      const onChange = vi.fn()
+      const user = userEvent.setup()
+      render(<Controlled onChange={onChange} initial={2} />)
+      await user.tab()
+      await user.keyboard('{ArrowDown}{Enter}')
+      expect(onChange).toHaveBeenCalledWith(null)
+      expect(getInput()).toHaveValue('')
+      expect(document.activeElement).toBe(getInput())
+    })
+
+    it('a linked task missing from the list (empty title) is a no-op', async () => {
+      const user = userEvent.setup()
+      render(<TaskTypeahead value={99} onChange={vi.fn()} onEscape={vi.fn()} />)
+      await user.tab()
+      await user.keyboard('{Escape}')
+      expect(getInput()).toHaveValue('')
+    })
+
+    it('a keyboard choice after a mouse choice selects the title', async () => {
+      const user = userEvent.setup()
+      render(<Controlled onChange={vi.fn()} />)
+      await user.click(getInput())
+      await user.click(screen.getByRole('option', { name: '#1 Fix login bug' }))
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}') // reopen (nothing highlighted), then None, #1
+      expectSelected('Fix login bug')
+    })
+
+    it('Enter-select then blur and refocus keeps the #480 focus selection', async () => {
+      const user = userEvent.setup()
+      render(
+        <>
+          <TaskTypeahead value={2} onChange={vi.fn()} />
+          <button>after</button>
+        </>,
+      )
+      await user.tab()
+      await user.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+      await user.tab()
+      await user.tab({ shift: true })
+      expectSelected('Write tests')
+    })
+
+    it('does not run journal shortcuts while typing after an Enter-select', async () => {
+      const { isInputFocused } = await import('@/lib/keyboard-utils')
+      const fired = vi.fn()
+      const listener = (e: KeyboardEvent) => {
+        if (isInputFocused()) return
+        fired(e.key)
+      }
+      document.addEventListener('keydown', listener)
+      try {
+        const user = userEvent.setup()
+        render(<Controlled onChange={vi.fn()} />)
+        await chooseDeploy(user, false)
+        fired.mockClear()
+        await user.keyboard('tln')
+        expect(getInput()).toHaveValue('tln')
+        expect(fired).not.toHaveBeenCalled()
+      } finally {
+        document.removeEventListener('keydown', listener)
+      }
+    })
+  })
+
   describe('blocked badge', () => {
     it('shows a Blocked badge only on blocked rows', async () => {
       mockTasks.push({ id: 4, title: 'Stuck task', status: 'Blocked' })

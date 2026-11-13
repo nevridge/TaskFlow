@@ -195,6 +195,14 @@ describe('TaskForm on mobile (#320)', () => {
   })
 })
 
+describe('TaskDetailPage title focus (#464)', () => {
+  it('the title heading clears the sticky nav when focused', () => {
+    // focus() ignores ancestors' scroll margins, so the margin must sit on the h1 itself.
+    const rule = /(?:^|\n)\.t-detail-title \{([^}]*)\}/.exec(base)?.[1] ?? ''
+    expect(rule).toMatch(/scroll-margin-top: calc\(64px \+ env\(safe-area-inset-top\)\)/)
+  })
+})
+
 describe('TaskDetailPage on mobile (#320)', () => {
   it('wraps the title row and lets the title shrink and break', () => {
     expect(width320).toMatch(/\.tasks-page \.t-card-row \{ flex-wrap: wrap; \}/)

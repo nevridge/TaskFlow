@@ -145,6 +145,18 @@ export function TaskDetailPage() {
     else if (wasEditing.current && taskReady) editButtonRef.current?.focus()
     wasEditing.current = formOpen
   }, [formOpen, taskReady])
+  // On arrival the title heading takes focus once per task id (#464). The id is consumed before the
+  // editing check, so an edit-on-arrival visit never focuses the heading later (Cancel/Escape/Save land
+  // on Edit via the effect above). Refetches and edits leave the deps unchanged, so they never refocus.
+  const lastFocusedTaskId = useRef<number | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (!taskReady) return
+    if (lastFocusedTaskId.current === taskId) return
+    lastFocusedTaskId.current = taskId
+    if (editing) return
+    headingRef.current?.focus()
+  }, [taskReady, taskId, editing])
 
   // Always pass the current state: router v7 replaces it with null otherwise and the journal
   // back link would lose focusTaskId.
@@ -264,7 +276,7 @@ export function TaskDetailPage() {
           ) : (
             <>
               <div className="t-card-row">
-                <h1 className="t-detail-title">{task.title}</h1>
+                <h1 ref={headingRef} tabIndex={-1} className="t-detail-title">{task.title}</h1>
                 <div className="t-card-actions">
                   <button ref={editButtonRef} className="t-btn" onClick={openEdit}>Edit</button>
                   {/* aria-disabled (never `disabled`) keeps it focusable; the `!` variants beat tasks.css hover/cursor. */}

@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -721,6 +722,196 @@ describe('TaskDetailPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
       await userEvent.click(editBtn())
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('title heading focus on arrival (#464)', () => {
+    function Nav() {
+      const navigate = useNavigate()
+      return (
+        <>
+          <button onClick={() => navigate('/tasks/1')}>go 1</button>
+          <button onClick={() => navigate('/tasks/2')}>go 2</button>
+        </>
+      )
+    }
+    const tree = (path = '/tasks/1', strict = false) => {
+      const body = (
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[path]}>
+            <Nav />
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      )
+      return strict ? <StrictMode>{body}</StrictMode> : body
+    }
+    const heading = (name = 'Fix login bug') => screen.getByRole('heading', { name })
+    const editBtn = () => screen.getByRole('button', { name: 'Edit' })
+    const titleBox = () => screen.getByRole('textbox', { name: /title/i })
+    const loading = () => vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: true, error: null } as never)
+
+    /** Counts focus events landing on any h1, to catch transient or repeated focus. */
+    function countHeadingFocus() {
+      const counter = { count: 0 }
+      const onFocus = (e: FocusEvent) => { if ((e.target as HTMLElement).tagName === 'H1') counter.count++ }
+      document.addEventListener('focusin', onFocus)
+      onCleanup.push(() => document.removeEventListener('focusin', onFocus))
+      return counter
+    }
+    const onCleanup: Array<() => void> = []
+    afterEach(() => { onCleanup.splice(0).forEach(fn => fn()) })
+
+    function perIdTasks() {
+      vi.mocked(useTaskQuery).mockImplementation(((id: number) => ({
+        data: { data: { ...task, id, title: `Task ${id}` } },
+        isLoading: false,
+        error: null,
+      })) as never)
+    }
+
+    it('focuses the heading on load, and it is not in the Tab order', async () => {
+      render(tree())
+      expect(heading()).toHaveFocus()
+      expect(heading()).toHaveAttribute('tabindex', '-1')
+      // Tab from the heading reaches Edit; Shift+Tab reaches the back link.
+      await userEvent.tab()
+      expect(editBtn()).toHaveFocus()
+      await userEvent.tab({ shift: true })
+      expect(screen.getByRole('link', { name: /back to tasks/i })).toHaveFocus()
+    })
+
+    it('repeated Tab from the document start never lands on the heading', async () => {
+      const counter = countHeadingFocus()
+      render(tree())
+      counter.count = 0
+      ;(document.activeElement as HTMLElement).blur()
+      for (let i = 0; i < 12; i++) await userEvent.tab()
+      expect(counter.count).toBe(0)
+    })
+
+    it('a refetch, status change or note action does not move focus back to the heading', async () => {
+      const view = render(tree())
+      const counter = countHeadingFocus()
+      await userEvent.click(screen.getByRole('button', { name: /add note/i }))
+      const active = document.activeElement
+      mockTask({ title: 'Fix login bug', status: 'InProgress' })
+      view.rerender(tree())
+      expect(heading()).not.toHaveFocus()
+      expect(document.activeElement).toBe(active)
+      expect(counter.count).toBe(0)
+    })
+
+    it('focuses the heading once when the task loads after a loading state', () => {
+      loading()
+      const counter = countHeadingFocus()
+      const view = render(tree())
+      expect(document.body).toHaveFocus()
+      mockTask()
+      view.rerender(tree())
+      expect(heading()).toHaveFocus()
+      expect(counter.count).toBe(1)
+    })
+
+    it('a failed load then a successful retry focuses the heading once', () => {
+      vi.mocked(useTaskQuery).mockReturnValue({ data: undefined, isLoading: false, error: new Error('x') } as never)
+      const counter = countHeadingFocus()
+      const view = render(tree())
+      expect(screen.getByText('Task not found.')).toBeInTheDocument()
+      expect(document.body).toHaveFocus()
+      mockTask()
+      view.rerender(tree())
+      expect(heading()).toHaveFocus()
+      expect(counter.count).toBe(1)
+    })
+
+    it('a non-numeric id focuses nothing and does not throw', () => {
+      expect(() => render(tree('/tasks/abc'))).not.toThrow()
+      expect(screen.getByText('Task not found.')).toBeInTheDocument()
+      expect(document.body).toHaveFocus()
+    })
+
+    it('?edit=1 focuses the Title input and never the heading, even transiently', () => {
+      const counter = countHeadingFocus()
+      const focusSpy = vi.spyOn(HTMLElement.prototype, 'focus')
+      render(tree('/tasks/1?edit=1'))
+      expect(titleBox()).toHaveFocus()
+      expect(counter.count).toBe(0)
+      expect(focusSpy.mock.contexts.some(c => (c as HTMLElement).tagName === 'H1')).toBe(false)
+      focusSpy.mockRestore()
+    })
+
+    it('Cancel, Escape and Save from ?edit=1 land on Edit, and a later refetch leaves the heading alone', async () => {
+      const counter = countHeadingFocus()
+      const view = render(tree('/tasks/1?edit=1'))
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(editBtn()).toHaveFocus()
+
+      await userEvent.click(editBtn())
+      await userEvent.keyboard('{Escape}')
+      expect(editBtn()).toHaveFocus()
+
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      await waitFor(() => expect(editBtn()).toHaveFocus())
+
+      mockTask({ title: 'Refetched' })
+      view.rerender(tree('/tasks/1'))
+      expect(editBtn()).toHaveFocus()
+      expect(counter.count).toBe(0)
+    })
+
+    it('a heading remounted after edit mode closes is not refocused', async () => {
+      render(tree())
+      await userEvent.click(editBtn())
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+      expect(heading()).not.toHaveFocus()
+      expect(editBtn()).toHaveFocus()
+    })
+
+    it('navigating to another task focuses its heading once; refetch does not refocus', () => {
+      perIdTasks()
+      const counter = countHeadingFocus()
+      render(tree())
+      expect(heading('Task 1')).toHaveFocus()
+      return userEvent.click(screen.getByRole('button', { name: 'go 2' })).then(async () => {
+        await waitFor(() => expect(heading('Task 2')).toHaveFocus())
+        expect(counter.count).toBe(2)
+        await userEvent.click(screen.getByRole('button', { name: 'go 2' }))
+        expect(heading('Task 2')).not.toHaveFocus()
+        expect(counter.count).toBe(2)
+      })
+    })
+
+    it('A to B to A refocuses the heading on each arrival, including the return to A', async () => {
+      perIdTasks()
+      render(tree())
+      expect(heading('Task 1')).toHaveFocus()
+      await userEvent.click(screen.getByRole('button', { name: 'go 2' }))
+      await waitFor(() => expect(heading('Task 2')).toHaveFocus())
+      await userEvent.click(screen.getByRole('button', { name: 'go 1' }))
+      await waitFor(() => expect(heading('Task 1')).toHaveFocus())
+    })
+
+    it('a task being deleted gets no heading focus, and a cancelled delete does not steal focus', () => {
+      const counter = countHeadingFocus()
+      const view = render(tree())
+      expect(counter.count).toBe(1)
+      // taskReady drops to false then back to true with the same id (e.g. delete undone).
+      loading()
+      view.rerender(tree())
+      mockTask()
+      view.rerender(tree())
+      expect(counter.count).toBe(1)
+    })
+
+    it('under StrictMode the heading is focused once without error', () => {
+      const counter = countHeadingFocus()
+      render(tree('/tasks/1', true))
+      expect(heading()).toHaveFocus()
+      expect(counter.count).toBe(1)
     })
   })
 

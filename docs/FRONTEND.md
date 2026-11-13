@@ -236,7 +236,7 @@ useDeleteNoteMutation(taskId: number) // UI deletes use useDeleteNoteUndoable (U
 
 The task list page. Responsibilities:
 - Fetch all tasks via `useTasksQuery`
-- Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and search. Search matches the title (or an ancestor's title, case-insensitive) or, for input like `42` or `#42`, the task with exactly that ID; the ID match still respects the other filters. Whitespace-only input counts as empty
+- Filter client-side by view chips (All / Active today / Scheduled future / Completed history), Status, Project and search. The chips use the journal day: a shown-Completed task is filed by the local day of its `completedAt` (`journalDayOf` in `lib/journal-utils.ts`, using the browser offset), an open task by its linked `currentJournalDate`. Active today = open and day is today; Scheduled future = open tasks only with a day after today (a completed task is never listed there); Completed history = completed with a day on or before today (`<=`, so tasks completed today appear). A stored-Completed parent that still has an open subtask is shown open and filed by its linked day, so on the Tasks page it can differ from the journal (the journal files it by `completedAt`) Search matches the title (or an ancestor's title, case-insensitive) or, for input like `42` or `#42`, the task with exactly that ID; the ID match still respects the other filters. Whitespace-only input counts as empty
 - Sort by title, status, priority, or due date
 - New Task opens inline; Edit navigates to `/tasks/:id?edit=1` (the task detail page in edit mode) with the filtered list as origin (see "Tasks filters in the URL" below). When the New Task panel opens, the title takes focus on every viewport (so Escape cancels from the keyboard, #470); `scrollIntoView` of the panel stays narrow-viewport-only
 - Delete is undoable: `useDeleteTaskUndoable` hides the task (pending key `task:<id>`) and sends the DELETE after a 10s Undo toast window; no confirm dialog. A parent with subtasks has an `aria-disabled` Delete ("Delete subtasks first (N)")
@@ -279,6 +279,7 @@ The task detail page. Responsibilities:
 - Parse and validate `id` from route params — renders an error state if `Number(id)` is not finite
 - Fetch task via `useTaskQuery(taskId)` (`enabled: Number.isFinite(taskId)`)
 - Fetch notes via `useNotesQuery(taskId)`
+- Meta line: "Completed: <M-D-YYYY>" for a task shown as Completed whose day derives from `completedAt` (same gate as the row badge); otherwise "Assigned: <M-D-YYYY>" from `currentJournalDate` when linked; neither otherwise
 - Edit task (replaces title/detail with `TaskForm`). Edit mode is driven by the `?edit=1` URL param, not local state; the in-page Edit button sets it too
 - Delete task — starts the undoable delete and navigates at once (`replace`) to the validated origin (the filtered `/tasks?...` list, else `/tasks`) with `state.focusNewTask` so New Task takes focus; the Undo toast persists across the navigation
 - Inline note creation and editing; note delete is undoable (pending key `tasknote:<id>`, 6s window)
@@ -412,7 +413,7 @@ A controlled form shared by both create and edit flows. Takes an optional `task`
 - Due date is stored as `YYYY-MM-DD` from `<input type="date">` and sent to the API as that raw `YYYY-MM-DD` string (no time or `Z` suffix)
 - Planned day (edit mode only, shown when `task` exists and its stored status is not Completed): `TaskFormPayload.plannedDay` is `undefined` when unchanged or not shown (including an unchanged stored past day), a `YYYY-MM-DD` string when set or changed, and `null` when cleared. It is not the due date and never affects it. The optional `plannedDayRevertToken` prop resets the field to the stored day after a failed clear. The date input's `min` is today, omitted while the stored day is already past.
 
-On the Tasks list, `TaskListRow` shows a non-interactive "Planned for Nov 12" badge (full date in `title`) next to the project badge for a non-Completed task with a `currentJournalDate`.
+On the Tasks list, `TaskListRow` shows a non-interactive day badge (class `.t-badge-day`, full date in `title`) after the project badge. A task shown as Completed gets "Completed Nov 12" (title "Completed 11-12-2026") when its day derives from `completedAt` (`completedDayOf`: stored status Completed and a parsable `completedAt`, local day); an open task with a `currentJournalDate` gets "Planned for Nov 12". The two are mutually exclusive, and a completed task with no `completedAt`-derived day (for example legacy, or a Blocked row) shows no badge.
 
 ### NoteCard / NoteForm
 

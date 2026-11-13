@@ -1,3 +1,5 @@
+import { normalizeStatus } from '@/lib/task-status'
+
 const PROJECT_START = '2026-05-09'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -69,6 +71,21 @@ export function completionDayOf(task: CompletionFields, offsetMinutes = getTimez
     if (!Number.isNaN(ms)) return userDayOf(ms, offsetMinutes)
   }
   return task.currentJournalDate ?? null
+}
+
+/**
+ * The user's day a stored-Completed task was completed on (completedAt's day), else null. Unlike
+ * completionDayOf it never falls back to the linked day, and it ignores tasks that are not stored Completed.
+ */
+export function completedDayOf(task: CompletionFields, offsetMinutes = getTimezoneOffsetMinutes()): string | null {
+  if (normalizeStatus(task.status) !== 'Completed' || !task.completedAt) return null
+  const ms = parseApiTimestamp(task.completedAt)
+  return Number.isNaN(ms) ? null : userDayOf(ms, offsetMinutes)
+}
+
+/** The journal day a task is on, mirroring the server's JournalDayRule: completion day when completed, else the linked day. */
+export function journalDayOf(task: CompletionFields, offsetMinutes = getTimezoneOffsetMinutes()): string | null {
+  return completedDayOf(task, offsetMinutes) ?? task.currentJournalDate ?? null
 }
 
 /** Exact mirror of the server's reopen guard (#350): a Completed task whose completion day is before today. */

@@ -27,6 +27,7 @@ function renderRow(
     onEdit?: TaskHandler
     onDelete?: TaskHandler
     onStatusCycle?: TaskHandler
+    displayStatus?: string
   } = {},
 ) {
   const onEdit = overrides.onEdit ?? vi.fn()
@@ -38,6 +39,7 @@ function renderRow(
         <tbody>
           <TaskListRow
             task={task}
+            displayStatus={overrides.displayStatus}
             onEdit={onEdit}
             onHistory={vi.fn<TaskHandler>()}
             onDelete={onDelete}
@@ -374,7 +376,7 @@ describe('TaskListRow', () => {
     it('shows "Planned for Nov 12" with the full date in the title', () => {
       renderRow(planned)
       const badge = screen.getByText('Planned for Nov 12')
-      expect(badge).toHaveClass('t-badge-planned')
+      expect(badge).toHaveClass('t-badge-day')
       expect(badge).toHaveAttribute('title', 'Planned for 11-12-2099')
       expect(badge.closest('td')).toHaveClass('t-list-cell--title')
     })
@@ -384,32 +386,45 @@ describe('TaskListRow', () => {
       ['no planned field', {}],
     ])('shows no badge when %s', (_label, extra) => {
       const { container } = renderRow({ ...baseTask, ...extra })
-      expect(container.querySelector('.t-badge-planned')).toBeNull()
+      expect(container.querySelector('.t-badge-day')).toBeNull()
     })
 
-    it('shows no badge for a Completed task', () => {
+    it('a Completed task shows "Completed <day>" from completedAt, not the planned day', () => {
+      const { container } = renderRow({ ...planned, status: 'Completed', completedAt: '2026-11-10T15:00:00Z' })
+      const badge = screen.getByText('Completed Nov 10')
+      expect(badge).toHaveClass('t-badge-day')
+      expect(badge).toHaveAttribute('title', 'Completed 11-10-2026')
+      expect(badge.closest('.t-list-badges')).not.toBeNull()
+      expect(screen.queryByText(/Planned for/)).toBeNull()
+      expect(container.querySelector('.t-overdue, .t-overdue-icon')).toBeNull()
+    })
+
+    it('a Completed task without completedAt shows no badge, not the linked day', () => {
       const { container } = renderRow({ ...planned, status: 'Completed' })
-      expect(container.querySelector('.t-badge-planned')).toBeNull()
+      expect(container.querySelector('.t-badge-day')).toBeNull()
     })
 
-    it('follows the displayed (derived) status, not the stored one, when hiding for Completed', () => {
-      const { container } = render(
-        <MemoryRouter>
-          <table>
-            <tbody>
-              <TaskListRow
-                task={planned}
-                displayStatus="Completed"
-                onEdit={vi.fn()}
-                onHistory={vi.fn()}
-                onDelete={vi.fn()}
-                onStatusCycle={vi.fn()}
-              />
-            </tbody>
-          </table>
-        </MemoryRouter>,
-      )
-      expect(container.querySelector('.t-badge-planned')).toBeNull()
+    it('puts the project pill before the completed badge', () => {
+      renderRow({ ...baseTask, status: 'Completed', completedAt: '2026-11-10T15:00:00Z', projectId: 3, projectName: 'Alpha' })
+      const pill = screen.getByText('Alpha')
+      expect(pill.nextElementSibling).toBe(screen.getByText('Completed Nov 10'))
+    })
+
+    it('a Blocked task with stored Completed and completedAt shows Planned for, not Completed', () => {
+      renderRow({ ...planned, status: 'Blocked', completedAt: '2026-11-10T15:00:00Z' })
+      expect(screen.getByText('Planned for Nov 12')).toBeInTheDocument()
+      expect(screen.queryByText(/^Completed/)).toBeNull()
+    })
+
+    it('follows the displayed status: a stored-Completed row displayed open shows Planned for', () => {
+      renderRow({ ...planned, status: 'Completed', completedAt: '2026-11-10T15:00:00Z' }, { displayStatus: 'InProgress' })
+      expect(screen.getByText('Planned for Nov 12')).toBeInTheDocument()
+      expect(screen.queryByText(/^Completed/)).toBeNull()
+    })
+
+    it('a row displayed Completed whose stored status is not Completed shows no date badge', () => {
+      const { container } = renderRow({ ...planned, status: 'InProgress', completedAt: '2026-11-10T15:00:00Z' }, { displayStatus: 'Completed' })
+      expect(container.querySelector('.t-badge-day')).toBeNull()
     })
 
     it('a past planned day is neutral: no overdue class or "!" icon', () => {

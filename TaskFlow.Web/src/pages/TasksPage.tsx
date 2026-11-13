@@ -23,7 +23,7 @@ import { TaskContextHeader } from '@/components/TaskContextHeader'
 import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
-import { todayISO } from '@/lib/journal-utils'
+import { journalDayOf, todayISO } from '@/lib/journal-utils'
 import {
   readFocusTaskId,
   stateWithoutFocusTaskId,
@@ -335,8 +335,9 @@ export function TasksPage() {
   const searchId = useMemo(() => parseTaskId(debouncedSearch), [debouncedSearch])
   const visibleTasks = useMemo(() => {
     const allStatusesChecked = STATUS_OPTIONS.every(o => statusFilter.has(o.value))
+    const today = todayISO()
     return tasks
-      .filter(t => matchesViewFilter(t, viewFilter, statusOf(t)))
+      .filter(t => matchesViewFilter(t, viewFilter, statusOf(t), today))
       .filter(t => {
         if (statusFilter.size === 0) return true
         const normalized = normalizeStatus(statusOf(t))
@@ -918,14 +919,19 @@ export function TasksPage() {
   )
 }
 
-function matchesViewFilter(task: TaskListModel, viewFilter: ViewFilter, status: string | undefined): boolean {
-  const assignedDate = task.currentJournalDate ?? null
-  // Blocked counts as not completed.
+function matchesViewFilter(
+  task: TaskListModel,
+  viewFilter: ViewFilter,
+  status: string | undefined,
+  today = todayISO(),
+): boolean {
+  // Blocked counts as not completed. A shown-completed task is filed by its completion day, others by their linked day.
   const completed = isCompleted(status)
+  const day = completed ? journalDayOf(task) : task.currentJournalDate ?? null
   switch (viewFilter) {
-    case 'activeToday': return assignedDate === todayISO() && !completed
-    case 'scheduledFuture': return assignedDate != null && assignedDate > todayISO()
-    case 'completedHistory': return completed && assignedDate != null && assignedDate < todayISO()
+    case 'activeToday': return !completed && day === today
+    case 'scheduledFuture': return !completed && day != null && day > today
+    case 'completedHistory': return completed && day != null && day <= today
     default: return true
   }
 }

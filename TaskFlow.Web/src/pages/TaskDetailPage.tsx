@@ -18,7 +18,7 @@ import { usePrefs } from '@/context/usePrefs'
 import { NoteCard } from '@/components/NoteCard'
 import { NoteForm } from '@/components/NoteForm'
 import { formatDateOnly } from '@/lib/utils'
-import { formatShort, formatStartedAt } from '@/lib/journal-utils'
+import { completedDayOf, formatShort, formatStartedAt } from '@/lib/journal-utils'
 import { getStatusLabel, isBlocked } from '@/lib/task-status'
 import { deriveTaskStatuses, getDerivedStatusTitle } from '@/lib/task-derived-status'
 import type { NoteResponseDto } from '@/api/client/types.gen'
@@ -222,6 +222,7 @@ export function TaskDetailPage() {
   const statusLocked = derivedInfo?.isDerived === true
   const shownStatus = statusLocked ? derivedInfo?.displayStatus : task.status
   const status = String(shownStatus ?? 'draft').toLowerCase()
+  const completionDay = status === 'completed' ? completedDayOf(task) : null
   const priority = String(task.priority ?? 'low').toLowerCase()
   const projectOptions = buildProjectOptions(task, projects)
   const selectValue = quickProjectValue ?? (serverProjectId !== null ? String(serverProjectId) : '')
@@ -315,7 +316,9 @@ export function TaskDetailPage() {
                 </div>
                 <span>Parent: <strong>{task.parentTaskItemId ? `#${task.parentTaskItemId}` : 'None'}</strong></span>
                 <span>Children: <strong>{task.childTaskCount ?? 0}</strong></span>
-                {task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}
+                {completionDay
+                  ? <span>Completed: <strong>{formatShort(completionDay)}</strong></span>
+                  : task.currentJournalDate && <span>Assigned: <strong>{formatShort(task.currentJournalDate)}</strong></span>}
                 <span>Tagged: <strong>{task.daysTagged ?? 0}d</strong></span>
                 <span>Moved: <strong>{task.moveCount ?? 0}</strong></span>
                 <span>Due: <strong>{formatDateOnly(task.dueDate)}</strong></span>

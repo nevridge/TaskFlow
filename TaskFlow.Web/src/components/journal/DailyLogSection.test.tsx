@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, act } from '@testing-library/react'
 import { render } from '@/test/renderWithToast'
 import userEvent from '@testing-library/user-event'
@@ -32,6 +32,7 @@ vi.mock('./TaskTypeahead', () => ({
 import { useAddLogEntryMutation } from '@/hooks/useJournal'
 import { deleteLogEntry } from '@/api/journal'
 import { DailyLogSection } from './DailyLogSection'
+import { STACKED_QUERY } from '@/hooks/useStackedLayout'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 
 const baseEntry: JournalLogEntryResponseDto = {
@@ -53,6 +54,9 @@ const secondEntry: JournalLogEntryResponseDto = {
 function renderSection(logEntries: JournalLogEntryResponseDto[] = [], ref?: React.Ref<DailyLogSectionHandle>) {
   return render(<DailyLogSection ref={ref} entryId={10} logEntries={logEntries} />)
 }
+
+const logRow = (content: string) => screen.getByText(content).closest('li')!
+const deleteBtn = (content: string) => logRow(content).querySelector<HTMLElement>('[data-log-x]')!
 
 describe('DailyLogSection', () => {
   beforeEach(() => {
@@ -131,14 +135,186 @@ describe('DailyLogSection', () => {
     }
   })
 
-  it('moves focus to the next entry delete button, or the add input when none is left', () => {
-    const second = { ...baseEntry, id: 2, content: 'Second' }
-    renderSection([baseEntry, second])
-    const [first, last] = screen.getAllByRole('button', { name: /delete entry/i })
-    fireEvent.click(first)
-    expect(last).toHaveFocus()
-    fireEvent.click(last)
+  it('moves focus to the next older entry delete button, or the add input when none is left', () => {
+    const older = { ...baseEntry, id: 1, content: 'Older', createdAt: '2026-05-28T09:00:00Z' }
+    const newer = { ...baseEntry, id: 2, content: 'Newer', createdAt: '2026-05-28T10:00:00Z' }
+    renderSection([older, newer])
+    // Newest first: deleting the top entry moves focus down to the older one.
+    fireEvent.click(deleteBtn('Newer'))
+    expect(deleteBtn('Older')).toHaveFocus()
+    fireEvent.click(deleteBtn('Older'))
     expect(screen.getByRole('textbox')).toHaveFocus()
+  })
+
+  describe('order and layout', () => {
+    const texts = () => Array.from(document.querySelectorAll('.log-text')).map(n => n.textContent)
+    const entry = (id: number, content: string, createdAt: string) => ({ ...baseEntry, id, content, createdAt })
+
+    it('lists entries newest first, whatever order they arrive in', () => {
+      renderSection([
+        entry(1, 'a', '2026-05-28T09:00:00Z'),
+        entry(2, 'b', '2026-05-28T11:00:00Z'),
+        entry(3, 'c', '2026-05-28T10:00:00Z'),
+      ])
+      expect(texts()).toEqual(['b', 'c', 'a'])
+    })
+
+    it('puts the higher id first when createdAt is identical', () => {
+      const t = '2026-05-28T09:00:00Z'
+      renderSection([entry(1, 'one', t), entry(3, 'three', t), entry(2, 'two', t)])
+      expect(texts()).toEqual(['three', 'two', 'one'])
+    })
+
+    it('falls back to id descending when a createdAt cannot be parsed', () => {
+      renderSection([entry(1, 'one', '2026-05-28T12:00:00Z'), entry(2, 'two', 'not a date')])
+      expect(texts()).toEqual(['two', 'one'])
+    })
+
+    it('does not reorder the array it was given', () => {
+      const input = [entry(1, 'a', '2026-05-28T09:00:00Z'), entry(2, 'b', '2026-05-28T10:00:00Z')]
+      renderSection(input)
+      expect(input.map(e => e.id)).toEqual([1, 2])
+    })
+
+    it('keeps an edited entry in place', () => {
+      const a = entry(1, 'a', '2026-05-28T09:00:00Z')
+      const b = entry(2, 'b', '2026-05-28T10:00:00Z')
+      const { rerender } = renderSection([a, b])
+      rerender(<DailyLogSection entryId={10} logEntries={[{ ...a, content: 'a edited' }, b]} />)
+      expect(texts()).toEqual(['b', 'a edited'])
+    })
+
+    it('puts the add form before the list in the DOM, outside the scroll region', () => {
+      renderSection([baseEntry])
+      const input = screen.getByRole('textbox')
+      const region = screen.getByRole('region', { name: 'Daily log' })
+      expect(input.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(region).not.toContainElement(input)
+      expect(region).toContainElement(screen.getByText('Fixed the bug'))
+    })
+
+    it('restores an undone entry to its sorted slot', () => {
+      vi.useFakeTimers()
+      try {
+        renderSection([
+          entry(1, 'a', '2026-05-28T09:00:00Z'),
+          entry(2, 'b', '2026-05-28T10:00:00Z'),
+          entry(3, 'c', '2026-05-28T11:00:00Z'),
+        ])
+        fireEvent.click(deleteBtn('b'))
+        expect(texts()).toEqual(['c', 'a'])
+        fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+        expect(texts()).toEqual(['c', 'b', 'a'])
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('scroll region', () => {
+    afterEach(() => {
+      Reflect.deleteProperty(window, 'matchMedia')
+    })
+
+    function mockStacked(initial: boolean) {
+      let matches = initial
+      const listeners = new Set<() => void>()
+      const matchMedia = vi.fn((query: string) => ({
+        media: query,
+        get matches() { return query === STACKED_QUERY && matches },
+        addEventListener: (_: string, l: () => void) => listeners.add(l),
+        removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+      }))
+      Object.defineProperty(window, 'matchMedia', { value: matchMedia, configurable: true, writable: true })
+      return (next: boolean) => {
+        matches = next
+        act(() => listeners.forEach(l => l()))
+      }
+    }
+
+    const region = () => screen.getByRole('region', { name: 'Daily log' })
+
+    it('is a focusable region named "Daily log" on desktop, and nothing else has that name', () => {
+      renderSection([baseEntry])
+      expect(region()).toHaveAttribute('tabindex', '0')
+      expect(screen.getAllByLabelText('Daily log')).toHaveLength(1)
+    })
+
+    it('has no tabindex when the layout is stacked', () => {
+      mockStacked(true)
+      renderSection([baseEntry])
+      expect(region()).not.toHaveAttribute('tabindex')
+    })
+
+    it('toggles tabindex on a breakpoint change without remounting, keeping the draft and input focus', async () => {
+      const setStacked = mockStacked(false)
+      renderSection([baseEntry])
+      const before = region()
+      const input = screen.getByRole('textbox')
+      await userEvent.type(input, 'half typed')
+      setStacked(true)
+      expect(region()).toBe(before)
+      expect(before).not.toHaveAttribute('tabindex')
+      expect(input).toHaveValue('half typed')
+      expect(input).toHaveFocus()
+      setStacked(false)
+      expect(before).toHaveAttribute('tabindex', '0')
+    })
+
+    it('moves focus from the region to the add input when the layout stacks', () => {
+      const setStacked = mockStacked(false)
+      renderSection([baseEntry])
+      region().focus()
+      setStacked(true)
+      expect(screen.getByRole('textbox')).toHaveFocus()
+    })
+
+    it('leaves focus alone on a breakpoint change when the region is not focused', () => {
+      const setStacked = mockStacked(false)
+      renderSection([baseEntry])
+      const del = screen.getByRole('button', { name: /delete entry/i })
+      del.focus()
+      setStacked(true)
+      expect(del).toHaveFocus()
+    })
+
+    describe('after adding', () => {
+      const submit = async (text: string) => {
+        await userEvent.type(screen.getByRole('textbox'), text)
+        await userEvent.keyboard('{Enter}')
+        return addLogMutate.mock.calls.at(-1)![1] as { onSuccess: () => void; onError: () => void }
+      }
+
+      it('scrolls to the top as soon as the add succeeds and again when the new entry renders, repeatably', async () => {
+        const first = { ...baseEntry, id: 1 }
+        const { rerender } = renderSection([first])
+        let newest = first
+        for (const id of [2, 3]) {
+          region().scrollTop = 80
+          const options = await submit(`new ${id}`)
+          act(() => options.onSuccess())
+          expect(region().scrollTop).toBe(0)
+          expect(screen.getByRole('textbox')).toHaveFocus()
+          // The refetch lands after onSuccess: the list changes and the browser may have scrolled it again.
+          region().scrollTop = 80
+          const added = { ...baseEntry, id, content: `n${id}`, createdAt: `2026-05-29T0${id}:00:00Z` }
+          rerender(<DailyLogSection entryId={10} logEntries={[first, newest, added].filter((e, i, a) => a.indexOf(e) === i)} />)
+          expect(region().scrollTop).toBe(0)
+          newest = added
+        }
+      })
+
+      it('a failed add keeps the draft and a later newest entry does not scroll the list', async () => {
+        const first = { ...baseEntry, id: 1 }
+        const { rerender } = renderSection([first])
+        const options = await submit('oops')
+        act(() => options.onError())
+        expect(screen.getByRole('textbox')).toHaveValue('oops')
+        region().scrollTop = 50
+        rerender(<DailyLogSection entryId={10} logEntries={[first, { ...baseEntry, id: 5, createdAt: '2026-05-29T09:00:00Z' }]} />)
+        expect(region().scrollTop).toBe(50)
+      })
+    })
   })
 
   it('focusDraftInput() via ref focuses the input', () => {
@@ -187,10 +363,10 @@ describe('DailyLogSection', () => {
 
   it('selecting a task via typeahead calls updateLogMutate with correct payload', async () => {
     renderSection([baseEntry])
-    // The component renders two TaskTypeaheads: one per log entry, one for the draft form.
-    // Click the first one (the log entry's typeahead) which calls onChange(99).
+    // The component renders the draft form's TaskTypeahead first, then one per log entry.
+    // Click the second one (the log entry's typeahead) which calls onChange(99).
     const typeaheads = screen.getAllByTestId('task-typeahead')
-    await userEvent.click(typeaheads[0])
+    await userEvent.click(typeaheads[1])
     expect(updateLogMutate).toHaveBeenCalledWith({ id: baseEntry.id, content: baseEntry.content, taskItemId: 99 })
   })
 
@@ -298,7 +474,7 @@ describe('DailyLogSection', () => {
     it('tapping the chip or typeahead does not enter edit mode', async () => {
       renderSection([linked])
       await userEvent.dblClick(screen.getByText('Build the feature'))
-      await userEvent.click(screen.getAllByTestId('task-typeahead')[0])
+      await userEvent.click(screen.getAllByTestId('task-typeahead')[1])
       expect(screen.queryByRole('textbox', { name: 'Edit log entry' })).not.toBeInTheDocument()
     })
 
@@ -312,7 +488,7 @@ describe('DailyLogSection', () => {
       expect(updateLogMutate).toHaveBeenNthCalledWith(1, { id: 1, content: 'Fixed the bug!', taskItemId: 7 })
       // The optimistic cache update flows back as new props; the relink reads the latest entry, not a captured one.
       rerender(<DailyLogSection entryId={10} logEntries={[{ ...linked, content: 'Fixed the bug!' }]} />)
-      await userEvent.click(screen.getAllByTestId('task-typeahead')[0])
+      await userEvent.click(screen.getAllByTestId('task-typeahead')[1])
       expect(updateLogMutate).toHaveBeenNthCalledWith(2, { id: 1, content: 'Fixed the bug!', taskItemId: 99 })
     })
 
@@ -327,9 +503,9 @@ describe('DailyLogSection', () => {
 
     it('keeps the typeahead mounted when the text swaps to the editor', async () => {
       renderSection([linked])
-      const before = screen.getAllByTestId('task-typeahead')[0]
+      const before = screen.getAllByTestId('task-typeahead')[1]
       await userEvent.dblClick(trigger())
-      expect(screen.getAllByTestId('task-typeahead')[0]).toBe(before)
+      expect(screen.getAllByTestId('task-typeahead')[1]).toBe(before)
     })
   })
 
@@ -351,8 +527,8 @@ describe('DailyLogSection', () => {
       expect(screen.getByRole('textbox')).toBeDisabled()
     })
 
-    // The draft's typeahead is the last one rendered (one per log entry comes first).
-    const clickDraftTypeahead = () => fireEvent.click(screen.getAllByTestId('task-typeahead').at(-1)!)
+    // The draft's typeahead is the first one rendered (the form sits above the list).
+    const clickDraftTypeahead = () => fireEvent.click(screen.getAllByTestId('task-typeahead')[0])
     const failLastAdd = () => {
       const options = addLogMutate.mock.calls.at(-1)![1] as { onError: () => void }
       act(() => options.onError())

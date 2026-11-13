@@ -519,6 +519,16 @@
   padding: 0;
   flex: 1;
 }
+/* Scrolls the Daily Log list inside its card. Wraps the list because NotesSection shares .log-list. Capped only
+   * above the stacked-layout width; the 820px block below lifts the cap so phones never get a nested scroller. */
+.log-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.journal-page .log-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .log-entry {
   /* Column widths are variables so the phone and touch blocks can change one track without restating the grid. */
   --log-time-w: 64px;
@@ -751,6 +761,11 @@
   background: var(--paper);
   transition: border-color .12s, box-shadow .12s;
 }
+/* The log's add row sits above the list, so its spacing goes below it. */
+.add-row.log-add-row {
+  margin-top: 0;
+  margin-bottom: calc(10px * var(--den));
+}
 .add-row:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 18%, transparent);
@@ -894,6 +909,7 @@
   .hdr-date-block { text-align: left; }
 
   .card { min-height: 0; }
+  .log-scroll { max-height: none; overflow-y: visible; }
   .journal-page {
     padding-inline: var(--page-pad);
     padding-bottom: 80px;

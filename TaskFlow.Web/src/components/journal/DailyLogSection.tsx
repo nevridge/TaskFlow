@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { deleteLogEntry } from '@/api/journal'
 import type { JournalLogEntryResponseDto } from '@/api/journal'
 import { useAddLogEntryMutation, useUpdateLogEntryMutation, journalKeys } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { useTapToEditBlock } from '@/hooks/useTapToEditBlock'
+import { useStackedLayout } from '@/hooks/useStackedLayout'
 import { isCoarsePointer } from '@/lib/pointer'
 import { formatTime } from '@/lib/journal-utils'
 import { TaskTypeahead } from './TaskTypeahead'
@@ -36,7 +37,20 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   const queryClient = useQueryClient()
   const { requestDelete, isHidden } = useUndoableDelete()
   // Entries waiting out the undo window stay in the cache but are not shown or counted.
-  const logEntries = useMemo(() => allLogEntries.filter(l => !isHidden(`log:${l.id}`)), [allLogEntries, isHidden])
+  // Shown newest first. The API returns oldest first, so sort a copy: createdAt desc, then id desc; an
+  // unparsable createdAt falls back to id desc. Render, the focus lookups and removeEntry all read this array.
+  const logEntries = useMemo(
+    () =>
+      allLogEntries
+        .filter(l => !isHidden(`log:${l.id}`))
+        .sort((a, b) => {
+          const ta = Date.parse(a.createdAt)
+          const tb = Date.parse(b.createdAt)
+          if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return tb - ta
+          return b.id - a.id
+        }),
+    [allLogEntries, isHidden],
+  )
   const updateLog = useUpdateLogEntryMutation(entryId)
 
   // Decided once per mount because it changes whether the field is disabled while saving (disabling would
@@ -50,6 +64,10 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
   const [editingText, setEditingText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const sectionRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // Set after a successful add until the new newest entry has rendered and the list has been scrolled to the top.
+  const scrollToTopPending = useRef(false)
+  const stacked = useStackedLayout()
   // Latest props for event handlers: a relink and a text edit are both full-row PUTs, so each must send the
   // other field's current value, not one captured when the row rendered.
   const logEntriesRef = useRef(logEntries)
@@ -71,6 +89,18 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     sectionRef.current?.querySelector<HTMLElement>(`[data-log-id="${id}"]`)?.focus()
   })
 
+  const newestId = logEntries[0]?.id
+  useEffect(() => {
+    if (!scrollToTopPending.current || !scrollRef.current) return
+    scrollRef.current.scrollTop = 0
+    scrollToTopPending.current = false
+  }, [newestId])
+
+  // The region stops being focusable when the layout stacks; keep focus from dropping to the page.
+  useLayoutEffect(() => {
+    if (stacked && document.activeElement === scrollRef.current) inputRef.current?.focus()
+  }, [stacked])
+
   function requestFocus(id: number) {
     pendingFocus.current = id
     setFocusTick(t => t + 1)
@@ -91,9 +121,14 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
     addLog.mutate(
       { content: text, taskItemId: linkedTaskId },
       {
-        onSuccess: () => inputRef.current?.focus(),
+        onSuccess: () => {
+          scrollToTopPending.current = true
+          if (scrollRef.current) scrollRef.current.scrollTop = 0
+          inputRef.current?.focus()
+        },
         // Put the text and link back if the save failed, unless something was typed since
         onError: () => {
+          scrollToTopPending.current = false
           setDraft(current => current || text)
           if (!draftRef.current) {
             setDraftTaskItemId(linkedTaskId)
@@ -170,6 +205,46 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
         </div>
       </div>
 
+      <form className="add-row log-add-row" onSubmit={addEntry}>
+        <span className="add-plus">›</span>
+        <input
+          ref={inputRef}
+          className="add-input"
+          maxLength={MAX_LOG_LENGTH}
+          enterKeyHint="enter"
+          placeholder="What did you just work on? Press Enter to log"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          // Disabling would blur the field and close the soft keyboard mid-capture, so touch never does.
+          disabled={!touch && addLog.isPending}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
+          }}
+        />
+        <div className="log-add-inputs">
+          <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} onEscape={() => inputRef.current?.focus()} />
+          {/* The submit button also lets Enter in the text input submit the form even though the TaskTypeahead
+              adds a second <input> (the HTML implicit-submission rule needs a submit button then). CSS hides it
+              on desktop and shows it on touch. */}
+          <button
+            type="submit"
+            className="log-add-btn"
+            disabled={!draft.trim()}
+            onPointerDown={e => e.preventDefault()}
+            onMouseDown={e => e.preventDefault()}
+          >
+            Add
+          </button>
+        </div>
+      </form>
+
+      <div
+        className="log-scroll"
+        ref={scrollRef}
+        role="region"
+        aria-label="Daily log"
+        tabIndex={stacked ? undefined : 0}
+      >
       <ol className="log-list">
         {logEntries.length === 0 && (
           <li className="j-empty">No log entries yet — capture what you worked on below.</li>
@@ -231,39 +306,7 @@ export const DailyLogSection = forwardRef<DailyLogSectionHandle, Props>(function
           </li>
         ))}
       </ol>
-
-      <form className="add-row log-add-row" onSubmit={addEntry}>
-        <span className="add-plus">›</span>
-        <input
-          ref={inputRef}
-          className="add-input"
-          maxLength={MAX_LOG_LENGTH}
-          enterKeyHint="enter"
-          placeholder="What did you just work on? Press Enter to log"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          // Disabling would blur the field and close the soft keyboard mid-capture, so touch never does.
-          disabled={!touch && addLog.isPending}
-          onKeyDown={e => {
-            if (e.key === 'Escape') { setDraft(''); inputRef.current?.blur() }
-          }}
-        />
-        <div className="log-add-inputs">
-          <TaskTypeahead value={draftTaskItemId} onChange={setDraftTaskItemId} onEscape={() => inputRef.current?.focus()} />
-          {/* The submit button also lets Enter in the text input submit the form even though the TaskTypeahead
-              adds a second <input> (the HTML implicit-submission rule needs a submit button then). CSS hides it
-              on desktop and shows it on touch. */}
-          <button
-            type="submit"
-            className="log-add-btn"
-            disabled={!draft.trim()}
-            onPointerDown={e => e.preventDefault()}
-            onMouseDown={e => e.preventDefault()}
-          >
-            Add
-          </button>
-        </div>
-      </form>
+      </div>
     </section>
   )
 })

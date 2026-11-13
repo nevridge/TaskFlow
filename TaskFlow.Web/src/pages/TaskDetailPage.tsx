@@ -25,6 +25,7 @@ import type { NoteResponseDto } from '@/api/client/types.gen'
 import {
   readBackOrigin,
   readJournalOrigin,
+  readTasksOrigin,
   readFocusTaskId,
   isEditRequested,
   withEditParam,
@@ -55,6 +56,15 @@ export function TaskDetailPage() {
   // Origin comes from router state only, validated on read; direct loads fall back to the Tasks list.
   const origin = readBackOrigin(location.state)
   const journalOrigin = readJournalOrigin(location.state)
+  // Journal returns always focus a row (falling back to this task); Tasks returns only forward an id the list sent.
+  const forwardedFocusId = readFocusTaskId(location.state)
+  const backLinkState = readTasksOrigin(location.state)
+    ? forwardedFocusId !== null
+      ? { focusTaskId: forwardedFocusId }
+      : undefined
+    : journalOrigin
+      ? { focusTaskId: forwardedFocusId ?? taskId }
+      : undefined
 
   // The URL is the single source of truth for edit mode.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -223,7 +233,7 @@ export function TaskDetailPage() {
       <div className="t-shell t-shell--narrow">
         <Link
           to={origin ?? '/tasks'}
-          state={journalOrigin ? { focusTaskId: readFocusTaskId(location.state) ?? taskId } : undefined}
+          state={backLinkState}
           className="t-back-link"
         >
           {journalOrigin ? '← Back to Journal' : '← Back to Tasks'}

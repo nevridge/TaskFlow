@@ -24,7 +24,13 @@ import { TaskHistoryPanel } from '@/components/TaskHistoryPanel'
 import { TaskForm, type TaskFormPayload, type ProjectOption } from '@/components/TaskForm'
 import type { TaskSortKey } from '@/lib/prefs'
 import { todayISO } from '@/lib/journal-utils'
-import { taskEditPath, tasksOriginPath, type TaskOriginState } from '@/lib/task-origin'
+import {
+  readFocusTaskId,
+  stateWithoutFocusTaskId,
+  taskEditPath,
+  tasksOriginPath,
+  type TaskOriginState,
+} from '@/lib/task-origin'
 import {
   buildTaskFiltersSearch,
   parseTaskFilters,
@@ -35,6 +41,7 @@ import { deriveTaskStatuses, getParentProgressLabel } from '@/lib/task-derived-s
 import {
   buildTaskSections,
   findSectionOfTask,
+  findSectionShowingTask,
   indexTasksById,
   matchesSearchWithAncestors,
 } from '@/lib/task-sections'
@@ -89,7 +96,7 @@ const COLUMNS: Array<{ key: TaskSortKey; label: string }> = [
 ]
 
 export function TasksPage() {
-  const { data, isLoading, error } = useTasksQuery()
+  const { data, isLoading, isFetching, error } = useTasksQuery()
   const createMutation = useCreateTaskMutation()
   const updateMutation = useUpdateTaskMutation()
   const deleteTaskUndoable = useDeleteTaskUndoable()
@@ -173,6 +180,9 @@ export function TasksPage() {
   const pendingAddFocusRef = useRef<{ anchorAttr: string; newId: number | null; parentTitle: string } | null>(null)
   // Set by a detail-page delete: focus New Task once on arrival. Captured on mount so a plain visit never does.
   const focusNewTaskRef = useRef((location.state as { focusNewTask?: boolean } | null)?.focusNewTask === true)
+
+  // Set when the detail page returns here: focus that task's control once the list settles. Cleared at settle, not on mount.
+  const pendingFocusTaskIdRef = useRef(readFocusTaskId(location.state))
 
   // Clear the route state on mount whether or not the button ever renders (e.g. on a load error).
   useEffect(() => {
@@ -302,9 +312,11 @@ export function TasksPage() {
 
   // Carried by Edit, the title link and the parent link so the detail page can return to this filtered list.
   const originState: TaskOriginState = { from: tasksOriginPath(location.search) }
+  // Per entry point: also names the task to focus when the detail page returns here. Never mutates originState.
+  const stateFor = (id: number): TaskOriginState => ({ ...originState, focusTaskId: id })
 
   function openEdit(task: TaskListModel) {
-    navigate(taskEditPath(Number(task.id)), { state: originState })
+    navigate(taskEditPath(Number(task.id)), { state: stateFor(Number(task.id)) })
   }
 
   function openCreate() {
@@ -428,6 +440,34 @@ export function TasksPage() {
       }
     }
   }, [sections, allById, focusTick])
+
+  // Return from the detail page: focus the control the user left from, once the list has settled. Never expands
+  // a collapsed section (its toggle takes the focus). Abandoned silently when the task is gone or the load failed.
+  useLayoutEffect(() => {
+    const pendingId = pendingFocusTaskIdRef.current
+    if (pendingId === null) return
+    if (isLoading || isFetching) return
+    pendingFocusTaskIdRef.current = null
+    if (!error && pendingStatusFocusRef.current === null) {
+      const active = document.activeElement
+      if (!active || active === document.body || !active.isConnected) {
+        const section = findSectionShowingTask(sections, pendingId)
+        if (section) {
+          const target = isSectionCollapsed(section.key)
+            ? document.querySelector<HTMLElement>(`[data-section-toggle="${section.key}"]`)
+            : document.querySelector<HTMLElement>(
+                `[data-task-edit-id="${pendingId}"], [data-task-header-id="${pendingId}"]`,
+              )
+          target?.focus()
+        }
+      }
+    }
+    navigate(
+      { pathname: location.pathname, search: location.search },
+      { replace: true, state: stateWithoutFocusTaskId(location.state) },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, isLoading, isFetching, error])
 
   // Handlers
   function clearFormErrors() {
@@ -825,7 +865,7 @@ export function TasksPage() {
                               onAddChild={() => beginAddChild(header.parentId, anchor)}
                               addSubtaskDisabled={isParentCompleted(header.parentId)}
                               progressLabel={headerInfo && headerInfo.directTotal > 0 ? getParentProgressLabel(headerInfo) : undefined}
-                              linkState={originState}
+                              linkState={stateFor(header.parentId)}
                             />,
                           )
                           if (addingHeader) items.push(renderChildEditor(`${section.key}:ctx-editor:${header.parentId}`))
@@ -849,7 +889,7 @@ export function TasksPage() {
                                 onAddChild={t => beginAddChild(Number(t.id), 'row')}
                                 isAddingChild={addingHere}
                                 addSubtaskDisabled={isCompleted(task.status)}
-                                detailState={originState}
+                                detailState={stateFor(taskId)}
                                 onEdit={openEdit}
                                 onHistory={setHistoryTask}
                                 onDelete={handleDelete}

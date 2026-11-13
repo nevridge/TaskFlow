@@ -341,6 +341,33 @@ describe('TaskDetailPage', () => {
       expect(JSON.parse(screen.getByTestId('journal-route').getAttribute('data-state') ?? 'null')).toEqual({ focusTaskId: 1 })
     })
 
+    function renderWithTasksRoute(state: unknown) {
+      return render(
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[{ pathname: '/tasks/1', state }]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskDetailPage />} />
+              <Route path="/tasks" element={<JournalProbe />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      )
+    }
+    const probeState = () => JSON.parse(screen.getByTestId('journal-route').getAttribute('data-state') ?? 'null')
+
+    it('forwards only focusTaskId to the filtered Tasks list (#479)', async () => {
+      renderWithTasksRoute({ from: '/tasks?q=foo', focusTaskId: 9 })
+      await userEvent.click(backLink())
+      expect(screen.getByTestId('journal-route')).toHaveAttribute('data-path', '/tasks')
+      expect(probeState()).toEqual({ focusTaskId: 9 })
+    })
+
+    it('sends no state back to Tasks when the list supplied no focusTaskId (no route-id fallback)', async () => {
+      renderWithTasksRoute({ from: '/tasks' })
+      await userEvent.click(backLink())
+      expect(probeState()).toBeNull()
+    })
+
     it('falls back to the Tasks list with no state (direct load)', () => {
       renderPage()
       expect(backLink()).toHaveAttribute('href', '/tasks')

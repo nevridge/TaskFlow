@@ -55,6 +55,27 @@ describe('TaskContextHeader parent link (#469)', () => {
     await userEvent.click(link)
     expect(screen.getByTestId('state')).toHaveTextContent('{"from":"/tasks?q=a"}')
   })
+
+  it('marks the nearest parent link, and only it, as the focus target (#479)', () => {
+    render(
+      <MemoryRouter>
+        <table>
+          <tbody>
+            <TaskContextHeader
+              path={[{ id: 3, title: 'Goal' }, { id: 5, title: 'Parent task' }]}
+              parentId={5}
+              anchor="ctx:active:5"
+              sectionLabel="Active"
+              isAdding={false}
+              onAddChild={vi.fn()}
+            />
+          </tbody>
+        </table>
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Parent task' })).toHaveAttribute('data-task-header-id', '5')
+    expect(document.querySelectorAll('[data-task-header-id]')).toHaveLength(1)
+  })
 })
 
 describe('TaskContextHeader', () => {

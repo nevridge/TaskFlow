@@ -880,18 +880,19 @@ describe('TaskDetailPage', () => {
       expect(counter.count).toBe(0)
     })
 
-    it('navigating to another task focuses its heading once; refetch does not refocus', () => {
+    it('navigating to another task focuses its heading, and a later rerender does not refocus it', async () => {
       perIdTasks()
       const counter = countHeadingFocus()
-      render(tree())
+      const view = render(tree())
       expect(heading('Task 1')).toHaveFocus()
-      return userEvent.click(screen.getByRole('button', { name: 'go 2' })).then(async () => {
-        await waitFor(() => expect(heading('Task 2')).toHaveFocus())
-        expect(counter.count).toBe(2)
-        await userEvent.click(screen.getByRole('button', { name: 'go 2' }))
-        expect(heading('Task 2')).not.toHaveFocus()
-        expect(counter.count).toBe(2)
-      })
+      await userEvent.click(screen.getByRole('button', { name: 'go 2' }))
+      await waitFor(() => expect(heading('Task 2')).toHaveFocus())
+      expect(counter.count).toBe(2)
+      // Move focus away, then rerender with the same data (a refetch): focus must stay put.
+      screen.getByRole('button', { name: 'go 2' }).focus()
+      view.rerender(tree())
+      expect(screen.getByRole('button', { name: 'go 2' })).toHaveFocus()
+      expect(counter.count).toBe(2)
     })
 
     it('A to B to A refocuses the heading on each arrival, including the return to A', async () => {
@@ -904,7 +905,7 @@ describe('TaskDetailPage', () => {
       await waitFor(() => expect(heading('Task 1')).toHaveFocus())
     })
 
-    it('a task being deleted gets no heading focus, and a cancelled delete does not steal focus', () => {
+    it('the same id becoming ready again after a loading state does not refocus the heading', () => {
       const counter = countHeadingFocus()
       const view = render(tree())
       expect(counter.count).toBe(1)

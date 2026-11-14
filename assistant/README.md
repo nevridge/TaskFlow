@@ -114,6 +114,8 @@ Open Claude Code in this repo (on `main` it creates a branch for you; any other 
 
 It needs the user-level agents `story-writer`, `codebase-researcher` and `spec-writer` in `~/.claude/agents/`. The skill is `.claude/skills/feature-factory/SKILL.md` and its agents are in `.claude/agents/`.
 
+If a run stops on a failure (a Halt), the skill commits the pending work on the branch as `chore: feature-factory halt commit` and keeps the run folder; re-run `/feature-factory <issue-number>` to resume, which undoes that commit so its work goes into the stage's normal commit. **Start over** deletes the run folder and keeps the branch, and asks whether to keep the branch's commits or reset it to `main`, never offering the reset once anything has been pushed.
+
 ## Known issues
 
 - Subagents cannot ask questions mid-run, so the agent proposes and reports rather than confirming; the interactive confirm-then-write flows live in the skills.

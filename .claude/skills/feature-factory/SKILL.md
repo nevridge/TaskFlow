@@ -33,13 +33,13 @@ Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep;
 5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete the folder found in step 2.
 6. **Branch and folder.** The first change in the run.
    - No run folder: on `main`, create a branch; any other branch is used as is.
-   - Run folder found (Resume or Start over): the branch is the `Branch:` line of `research.md`. Never create a branch. If the current branch differs, name both and ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Check out <recorded branch>** and **Stop**. If the owner declines or the checkout fails, stop.
+   - Run folder found (Resume or Start over): the branch is the `Branch:` line of `research.md`. Never create a branch. If the current branch differs, name both and ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Check out <recorded branch>** and **Stop**. If the owner declines or the checkout fails, stop. If the recorded branch no longer exists, say so and that deleting the run folder starts a fresh run.
    - Resume: apply the halt-commit rule, then continue from the latest stage.
-   - Start over: apply the halt-commit rule only on the keep path, then the Start over rule.
+   - Start over: apply the Start over rule; it applies the halt-commit rule on the keep path.
 
 **Halt-commit rule** (Resume, and the Start over keep path):
 
-- If HEAD's subject is exactly `chore: feature-factory halt commit` and HEAD is not on a remote branch, run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.
+- If HEAD's subject is exactly `chore: feature-factory halt commit` and the branch is not pushed (the Start over rule's test), run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.
 - Reset nothing in any other case; resume only ever undoes a HEAD commit with exactly that subject.
 - If a commit with that subject is in `git log main..HEAD` but was not undone (not HEAD, or HEAD but pushed), warn "Halt commit <short hash> is still in the branch history" and carry on.
 
@@ -47,7 +47,7 @@ Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep;
 
 - No commits beyond `main` (`git log main..HEAD` is empty): delete the run folder, keep the branch, begin at Stage 1.
 - Commits exist: run `git fetch origin`. The branch counts as pushed when `git ls-remote --heads origin <branch>` lists it and `git rev-list main..origin/<branch>` is non-empty. If the fetch or ls-remote fails, treat it as pushed.
-- Not pushed: ask every time, with exactly two options.
+- Not pushed: ask every time, listing the commits the reset would discard (`git log --oneline main..HEAD`), with exactly two options.
   - **Keep the commits and run again**: apply the halt-commit rule, delete the run folder, run from Stage 1 on top of the commits.
   - **Reset the branch to main**: `git reset --hard main` (the tree is clean), delete the run folder, run from Stage 1.
 - Pushed: do not offer the reset and ask no question. State "Commits are pushed; keeping them (no force push is ever used)." Then take the keep path.

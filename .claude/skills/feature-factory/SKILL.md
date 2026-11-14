@@ -15,15 +15,16 @@ You are the feature-factory orchestrator. You run a multi-agent pipeline with th
 - One shared correction budget of 2 for the whole run, and one respec budget of 1.
 - Spec blockers from a builder go back to `spec-writer`, never to another builder.
 - Every `git add` is plain `git add -A`; `.feature-factory/` and `.playwright-mcp/` are gitignored.
-- Every decision put to the owner (blockers, resume, stops 1 to 3) uses the AskUserQuestion tool (or a plain-text list if it is unavailable). Free-form questions stay as plain text.
+- Every decision put to the owner uses the AskUserQuestion tool (or a plain-text list if it is unavailable). Free-form questions stay as plain text.
+- The orchestrator itself asks every owner question and runs every commit, reset, branch checkout, push and GitHub post. Never delegate these to an agent: agents cannot ask the owner questions and never commit.
 
 ## Run folder
 
-`.feature-factory/<issue-number-or-slug>/` holds `research.md`, `story.md`, `brief.md`, `advisories.md`, `build-<area>.md`, `verify.md`, `validation.md`, `diff.patch` and `changed-files.txt`. The first line of `research.md` is `Branch: <name>`. There is no state file: the stage is inferred from which files exist and from `git log`. A stage is finished only when its commit is in `git log`; a `build-<area>.md` without that commit, or one holding a spec blocker, means the area runs again. After a halt-commit undo the work sits in the working tree, and the stage whose commit is missing runs again over it.
+`.feature-factory/<issue-number-or-slug>/` holds `research.md`, `story.md`, `brief.md`, `advisories.md`, `build-<area>.md`, `verify.md`, `validation.md`, `diff.patch` and `changed-files.txt`. The first line of `research.md` is `Branch: <name>`. There is no state file: the stage is inferred from which files exist and from `git log`. A stage that makes a commit (a build area, verify, a correction pass) is finished only when its commit is in `git log`; a `build-<area>.md` without that commit, or one holding a spec blocker, means the area runs again. After a halt-commit undo the work sits in the working tree, and the stage whose commit is missing runs again over it.
 
 ## Stage 0: Preflight
 
-Stop on any failure. Steps 1 to 5 only read or ask; nothing changes before step 6.
+Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep; the branch, the tree and this run's folder do not change before step 6.
 
 1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description and ask for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
 2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none. If one exists, show which files it has, then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Resume from the latest stage** and **Start over**. The answer changes nothing until step 6. This is "this run's folder".
@@ -112,7 +113,7 @@ Send the validator's **Must fix** findings, the verifier's **code failures** (wi
 
 **Halt**: a stop with these triggers only: a spec blocker with the respec budget spent, client regeneration FAILED, ENVIRONMENT FAILURE, and the correction budget spent with Must fix findings or a failing gate remaining.
 
-- A Halt keeps every file, commits pending work on the feature branch, and reports what failed and the branch name. If the tree has any change, run `git add -A` and commit with the subject `chore: feature-factory halt commit`; a clean tree gets no commit. If the commit fails, report that and leave the tree as it is.
+- A Halt keeps every file, commits pending work on the feature branch, and reports what failed and the branch name. If the tree has any change, run `git add -A` and commit with the subject `chore: feature-factory halt commit`; a clean tree gets no commit. If the commit fails, report that and leave the tree as it is; the owner commits or stashes the changes before re-running, because preflight stops on a dirty tree.
 - A halted run writes no notes and opens no PR.
 - Rejected at stop 1 or 2, No at stop 3, a preflight stop and a blocker **Stop** are not Halts: no halt commit is made, and the files stay. This is intended.
 

@@ -38,6 +38,8 @@ Numbered. Each item: the recommendation, why, the source URL, the retrieval date
 ### Conflicts with brief
 Each conflict with the brief, with the source, or `None`. Do not resolve it.
 
+### Out of scope (useful ideas beyond the brief, one per line, or `None`)
+
 ### Docs consulted
 Every URL fetched and its retrieval date.
 

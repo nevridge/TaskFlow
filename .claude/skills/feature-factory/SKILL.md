@@ -19,18 +19,37 @@ You are the feature-factory orchestrator. You run a multi-agent pipeline with th
 
 ## Run folder
 
-`.feature-factory/<issue-number-or-slug>/` holds `research.md`, `story.md`, `brief.md`, `advisories.md`, `build-<area>.md`, `verify.md`, `validation.md`, `diff.patch` and `changed-files.txt`. The first line of `research.md` is `Branch: <name>`. There is no state file: the stage is inferred from which files exist and from `git log`.
+`.feature-factory/<issue-number-or-slug>/` holds `research.md`, `story.md`, `brief.md`, `advisories.md`, `build-<area>.md`, `verify.md`, `validation.md`, `diff.patch` and `changed-files.txt`. The first line of `research.md` is `Branch: <name>`. There is no state file: the stage is inferred from which files exist and from `git log`. A stage is finished only when its commit is in `git log`; a `build-<area>.md` without that commit, or one holding a spec blocker, means the area runs again. After a halt-commit undo the work sits in the working tree, and the stage whose commit is missing runs again over it.
 
 ## Stage 0: Preflight
 
-Stop on any failure; nothing has changed yet.
+Stop on any failure. Steps 1 to 5 only read or ask; nothing changes before step 6.
 
 1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description and ask for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
-2. **Branch.** On `main`, create a branch first. Any other branch is used as is.
-3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in.
-4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). Any open blocker stops the run and is named. Ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then; any blocker found later needs a new question.
-5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete this run's folder.
-6. **Resume.** If a folder for this issue or slug exists, show which files it has, then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Resume from the latest stage** and **Start over**.
+2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none. If one exists, show which files it has, then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Resume from the latest stage** and **Start over**. The answer changes nothing until step 6. This is "this run's folder".
+3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in. A Halt has already committed its pending work (see Halt), so a halted run passes.
+4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). Any open blocker stops the run and is named. Ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then; the check before stop 3 re-reads `blocked_by`, and any blocker found there needs a new question.
+5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete the folder found in step 2.
+6. **Branch and folder.** The first change in the run.
+   - No run folder: on `main`, create a branch; any other branch is used as is.
+   - Run folder found (Resume or Start over): the branch is the `Branch:` line of `research.md`. Never create a branch. If the current branch differs, name both and ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Check out <recorded branch>** and **Stop**. If the owner declines or the checkout fails, stop.
+   - Resume: apply the halt-commit rule, then continue from the latest stage.
+   - Start over: apply the halt-commit rule only on the keep path, then the Start over rule.
+
+**Halt-commit rule** (Resume, and the Start over keep path):
+
+- If HEAD's subject is exactly `chore: feature-factory halt commit` and HEAD is not on a remote branch, run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.
+- Reset nothing in any other case; resume only ever undoes a HEAD commit with exactly that subject.
+- If a commit with that subject is in `git log main..HEAD` but was not undone (not HEAD, or HEAD but pushed), warn "Halt commit <short hash> is still in the branch history" and carry on.
+
+**Start over rule:**
+
+- No commits beyond `main` (`git log main..HEAD` is empty): delete the run folder, keep the branch, begin at Stage 1.
+- Commits exist: run `git fetch origin`. The branch counts as pushed when `git ls-remote --heads origin <branch>` lists it and `git rev-list main..origin/<branch>` is non-empty. If the fetch or ls-remote fails, treat it as pushed.
+- Not pushed: ask every time, with exactly two options.
+  - **Keep the commits and run again**: apply the halt-commit rule, delete the run folder, run from Stage 1 on top of the commits.
+  - **Reset the branch to main**: `git reset --hard main` (the tree is clean), delete the run folder, run from Stage 1.
+- Pushed: do not offer the reset and ask no question. State "Commits are pushed; keeping them (no force push is ever used)." Then take the keep path.
 
 ## Stage 1: Research
 
@@ -91,18 +110,27 @@ Send the validator's **Must fix** findings, the verifier's **code failures** (wi
 
 **Should fix** findings are not reworked. They go in the PR body as residual findings.
 
-**Halt**: stop the run, keep every file, report what failed and the branch name. A halted run writes no notes and opens no PR.
+**Halt**: a stop with these triggers only: a spec blocker with the respec budget spent, client regeneration FAILED, ENVIRONMENT FAILURE, and the correction budget spent with Must fix findings or a failing gate remaining.
+
+- A Halt keeps every file, commits pending work on the feature branch, and reports what failed and the branch name. If the tree has any change, run `git add -A` and commit with the subject `chore: feature-factory halt commit`; a clean tree gets no commit. If the commit fails, report that and leave the tree as it is.
+- A halted run writes no notes and opens no PR.
+- Rejected at stop 1 or 2, No at stop 3, a preflight stop and a blocker **Stop** are not Halts: no halt commit is made, and the files stay. This is intended.
 
 ## Stage 8: Finish, stop 3
 
-Draft the implementation notes from the run files only. Show them at **stop 3** with the validator report, residual Should fix findings, skipped areas and the gate results, then ask whether to open the PR with AskUserQuestion (or a plain-text list if it is unavailable), offering **Yes** and **No**. Stop 3 is never skipped and has no override.
+Draft the implementation notes from the run files only. With an issue number, re-read `blocked_by` as in Stage 0 step 4. Show any open blocker not already covered by a **proceed anyway** in this run together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. **Stop** keeps the files, makes no halt commit, and pushes and posts nothing. If the read fails, say so and stop.
 
-On **No**, post nothing and leave the branch as it is. On **Yes**:
+Show the notes at **stop 3** with the validator report, residual Should fix findings, skipped areas and the gate results, then ask whether to open the PR with AskUserQuestion (or a plain-text list if it is unavailable), offering **Yes** and **No**. Stop 3 is never skipped and has no override.
 
-1. With an issue number, post the notes as one issue comment whose first line is `<!-- implementation-notes -->`. Find an existing comment by that marker and update it in place on a re-run. Without an issue, the notes go at the end of the PR body.
-2. Push the branch and open a PR against `main`. The body has: summary, gate results, residual Should fix findings, the skip reasons, `Closes #N` and a link to the notes comment. It has no list of changed files.
-3. Delete the run folder.
+On **No**, post nothing and leave the branch as it is (no halt commit). On **Yes**, in this order:
+
+1. Push the branch. If the push fails, report it and the branch name and stop: nothing is posted, no PR is opened, the run folder stays.
+2. With an issue number, post the notes as one issue comment whose first line is `<!-- implementation-notes -->`; find an existing comment by that marker and update it in place on a re-run. Without an issue, the notes go at the end of the PR body. If the post fails, report it and stop; the push stays.
+3. Open a PR against `main`; if an open PR for the branch exists, update its body in place instead. The body has: summary, gate results, residual Should fix findings, the skip reasons, `Closes #N` and a link to the notes comment. It has no list of changed files. If this fails, report it and stop.
 4. Print "Review with: `/pr-triage <N>`" using the PR number. When the Scope block says the UI changes, also print "UI changed: run `/ux-test PR#<N>`". Never run either yourself.
+5. Delete the run folder last, only after the PR is open and step 4 has printed.
+
+A failure in steps 1 to 3 is not a Halt: keep the run folder. Re-running resumes at this stage; stop 3 is asked again; on Yes the push is a no-op if already pushed, the marker comment is updated and the existing PR body is updated in place.
 
 ### Implementation notes
 

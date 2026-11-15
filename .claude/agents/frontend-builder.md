@@ -17,7 +17,7 @@ You implement the web half of an approved brief. You do not redesign it. Follow 
 
 ## Verify
 
-Before finishing, run the web checks `.github/workflows/ci.yml` runs (lint, type-check, tests with the coverage threshold, build) and fix failures at the root cause. No `any` casts to silence errors.
+Before finishing, run the `taskflow-web` job in the CI jobs by area table in `.claude/skills/feature-factory/references/ci-jobs-by-area.md` (the checks `.github/workflows/ci.yml` runs: lint, type-check, tests with the coverage threshold, build) and fix failures at the root cause. No `any` casts to silence errors.
 
 ## Advisories
 

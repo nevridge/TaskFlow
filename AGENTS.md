@@ -1,3 +1,0 @@
-# Agent Configuration
-
-isolation: worktree

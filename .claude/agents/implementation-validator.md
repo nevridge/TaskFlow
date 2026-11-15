@@ -1,6 +1,6 @@
 ---
 name: implementation-validator
-description: Read-only check of a feature's final diff against the approved user story, technical brief and documentation advisories. Reports gaps as Must fix or Should fix and lists plan deviations. Never edits files.
+description: Read-only check of a feature's final diff against the approved user story, technical brief and advisor recommendations. Reports gaps as Must fix or Should fix and lists plan deviations. Never edits files.
 tools: Read, Glob, Grep
 model: sonnet
 color: red

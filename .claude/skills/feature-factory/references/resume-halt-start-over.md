@@ -2,6 +2,8 @@
 
 The feature-factory orchestrator reads this file in full when a stage in `../SKILL.md` says to, before any Halt and before a budget check on a resumed run. Stage and step numbers refer to `SKILL.md`, and Rules means its Rules section.
 
+**One working copy.** Every agent works in the one working copy, on the run's branch. Worktree isolation is not used for any agent: no agent file sets `isolation: worktree`, and the orchestrator does not set it on an Agent call. A worktree-isolated agent starts from the default branch, not the run's branch, and does not load the worktree's own `CLAUDE.md` or `.claude/rules/`; the halt-commit, `git reset --hard main` and clean-tree rules below also assume one working copy.
+
 **Halt-commit rule** (Resume, and the Start over keep path):
 
 - If HEAD's subject is exactly `chore: feature-factory halt commit` and the branch is not pushed (the Start over rule's test), run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.
@@ -16,12 +18,12 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
   - **Keep the commits and run again**: apply the halt-commit rule, delete the run folder, run from Stage 1 on top of the commits.
   - **Reset the branch to main**: `git reset --hard main` (the tree is clean), delete the run folder, run from Stage 1.
 - Pushed: do not offer the reset and ask no question. State "Commits are pushed; keeping them (no force push is ever used)." Then take the keep path.
-- On every path, once the old folder is deleted and the new one exists, append all held answers as its first entries, in the order they were asked: the Resume or Start over answer, any preflight **proceed anyway**, the wrong-branch answer when it was asked, then the keep or reset answer when it was asked. Nothing from the deleted record carries over.
+- On every path, once the old folder is deleted the orchestrator creates the new run folder at once (before any stage runs), then appends all held answers as its first entries, in the order they were asked: the Resume or Start over answer, any preflight **proceed anyway**, the wrong-branch answer when it was asked, then the keep or reset answer when it was asked. Nothing from the deleted record carries over.
 - **Mid-run Start over** (the Start over answer at a budget check on a resumed run; see Resume after a budget Halt in this file) replaces the previous bullet with this order:
   1. Hold in memory the old record's preflight **proceed anyway** entries and its wrong-branch answer.
   2. Run the halt commit (see Halt in this file). If it fails, stop with the folder intact and delete nothing.
   3. Apply the paths above, which delete the folder.
-  4. Write the first entries of the new record: those **proceed anyway** entries in their old order, the wrong-branch entry, the Start over answer, then the keep or reset answer if it was asked. The old Resume answer is dropped.
+  4. The orchestrator creates the new folder, then writes the first entries of the new record: those **proceed anyway** entries in their old order, the wrong-branch entry, the Start over answer, then the keep or reset answer if it was asked. The old Resume answer is dropped.
 
 **Halt**: a stop with these triggers only: the Outcome table rows whose destination is `Halt`. Read `outcome-table.md` in full before applying a Halt.
 

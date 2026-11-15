@@ -55,7 +55,7 @@ A spec blocker is a contradiction or impossibility in the brief that the conserv
 ## Reply
 
 0. **Spec blockers** (omit if none), first.
-1. **Files changed**
+1. **Files changed**, ending with one line: `Dependencies added outside the brief: <names>`, or `Dependencies added outside the brief: none` (packages you added that the brief does not name).
 2. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
 3. **Client regeneration**: `ran`, `not needed` or `FAILED (reason)`, plus the diff check result.
 4. **API contract**: new or changed endpoints (method, path, request, response, status codes) for the frontend.

@@ -35,6 +35,20 @@ The orchestrator appends one entry to `decisions.md` each time one of these is p
 - The FORMAT-ONLY entry reads "Stage 5, FORMAT-ONLY pass used (no budget)" and is appended before the formatter runs. A record that holds it has used the run's one pass, so the count survives Resume; Start over deletes the record and resets it.
 - If a line is a budget entry but its date, stage or budget cannot be read, say so and ask the owner how much of that budget was spent. Never read it as zero. Other malformed lines are ignored.
 
+## CI jobs by area
+
+`.github/workflows/ci.yml` is the source for every command and threshold; this table only says who runs each job. For which CI job runs for a diff, this table wins. The Outcome table still decides how each reply is routed.
+
+| ci.yml job | Owner | Runs when | Note |
+|---|---|---|---|
+| `lint` | api | the diff touches api | `dotnet format TaskFlow.sln`; `TaskFlow.sln` also covers root build files |
+| `build` | api | the diff touches api | `dotnet build TaskFlow.sln`; `TaskFlow.sln` also covers root build files |
+| `test` | api | the diff touches api | `TaskFlow.Api.Tests`, with the coverage threshold; holds `ContractsProjectTests` |
+| `mcp-integration` | test-verifier | the diff touches api (including `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`) or assistant | `TaskFlow.Mcp.Integration.Tests` references `TaskFlow.Api` and the assistant MCP project |
+| `assistant` | assistant | the diff touches assistant | run from `assistant/` |
+| `taskflow-web` | web | the diff touches web | run from `TaskFlow.Web/` |
+| `smoke-test` | CI-only | never run by builders or the verifier | runs `docker compose up -d` and `down -v` against the default compose project, which locally is the live stack; CLAUDE.md says to rebuild the live stack only from `main` and that `-p taskflow-test` is mandatory |
+
 ## Outcome table
 
 Every agent reply value has a row, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. When this table and stage prose disagree, the table wins. Stage prose points to the table and does not restate outcomes.
@@ -43,7 +57,7 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt.
 - Rows with the budget `1 correction` are the Stage 7 triggers. They share one pass and one unit (Stage 7).
 - "Reported" means shown at stop 3, listed in the implementation notes under Possible issues and listed in the PR body.
-- The js-yaml rows cover edits to `.claude/agents/` files only. Skill files are not parse-checked.
+- The js-yaml rows cover edits to any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`.
 
 | Source | Reply value (label exactly as emitted) | Outcome | Destination | Budget |
 |---|---|---|---|---|
@@ -70,8 +84,8 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | docs agent | **Spec blockers**, respec budget spent | No respec is left. | Halt | none |
 | docs agent | js-yaml `passed` | Recorded in `build-docs.md`. | continue | none |
 | docs agent | js-yaml `parse error fixed` | Recorded in `build-docs.md`. | continue | none |
-| docs agent | js-yaml `not needed` | No `.claude/agents/` file was edited. | continue | none |
-| docs agent | js-yaml `check could not run` | The agent files are unchecked. | Halt | none |
+| docs agent | js-yaml `not needed` | No file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/` was edited. | continue | none |
+| docs agent | js-yaml `check could not run` | The edited `.claude` files are unchecked. | Halt | none |
 | test-verifier | Pass | Stage 6 runs. | continue | none |
 | test-verifier | `FORMAT-ONLY`, with no FORMAT-ONLY entry in `decisions.md` | The run's one formatter pass (Stage 5). | loop: Stage 5 | none |
 | test-verifier | `FORMAT-ONLY`, with a FORMAT-ONLY entry in `decisions.md` | Treated as a Code failure. | loop: Stage 7 | 1 correction |
@@ -162,7 +176,7 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 
 ## Stage 3: Brief, then stop 2
 
-1. `spec-writer` gets `story.md` and `research.md`. The brief must end with a **Scope block**: which areas change (`api`, `web`, `assistant`, `docs`), whether the UI changes, whether an MCP tool surface changes, and a reason for each area that does not change when an API contract or error code does. `docs` is `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, in each case only outside the code-area paths: `TaskFlow.Api*/` is api, `TaskFlow.Web/` is web, `assistant/` is assistant. A file under a code-area path belongs to that area (`assistant/README.md` is assistant). If the block is missing, re-ask once; the Outcome table gives the outcome if it is still missing.
+1. `spec-writer` gets `story.md` and `research.md`. The brief must end with a **Scope block**: which areas change (`api`, `web`, `assistant`, `docs`), whether the UI changes, and a reason for each area that does not change when an API contract or error code does. The code areas are: `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/` are api, `TaskFlow.Web/` is web, `assistant/` is assistant. A file under a code-area path belongs to that area (`assistant/README.md` and `TaskFlow.Contracts/README.md` are not docs). `docs` is root `docs/**` (`TaskFlow.Web/docs/` is web), `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, in each case only outside the code-area paths and outside `.github/**`. `.github/**` is in no area and is never docs, so its files (including `*.md`) are routed by hand. Root `README.md`, `CLAUDE.md` and `AGENTS.md` are docs. Root-level build files (`TaskFlow.sln`, `Directory.Build.props`, `global.json`) and `.gitignore` are in no area and change only when the brief names them, and the brief says who edits each; an unnamed edit is reported by the validator as outside the brief. This rule covers root-level files only: `assistant/Directory.Build.props` and `assistant/.editorconfig` stay assistant. If the block is missing, re-ask once; the Outcome table gives the outcome if it is still missing.
 2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Both get the draft brief, `story.md` and `research.md`. Write their replies to `advisories.md`. A `NO_UI_WORK` reply adds nothing. The Outcome table gives the outcome of every other advisor reply value. No advisor applies to `docs`.
 3. One more `spec-writer` pass folds `advisories.md` into the brief. A proposed package appears as "Proposed dependency (needs approval)". Write `brief.md`.
 
@@ -182,10 +196,10 @@ One builder per area the Scope block lists, in dependency order: `backend-builde
 The `docs` agent prompt:
 
 - Implement the docs part of the approved brief; do not redesign it.
-- Allowlist: `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Web/` and `assistant/`.
+- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`).
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
 - Do not run `git add`, `git commit` or `git push`; the orchestrator commits.
-- After editing any `.claude/agents/` file: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
+- After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
 - Reply with "Spec blockers" first (omit if none), then files changed, then verification results: the js-yaml outcome, exactly one of `passed`, `parse error fixed`, `check could not run` or `not needed`.
 
 Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one commit after each area. `docs` gets one commit; its spec blockers and the respec budget work as for code areas, with no budget change. The Outcome table gives the outcome of every builder and `docs` agent reply value. An area whose builder reports `Gates: red` is still committed.
@@ -203,7 +217,7 @@ A spec blocker raised in a Stage 7 pass uses the same rows, this procedure and t
 
 ## Stage 5: Verify
 
-`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. A docs-only diff has no gates. `test-verifier` still runs and reports `NO GATES APPLICABLE`; this is not ENVIRONMENT FAILURE. Write `verify.md` and make one commit.
+`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. A docs-only diff (the `docs` definition in Stage 3) has no gates; every other diff runs the jobs the CI jobs by area table gives its areas. `test-verifier` still runs and reports `NO GATES APPLICABLE`; this is not ENVIRONMENT FAILURE. Write `verify.md` and make one commit.
 
 The Outcome table gives the outcome of every verifier reply value.
 
@@ -213,7 +227,7 @@ A run gets one FORMAT-ONLY pass: append the FORMAT-ONLY entry (Decisions record)
 
 Runs after every Stage 5, including when Stage 5 reported code failures; Stage 7 consumes both reports. The Outcome table gives the outcome of every validator reply value.
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`; this check applies to code areas only), and that an API change cannot pass without the assistant step or a stated reason. For a docs-only diff, the skipped-area check expects no changes under `TaskFlow.Api*/`, `TaskFlow.Web/` or `assistant/` and no paths outside the docs allowlist. Write `validation.md`.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`; this check applies to code areas only), and that an API change cannot pass without the assistant step or a stated reason. For a docs-only diff, the skipped-area check expects no changes under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/` or `assistant/` and no paths outside the docs allowlist and the root files the brief names. Write `validation.md`.
 
 ## Stage 7: Correct
 

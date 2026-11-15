@@ -25,7 +25,7 @@ You are the feature-factory orchestrator of a multi-agent pipeline with three ap
 
 ## Reference files
 
-After a compaction, re-read `SKILL.md` and the current stage's reference file. `SKILL.md` must stay at or under 3,000 words, counted with `wc -w`.
+After a compaction, re-read `SKILL.md` and the reference files the current stage or stop names. `SKILL.md` must stay at or under 3,000 words, counted with `wc -w`.
 
 Read each file in full when a stage says to:
 
@@ -33,6 +33,7 @@ Read each file in full when a stage says to:
 - [references/decisions-record.md](references/decisions-record.md): the Decisions record.
 - [references/resume-halt-start-over.md](references/resume-halt-start-over.md): the Halt-commit rule, the Start over rule, Halt and the Resume rules.
 - [references/ci-jobs-by-area.md](references/ci-jobs-by-area.md): the CI jobs by area table.
+- [references/implementation-notes.md](references/implementation-notes.md): the sections of the implementation notes.
 
 Read `references/resume-halt-start-over.md` in full before any Halt and before a budget check on a resumed run (Resume after a budget Halt).
 
@@ -64,6 +65,8 @@ Read `references/outcome-table.md` in full before this stage.
 
 ## Stage 2: Story, then stop 1
 
+Read `references/decisions-record.md` in full before this stage.
+
 An issue is **groomed** when its first non-blank line begins `> Groomed` and the body has `## Acceptance Criteria`, `## Edge Cases` and `## Out of Scope` headings.
 
 - Groomed: the issue body is the story; copy it to `story.md` and skip stop 1 (record the skip). If `research.md` contradicts it (a referenced entity, endpoint or schema is missing or restructured), flag that and run `story-writer` with the groomed story as context.
@@ -71,13 +74,13 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 
 ## Stage 3: Brief, then stop 2
 
-Read `references/outcome-table.md` in full before this stage.
+Read `references/outcome-table.md` and `references/decisions-record.md` in full before this stage.
 
 1. `spec-writer` gets `story.md` and `research.md`. The brief must end with a **Scope block**: which areas change (`api`, `web`, `assistant`, `docs`), whether the UI changes, and a reason for each area that does not change when an API contract or error code does. If the block is missing, re-ask once; the Outcome table (`references/outcome-table.md`) gives the outcome if it is still missing. The areas:
    - Code areas: `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/` are api, `TaskFlow.Web/` is web, `assistant/` is assistant. A file under a code-area path belongs to that area (`assistant/README.md` and `TaskFlow.Contracts/README.md` are not docs).
    - `docs` is root `docs/**` (`TaskFlow.Web/docs/` is web), `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, in each case only outside the code-area paths and outside `.github/**`. Root `README.md`, `CLAUDE.md` and `AGENTS.md` are docs.
    - `.github/**` is in no area and is never docs, so its files (including `*.md`) are routed by hand.
-   - Root-level build files (`TaskFlow.sln`, `Directory.Build.props`, `global.json`) and `.gitignore` are in no area and change only when the brief names them, and the brief says who edits each; an unnamed edit is reported by the validator as outside the brief.
+   - Root-level build files (`TaskFlow.sln`, `Directory.Build.props`, `global.json`) and `.gitignore` are in no area and change only when the brief names them, and the brief says who edits each; an unnamed edit is reported by the validator as outside the brief. `assistant/Directory.Build.props` and `assistant/.editorconfig` stay assistant.
 2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Both get the draft brief, `story.md` and `research.md`. Write their replies to `advisories.md`, as the Outcome table (`references/outcome-table.md`) says for each reply value. No advisor applies to `docs`.
 3. One more `spec-writer` pass folds `advisories.md` into the brief. A proposed package appears as "Proposed dependency (needs approval)". Write `brief.md`.
 
@@ -94,7 +97,7 @@ Present the story or brief. List every open question. Put each question with dis
 
 ## Stage 4: Build
 
-Read `references/outcome-table.md` in full before this stage.
+Read `references/outcome-table.md` and `references/decisions-record.md` in full before this stage.
 
 One builder per area the Scope block lists, in dependency order: `backend-builder` (api, regenerates the client), `frontend-builder` (web), `assistant-builder` (assistant), then `docs`. An area not listed is skipped, and each skip is recorded in `decisions.md` with its reason. Each builder gets `brief.md`, `research.md` and the earlier `build-<area>.md` files. Pass `advisories.md` to `frontend-builder` and `assistant-builder` only.
 
@@ -103,8 +106,8 @@ The `docs` agent prompt:
 - Implement the docs part of the approved brief; do not redesign it.
 - Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`), never a path in the next bullet.
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
-- Do not run `git add`, `git commit` or `git push` (see Rules).
-- After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. A file with no frontmatter needs no check and counts as `not needed`. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
+- Do not run `git add`, `git commit` or `git push`.
+- After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. A file with no frontmatter needs no check and counts as `not needed`. An agent file or a `SKILL.md` must have frontmatter; a missing one is a parse error. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
 - Reply with "Spec blockers" first (omit if none), then files changed, then verification results: the js-yaml outcome, exactly one of `passed`, `parse error fixed`, `check could not run` or `not needed`.
 
 Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one commit after each area.
@@ -130,7 +133,7 @@ A run gets one FORMAT-ONLY pass: append the FORMAT-ONLY entry (Decisions record,
 
 ## Stage 6: Validate
 
-Read `references/outcome-table.md` and `references/ci-jobs-by-area.md` in full before this stage.
+Read `references/outcome-table.md` in full before this stage.
 
 Runs after every Stage 5, even when it reported code failures; Stage 7 consumes both reports.
 
@@ -138,7 +141,7 @@ Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh bef
 
 ## Stage 7: Correct
 
-Read `references/outcome-table.md` and `references/resume-halt-start-over.md` in full before this stage.
+Read `references/outcome-table.md`, `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before this stage.
 
 Triggers: verifier code failures, `probable bug` and `bug:` items, a builder's `Gates: red`, and validator Must fix findings not marked `[?]`. One pass covers every trigger present and spends one unit of the correction budget. Skipped when no trigger is present.
 
@@ -146,9 +149,9 @@ Send every trigger present to the area builder, with the verifier's diagnosis fo
 
 ## Stage 8: Finish, stop 3
 
-Read `references/outcome-table.md`, `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before this stage.
+Read `references/outcome-table.md`, `references/decisions-record.md`, `references/resume-halt-start-over.md` and `references/implementation-notes.md` in full before this stage.
 
-Draft the implementation notes from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
+Draft the implementation notes (`references/implementation-notes.md`) from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
 
 Show the notes at **stop 3** with the validator report, residual Should fix findings, skipped areas, the gate results, every validator finding marked `[?]` for the owner to decide, and every item the Outcome table (`references/outcome-table.md`) marks as reported, then ask (see Rules) whether to open the PR, offering **Yes** and **No**. Record the answer, before step 1 on Yes.
 
@@ -161,7 +164,3 @@ On **No**, post nothing and apply the halt commit (see Halt in `references/resum
 5. Delete the run folder last, only after the PR is open and step 4 has printed.
 
 A failure in steps 1 to 3 is not a Halt: keep the run folder. Re-running resumes at this stage and asks stop 3 again; on Yes the push is a no-op if already pushed.
-
-### Implementation notes
-
-Five sections: **Decisions**, **Plan deviations** (the validator's three groups, copied as they stand), **Advisor deviations** (the `advisory_deviations` with reasons from `frontend-builder` and `assistant-builder`, the only builders that report them), **Possible issues** (the verifier's unclear probes and every item the Outcome table (`references/outcome-table.md`) marks as reported) and **Follow-up candidates** (exactly three sources: the story's Out of Scope section, the integration advisor's out-of-scope ideas in `advisories.md`, and any `SOURCE LIST NEEDS UPDATE` line; an idea from the advisor's list appears here only, not under Advisor deviations; builders' other out-of-scope advice stays under Advisor deviations). List candidates; never open issues.

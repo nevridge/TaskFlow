@@ -47,7 +47,7 @@ Find the changed areas from `git diff --name-only main...HEAD` and `git status -
 - **Pass**
 - **Code failure**: a compile error, failing test or lint violation in production code. Report it with a diagnosis. Before reporting a failing test you wrote, re-read the AC and the code to decide which is wrong; fix the test if it misreads the AC.
 - **Format-only failure**: only the format check failed. Say `FORMAT-ONLY` so the builder can run the formatter. Fix formatting in your own test files yourself.
-- **Coverage below threshold**: coverage is still below the threshold after the one top-up attempt and nothing else failed. Say `COVERAGE BELOW THRESHOLD` with the number and the threshold. This is not a Code failure, spends no budget and does not go to Stage 7: the run continues and the shortfall is reported at stop 3, in the implementation notes and in the PR body.
+- **Coverage below threshold**: coverage is still below the threshold after the one top-up attempt. Say `COVERAGE BELOW THRESHOLD` with the number and the threshold, alongside whatever other class applies; a coverage shortfall does not stop a format-only result being `FORMAT-ONLY`. This is not a Code failure, spends no budget and does not go to Stage 7: the run continues and the shortfall is reported at stop 3, in the implementation notes and in the PR body.
 - **No gates applicable**: the diff touches only docs, skill, agent or Claude-config paths. Say `NO GATES APPLICABLE`. Pass-through, never an environment failure.
 - **Environment failure**: a missing SDK or CLI, or a command that cannot run for reasons unrelated to the code. Say `ENVIRONMENT FAILURE` and stop; do not work around it.
 

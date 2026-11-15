@@ -77,12 +77,13 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | test-verifier | `FORMAT-ONLY`, with a FORMAT-ONLY entry in `decisions.md` | Treated as a Code failure. | loop: Stage 7 | 1 correction |
 | test-verifier | `NO GATES APPLICABLE` | Stage 6 runs. | continue | none |
 | test-verifier | `ENVIRONMENT FAILURE` | The gates cannot run. | Halt | none |
+| test-verifier | A reply that the story or brief is missing | Nothing was verified. | Halt | none |
 | test-verifier | Code failure | Stage 6 runs first. | loop: Stage 7 | 1 correction |
 | test-verifier | `COVERAGE BELOW THRESHOLD` | Reported. Not a Code failure. | continue | none |
 | test-verifier | `UNTESTABLE` | Reported. | continue | none |
 | test-verifier | `NOT COVERED` | Reported. | continue | none |
 | test-verifier | A covered line of the AC coverage report; **Tests added** | Recorded in `verify.md`. | continue | none |
-| test-verifier | **Bugs or gaps found**, a `bug:` item | Handled like a `probable bug`. Stage 6 runs first. | loop: Stage 7 | 1 correction |
+| test-verifier | **Bugs or gaps found**, a `bug:` item | Sent to the area builder with the verifier's description. Stage 6 runs first. | loop: Stage 7 | 1 correction |
 | test-verifier | **Bugs or gaps found**, a `gap:` item | Reported. | continue | none |
 | test-verifier | `probable bug` | Stage 6 runs first. | loop: Stage 7 | 1 correction |
 | test-verifier | `unclear` | Goes in the notes under Possible issues. | continue | none |
@@ -117,7 +118,7 @@ Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep 
 2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none, even when it holds a `decisions.md`. If one exists, show which files it has, then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Resume from the latest stage** and **Start over**. The answer changes nothing until step 6, where it is recorded. This is "this run's folder".
 3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in. A Halt has already committed its pending work (see Halt), so a halted run passes.
    - No run folder in step 2: stop and tell the owner to commit or stash.
-   - Run folder found in step 2: a halt commit may have failed. Ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Retry the halt commit** and **Stop**. **Retry** runs the halt commit (see Halt): on success preflight continues, on failure report it and stop. **Stop** ends the run.
+   - Run folder found in step 2: a halt commit may have failed. If the current branch is not the `Branch:` line of `research.md`, stop, name both branches and commit nothing. Otherwise ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Retry the halt commit** and **Stop**. **Retry** runs the halt commit (see Halt): on success preflight continues, on failure report it and stop. **Stop** ends the run.
    - Neither this offer nor Start over discards a change. A Start over answer from step 2 stays held, so the folder is not deleted before the retry.
 4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). On Resume, read `decisions.md` first: a blocker listed in a recorded **proceed anyway** entry is covered, by the same rule as the check before stop 3, so only new blockers are asked about. On Start over no recorded entry counts, because nothing carries over. Any open blocker that is not covered stops the run and is named. Ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then and is recorded with their issue numbers. The check before stop 3 re-reads `blocked_by` and reads those numbers from `decisions.md`; any blocker not listed there needs a new question.
 5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete the folder found in step 2.
@@ -172,7 +173,7 @@ An issue is **groomed** when its first non-blank line begins `> Groomed` and the
 Present the story or brief. List every open question. Put each question with discrete answers to the owner through AskUserQuestion (or a plain-text list if it is unavailable): 2 to 4 options per question, at most 4 questions per call, batched across calls when there are more. Free-form questions stay as plain text. Re-run the agent with the answers and repeat until no open questions remain. Record each round's answers and the outcome. Then ask with AskUserQuestion (or a plain-text list if it is unavailable), offering **Approved**, **Changes requested** and **Rejected**.
 - **Changes requested:** take the owner's free-text feedback from the tool's "Other" answer; if none was given, ask a follow-up plain-text prompt for it. Re-run with the feedback and present again. Record the stop, "Changes requested" and a one-line summary.
 - **Rejected:** apply the halt commit (see Halt) and stop; the files stay.
-- **On Resume:** read `decisions.md` and hold stop 1 again unless its latest entry is Approved or a recorded skip. Apply the same test to stop 2. A "Spent respec budget" entry after stop 2's latest Approved reopens stop 2, because the revised brief has not been approved. No entry means the stop is held. A stop with a recorded skip is not held again.
+- **On Resume:** read `decisions.md` and hold stop 1 again unless its latest entry is Approved or a recorded skip. Apply the same test to stop 2. A "Spent respec budget" entry after stop 2's latest Approved or recorded skip reopens stop 2, because the revised brief has not been approved. No entry means the stop is held. A stop with a recorded skip and no later respec spend is not held again.
 
 ## Stage 4: Build
 
@@ -193,7 +194,7 @@ Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one 
 
 1. Record the spend (stage and reason).
 2. Run `spec-writer` with the blocker to revise the brief.
-3. Re-run every advisor that ran in Stage 3, on the revised brief, `story.md` and `research.md`. Their replies replace `advisories.md`.
+3. Re-run every advisor that ran in Stage 3, plus any the revised brief's Scope block calls for, on the revised brief, `story.md` and `research.md`. Their replies replace `advisories.md`.
 4. One more `spec-writer` pass folds `advisories.md` into the brief.
 5. Hold stop 2 in full. It shows the re-run advisors' replies as their table rows say.
 6. Re-run the affected area and every later one.
@@ -218,7 +219,7 @@ Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh bef
 
 Triggers: verifier code failures, `probable bug` and `bug:` items, a builder's `Gates: red`, and validator Must fix findings not marked `[?]`. One pass covers every trigger present and spends one unit. Skipped on PASS or CONDITIONAL PASS with green gates and no other trigger.
 
-Send every trigger present to the area builder, with the verifier's diagnosis for a code failure; Must fix findings in docs files go to the `docs` general-purpose agent with the same prompt. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Commit, then repeat stages 5 and 6. Each pass spends one unit of the correction budget, recorded before the pass runs (stage and reason). The Outcome table gives the outcome when the budget is spent and a trigger remains, and when a pass raises a spec blocker.
+Send every trigger present to the area builder, with the verifier's diagnosis for a code failure; Must fix findings in docs files go to the `docs` general-purpose agent with the same prompt. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Write the builder's reply over its `build-<area>.md`, commit, then repeat stages 5 and 6. Each pass spends one unit of the correction budget, recorded before the pass runs (stage and reason). The Outcome table gives the outcome when the budget is spent and a trigger remains, and when a pass raises a spec blocker.
 
 **Should fix** findings are not reworked. They go in the PR body as residual findings.
 

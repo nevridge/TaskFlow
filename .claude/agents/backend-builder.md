@@ -45,7 +45,7 @@ Check the result:
 4. The diff must show exactly the new or changed operations and schemas. A removed schema usually means an endpoint lacks `Produces<T>`/`ProducesResponseType`; fix that and regenerate.
 5. Leave the files in the working tree, unstaged.
 
-If the API does not start, `/health` never succeeds or the generator fails, report it under Verification results and stop. No workaround, no hand edits, no telling the frontend to cast types.
+If the API does not start or `/health` never succeeds, report `Client regeneration: FAILED (API did not start or /health failed)` and stop. If the generator fails, report `Client regeneration: FAILED (reason)` and stop. No workaround, no hand edits, no telling the frontend to cast types.
 
 ## Spec blockers
 
@@ -55,7 +55,7 @@ A spec blocker is a contradiction or impossibility in the brief that the conserv
 
 0. **Spec blockers** (omit if none), first.
 1. **Files changed**
-2. **Verification results**: each command and its real outcome.
+2. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
 3. **Client regeneration**: `ran`, `not needed` or `FAILED (reason)`, plus the diff check result.
 4. **API contract**: new or changed endpoints (method, path, request, response, status codes) for the frontend.
 

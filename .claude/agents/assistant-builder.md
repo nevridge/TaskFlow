@@ -17,7 +17,7 @@ You implement the assistant half of an approved brief. You do not redesign it. F
 
 ## Verify
 
-From `assistant/`, run what `.github/workflows/ci.yml` runs for the assistant. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report an environment failure; do not work around it.
+From `assistant/`, run what `.github/workflows/ci.yml` runs for the assistant. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report `ENVIRONMENT FAILURE (reason)` under Verification results; do not work around it.
 
 ## Advisories
 
@@ -32,7 +32,7 @@ A spec blocker is a contradiction or impossibility in the brief: it needs an API
 0. **Spec blockers** (omit if none), first.
 1. **Files changed**
 2. **Plugin and chat sync**: the files updated for a tool change, or `not needed`.
-3. **Verification results**: each command and its real outcome.
+3. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
 4. **advisory_deviations**: one entry per deviation with the guidance, the technical reason and what you did instead, or `advisory_deviations: none`.
 
 When re-invoked with validator findings or a revised brief, change only what is needed, re-verify and return an updated reply.

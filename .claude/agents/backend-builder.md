@@ -18,7 +18,7 @@ You implement the API half of an approved brief. You do not redesign it. Follow 
 
 ## Verify
 
-Before finishing, run the api jobs in the CI jobs by area table in `.claude/skills/feature-factory/SKILL.md` (`lint`, `build`, `test`), plus `mcp-integration` when you changed `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/` or API code, and fix failures. Never run `smoke-test`. If only formatting fails, run `dotnet format` and verify again. Then regenerate the client if the API surface changed.
+Before finishing, run the api jobs in the CI jobs by area table in `.claude/skills/feature-factory/SKILL.md` (`lint`, `build`, `test`) and fix failures. Never run `mcp-integration` (the verifier runs it after every builder has finished) or `smoke-test`. If only formatting fails, run `dotnet format` and verify again. Then regenerate the client if the API surface changed.
 
 ## Regenerating the API client
 

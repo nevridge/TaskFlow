@@ -45,7 +45,7 @@ The orchestrator appends one entry to `decisions.md` each time one of these is p
 | `build` | api | the diff touches api | `dotnet build TaskFlow.sln`; `TaskFlow.sln` also covers root build files |
 | `test` | api | the diff touches api | `TaskFlow.Api.Tests`, with the coverage threshold; holds `ContractsProjectTests` |
 | `mcp-integration` | test-verifier | the diff touches api (including `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`) or assistant | `TaskFlow.Mcp.Integration.Tests` references `TaskFlow.Api` and the assistant MCP project |
-| `assistant` | assistant | the diff touches assistant | run from `assistant/` |
+| `assistant` | assistant | the diff touches assistant or `TaskFlow.Contracts/` | run from `assistant/`; `TaskFlow.Assistant.sln` builds `TaskFlow.Contracts` and its tests assert on it |
 | `taskflow-web` | web | the diff touches web | run from `TaskFlow.Web/` |
 | `smoke-test` | CI-only | never run by builders or the verifier | runs `docker compose up -d` and `down -v` against the default compose project, which locally is the live stack; CLAUDE.md says to rebuild the live stack only from `main` and that `-p taskflow-test` is mandatory |
 
@@ -196,7 +196,7 @@ One builder per area the Scope block lists, in dependency order: `backend-builde
 The `docs` agent prompt:
 
 - Implement the docs part of the approved brief; do not redesign it.
-- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`).
+- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`), never a path in the next bullet.
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
 - Do not run `git add`, `git commit` or `git push`; the orchestrator commits.
 - After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
@@ -217,7 +217,7 @@ A spec blocker raised in a Stage 7 pass uses the same rows, this procedure and t
 
 ## Stage 5: Verify
 
-`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. A docs-only diff (the `docs` definition in Stage 3) has no gates; every other diff runs the jobs the CI jobs by area table gives its areas. `test-verifier` still runs and reports `NO GATES APPLICABLE`; this is not ENVIRONMENT FAILURE. Write `verify.md` and make one commit.
+`test-verifier` gets `story.md`, `brief.md`, the `build-*.md` files and `advisories.md` if present. A docs-only diff (the `docs` definition in Stage 3) has no gates: `test-verifier` still runs and reports `NO GATES APPLICABLE`; this is not ENVIRONMENT FAILURE. Every other diff runs the jobs the CI jobs by area table gives its areas. Write `verify.md` and make one commit.
 
 The Outcome table gives the outcome of every verifier reply value.
 

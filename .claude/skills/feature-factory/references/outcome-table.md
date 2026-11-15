@@ -83,5 +83,5 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | claude-integration-advisor | Source health, every line OK | Written to `advisories.md`. | continue | none |
 | claude-integration-advisor | Source health with a Failed or Topic missing line | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
 | claude-integration-advisor | Source health with a Moved line | Written to `advisories.md`. Shown at stop 3. Stop 2 is not held for it. | continue | none |
-| claude-integration-advisor | The `SOURCE LIST NEEDS UPDATE: <entry>` prefix | Goes in the notes under Follow-up candidates. This row does not hold stop 2: the Source health lines decide the hold, never the prefix. | continue | none |
+| claude-integration-advisor | The `SOURCE LIST NEEDS UPDATE: <entry>` prefix | Written to `advisories.md`. Goes in the notes under Follow-up candidates. This row does not hold stop 2: the Source health lines decide the hold, never the prefix. | continue | none |
 | orchestrator | The correction budget is spent and a Stage 7 trigger remains | No correction pass is left. | Halt | none |

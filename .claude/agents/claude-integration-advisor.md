@@ -46,6 +46,6 @@ Every URL fetched and its retrieval date.
 ### Source health
 One line per source entry, with exactly one label: Failed (after the one search retry), Topic missing (say what no longer appears), Moved (give the new URL) or OK.
 
-- Moved means the listed URL led to a different final URL and the page reached there covers the entry's "Must cover" topics.
+- Moved means the listed URL led to a different final URL, through a redirect or the one search retry, and the page reached there covers the entry's "Must cover" topics.
 - If the page reached does not cover those topics, the line is Topic missing, not Moved.
 - When more than one label could apply, use this precedence: Failed, then Topic missing, then Moved, then OK.

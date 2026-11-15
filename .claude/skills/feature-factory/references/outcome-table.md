@@ -75,7 +75,7 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | ux-advisor | DESIGN_CONFLICTS | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
 | ux-advisor | DEPENDENCY_PROPOSALS | Written to `advisories.md`. Stop 2 is held and shows it as "Proposed dependency (needs approval)". | continue | none |
 | claude-integration-advisor | Recommendations (**should** or **consider**) | Written to `advisories.md`. | continue | none |
-| claude-integration-advisor | `UNVERIFIED` on a recommendation | A lead, not an instruction. A validator Should fix at most. | continue | none |
+| claude-integration-advisor | `UNVERIFIED` on a recommendation | A lead, not an instruction. Not following it is not a finding. | continue | none |
 | claude-integration-advisor | Conflicts with brief, with any entry | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
 | claude-integration-advisor | Conflicts with brief, `None` | Nothing to show. | continue | none |
 | claude-integration-advisor | Out of scope | Goes in the notes under Follow-up candidates. | continue | none |

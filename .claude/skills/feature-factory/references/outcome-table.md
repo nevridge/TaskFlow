@@ -5,7 +5,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 ## Contents
 
 - [How the rows apply](#how-the-rows-apply)
-- [The table](#the-table): 61 rows, grouped by source in this order: orchestrator (the Scope block), codebase-researcher, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor, orchestrator (the correction budget)
+- [The table](#the-table): 63 rows, grouped by source in this order: orchestrator (the Scope block), codebase-researcher, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor, orchestrator (the correction budget)
 
 ## How the rows apply
 
@@ -81,5 +81,7 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | claude-integration-advisor | Out of scope | Goes in the notes under Follow-up candidates. | continue | none |
 | claude-integration-advisor | Docs consulted | Written to `advisories.md`. | continue | none |
 | claude-integration-advisor | Source health, every line OK | Written to `advisories.md`. | continue | none |
-| claude-integration-advisor | Source health with a Failed, Moved or Topic missing line, and its `SOURCE LIST NEEDS UPDATE: <entry>` prefix | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
+| claude-integration-advisor | Source health with a Failed or Topic missing line | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
+| claude-integration-advisor | Source health with a Moved line | Written to `advisories.md`. Shown at stop 3. Stop 2 is not held for it. | continue | none |
+| claude-integration-advisor | The `SOURCE LIST NEEDS UPDATE: <entry>` prefix | Written to `advisories.md`. Goes in the notes under Follow-up candidates. This row does not hold stop 2: the Source health lines decide the hold, never the prefix. | continue | none |
 | orchestrator | The correction budget is spent and a Stage 7 trigger remains | No correction pass is left. | Halt | none |

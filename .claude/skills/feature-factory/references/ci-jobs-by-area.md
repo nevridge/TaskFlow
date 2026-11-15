@@ -1,6 +1,6 @@
 # CI jobs by area
 
-Read in full by the feature-factory orchestrator when a stage in `../SKILL.md` says to, and by `backend-builder` and `test-verifier` before they run gates.
+Read in full by the feature-factory orchestrator when a stage in `../SKILL.md` says to, and by `backend-builder`, `frontend-builder`, `assistant-builder` and `test-verifier` before they run gates.
 
 `.github/workflows/ci.yml` is the source for every command and threshold; this table only says who runs each job. For which CI job runs for a diff, this table wins. The Outcome table (`outcome-table.md`) still decides how each reply is routed.
 

@@ -34,8 +34,8 @@ You get run-folder paths: the story, the brief, the build summaries, and `adviso
 
 After the AC tests, write up to about five probe tests on the changed behavior and its neighbours, from this list: boundary values and empty or null input; the local-date and timezone boundary; journal carry-forward; enum casing; idempotent re-runs and ordering; callers of anything the diff changed. Each probe states the expected behavior and its source (story, brief, existing behavior or a rule in CLAUDE.md). Drop a probe with no source. Run probes with the gates.
 
-- A failing probe that contradicts the story, brief or a stated invariant is a **probable bug**. Report the test code, the expected behavior and its source, then remove the test from the working tree. Never leave a failing test behind; the builder restores it with the fix.
-- A failing probe where the spec is silent is **unclear**. Delete the test and list the case under possible issues.
+- A failing probe that contradicts the story, brief or a stated invariant is a **probable bug** (item prefix `probable bug:`). Report the test code, the expected behavior and its source, then remove the test from the working tree. Never leave a failing test behind; the builder restores it with the fix.
+- A failing probe where the spec is silent is **unclear** (item prefix `unclear:`). Delete the test and list the case under possible issues.
 - A passing probe stays only if it meets the usefulness bar above.
 
 ## Gates
@@ -56,5 +56,5 @@ Find the changed areas from `git diff --name-only main...HEAD` and `git status -
 1. **Verification results**: a table of command, result class and key numbers, with coverage against the threshold.
 2. **AC coverage report**: one line per AC and edge case, such as `✅ AC 3 → File.Test.Name (new)`, `✅ AC 4 → File.Test.Name (already exists in X — not duplicated)`, `⚠️ AC 5 → NOT COVERED: reason`, `❌ AC 6 → UNTESTABLE: reason`. Every covered line cites the test file and name relied on; end the section by listing the test bodies you opened. The only unverified outcomes are `UNTESTABLE` (cannot be automated, with the reason) and `NOT COVERED` (no test exists). On a docs-only diff, mark each AC `⚠️ AC n → UNTESTABLE (docs-only): prompt-only change, no gates apply`. "Not verified" because the story was not read is not allowed.
 3. **Tests added**: files and test names.
-4. **Bugs or gaps found**: production issues you saw but did not fix. Prefix each item with `bug:` or `gap:`. A bug contradicts the story, brief or a stated invariant; a gap is anything else.
-5. **Probable bugs and possible issues**: for each probable bug, the test code, expected behavior and source; for each unclear case, the scenario and why the spec is silent.
+4. **Bugs or gaps found**: production issues you saw but did not fix. Start each item with `bug:` or `gap:`. A bug contradicts the story, brief or a stated invariant; a gap is anything else.
+5. **Probable bugs and possible issues**: start each item with `probable bug:` (then the test code, expected behavior and source) or `unclear:` (then the scenario and why the spec is silent).

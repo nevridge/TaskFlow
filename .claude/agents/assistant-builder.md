@@ -17,7 +17,7 @@ You implement the assistant half of an approved brief. You do not redesign it. F
 
 ## Verify
 
-From `assistant/`, run what `.github/workflows/ci.yml` runs for the assistant. Never run `mcp-integration` (the verifier runs it after every builder has finished) or `smoke-test`. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report `ENVIRONMENT FAILURE (reason)` under Verification results; do not work around it.
+From `assistant/`, run the `assistant` job in the CI jobs by area table in `.claude/skills/feature-factory/references/ci-jobs-by-area.md` (what `.github/workflows/ci.yml` runs for the assistant). Never run `mcp-integration` (the verifier runs it after every builder has finished) or `smoke-test`. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report `ENVIRONMENT FAILURE (reason)` under Verification results; do not work around it.
 
 ## Advisories
 
@@ -30,7 +30,7 @@ A spec blocker is a contradiction or impossibility in the brief: it needs an API
 ## Reply
 
 0. **Spec blockers** (omit if none), first.
-1. **Files changed**
+1. **Files changed**, ending with one line: `Dependencies added outside the brief: <names>`, or `Dependencies added outside the brief: none` (packages you added that the brief does not name).
 2. **Plugin and chat sync**: the files updated for a tool change, or `not needed`.
 3. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
 4. **advisory_deviations**: one entry per deviation with the guidance, the technical reason and what you did instead, or `advisory_deviations: none`.

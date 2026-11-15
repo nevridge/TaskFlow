@@ -24,7 +24,7 @@ The Claude work-assistant MCP server, plugin and Chat skill live in `assistant/`
 ## Branches and PRs
 
 - Never commit or push to `main`: work on a branch and open a PR (a hook blocks the obvious cases).
-- A PR needs new or updated tests.
+- A PR needs new or updated tests, unless it changes only Markdown files (prompt files included).
 
 ## Deployment
 

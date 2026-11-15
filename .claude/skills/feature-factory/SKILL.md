@@ -70,7 +70,7 @@ Once `research.md` is written, read `references/decisions-record.md` in full bef
 An issue is **groomed** when its first non-blank line begins `> Groomed` and the body has `## Acceptance Criteria`, `## Edge Cases` and `## Out of Scope` headings.
 
 - Groomed and not contradicted: the issue body is the story; copy it to `story.md` and skip stop 1 (record the skip).
-- Contradicted (`research.md` shows a referenced entity, endpoint or schema missing or restructured): flag that and run `story-writer` once (no loop) with the groomed story as context and write `story.md`; the run is then not groomed, so hold stops 1 and 2 and record no skip.
+- Groomed but contradicted (`research.md` shows a referenced entity, endpoint or schema missing or restructured): flag that and run `story-writer` once before stop 1 with the groomed story as context and write `story.md`; the run is then not groomed, so hold stops 1 and 2 and record no skip.
 - Otherwise: `story-writer` gets `research.md`; write `story.md` and hold **stop 1**.
 
 ## Stage 3: Brief, then stop 2
@@ -144,7 +144,7 @@ Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh bef
 
 Read `references/outcome-table.md`, `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before this stage.
 
-Triggers: every Outcome table row (`references/outcome-table.md`) whose destination is `loop: Stage 7`. One pass covers every trigger present and spends one unit of the correction budget (on a resumed run, see Resume after a budget Halt). Skipped when no trigger is present.
+Triggers: every Outcome table row (`references/outcome-table.md`) whose destination is `loop: Stage 7`. One pass covers every trigger present and spends one unit of the correction budget (resumed run: Resume after a budget Halt, `references/resume-halt-start-over.md`). Skipped when no trigger is present.
 
 Send every trigger present to the area builder, with the verifier's diagnosis for a code failure; a failure in the `assistant` job goes to `assistant-builder`, even when the Scope block does not list `assistant`; Must fix findings in docs files go to the `docs` agent with the same prompt. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. Write the builder's reply over its `build-<area>.md`, commit, then repeat stages 5 and 6.
 

@@ -17,7 +17,7 @@ You implement the assistant half of an approved brief. You do not redesign it. F
 
 ## Verify
 
-From `assistant/`, run what `.github/workflows/ci.yml` runs for the assistant. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report `ENVIRONMENT FAILURE (reason)` under Verification results; do not work around it.
+From `assistant/`, run what `.github/workflows/ci.yml` runs for the assistant. Never run `mcp-integration` (the verifier runs it after every builder has finished) or `smoke-test`. If you changed `plugin/**` or `chat/**`, also run `claude plugin validate ./plugin` and `claude plugin validate .`; CI does not run these. If the SDK or the `claude` CLI is missing, report `ENVIRONMENT FAILURE (reason)` under Verification results; do not work around it.
 
 ## Advisories
 

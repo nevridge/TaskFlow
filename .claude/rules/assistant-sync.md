@@ -2,6 +2,7 @@
 paths:
   - TaskFlow.Api/**
   - assistant/**
+  - TaskFlow.Contracts/**
 ---
 
 # Keep the assistant in sync with the API

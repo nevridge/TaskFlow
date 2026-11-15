@@ -76,6 +76,7 @@ packages/
 *.coverage
 coverage/
 coveragereport/
+mcp-integration-results/
 *.cobertura.xml
 
 # NUnit

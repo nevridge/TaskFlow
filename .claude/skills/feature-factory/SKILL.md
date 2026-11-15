@@ -43,7 +43,7 @@ Read `references/decisions-record.md` and `references/resume-halt-start-over.md`
 
 Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep and the halt commit retry in step 3; this run's folder does not change before step 6, and the branch and the tree change only through that retry. Answers are held, see the Decisions record (`references/decisions-record.md`).
 
-1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description, asking for one if there is none. Read the issue (title, body, state) and stop if it is closed.
+1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description, asking for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
 2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none, even when it holds a `decisions.md`. If one exists, show which files it has, then ask (see Rules), offering **Resume from the latest stage** and **Start over**. This is "this run's folder".
 3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in.
    - No run folder in step 2: stop and tell the owner to commit or stash.
@@ -107,7 +107,7 @@ The `docs` agent prompt:
 - Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`), never a path in the next bullet.
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
 - Do not run `git add`, `git commit` or `git push`.
-- After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. A file with no frontmatter needs no check and counts as `not needed`. An agent file or a `SKILL.md` must have frontmatter; a missing one is a parse error. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
+- After editing any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`: `cd TaskFlow.Web`, then via Bash `node -e` with `require('js-yaml').load(<frontmatter text>)`, where the frontmatter text is what lies between the first two `---` lines of the file. A file with no frontmatter (its first line is not `---`) needs no check and counts as `not needed`. An agent file or a `SKILL.md` must have frontmatter; a missing one is a parse error. Fix any parse error before replying. If `node_modules` or `js-yaml` is missing, report "check could not run"; never skip the check silently.
 - Reply with "Spec blockers" first (omit if none), then files changed, then verification results: the js-yaml outcome, exactly one of `passed`, `parse error fixed`, `check could not run` or `not needed`.
 
 Write each reply to `build-<area>.md` (`build-docs.md` for `docs`) and make one commit after each area.

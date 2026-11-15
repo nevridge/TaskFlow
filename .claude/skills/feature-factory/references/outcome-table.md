@@ -15,7 +15,7 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt in `resume-halt-start-over.md`.
 - Rows with the budget `1 correction` are the Stage 7 triggers. They share one pass and one unit (Stage 7).
 - "Reported" means shown at stop 3, listed in the implementation notes under Possible issues and listed in the PR body.
-- The js-yaml rows cover edits to any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`. A file with no frontmatter needs no check and counts as `not needed`.
+- The js-yaml rows cover edits to any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`. A file with no frontmatter (its first line is not `---`) needs no check and counts as `not needed`, except an agent file or a `SKILL.md`, which must have frontmatter.
 
 ## The table
 
@@ -44,7 +44,7 @@ Every agent reply value has a row, and each row has exactly one destination: `co
 | docs agent | **Spec blockers**, respec budget spent | No respec is left. | Halt | none |
 | docs agent | js-yaml `passed` | Recorded in `build-docs.md`. | continue | none |
 | docs agent | js-yaml `parse error fixed` | Recorded in `build-docs.md`. | continue | none |
-| docs agent | js-yaml `not needed` | No file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/` was edited, or every file edited there has no frontmatter. | continue | none |
+| docs agent | js-yaml `not needed` | No file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/` was edited, or every file edited there has no frontmatter and is not an agent file or a `SKILL.md`. | continue | none |
 | docs agent | js-yaml `check could not run` | The edited `.claude` files are unchecked. | Halt | none |
 | test-verifier | Pass | Stage 6 runs. | continue | none |
 | test-verifier | `FORMAT-ONLY`, with no FORMAT-ONLY entry in `decisions.md` | The run's one formatter pass (Stage 5). | loop: Stage 5 | none |

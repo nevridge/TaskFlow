@@ -30,7 +30,7 @@ Stay within the brief. List useful out-of-scope ideas as out of scope.
 
 ## Reply
 
-If any source health line below is not OK, begin the reply with `SOURCE LIST NEEDS UPDATE: <entry>`. You cannot edit this file; the owner fixes the list.
+If any source health line below is not OK (a Moved line included), begin the reply with `SOURCE LIST NEEDS UPDATE: <entry>`. You cannot edit this file; the owner fixes the list.
 
 ### Recommendations
 Numbered. Each item: the recommendation, why, the source URL, the retrieval date, `UNVERIFIED` where it applies, and **should** or **consider**.
@@ -44,4 +44,8 @@ Each conflict with the brief, with the source, or `None`. Do not resolve it.
 Every URL fetched and its retrieval date.
 
 ### Source health
-One line per source entry: OK, Failed (after the one search retry), Moved (give the new URL) or Topic missing (say what no longer appears).
+One line per source entry, with exactly one label: Failed (after the one search retry), Topic missing (say what no longer appears), Moved (give the new URL) or OK.
+
+- Moved means the listed URL led to a different final URL and the page reached there covers the entry's "Must cover" topics.
+- If the page reached does not cover those topics, the line is Topic missing, not Moved.
+- When more than one label could apply, use this precedence: Failed, then Topic missing, then Moved, then OK.

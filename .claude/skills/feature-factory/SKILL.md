@@ -138,7 +138,7 @@ Read `references/outcome-table.md` in full before this stage.
 
 Runs after every Stage 5 that does not Halt; Stage 7 consumes both reports.
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. Also tell it to check each skipped area against the final diff (DTOs, controllers, `Helpers/`; this check applies to code areas only), and that an API change cannot pass without the assistant step or a stated reason. For a docs-only diff, the skipped-area check expects no changes under the code-area paths (Stage 3) and no paths outside the docs allowlist and the root files the brief names. Write `validation.md`.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, `advisories.md`, `diff.patch` and `changed-files.txt`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (Stage 3) and no paths outside the docs allowlist and the root files the brief names. Write `validation.md`.
 
 ## Stage 7: Correct
 

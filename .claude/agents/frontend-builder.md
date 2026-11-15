@@ -30,9 +30,9 @@ A spec blocker is a contradiction or impossibility in the brief, or an API type 
 ## Reply
 
 0. **Spec blockers** (omit if none), first.
-1. **Files changed**
+1. **Files changed**, ending with one line: `Dependencies added outside the brief: <names>`, or `Dependencies added outside the brief: none`.
 2. **Client status**: generated types and operations you relied on, and hand-written modules you changed.
-3. **Verification results**: each command and its real outcome.
+3. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
 4. **User-visible change**: what the user sees and how they interact with it.
 5. **advisory_deviations** (only when advisories were supplied): one entry per deviation with the guidance, the technical reason and what you did instead, or `advisory_deviations: none`.
 

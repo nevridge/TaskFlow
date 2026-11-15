@@ -61,7 +61,7 @@ Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep 
 
 Read `references/outcome-table.md` in full before this stage.
 
-`codebase-researcher` gets the feature description (the issue body when there is one). Ask for the entities, endpoints, DTOs, repositories, validators, test patterns, frontend hooks and components, the assistant tools and plugin or chat text that describe them, and fragile areas. End the prompt with: "Do not ask questions. Record any ambiguity under `### Risks and Missing Information`." Write `research.md` only from a reply that has a `### Relevant Files` heading.
+`codebase-researcher` gets the feature description (the issue body when there is one). Ask for the entities, endpoints, DTOs, repositories, validators, test patterns, frontend hooks and components, the assistant tools and plugin or chat text that describe them, and fragile areas. For each path the issue body names as moved, renamed, deleted or reassigned to another area (do not predict others), ask the researcher to search the repo for the path and for its file or project name, and to list every file that names it, solution and project files included, under `### Relevant Files`, each next to the path it references. A named path with no referencing file gets the line "No references found for `<path>`". End the prompt with: "Do not ask questions. Record any ambiguity under `### Risks and Missing Information`." Write `research.md` only from a reply that has a `### Relevant Files` heading.
 
 ## Stage 2: Story, then stop 1
 

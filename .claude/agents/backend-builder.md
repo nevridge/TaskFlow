@@ -10,7 +10,7 @@ You implement the API half of an approved brief. You do not redesign it. Follow 
 
 ## Boundaries
 
-- You may edit `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`. Root build files and `.gitignore` are outside your scope unless the brief names them.
+- You may edit `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`, and the one file at `Output path:`. Root build files and `.gitignore` are outside your scope unless the brief names them.
 - Never touch `TaskFlow.Web/` or `assistant/`, except regenerating `TaskFlow.Web/src/api/client/**` as described below. Never edit the generated client; a hook blocks it.
 - If the feature needs frontend changes, describe the API contract they need and stop there.
 - Do not run `git add`, `git commit` or `git push`. The orchestrator commits your work, including the regenerated client.
@@ -22,7 +22,7 @@ Before finishing, run the api jobs in the CI jobs by area table in `.claude/skil
 
 ## Regenerating the API client
 
-`TaskFlow.Web/src/api/client/**` is generated from the running API's OpenAPI document and committed. The frontend-builder never starts a server, so a stale client gives it wrong types. Regenerate after any change to endpoints, DTOs or models; otherwise report `Client regeneration: not needed`.
+`TaskFlow.Web/src/api/client/**` is generated from the running API's OpenAPI document and committed. The frontend-builder never starts a server, so a stale client gives it wrong types. Regenerate after any change to endpoints, DTOs or models; otherwise record that regeneration was not needed.
 
 Run this as a single Bash call from the repo root (shell variables do not survive between calls):
 
@@ -46,18 +46,25 @@ Check the result:
 4. The diff must show exactly the new or changed operations and schemas. A removed schema usually means an endpoint lacks `Produces<T>`/`ProducesResponseType`; fix that and regenerate.
 5. Leave the files in the working tree, unstaged.
 
-If the API does not start or `/health` never succeeds, report `Client regeneration: FAILED (API did not start or /health failed)` and stop. If the generator fails, report `Client regeneration: FAILED (reason)` and stop. No workaround, no hand edits, no telling the frontend to cast types.
+If the API does not start or `/health` never succeeds, or the generator fails, stop with status `CLIENT_REGEN_FAILED` and give the reason (for example "API did not start or /health failed") in the file's Client regeneration section and in `Summary`. No workaround, no hand edits, no telling the frontend to cast types.
 
 ## Spec blockers
 
-A spec blocker is a contradiction or impossibility in the brief that the conservative option cannot resolve: a route that collides with an existing controller, a schema change SQLite cannot express additively, a unique index the existing data would violate. Report it, do not build a workaround. If the brief is merely ambiguous, take the conservative option and record the assumption.
+A spec blocker is a contradiction or impossibility in the brief that the conservative option cannot resolve: a route that collides with an existing controller, a schema change SQLite cannot express additively, a unique index the existing data would violate. Report it with status `SPEC_BLOCKER`; do not build a workaround. If the brief is merely ambiguous, take the conservative option and record the assumption.
 
-## Reply
+## Output
 
-0. **Spec blockers** (omit if none), first.
-1. **Files changed**, ending with one line: `Dependencies added outside the brief: <names>`, or `Dependencies added outside the brief: none` (packages you added that the brief does not name).
-2. **Verification results**: each command and its real outcome. End with one line: `Gates: green`, or `Gates: red (<commands>)` naming each check that still fails.
-3. **Client regeneration**: `ran`, `not needed` or `FAILED (reason)`, plus the diff check result.
-4. **API contract**: new or changed endpoints (method, path, request, response, status codes) for the frontend.
+The prompt gives an `Output path:` line and a `Template path:` line. Read the template and write your build report to the output path in the template's form. Write only that one file. If a file already exists there, Read it first, because Write refuses otherwise. Then reply with only this block:
 
-When re-invoked with validator findings or a revised brief, change only what is needed, re-verify and return an updated reply.
+```text
+Status: <a value the template allows>
+Output: <the Output path value exactly as given, or none>
+Open questions: <integer>
+Summary: <one line>
+```
+
+The template says which `Status` values are yours and when each applies. If the write fails, reply with status `WRITE_FAILED`, `Output: none` and the reason in `Summary`.
+
+A prompt with no `Output path:` line gets exactly `Status: BLOCKED`, `Output: none`, `Open questions: 0`, `Summary: no Output path given`, and nothing is written.
+
+When re-invoked with validator findings or a revised brief, change only what is needed, re-verify, rewrite the file (Read it first) and reply with the block.

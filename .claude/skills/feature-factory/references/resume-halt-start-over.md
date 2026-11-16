@@ -25,7 +25,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 - **Mid-run Start over** (the Start over answer at a budget check on a resumed run; see Resume after a budget Halt in this file) replaces the previous bullet with this order:
   1. Hold in memory the old record's preflight **proceed anyway** entries and its wrong-branch answer.
   2. Run the halt commit (see Halt in this file). If it fails, stop with the folder intact and delete nothing.
-  3. Apply the paths above, which delete the folder.
+  3. Apply the paths above, which delete the folder (or empty it apart from `grooming.md`).
   4. The orchestrator creates the new folder, then writes the first entries of the new record: those **proceed anyway** entries in their old order, the wrong-branch entry, the Start over answer, then the keep or reset answer if it was asked. The old Resume answer is dropped.
 
 **Halt**: a stop with these triggers only: the Outcome table rows whose destination is `Halt`. Read `outcome-table.md` in full before applying a Halt.

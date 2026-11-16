@@ -28,7 +28,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 A run folder is **groomed, not started** when `research.md` line 1 is exactly `Branch: none` and line 2 is `Commit: <sha>`. `/groom-issue` (nevridge/dotfiles#37) writes it ahead of a run: it holds `research.md` and may hold `grooming.md`. This folder state is separate from a **groomed** issue (Stage 2: a body whose first non-blank line begins `> Groomed`); never call the folder just "groomed".
 
-- **Line 1 comparison.** Every check of line 1 against `Branch: none` first trims one trailing `\r`, because files may have CRLF line endings on Windows.
+- **Line 1 and 2 reads.** Every read of line 1 or line 2 of `research.md` (the `Branch: none` check, a `Branch:` comparison, the `Commit:` value) first trims one trailing `\r`, because files may have CRLF line endings on Windows.
 - **Folder-name parse.** A folder name made only of digits is the issue number. Any other name has no parseable issue number.
 - **`grooming.md`** holds the owner's grooming questions and answers. It is optional context only: a prompt that names it says to read it only if it exists, and it is never read for stops, budgets, blocker coverage or the stage.
 - **Not a started run.** Stage 0 treats the folder as no run folder for steps 2 and 3 (no Resume or Start over offer, and the `Branch:` comparison is never applied). Step 5 sweeps it only when its issue is closed. Step 6 creates the branch and keeps `research.md` and `grooming.md`. The only way to force a fresh research run is to delete the folder by hand.

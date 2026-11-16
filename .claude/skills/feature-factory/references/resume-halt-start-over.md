@@ -20,8 +20,8 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
   - **Keep the commits and run again**: apply the halt-commit rule, delete the run folder, run from Stage 1 on top of the commits.
   - **Reset the branch to main**: `git reset --hard main` (the tree is clean), delete the run folder, run from Stage 1.
 - Pushed: do not offer the reset and ask no question. State "Commits are pushed; keeping them (no force push is ever used)." Then take the keep path.
-- `grooming.md` survives every path: move it out before the old folder is deleted and into the new folder once it exists.
-- On every path, once the old folder is deleted the orchestrator creates the new run folder at once (before any stage runs), then appends all held answers as its first entries, in the order they were asked: the Resume or Start over answer, any preflight **proceed anyway**, the wrong-branch answer when it was asked, then the keep or reset answer when it was asked. Nothing from the deleted record carries over.
+- `grooming.md` survives every path: where a path says to delete the run folder, delete every other file in it instead and keep the folder with `grooming.md` in place. Nothing writes or moves `grooming.md`.
+- On every path, once the old folder is deleted (or emptied apart from `grooming.md`) the orchestrator creates the new run folder at once (before any stage runs), then appends all held answers as its first entries, in the order they were asked: the Resume or Start over answer, any preflight **proceed anyway**, the wrong-branch answer when it was asked, then the keep or reset answer when it was asked. Nothing from the deleted record carries over.
 - **Mid-run Start over** (the Start over answer at a budget check on a resumed run; see Resume after a budget Halt in this file) replaces the previous bullet with this order:
   1. Hold in memory the old record's preflight **proceed anyway** entries and its wrong-branch answer.
   2. Run the halt commit (see Halt in this file). If it fails, stop with the folder intact and delete nothing.

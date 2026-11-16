@@ -5,7 +5,7 @@ argument-hint: "[issue-number]"
 disable-model-invocation: true
 ---
 
-You are the feature-factory orchestrator of a multi-agent pipeline with three approval stops, the first two skippable only under Stages 2 and 3. **Never implement code yourself**: you write only `decisions.md`, `diff.patch` and `changed-files.txt`, with one exception: `story.md` as a verbatim copy of a groomed issue body (Stage 2). Every other run file is written by its agent from a template (`references/run-folder.md`). Agents receive file paths and read them; do not paste earlier output into prompts.
+You are the feature-factory orchestrator of a multi-agent pipeline with three approval stops, the first two skippable only under Stages 2 and 3. **Never implement code yourself**: you write only `decisions.md`, `diff.patch` and `changed-files.txt`, with two exceptions: `story.md`, only as a verbatim copy of a groomed issue body that stands (Stage 2); and line 1 of `research.md`, only when it reads exactly `Branch: none`, replaced with the real branch (Stage 1). Every other run file is written by its agent from a template (`references/run-folder.md`). Agents receive file paths and read them; do not paste earlier output into prompts.
 
 `story-writer`, `codebase-researcher` and `spec-writer` are user-level agents. If any is missing, stop at its stage, name it, and resume from the run files once it is installed. Every other agent named below is a project agent. `docs` has no agent file: a general-purpose agent builds it from the prompt in Stage 4.
 
@@ -15,7 +15,7 @@ You are the feature-factory orchestrator of a multi-agent pipeline with three ap
 - One shared correction budget of 2 for the whole run, and one respec budget of 1.
 - Spec blockers from a builder go back to `spec-writer`, never to another builder.
 - When the Outcome table (`references/outcome-table.md`) and stage prose disagree, the table wins.
-- Every agent prompt, the `docs` prompt included, carries absolute `Output path:` and `Template path:` on their own lines and states no reply format. The output is the run file a stage names; the template is the `references/template-*.md` file it names. Pipe each reply to `node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` (the reply on standard input). On exit 0, route on its `Status` by the Outcome table. A failed check or `WRITE_FAILED` gets one re-ask, then Halt. Never write an agent's file.
+- Every agent prompt, the `docs` prompt included, carries absolute `Output path:` and `Template path:` on their own lines and states no reply format. The output is the run file a stage names; the template is the `references/template-*.md` file it names. Pipe each reply to `node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` (the reply on standard input). On exit 0, route on its `Status` by the Outcome table. A failed check or `WRITE_FAILED` gets one re-ask, then Halt. Never write an agent's file beyond the exceptions above.
 - Every `git add` is plain `git add -A`; `.feature-factory/` and `.playwright-mcp/` are gitignored.
 - Every decision put to the owner uses the AskUserQuestion tool (or a plain-text list if it is unavailable). Free-form questions stay as plain text.
 - The orchestrator itself asks every owner question and runs every commit, reset, branch checkout, push and GitHub post. Never delegate these to an agent: agents cannot ask the owner questions and never commit.
@@ -46,15 +46,16 @@ Read `references/run-folder.md`, `references/decisions-record.md` and `reference
 Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep and the halt commit retry in step 3; this run's folder does not change before step 6, and the branch and the tree change only through that retry.
 
 1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description, asking for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
-2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none, even when it holds a `decisions.md`. If one exists, show which files it has, then ask (see Rules), offering **Resume from the latest stage** and **Start over**. This is "this run's folder".
+2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none, even when it holds a `decisions.md`; so does a groomed, not started folder (`references/run-folder.md`). If one exists, show which files it has, then ask (see Rules), offering **Resume from the latest stage** and **Start over**. This is "this run's folder".
 3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in.
-   - No run folder in step 2: stop and tell the owner to commit or stash.
+   - No run folder in step 2 (groomed, not started included): stop and tell the owner to commit or stash.
    - Run folder found in step 2: a halt commit may have failed. If the current branch is not the `Branch:` line of `research.md`, stop, name both branches and commit nothing. Otherwise ask (see Rules), offering **Retry the halt commit** and **Stop**. **Retry** runs the halt commit (see Halt in `references/resume-halt-start-over.md`): on success preflight continues, on failure report it and stop.
    - Neither this offer nor Start over discards a change. A Start over answer from step 2 stays held, so the folder is not deleted before the retry.
 4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). On Resume, read `decisions.md` first: a blocker listed in a recorded **proceed anyway** entry is covered, so only new blockers are asked about. On Start over no recorded entry counts. Any open blocker that is not covered stops the run and is named. Ask (see Rules), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then.
-5. **Orphan sweep.** For each other folder under `.feature-factory/`, read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Skip folders without a `research.md` and never delete the folder found in step 2.
+5. **Orphan sweep.** For each other folder under `.feature-factory/` (skip folders without a `research.md`): a groomed, not started folder is judged only by its issue, deleted when its name parses to an issue number and `gh issue view <number> --json state` gives CLOSED, otherwise kept. Any other folder: read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Never delete this run's folder, named by step 1's issue number or slug.
 6. **Branch and folder.**
    - No run folder: on `main`, create a branch `<type>/<issue-number>-<short-slug>` (type `feat`, `fix` or `chore` from the issue; slug a few title words; with no issue `<type>/<slug>`; for example `chore/523-restructure-feature-factory-skill`); any other branch is used as is, whatever its name. Create the run folder; if a folder without `research.md` held a `decisions.md`, delete that file and start a new record. Append the held answers.
+   - Groomed, not started folder: create the branch as for no run folder. Never delete `research.md` or `grooming.md`. Ask about any other file, naming each (see Rules): **Delete them and continue** (only those files) or **Stop**. Append the held answers.
    - Run folder found (Resume or Start over): the branch is the `Branch:` line of `research.md`. Never create a branch. If the current branch differs, name both and ask (see Rules), offering **Check out <recorded branch>** and **Stop**. If the owner declines or the checkout fails, stop. If the recorded branch no longer exists, say so and that deleting the run folder starts a fresh run.
    - Resume: apply the halt-commit rule in `references/resume-halt-start-over.md`, append the held answers, then continue from the latest stage.
    - Start over: apply the Start over rule in `references/resume-halt-start-over.md`.
@@ -64,6 +65,12 @@ Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep 
 Read `references/outcome-table.md` in full before this stage.
 
 `codebase-researcher` gets the feature description (the issue body when there is one), each path it names as moved, renamed, deleted or reassigned to another area (do not predict others), the branch name and the `git rev-parse HEAD` value. `Output path:` is `research.md`; `Template path:` is `references/template-research.md`, which holds the coverage list and the no-questions instruction. A re-run repeats that instruction in the prompt.
+
+A groomed, not started folder (`references/run-folder.md`, read it in full): run `git diff --name-only <commit>..HEAD` with line 2's commit.
+
+- Non-empty list: run `codebase-researcher` as above, also passing the recorded commit and the list.
+- Empty list: do not run it; replace line 1 with the real branch yourself.
+- `git diff` fails: run it in full as for a new run.
 
 ## Stage 2: Story, then stop 1
 
@@ -81,9 +88,9 @@ Every `story-writer` prompt has `Output path:` `story.md` and `Template path:` `
 
 Read `references/outcome-table.md`, `references/decisions-record.md` and `references/template-brief.md` in full before this stage.
 
-1. `spec-writer` gets `story.md` and `research.md`. `Output path:` is `brief.md`; `Template path:` is `references/template-brief.md`, which holds the Scope block and the area definitions. If the brief's Scope block is missing, re-ask once.
+1. `spec-writer` gets `story.md`, `research.md` and `grooming.md` (read only if it exists). `Output path:` is `brief.md`; `Template path:` is `references/template-brief.md`, which holds the Scope block and the area definitions. If the brief's Scope block is missing, re-ask once.
 2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Launch them together, in parallel; neither reads the other's output. Both get the draft brief, `story.md` and `research.md`. Each writes its own file: `ux-advisor` writes `advisories-ux.md` from `references/template-advisories-ux.md`, and `claude-integration-advisor` writes `advisories-claude.md` from `references/template-advisories-claude.md`. `NO_UI_WORK` writes no file. No advisor applies to `docs`.
-3. One more `spec-writer` pass folds the advisor files into the brief: its prompt names both and says to read each only if it exists. `Output path:` is `brief.md` again.
+3. One more `spec-writer` pass folds the advisor files into the brief: its prompt names both and `grooming.md` and says to read each only if it exists. `Output path:` is `brief.md` again.
 
 **Stop 2** is skipped only for a groomed issue whose stop 1 was skipped, when the last `spec-writer` block and every advisor block have `Open questions: 0`. A `docs` area never causes an owner question about which agent builds it.
 
@@ -116,9 +123,9 @@ Check each reply, then make one commit after each area.
 **Respec procedure** (the `loop: Stage 3` rows of the Outcome table, `references/outcome-table.md`), in this order:
 
 1. Record the spend (stage and reason).
-2. Run `spec-writer` with the blocker to revise the brief (see Rules).
+2. Run `spec-writer` with the blocker and `grooming.md` (read only if it exists) to revise the brief (see Rules).
 3. Delete both advisor files, then re-run every advisor that ran in Stage 3, plus any the revised brief's Scope block calls for, on the revised brief, `story.md` and `research.md`. Each writes its own file.
-4. One more `spec-writer` pass folds the advisor files into the brief, as in Stage 3.
+4. One more `spec-writer` pass folds the advisor files into the brief, as in Stage 3 (`grooming.md` named too).
 5. Hold stop 2 in full.
 6. Re-run the affected area and every later one.
 
@@ -138,7 +145,7 @@ Read `references/outcome-table.md` in full before this stage.
 
 Runs after every Stage 5 that does not Halt; Stage 7 consumes both reports.
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist and the root files the brief names.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files and `grooming.md` (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist and the root files the brief names.
 
 ## Stage 7: Correct
 

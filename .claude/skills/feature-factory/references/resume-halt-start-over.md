@@ -4,6 +4,8 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 **One working copy.** Every agent works in the one working copy, on the run's branch. Worktree isolation is not used for any agent: no agent file sets `isolation: worktree`, and the orchestrator does not set it on an Agent call. A worktree-isolated agent starts from the default branch, not the run's branch, and does not load the worktree's own `CLAUDE.md` or `.claude/rules/`; the halt-commit, `git reset --hard main` and clean-tree rules below also assume one working copy.
 
+**Groomed, not started folder** (`run-folder.md`): it is neither Resume nor Start over; Stage 0 treats it as no run folder, and only deleting it by hand forces a fresh research run. Once Stage 1 has replaced line 1 of `research.md` with the real branch, it is a normal started run: the halt commit, Resume and Start over rules below apply to it as to any other run.
+
 **Halt-commit rule** (Resume, and the Start over keep path):
 
 - If HEAD's subject is exactly `chore: feature-factory halt commit` and the branch is not pushed (the Start over rule's test), run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.

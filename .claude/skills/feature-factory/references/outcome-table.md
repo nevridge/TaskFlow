@@ -12,7 +12,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 Each agent replies with one `Status` value, taken from the `Allowed status:` line of its template. Every (source, Status) pair has a row in Part 1, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. No row depends on a heading or on any other text of a run file. Stage prose points to the table and does not restate outcomes.
 
-- Route a reply only after `check-reply.mjs` exits 0 for it (`run-folder.md`). The first two rows cover a reply that fails the check.
+- Route a reply only after `check-reply.mjs` exits 0 for it (`run-folder.md`). The first two rows cover a reply that fails the check. A Status that passes the script but that the template does not list for that writer (`template-build.md` has one list for four writers) counts as a failed check.
 - Each template gives the precedence that picks one Status when several conditions hold. Across the replies of one stage, a `Halt` row applies first, and after it a `loop: Stage 5` row applies before a `loop: Stage 7` row. `Halt` is defined in `resume-halt-start-over.md`: read that file in full before applying a `Halt` row.
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt in `resume-halt-start-over.md`.
 - Rows with the budget `1 correction` are the Stage 7 triggers. They share one pass and one unit (Stage 7).

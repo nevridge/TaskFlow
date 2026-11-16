@@ -18,7 +18,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 ## Rules
 
-- `research.md` line 1 is `Branch: <name>` and line 2 is `Commit: <sha>`. The orchestrator passes both values in the Stage 1 prompt (the branch name, also for a branch used as is, and the `git rev-parse HEAD` value) and the researcher writes them. Preflight reads the `Branch:` line.
+- `research.md` line 1 is `Branch: <name>` and line 2 is `Commit: <sha>`. The orchestrator passes both values in the Stage 1 prompt (the branch name, also for a branch used as is, and the `git rev-parse HEAD` value) and the researcher writes them. Preflight reads the `Branch:` line, so after the reply check the orchestrator reads line 1: a line that is not `Branch: <the name it passed>` counts as a failed check.
 - The orchestrator writes `story.md` in one case only: a groomed story that stands, copied verbatim from the issue body. It writes no other agent file, also not after a failed check or a `WRITE_FAILED` reply.
 - `advisories-ux.md` and `advisories-claude.md` are the two advisor files. Each exists only when its advisor ran and did not return `NO_UI_WORK`. Every reader copes with a missing advisor file: a prompt names both, and the agent reads each only if it exists.
 - An agent that runs again rewrites its file: it reads the existing file first, then writes the whole file.

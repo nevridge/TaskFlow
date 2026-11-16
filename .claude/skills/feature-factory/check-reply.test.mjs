@@ -99,6 +99,12 @@ describe('tolerated formatting exits 0', () => {
     const none = 'Status: BLOCKED\r\nOutput: none\r\nOpen questions: 0\r\nSummary: no input\r\n';
     assert.equal(run(none, [crlfTemplate, spacedOutput]).status, 0);
   });
+
+  test('a block wrapped in a code fence', () => {
+    writeOutput();
+    const result = run(`\`\`\`text\n${block()}\n\`\`\`\n`);
+    assert.equal(result.status, 0, result.stderr);
+  });
 });
 
 describe('invalid replies exit non-zero', () => {
@@ -184,6 +190,13 @@ describe('invalid replies exit non-zero', () => {
     assert.equal(result.status, 1);
     assert.match(result.stderr, /not a No-file status/);
     assert.ok(result.stderr.includes('NO_UI_WORK, BLOCKED, WRITE_FAILED'), result.stderr);
+  });
+
+  test('a No-file status that names the output path, with a stale file there', () => {
+    writeOutput();
+    const result = run(block({ status: 'BLOCKED' }));
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /is a No-file status but Output is not none/);
   });
 
   test('Open questions that is not an integer', () => {

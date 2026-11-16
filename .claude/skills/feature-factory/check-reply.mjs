@@ -9,7 +9,8 @@ import fs from 'node:fs';
 import process from 'node:process';
 
 // `node --test <directory>` may run this file as a test on some Node versions. It is not a test.
-if (process.env.NODE_TEST_CONTEXT) process.exit(0);
+// A test runner passes no arguments; a real call always has two, so it is always checked.
+if (process.env.NODE_TEST_CONTEXT && process.argv.length <= 2) process.exit(0);
 
 const LABELS = ['Status', 'Output', 'Open questions', 'Summary'];
 
@@ -57,10 +58,11 @@ try {
 }
 
 // The block is the first four non-blank lines. Text after them is ignored.
+// A line that is only a code fence is skipped, so a block wrapped in a fence is read as the block.
 const lines = reply
   .split(/\r?\n/)
   .map((line) => line.trim())
-  .filter((line) => line !== '')
+  .filter((line) => line !== '' && !/^```[\w-]*$/.test(line))
   .slice(0, 4);
 
 const values = {};
@@ -100,6 +102,10 @@ if (output === 'none') {
     );
   }
   process.exit(0);
+}
+
+if (noFile.includes(status)) {
+  fail(`Status ${status} is a No-file status but Output is not none: expected Output none, got ${output || '(empty)'}`);
 }
 
 if (output !== expectedOutput) {

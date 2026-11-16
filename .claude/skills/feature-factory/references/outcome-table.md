@@ -5,83 +5,83 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 ## Contents
 
 - [How the rows apply](#how-the-rows-apply)
-- [The table](#the-table): 63 rows, grouped by source in this order: orchestrator (the Scope block), codebase-researcher, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor, orchestrator (the correction budget)
+- [Part 1: routing rows](#part-1-routing-rows): 41 rows keyed on (source, Status), grouped by source in this order: every agent (the reply check), orchestrator, codebase-researcher, story-writer, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor
+- [Part 2: report-only sections](#part-2-report-only-sections): the sections of each run file that route nothing, and where each is shown
 
 ## How the rows apply
 
-Every agent reply value has a row, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. Stage prose points to the table and does not restate outcomes.
+Each agent replies with one `Status` value, taken from the `Allowed status:` line of its template. Every (source, Status) pair has a row in Part 1, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. No row depends on a heading or on any other text of a run file. Stage prose points to the table and does not restate outcomes.
 
-- Every row a reply matches applies. A `Halt` row applies first, and after it a `loop: Stage 5` row applies before a `loop: Stage 7` row. `Halt` is defined in `resume-halt-start-over.md`: read that file in full before applying a `Halt` row.
+- Route a reply only after `check-reply.mjs` exits 0 for it (`run-folder.md`). The first two rows cover a reply that fails the check.
+- Each template gives the precedence that picks one Status when several conditions hold. Across the replies of one stage, a `Halt` row applies first, and after it a `loop: Stage 5` row applies before a `loop: Stage 7` row. `Halt` is defined in `resume-halt-start-over.md`: read that file in full before applying a `Halt` row.
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt in `resume-halt-start-over.md`.
 - Rows with the budget `1 correction` are the Stage 7 triggers. They share one pass and one unit (Stage 7).
+- The `loop: Stage 3` rows use the respec procedure (Stage 4).
+- "Stop 2 is held" rows have `Open questions:` above 0. Stop 2 reads that number, never a heading.
 - "Reported" means shown at stop 3, listed in the implementation notes under Possible issues and listed in the PR body.
-- The js-yaml rows cover edits to any file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/`. A file with no frontmatter (its first line is not `---`) needs no check and counts as `not needed`, except an agent file or a `SKILL.md`, which must have frontmatter.
-- A prefix token (`bug:`, `gap:`, `probable bug:`, `unclear:`) matches only at the start of an item, in its own section of the verifier reply.
 
-## The table
+## Part 1: routing rows
 
-| Source | Reply value (label exactly as emitted) | Outcome | Destination | Budget |
+| Source | Status | Outcome | Destination | Budget |
 |---|---|---|---|---|
+| every agent | A reply that fails `check-reply.mjs`, or `WRITE_FAILED`, first time | Re-ask the same stage call once, with the script's message. The orchestrator never writes the file. | loop: the same stage | none |
+| every agent | A reply that fails `check-reply.mjs`, or `WRITE_FAILED`, again after the re-ask | The run file is missing or unchecked. The orchestrator never writes the file. | Halt | none |
 | orchestrator | Stage 3: the Scope block is still missing after one re-ask | The brief cannot be scoped. | Halt | none |
-| codebase-researcher | A reply with a `### Relevant Files` heading | Written to `research.md`. | continue | none |
-| codebase-researcher | A reply with no `### Relevant Files` heading (a question), first time | Not written to `research.md`. Re-run the researcher once with the no-questions instruction repeated. | loop: Stage 1 | none |
-| codebase-researcher | A reply with no `### Relevant Files` heading again, after the re-run | Not written to `research.md`. | Halt | none |
-| spec-writer | A reply whose first line is `MISSING INPUTS: <what is missing>` | No brief was written. | Halt | none |
-| backend-builder, frontend-builder, assistant-builder | **Spec blockers**, respec budget remaining | Respec procedure (Stage 4). | loop: Stage 3 | 1 respec |
-| backend-builder, frontend-builder, assistant-builder | **Spec blockers**, respec budget spent | No respec is left. | Halt | none |
-| backend-builder, frontend-builder, assistant-builder, docs agent | **Files changed** | Recorded in `build-<area>.md`. | continue | none |
-| backend-builder, frontend-builder, assistant-builder | `Gates: green` | Recorded in `build-<area>.md`. | continue | none |
-| backend-builder, frontend-builder, assistant-builder | `Gates: red (<commands>)` | The area is committed and Stages 5 and 6 run first. | loop: Stage 7 | 1 correction |
-| backend-builder | `Client regeneration: FAILED (<reason>)`, any reason, including `API did not start or /health failed` | The client cannot be regenerated. | Halt | none |
-| backend-builder | `Client regeneration: ran` or `Client regeneration: not needed` | Recorded in `build-<area>.md`. | continue | none |
-| backend-builder | **API contract** | Recorded in `build-<area>.md` for the later builders. | continue | none |
-| frontend-builder | **Client status**, **User-visible change** | Recorded in `build-<area>.md`. | continue | none |
-| frontend-builder, backend-builder, assistant-builder | `Dependencies added outside the brief: <names>` | The validator's scope check judges it. | continue | none |
-| frontend-builder, backend-builder, assistant-builder | `Dependencies added outside the brief: none` | Nothing to judge. | continue | none |
-| frontend-builder, assistant-builder | `advisory_deviations` (entries, or `advisory_deviations: none`) | Entries go in the notes under Advisor deviations. | continue | none |
-| assistant-builder | `ENVIRONMENT FAILURE (reason)` under Verification results | The area cannot be verified. | Halt | none |
-| assistant-builder | **Plugin and chat sync** | Recorded in `build-<area>.md`. | continue | none |
-| docs agent | **Spec blockers**, respec budget remaining | Respec procedure (Stage 4). | loop: Stage 3 | 1 respec |
-| docs agent | **Spec blockers**, respec budget spent | No respec is left. | Halt | none |
-| docs agent | js-yaml `passed` | Recorded in `build-docs.md`. | continue | none |
-| docs agent | js-yaml `parse error fixed` | Recorded in `build-docs.md`. | continue | none |
-| docs agent | js-yaml `not needed` | No file under `.claude/agents/`, `.claude/skills/` or `.claude/rules/` was edited, or every file edited there has no frontmatter and is not an agent file or a `SKILL.md`. | continue | none |
-| docs agent | js-yaml `check could not run` | The edited `.claude` files are unchecked. | Halt | none |
-| test-verifier | Pass | Stage 6 runs. | continue | none |
-| test-verifier | `FORMAT-ONLY`, with no FORMAT-ONLY entry in `decisions.md` | The run's one formatter pass (Stage 5). | loop: Stage 5 | none |
-| test-verifier | `FORMAT-ONLY`, with a FORMAT-ONLY entry in `decisions.md` | Treated as a Code failure. | loop: Stage 7 | 1 correction |
-| test-verifier | `NO GATES APPLICABLE` | Stage 6 runs. | continue | none |
-| test-verifier | `ENVIRONMENT FAILURE` | The gates cannot run. | Halt | none |
-| test-verifier | A reply that the story or brief is missing | Nothing was verified. | Halt | none |
-| test-verifier | Code failure | Stage 6 runs first. | loop: Stage 7 | 1 correction |
-| test-verifier | `COVERAGE BELOW THRESHOLD` | Reported. Not a Code failure. | continue | none |
-| test-verifier | `UNTESTABLE` | Reported. | continue | none |
-| test-verifier | `NOT COVERED` | Reported. | continue | none |
-| test-verifier | A covered line of the AC coverage report; **Tests added** | Recorded in `verify.md`. | continue | none |
-| test-verifier | **Bugs or gaps found**, an item starting `bug:` | Sent to the area builder with the verifier's description. Stage 6 runs first. | loop: Stage 7 | 1 correction |
-| test-verifier | **Bugs or gaps found**, an item starting `gap:` | Reported. | continue | none |
-| test-verifier | **Probable bugs and possible issues**, an item starting `probable bug:` | Stage 6 runs first. | loop: Stage 7 | 1 correction |
-| test-verifier | **Probable bugs and possible issues**, an item starting `unclear:` | Goes in the notes under Possible issues. | continue | none |
-| implementation-validator | `NO SPEC` | The validator had no story or brief. | Halt | none |
-| implementation-validator | PASS | Nothing to correct. | continue | none |
-| implementation-validator | CONDITIONAL PASS | Its Should fix findings go in the PR body. | continue | none |
-| implementation-validator | A **Must fix** finding not marked `[?]`, in a FAIL verdict or any other section | Correction pass. | loop: Stage 7 | 1 correction |
-| implementation-validator | FAIL, with every Must fix finding marked `[?]` | Shown at stop 3 for the owner to decide. | continue | none |
-| implementation-validator | A **Should fix** finding | Not reworked. Shown at stop 3 and goes in the PR body as a residual finding. | continue | none |
-| implementation-validator | **Plan deviations** | Go in the notes under Plan deviations. | continue | none |
-| implementation-validator | A finding marked `[?]`, in any section | Not reworked. Shown at stop 3 for the owner to decide. | continue | none |
-| ux-advisor | `NO_UI_WORK` | Adds nothing to `advisories.md`. | continue | none |
-| ux-advisor | FRONTEND_GUIDANCE, STYLE_ADDITIONS, BACKEND_IMPLICATIONS, ACCESSIBILITY_NOTES, TESTING_CRITERIA, DESIGN_RATIONALE | Written to `advisories.md`. | continue | none |
-| ux-advisor | DESIGN_CONFLICTS | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
-| ux-advisor | DEPENDENCY_PROPOSALS | Written to `advisories.md`. Stop 2 is held and shows it as "Proposed dependency (needs approval)". | continue | none |
-| claude-integration-advisor | Recommendations (**should** or **consider**) | Written to `advisories.md`. | continue | none |
-| claude-integration-advisor | `UNVERIFIED` on a recommendation | A lead, not an instruction. Not following it is not a finding. | continue | none |
-| claude-integration-advisor | Conflicts with brief, with any entry | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
-| claude-integration-advisor | Conflicts with brief, `None` | Nothing to show. | continue | none |
-| claude-integration-advisor | Out of scope | Goes in the notes under Follow-up candidates. | continue | none |
-| claude-integration-advisor | Docs consulted | Written to `advisories.md`. | continue | none |
-| claude-integration-advisor | Source health, every line OK | Written to `advisories.md`. | continue | none |
-| claude-integration-advisor | Source health with a Failed or Topic missing line | Written to `advisories.md`. Stop 2 is held and shows it. | continue | none |
-| claude-integration-advisor | Source health with a Moved line | Written to `advisories.md`. Shown at stop 3. Stop 2 is not held for it. | continue | none |
-| claude-integration-advisor | The `SOURCE LIST NEEDS UPDATE: <entry>` prefix | Written to `advisories.md`. Goes in the notes under Follow-up candidates. This row does not hold stop 2: the Source health lines decide the hold, never the prefix. | continue | none |
 | orchestrator | The correction budget is spent and a Stage 7 trigger remains | No correction pass is left. | Halt | none |
+| codebase-researcher | `DONE` | `research.md` is written. | continue | none |
+| codebase-researcher | `BLOCKED`, first time | No file. Re-run the researcher once with the template's no-questions instruction repeated. | loop: Stage 1 | none |
+| codebase-researcher | `BLOCKED`, again after the re-run | No file. | Halt | none |
+| story-writer | `DONE` | `story.md` is written. | continue | none |
+| story-writer | `NEEDS_INPUT` | `story.md` is written. Stop 1 is held and lists its open questions. | continue | none |
+| story-writer | `BLOCKED` | No story was written. | Halt | none |
+| spec-writer | `DONE` | `brief.md` is written. | continue | none |
+| spec-writer | `NEEDS_INPUT` | `brief.md` is written. Stop 2 is held and lists its open questions. | continue | none |
+| spec-writer | `BLOCKED` | No brief was written. | Halt | none |
+| backend-builder, frontend-builder, assistant-builder | `DONE` | `build-<area>.md` is written and its checks pass. | continue | none |
+| backend-builder, frontend-builder, assistant-builder | `SPEC_BLOCKER`, respec budget remaining | Respec procedure (Stage 4). | loop: Stage 3 | 1 respec |
+| backend-builder, frontend-builder, assistant-builder | `SPEC_BLOCKER`, respec budget spent | No respec is left. | Halt | none |
+| backend-builder, frontend-builder, assistant-builder | `GATES_RED` | The area is committed and Stages 5 and 6 run first. | loop: Stage 7 | 1 correction |
+| backend-builder | `CLIENT_REGEN_FAILED` | The client cannot be regenerated. | Halt | none |
+| assistant-builder | `ENVIRONMENT_FAILURE` | The area cannot be verified. | Halt | none |
+| backend-builder, frontend-builder, assistant-builder | `BLOCKED` | Nothing was built. | Halt | none |
+| docs agent | `DONE` | `build-docs.md` is written; the js-yaml check is `passed`, `parse error fixed` or `not needed`. | continue | none |
+| docs agent | `SPEC_BLOCKER`, respec budget remaining | Respec procedure (Stage 4). | loop: Stage 3 | 1 respec |
+| docs agent | `SPEC_BLOCKER`, respec budget spent | No respec is left. | Halt | none |
+| docs agent | `CHECK_NOT_RUN` | The edited `.claude` files are unchecked. | Halt | none |
+| docs agent | `BLOCKED` | Nothing was built. | Halt | none |
+| test-verifier | `DONE` | Every gate passed, or no gate applies. Stage 6 runs. | continue | none |
+| test-verifier | `FORMAT_ONLY`, with no FORMAT-ONLY entry in `decisions.md` | The run's one formatter pass (Stage 5). | loop: Stage 5 | none |
+| test-verifier | `FORMAT_ONLY`, with a FORMAT-ONLY entry in `decisions.md` | Treated as `CODE_FAILURE`. | loop: Stage 7 | 1 correction |
+| test-verifier | `CODE_FAILURE` | Stage 6 runs first. The failure, each `bug:` item and each `probable bug:` item go to the area builder with the verifier's description. | loop: Stage 7 | 1 correction |
+| test-verifier | `ENVIRONMENT_FAILURE` | The gates cannot run. | Halt | none |
+| test-verifier | `BLOCKED` | Nothing was verified. | Halt | none |
+| implementation-validator | `DONE` | No unmarked Must fix finding. | continue | none |
+| implementation-validator | `MUST_FIX` | Correction pass for every Must fix finding not marked `[?]`. | loop: Stage 7 | 1 correction |
+| implementation-validator | `BLOCKED` | The validator had no story or brief. | Halt | none |
+| ux-advisor | `DONE` | `advisories-ux.md` is written. | continue | none |
+| ux-advisor | `NEEDS_INPUT` | `advisories-ux.md` is written. Stop 2 is held and shows its DESIGN_CONFLICTS, and its DEPENDENCY_PROPOSALS as "Proposed dependency (needs approval)". | continue | none |
+| ux-advisor | `NO_UI_WORK` | `Output: none`: no file is written. | continue | none |
+| ux-advisor | `BLOCKED` | No advice was written. | Halt | none |
+| claude-integration-advisor | `DONE` | `advisories-claude.md` is written. | continue | none |
+| claude-integration-advisor | `NEEDS_INPUT` | `advisories-claude.md` is written. Stop 2 is held and shows its Conflicts with brief and its Failed and Topic missing Source health lines. | continue | none |
+| claude-integration-advisor | `BLOCKED` | No advice was written. | Halt | none |
+
+## Part 2: report-only sections
+
+These sections of the run files route nothing, and none is a Status value. Each is a fixed section of its template, deleted when it is empty.
+
+| File | Section or line | Where it is shown |
+|---|---|---|
+| `build-*.md` | Dependencies added outside the brief | The validator's scope check judges it. |
+| `build-*.md` | Advisory deviations | The notes, under Advisor deviations. |
+| `verify.md` | Coverage below threshold | Reported. Not a `CODE_FAILURE`. |
+| `verify.md` | `UNTESTABLE` and `NOT COVERED` lines of the AC coverage report | Reported. |
+| `verify.md` | `gap:` items of Bugs or gaps found | Reported. |
+| `verify.md` | `unclear:` items of Probable bugs and possible issues | The notes, under Possible issues. |
+| `validation.md` | The `Verdict:` line (PASS, CONDITIONAL PASS or FAIL) | Shown at stop 3. |
+| `validation.md` | A finding marked `[?]`, in any section | Not reworked. Shown at stop 3 for the owner to decide. |
+| `validation.md` | Should fix | Not reworked. Shown at stop 3 and goes in the PR body as a residual finding. |
+| `validation.md` | Plan deviations | The notes, under Plan deviations. |
+| `advisories-claude.md` | Out of scope | The notes, under Follow-up candidates. |
+| `advisories-claude.md` | Source list needs update | The notes, under Follow-up candidates. Never holds stop 2. |
+| `advisories-claude.md` | A Moved line of Source health | Shown at stop 3. Never holds stop 2. |

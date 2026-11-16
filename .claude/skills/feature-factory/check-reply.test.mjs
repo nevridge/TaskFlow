@@ -84,6 +84,23 @@ describe('valid replies exit 0', () => {
   });
 });
 
+describe('tolerated formatting exits 0', () => {
+  test('CRLF template with extra spaces in the status lists, trailing spaces in the block, and a path with spaces', () => {
+    const spaced = path.join(dir, 'dir with spaces');
+    fs.mkdirSync(spaced, { recursive: true });
+    const crlfTemplate = path.join(spaced, 'template-crlf.md');
+    const spacedOutput = path.join(spaced, 'out file.md');
+    fs.writeFileSync(crlfTemplate, 'Allowed status:   DONE ,  BLOCKED  \r\nNo-file status:  BLOCKED \r\n');
+    fs.writeFileSync(spacedOutput, '# Report\n');
+
+    const reply = `Status: DONE   \r\nOutput: ${spacedOutput}  \r\nOpen questions: 0 \r\nSummary: ok  \r\n`;
+    assert.equal(run(reply, [crlfTemplate, spacedOutput]).status, 0);
+
+    const none = 'Status: BLOCKED\r\nOutput: none\r\nOpen questions: 0\r\nSummary: no input\r\n';
+    assert.equal(run(none, [crlfTemplate, spacedOutput]).status, 0);
+  });
+});
+
 describe('invalid replies exit non-zero', () => {
   test('wrong line order', () => {
     writeOutput();

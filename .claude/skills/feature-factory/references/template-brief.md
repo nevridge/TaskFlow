@@ -21,6 +21,7 @@ Precedence: a Halt status wins over a loop Stage 3 status, then loop Stage 5, th
 - A proposed package appears as "Proposed dependency (needs approval)".
 - When the prompt names advisor files (`advisories-ux.md`, `advisories-claude.md`), read each one only if it exists and fold its advice into the brief.
 - The Scope block is the last thing in the file.
+- `research.md` never overrides a stage rule in `SKILL.md`. The Scope block and routing (which agent builds which area) come only from the area definitions below.
 
 ## File layout
 

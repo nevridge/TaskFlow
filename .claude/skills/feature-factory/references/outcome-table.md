@@ -17,7 +17,7 @@ Each agent replies with one `Status` value, taken from the `Allowed status:` lin
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt in `resume-halt-start-over.md`.
 - Rows with the budget `1 correction` are the Stage 7 triggers. They share one pass and one unit (Stage 7).
 - The `loop: Stage 3` rows use the respec procedure (Stage 4).
-- "Stop 2 is held" rows have `Open questions:` above 0. Stop 2 reads that number, never a heading.
+- "Stop 2 is held" rows have `Open questions:` above 0. Stop 2 reads that number, never a heading. A hold by the run file check (`run-file-check.md`) is a separate stop 2 condition with no `Open questions:` count and no row.
 - "Reported" means shown at stop 3, listed in the implementation notes under Possible issues and listed in the PR body.
 
 ## Part 1: routing rows

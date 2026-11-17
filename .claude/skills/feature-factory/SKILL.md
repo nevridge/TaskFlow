@@ -112,8 +112,9 @@ Check each reply, then make one commit after each area.
 2. Run `spec-writer` with the blocker and `grooming.md` (read only if it exists) to revise the brief (see Rules).
 3. Delete both advisor files, then re-run every advisor that ran in Stage 3, plus any the revised brief's Scope block calls for, on the revised brief, `story.md` and `research.md`. Each writes its own file.
 4. One more `spec-writer` pass folds the advisor files into the brief, as in Stage 3 (`grooming.md` named too).
-5. Hold stop 2 in full.
-6. Re-run the affected area and every later one.
+5. Read `brief.md` and `research.md` yourself against the stage rules, as `references/run-file-check.md` (read in full first) says for a respec.
+6. Hold stop 2 in full.
+7. Re-run the affected area and every later one.
 
 A spec blocker raised in a Stage 7 pass uses the same rows, this procedure and the same respec budget. The correction unit spent for that pass stays spent.
 

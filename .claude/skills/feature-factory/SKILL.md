@@ -37,6 +37,7 @@ Read each file in full when a stage says to:
 - [references/resume-halt-start-over.md](references/resume-halt-start-over.md): the Halt-commit rule, the Start over rule, Halt and the Resume rules.
 - [references/ci-jobs-by-area.md](references/ci-jobs-by-area.md): the CI jobs by area table.
 - [references/implementation-notes.md](references/implementation-notes.md): the sections of the implementation notes.
+- [references/run-file-check.md](references/run-file-check.md): the run file check before stop 2.
 
 Read `references/resume-halt-start-over.md` in full before any Halt and before a budget check on a resumed run (Resume after a budget Halt).
 
@@ -70,17 +71,18 @@ Every `story-writer` prompt has `Output path:` `story.md` and `Template path:` `
 
 ## Stage 3: Brief, then stop 2
 
-Read `references/outcome-table.md`, `references/decisions-record.md` and `references/template-brief.md` in full before this stage.
+Read `references/outcome-table.md`, `references/decisions-record.md`, `references/template-brief.md` and `references/run-file-check.md` in full before this stage.
 
 1. `spec-writer` gets `story.md`, `research.md` and `grooming.md` (read only if it exists). `Output path:` is `brief.md`; `Template path:` is `references/template-brief.md`, which holds the Scope block and the area definitions. If the brief's Scope block is missing, re-ask once.
 2. Advisors, by the Scope block: `ux-advisor` when the UI changes, `claude-integration-advisor` when `assistant` is listed. Launch them together, in parallel; neither reads the other's output. Both get the draft brief, `story.md` and `research.md`. Each writes its own file: `ux-advisor` writes `advisories-ux.md` from `references/template-advisories-ux.md`, and `claude-integration-advisor` writes `advisories-claude.md` from `references/template-advisories-claude.md`. `NO_UI_WORK` writes no file. No advisor applies to `docs`.
 3. One more `spec-writer` pass folds the advisor files into the brief: its prompt names both and `grooming.md` and says to read each only if it exists. `Output path:` is `brief.md` again.
+4. Before stop 2 is decided, read `brief.md` and `research.md` yourself, once, against the stage rules (not the advisor files).
 
-**Stop 2** is skipped only for a groomed issue whose stop 1 was skipped, when the last `spec-writer` block and every advisor block have `Open questions: 0`. A `docs` area never causes an owner question about which agent builds it.
+**Stop 2** is skipped only for a groomed issue whose stop 1 was skipped, when the last `spec-writer` block and every advisor block have `Open questions: 0` and step 4 found no contradiction (`references/run-file-check.md`). A `docs` area never causes an owner question about which agent builds it.
 
 ## Stops 1 and 2
 
-Read `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before each stop.
+Read `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before each stop, and `references/run-file-check.md` before stop 2.
 
 Present the story or brief. List every open question. Put each question with discrete answers to the owner through AskUserQuestion (see Rules): 2 to 4 options per question, at most 4 questions per call, batched across calls when there are more. Re-run the agent with the answers and repeat until no open questions remain. Then ask (see Rules), offering **Approved**, **Changes requested** and **Rejected**.
 - **Changes requested:** take the owner's free-text feedback from the tool's "Other" answer; if none was given, ask a follow-up plain-text prompt for it. Re-run with the feedback and present again.

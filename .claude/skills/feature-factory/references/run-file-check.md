@@ -35,11 +35,11 @@ Stop 2 then runs its normal loop (answers, **Changes requested** re-runs) to **A
 On **Changes requested** after a hold, the agents that re-run depend on the held file:
 
 - **`research.md` held, or both files held:** re-run `codebase-researcher` first, then `spec-writer`.
-- **Only `brief.md` held:** re-run only `spec-writer`, with the owner's feedback.
+- **Only `brief.md` held:** re-run only `spec-writer`, with the owner's feedback and the listed contradictions.
 
-The `codebase-researcher` prompt quotes the contradicted statement and names the rule it breaks. It passes the branch name and the current `git rev-parse HEAD` value, so lines 1 and 2 of `research.md` stay correct, and no recorded commit or changed-file list, so the template's re-check section does not apply and the whole file is rewritten (the agent reads the existing file first). It says to state nothing about pipeline mechanics. The researcher gets only the named contradiction, not the owner's feedback. `spec-writer` then re-runs on the rewritten `research.md` with the owner's feedback. Stop 2 shows the rewritten brief and continues its normal loop to **Approved**.
+The `codebase-researcher` prompt is the Stage 1 prompt (the feature description, the named paths and the no-questions instruction), and it also quotes the contradicted statement and names the rule it breaks. It passes the branch name and the current `git rev-parse HEAD` value, so lines 1 and 2 of `research.md` stay correct, and no recorded commit or changed-file list, so the template's re-check section does not apply and the whole file is rewritten (the agent reads the existing file first). It says to state nothing about pipeline mechanics. The researcher gets only the named contradiction, not the owner's feedback. `spec-writer` then re-runs on the rewritten `research.md` with the owner's feedback and the listed contradictions. Stop 2 shows the rewritten brief and continues its normal loop to **Approved**.
 
-A failed researcher re-run uses the existing Outcome table rows (the `codebase-researcher` `BLOCKED` rows and the every-agent re-ask and `WRITE_FAILED` rows); there is no new row. The re-run spends no respec or correction budget, and the existing **Changes requested** `decisions.md` entry covers it.
+A failed researcher re-run uses the existing Outcome table rows (the `codebase-researcher` `BLOCKED` rows and the every-agent re-ask and `WRITE_FAILED` rows); there is no new row. The re-run those rows call for happens here, at the same stop, not as a return to Stage 1. The re-run spends no respec or correction budget, and the existing **Changes requested** `decisions.md` entry covers it.
 
 **Approved** with a `research.md` contradiction still present needs nothing extra: no builder prompt text is added, because routing comes from the brief's Scope block and `research.md` never overrides a stage rule (`template-brief.md`).
 

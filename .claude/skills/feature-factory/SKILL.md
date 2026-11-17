@@ -26,10 +26,11 @@ You are the feature-factory orchestrator of a multi-agent pipeline with three ap
 
 ## Reference files
 
-After a compaction, re-read `SKILL.md` and the reference files the current stage or stop names. `SKILL.md` must stay at or under 3,000 words, counted with `wc -w`.
+After a compaction, re-read `SKILL.md` and the reference files the current stage or stop names. `SKILL.md` must stay at or under 5,000 tokens, checked as at or under 18,000 bytes with `wc -c SKILL.md`, because after a compaction only the first 5,000 tokens of a skill are re-attached.
 
 Read each file in full when a stage says to:
 
+- [references/preflight.md](references/preflight.md): Stage 0, the preflight steps.
 - [references/run-folder.md](references/run-folder.md): the run folder layout. The `references/template-*.md` files are the agents' templates, one per run file, named in the stage that uses each.
 - [references/outcome-table.md](references/outcome-table.md): the Outcome table, which gives the outcome of every agent Status value and lists the report-only sections.
 - [references/decisions-record.md](references/decisions-record.md): the Decisions record.
@@ -41,24 +42,7 @@ Read `references/resume-halt-start-over.md` in full before any Halt and before a
 
 ## Stage 0: Preflight
 
-Read `references/run-folder.md`, `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before this stage.
-
-Stop on any failure. Steps 1 to 5 only read or ask, apart from the orphan sweep and the halt commit retry in step 3; this run's folder does not change before step 6, and the branch and the tree change only through that retry.
-
-1. **Issue.** Use the invocation argument, or ask once "Which GitHub issue is this for? Give a number, or 'none'." With no issue, derive a slug from the feature description, asking for the description if there is none. Read the issue (title, body, state) and stop if it is closed.
-2. **Run folder.** Look for `.feature-factory/<issue-number-or-slug>/`. A folder without `research.md` counts as none, even when it holds a `decisions.md`; so does a groomed, not started folder (`references/run-folder.md`). If one exists, show which files it has, then ask (see Rules), offering **Resume from the latest stage** and **Start over**. This is "this run's folder".
-3. **Clean tree.** Any uncommitted change stops the run: stage commits would sweep it in.
-   - No run folder in step 2 (groomed, not started included): stop and tell the owner to commit or stash.
-   - Run folder found in step 2: a halt commit may have failed. If the current branch is not the `Branch:` line of `research.md`, stop, name both branches and commit nothing. Otherwise ask (see Rules), offering **Retry the halt commit** and **Stop**. **Retry** runs the halt commit (see Halt in `references/resume-halt-start-over.md`): on success preflight continues, on failure report it and stop.
-   - Neither this offer nor Start over discards a change. A Start over answer from step 2 stays held, so the folder is not deleted before the retry.
-4. **Blockers.** Read `repos/{owner}/{repo}/issues/<N>/dependencies/blocked_by` (GitHub's native links, not body text). On Resume, read `decisions.md` first: a blocker listed in a recorded **proceed anyway** entry is covered, so only new blockers are asked about. On Start over no recorded entry counts. Any open blocker that is not covered stops the run and is named. Ask (see Rules), offering **proceed anyway** and **Stop**. Continue only on **proceed anyway**, which covers only the blockers listed then.
-5. **Orphan sweep.** For each other folder under `.feature-factory/` (skip folders without a `research.md`): a groomed, not started folder is judged only by its issue, deleted when its name parses to an issue number and `gh issue view <number> --json state` gives CLOSED, otherwise kept. Any other folder: read the branch from `research.md` and delete the folder if that branch no longer exists locally or its PR is merged or closed. Never delete this run's folder, named by step 1's issue number or slug.
-6. **Branch and folder.**
-   - No run folder: on `main`, create a branch `<type>/<issue-number>-<short-slug>` (type `feat`, `fix` or `chore` from the issue; slug a few title words; with no issue `<type>/<slug>`; for example `chore/523-restructure-feature-factory-skill`); any other branch is used as is, whatever its name. Create the run folder; if a folder without `research.md` held a `decisions.md`, delete that file and start a new record. Append the held answers.
-   - Groomed, not started folder: create the branch as for no run folder. Never delete `research.md` or `grooming.md`. Ask about any other file, naming each (see Rules): **Delete them and continue** (only those files) or **Stop**. Append the held answers.
-   - Run folder found (Resume or Start over): the branch is the `Branch:` line of `research.md`. Never create a branch. If the current branch differs, name both and ask (see Rules), offering **Check out <recorded branch>** and **Stop**. If the owner declines or the checkout fails, stop. If the recorded branch no longer exists, say so and that deleting the run folder starts a fresh run.
-   - Resume: apply the halt-commit rule in `references/resume-halt-start-over.md`, append the held answers, then continue from the latest stage.
-   - Start over: apply the Start over rule in `references/resume-halt-start-over.md`.
+Read `references/preflight.md`, `references/run-folder.md`, `references/decisions-record.md` and `references/resume-halt-start-over.md` in full before this stage. The steps of this stage are in `references/preflight.md`.
 
 ## Stage 1: Research
 
@@ -159,7 +143,7 @@ Send every trigger present to the area builder, with the verifier's diagnosis fo
 
 Read `references/outcome-table.md`, `references/decisions-record.md`, `references/resume-halt-start-over.md` and `references/implementation-notes.md` in full before this stage.
 
-Draft the implementation notes (`references/implementation-notes.md`) from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
+Draft the implementation notes (`references/implementation-notes.md`) from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4 in `references/preflight.md`. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
 
 Show the notes at **stop 3** with the validator report, skipped areas, the gate results and every item the Outcome table (`references/outcome-table.md`) marks as reported or shown at stop 3, then ask (see Rules) whether to open the PR, offering **Yes** and **No**. Record the answer, before step 1 on Yes.
 

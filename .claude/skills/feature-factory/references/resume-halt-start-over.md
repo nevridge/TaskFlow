@@ -1,6 +1,6 @@
 # Resume, halt-commit and Start over rules
 
-The feature-factory orchestrator reads this file in full when a stage in `../SKILL.md` says to, before any Halt and before a budget check on a resumed run. Stage and step numbers refer to `SKILL.md`, and Rules means its Rules section.
+The feature-factory orchestrator reads this file in full when a stage in `../SKILL.md` says to, before any Halt and before a budget check on a resumed run. Stage and step numbers refer to `SKILL.md`, except Stage 0 step numbers, which refer to `preflight.md`. Rules means the Rules section of `SKILL.md`.
 
 **One working copy.** Every agent works in the one working copy, on the run's branch. Worktree isolation is not used for any agent: no agent file sets `isolation: worktree`, and the orchestrator does not set it on an Agent call. A worktree-isolated agent starts from the default branch, not the run's branch, and does not load the worktree's own `CLAUDE.md` or `.claude/rules/`; the halt-commit, `git reset --hard main` and clean-tree rules below also assume one working copy.
 
@@ -31,9 +31,9 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 **Halt**: a stop with these triggers only: the Outcome table rows whose destination is `Halt`. Read `outcome-table.md` in full before applying a Halt.
 
 - A Halt keeps every file, applies the halt commit on the feature branch, and reports what failed and the branch name.
-- **The halt commit.** If the tree has any change, stage it as Rules says and commit with the subject `chore: feature-factory halt commit`. A clean tree gets no commit. If the commit fails, report it and leave the tree as it is; the next run's preflight offers to retry it (Stage 0 step 3).
+- **The halt commit.** If the tree has any change, stage it as Rules says and commit with the subject `chore: feature-factory halt commit`. A clean tree gets no commit. If the commit fails, report it and leave the tree as it is; the next run's preflight offers to retry it (Stage 0 step 3 in `preflight.md`).
 - **Resume after a budget Halt.** Counting reads `decisions.md` (Decisions record, `decisions-record.md`). When a resumed run reaches a budget check (Stage 4 respec, Stage 7 correction) and that budget was already spent at Resume and no unit has been granted since, do not Halt again and do not grant a unit yourself. Show what was spent, and ask via AskUserQuestion (see Rules), offering **Grant one more unit of the <respec|correction> budget** and **Start over**. A grant is recorded as its own entry and the run continues. **Start over** follows the mid-run Start over order in the Start over rule in this file. A budget spent during this invocation Halts as before. A resumed run never starts with fresh budgets. Known behaviour: a budget unit is recorded before the pass, so a session that dies before the pass commits is counted twice on Resume. This errs toward asking the owner for a grant, never toward extra passes.
 - A halted run writes no notes and opens no PR.
-- Rejected at stop 1 or 2, No at stop 3 and a Stage 8 blocker **Stop** are not Halts, but each applies the halt commit, and the files stay. A preflight stop applies none: past Stage 0 step 3 the tree is clean.
+- Rejected at stop 1 or 2, No at stop 3 and a Stage 8 blocker **Stop** are not Halts, but each applies the halt commit, and the files stay. A preflight stop applies none: past Stage 0 step 3 in `preflight.md` the tree is clean.
 
 **Stops 1 and 2 on Resume:** read `decisions.md` and hold stop 1 again unless its latest entry is Approved or a recorded skip. Apply the same test to stop 2. A "Spent respec budget" entry after stop 2's latest Approved or recorded skip reopens stop 2, because the revised brief has not been approved. No entry means the stop is held. A stop with a recorded skip and no later respec spend is not held again.

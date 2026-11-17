@@ -2,13 +2,15 @@
 
 The feature-factory orchestrator reads this file in full when a stage in `../SKILL.md` says to. Stage numbers refer to `SKILL.md`.
 
-The run file check is Stage 3 step 4. The orchestrator itself reads `brief.md` and `research.md` once against the stage rules, after the last `spec-writer` pass and before stop 2 is decided. Advisor files (`advisories-ux.md`, `advisories-claude.md`) are not read. The check runs when stop 2 is presented or skipped, so a resumed run that reaches stop 2 with no recorded stop 2 decision runs it too.
+The run file check is Stage 3 step 4. The orchestrator itself reads `brief.md` and `research.md` once against the stage rules, after the last `spec-writer` pass and before stop 2 is decided. Advisor files (`advisories-ux.md`, `advisories-claude.md`) are not read. The check runs when stop 2 is presented or skipped, so a resumed run that reaches stop 2 with no recorded stop 2 decision and no `stop 2 held` entry runs it too. Once a hold is recorded, the check is not run again.
 
 ## What counts as a contradiction
 
 A contradiction is a statement about pipeline mechanics (routing, stops, which agent builds which area, who writes which file) that conflicts with one of these stage rules:
 
+- the opening paragraph of `SKILL.md` (the orchestrator never implements, and which files it writes);
 - the Rules block of `SKILL.md`;
+- the stop rules in Stages 2 and 3 of `SKILL.md`;
 - Stage 4's area and builder rules in `SKILL.md`;
 - the area definitions in `template-brief.md` (The areas).
 
@@ -23,7 +25,7 @@ A run file that accurately restates a stage rule is not a contradiction. Only a 
 - **Hold:** stop 2 is held, even for a groomed issue whose stop 1 was skipped. This is a separate condition from the agents' `Open questions:` counts, which are not changed or added to.
 - **Listing:** at stop 2, show each contradiction as a plain-text item with the brief: quote the statement, name the file it is in, and name the stage rule it breaks.
 - **Record:** append one `decisions.md` entry per held stop 2 naming the file and the rule, for example "stop 2 held: brief.md contradicts <rule>" (or `research.md`, or both files).
-- **Both stops already held** (a run that is not groomed, or a contradicted groomed run): the contradictions join the normal stop 2 list, with no extra prompt.
+- **Both stops already held** (a run that is not groomed, or a groomed run that `research.md` contradicted at Stage 2): the contradictions join the normal stop 2 list, with no extra prompt.
 - Stop 1 is never held by this check.
 
 ## After the hold

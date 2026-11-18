@@ -2,7 +2,7 @@
 
 The feature-factory orchestrator reads this file in full when a stage in `../SKILL.md` says to. Stage numbers refer to `SKILL.md`.
 
-The run file check is Stage 3 step 4. The orchestrator itself reads `brief.md` and `research.md` once against the stage rules, after the last `spec-writer` pass and before stop 2 is decided. Advisor files (`advisories-ux.md`, `advisories-claude.md`) are not read. The check runs when stop 2 is presented or skipped, so a resumed run that reaches stop 2 with no recorded stop 2 decision and no `stop 2 held` entry runs it too. Once a hold is recorded, the check is not run again.
+The run file check is Stage 3 step 4 and step 5 of the Stage 4 Respec procedure. The orchestrator itself reads `brief.md` and `research.md` once against the stage rules, after the last `spec-writer` pass and before stop 2 is decided. Advisor files (`advisories-ux.md`, `advisories-claude.md`) are not read. In Stage 3 the check runs when stop 2 is presented or skipped, so a resumed run that reaches stop 2 with no recorded stop 2 decision and no `stop 2 held` entry runs it too; once a Stage 3 hold is recorded, Stage 3 does not run the check again. The respec check (see "On a respec" below) runs on every respec, even when stop 2 was held before.
 
 ## What counts as a contradiction
 
@@ -30,8 +30,23 @@ A run file that accurately restates a stage rule is not a contradiction. Only a 
 
 ## After the hold
 
-Stop 2 then runs its normal loop (answers, **Changes requested** re-runs) to **Approved**. The hold is not a fourth option in the closing question: the owner's route on is **Changes requested** with feedback, so the re-run removes the statement, or **Approved** if the owner accepts it.
+Stop 2 then runs its normal loop (answers, **Changes requested** re-runs) to **Approved**. The hold is not a fourth option in the closing question: the owner's route on is **Changes requested** with feedback, so the re-runs below remove the statement, or **Approved** if the owner accepts it.
 
-The check is not repeated after a re-run, so it does not re-trigger on fixed text. A contradiction introduced by a later re-run is therefore not caught by this check; the owner accepted this at grooming.
+On **Changes requested** after a hold, the agents that re-run depend on the held file:
+
+- **`research.md` held, or both files held:** re-run `codebase-researcher` first, then `spec-writer`.
+- **Only `brief.md` held:** re-run only `spec-writer`, with the owner's feedback and the listed contradictions.
+
+The `codebase-researcher` prompt is the Stage 1 prompt (the feature description, the named paths and the no-questions instruction), and it also quotes the contradicted statement and names the rule it breaks. It passes the branch name and the current `git rev-parse HEAD` value, so lines 1 and 2 of `research.md` stay correct, and no recorded commit or changed-file list, so the template's re-check section does not apply and the whole file is rewritten (the agent reads the existing file first). It says to state nothing about pipeline mechanics. The researcher gets only the named contradiction, not the owner's feedback. `spec-writer` then re-runs on the rewritten `research.md` with the owner's feedback and the listed contradictions. Stop 2 shows the rewritten brief and continues its normal loop to **Approved**.
+
+A failed researcher re-run uses the existing Outcome table rows (the `codebase-researcher` `BLOCKED` rows and the every-agent re-ask and `WRITE_FAILED` rows); there is no new row. The re-run those rows call for happens here, at the same stop, not as a return to Stage 1. The re-run spends no respec or correction budget, and the existing **Changes requested** `decisions.md` entry covers it.
+
+**Approved** with a `research.md` contradiction still present needs nothing extra: no builder prompt text is added, because routing comes from the brief's Scope block and `research.md` never overrides a stage rule (`template-brief.md`).
+
+The check is not repeated after these **Changes requested** re-runs at stop 2, so it does not re-trigger on fixed text. A contradiction introduced by such a re-run is therefore not caught at stop 2; the owner accepted this at grooming.
+
+## On a respec
+
+Step 5 of the Stage 4 Respec procedure runs the check on the revised `brief.md` and on `research.md`, after the advisor fold and before stop 2 is held in full. It runs on every respec, even when stop 2 was held by the check before. A contradiction is listed at stop 2 and recorded exactly as in "When a contradiction is found": quote, file and rule in the listing, and one `decisions.md` entry "stop 2 held: <file> contradicts <rule>". A contradiction the owner accepted earlier is found and listed again; no marker for accepted contradictions is kept. The stop 2 loop and the re-runs above then apply as for a Stage 3 hold.
 
 Run files are deleted after the PR opens, so the `decisions.md` entry is the only lasting record of a caught contradiction.

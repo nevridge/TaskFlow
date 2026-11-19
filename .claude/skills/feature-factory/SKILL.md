@@ -146,9 +146,11 @@ Send every trigger present to the area builder, with the verifier's diagnosis fo
 
 Read `references/outcome-table.md`, `references/decisions-record.md`, `references/resume-halt-start-over.md`, `references/implementation-notes.md` and `references/preflight.md` in full before this stage.
 
+First apply Owner changes at Stage 8 (`references/resume-halt-start-over.md`): a dirty tree is committed and re-verified before the blocker question.
+
 Draft the implementation notes (`references/implementation-notes.md`) from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4 in `references/preflight.md`. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
 
-Show the notes at **stop 3** with the validator report, skipped areas, the gate results and every item the Outcome table (`references/outcome-table.md`) marks as reported or shown at stop 3, then ask (see Rules) whether to open the PR, offering **Yes** and **No**, plus the third answer when the Outcome table's stop 3 row offers it. Record the answer, before step 1 on Yes.
+Show the notes at **stop 3** with the validator report, skipped areas, the gate results and every item the Outcome table (`references/outcome-table.md`) marks as reported or shown at stop 3, then ask (see Rules) whether to open the PR, offering **Yes** and **No**, plus the third answer when the Outcome table's stop 3 row offers it. Record the answer, before step 1 on Yes. After a Yes and before step 1, apply that check again; a dirty tree pushes nothing and reopens stop 3.
 
 On **No**, post nothing and apply the halt commit (see Halt in `references/resume-halt-start-over.md`); nothing else on the branch changes. On **Yes**, in this order:
 

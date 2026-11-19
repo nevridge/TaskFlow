@@ -8,7 +8,7 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 **Halt-commit rule** (Resume, and the Start over keep path):
 
-- If HEAD's subject is exactly `chore: feature-factory halt commit` and the branch is not pushed (the Start over rule's test), run `git reset --soft HEAD~1`. Its work returns to the working tree and the stage's normal commit takes it, so no halt commit reaches the PR.
+- If HEAD's subject is exactly `chore: feature-factory halt commit` and the branch is not pushed (the Start over rule's test), run `git reset --soft HEAD~1`. Its work returns to the working tree and goes into the stage's normal commit, or at Stage 8 into an owner-changes commit that is re-verified (Owner changes at Stage 8 in this file), so no halt commit reaches the PR.
 - Reset nothing in any other case; resume only ever undoes a HEAD commit with exactly that subject.
 - If a commit with that subject is in `git log main..HEAD` but was not undone (not HEAD, or HEAD but pushed), warn "Halt commit <short hash> is still in the branch history" and carry on.
 
@@ -37,3 +37,16 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 - Rejected at stop 1 or 2, No at stop 3 and a Stage 8 blocker **Stop** are not Halts, but each applies the halt commit, and the files stay. A preflight stop applies none: past Stage 0 step 3 in `preflight.md` the tree is clean.
 
 **Stops 1 and 2 on Resume:** read `decisions.md` and hold stop 1 again unless its latest entry is Approved or a recorded skip. Apply the same test to stop 2. A "Spent respec budget" entry after stop 2's latest Approved or recorded skip reopens stop 2, because the revised brief has not been approved. No entry means the stop is held. A stop with a recorded skip and no later respec spend is not held again.
+
+**Owner changes at Stage 8.** The owner may edit files by hand during stop 3, or answer No (halt commit) and re-run. Stage 8 checks the working tree at two points.
+
+- **Check point A**, at the start of Stage 8, before the notes draft and the blocker question:
+  1. Run `git status --porcelain`. A clean tree: do nothing; Stage 8 runs as written.
+  2. A dirty tree: stage it as Rules says and commit with the subject `chore: owner changes from stop 3 (#N)`, where N is the issue number. A run without an issue puts the run slug in its place: `chore: owner changes from stop 3 (<slug>)`.
+  3. Append one entry to `decisions.md`: the date, "Stage 8", "Owner changes committed and re-verified: <files>".
+  4. Re-run Stage 5, then Stage 6, which writes `diff.patch` and `changed-files.txt` fresh as usual. No builder pass runs, so the re-run itself spends no correction budget. A Stage 5 re-run with nothing new to commit makes no commit.
+  5. Route the replies by the Outcome table as normal. A trigger goes to Stage 7 (one correction unit per pass, budget as usual); after Stage 7 repeats Stages 5 and 6, return to the start of Stage 8.
+  6. Continue Stage 8. The stop 3 review lists the files the owner-changes commit contains; the notes sections do not change.
+- **Check point B**, after a Yes at stop 3 and before step 1 (push): check the tree again. A clean tree: the Yes stands and steps 1 to 5 run. A dirty tree: push nothing, run steps 2 to 5 of check point A, then show stop 3 again with the new files. The earlier Yes entry stays in `decisions.md`; the latest stop 3 entry is the answer in force.
+- The check repeats each time stop 3 reopens, with no limit.
+- The check reads only the tree. A retried halt commit (Stage 0 step 3) is undone by Stage 0 step 6 in the same pass; resumed at Stage 8, check point A commits that work once. A halt commit that was not undone (pushed or not HEAD) leaves the tree clean and triggers nothing. The owner-changes subject is not the halt-commit subject, so Resume never undoes it; after check point A, a later blocker **Stop** finds a clean tree and makes no halt commit.

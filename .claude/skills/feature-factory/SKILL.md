@@ -140,7 +140,7 @@ Read `references/outcome-table.md`, `references/decisions-record.md` and `refere
 
 Triggers: every Outcome table row (`references/outcome-table.md`) whose destination is `loop: Stage 7`. One pass covers every trigger present and spends one unit of the correction budget (resumed run: Resume after a budget Halt, `references/resume-halt-start-over.md`). Skipped when no trigger is present.
 
-Send every trigger present to the area builder, with the verifier's diagnosis for a code failure; a failure in the `assistant` job goes to `assistant-builder`, even when the Scope block does not list `assistant`; Must fix findings in docs files go to the `docs` agent with the same prompt. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. The builder reads its `build-<area>.md` and rewrites it. Check the reply, commit, then repeat stages 5 and 6.
+Send every trigger present to the area builder, with the verifier's diagnosis for a code failure; a failure in the `assistant` job goes to `assistant-builder`, even when the Scope block does not list `assistant`; Must fix findings in docs files go to the `docs` agent with the same prompt; a stop 3 answer's handoff is in the Outcome table. For a probable bug, pass the test code, the expected behavior and its source from `verify.md`; the builder restores the test together with the fix. The builder reads its `build-<area>.md` and rewrites it. Check the reply, commit, then repeat stages 5 and 6.
 
 ## Stage 8: Finish, stop 3
 
@@ -148,7 +148,7 @@ Read `references/outcome-table.md`, `references/decisions-record.md`, `reference
 
 Draft the implementation notes (`references/implementation-notes.md`) from the run files only; the Decisions section and the PR body's skip reasons come from `decisions.md`, with repeated identical lines collapsed and a skip reported only for an area the final Scope block does not list. With an issue number, re-read `blocked_by` as in Stage 0 step 4 in `references/preflight.md`. Show any open blocker not listed in a **proceed anyway** entry in `decisions.md` together with the review, and ask the same **proceed anyway** / **Stop** question before the Yes/No question. Record a **proceed anyway** here and add it to the notes' Decisions before they are shown. **Stop** applies the halt commit (see Halt in `references/resume-halt-start-over.md`) and pushes and posts nothing. If the read fails, say so and stop.
 
-Show the notes at **stop 3** with the validator report, skipped areas, the gate results and every item the Outcome table (`references/outcome-table.md`) marks as reported or shown at stop 3, then ask (see Rules) whether to open the PR, offering **Yes** and **No**. Record the answer, before step 1 on Yes.
+Show the notes at **stop 3** with the validator report, skipped areas, the gate results and every item the Outcome table (`references/outcome-table.md`) marks as reported or shown at stop 3, then ask (see Rules) whether to open the PR, offering **Yes** and **No**, plus the third answer when the Outcome table's stop 3 row offers it. Record the answer, before step 1 on Yes.
 
 On **No**, post nothing and apply the halt commit (see Halt in `references/resume-halt-start-over.md`); nothing else on the branch changes. On **Yes**, in this order:
 

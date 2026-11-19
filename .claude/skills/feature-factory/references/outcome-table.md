@@ -5,12 +5,13 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 ## Contents
 
 - [How the rows apply](#how-the-rows-apply)
-- [Part 1: routing rows](#part-1-routing-rows): 41 rows keyed on (source, Status), grouped by source in this order: every agent (the reply check), orchestrator, codebase-researcher, story-writer, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor
+- [Part 1: routing rows](#part-1-routing-rows): 42 rows keyed on (source, Status), grouped by source in this order: every agent (the reply check), orchestrator, codebase-researcher, story-writer, spec-writer, the builders, the docs agent, test-verifier, implementation-validator, ux-advisor, claude-integration-advisor, owner (the stop 3 answer)
+- [The stop 3 correction answer](#the-stop-3-correction-answer): when stop 3 offers it, how findings are chosen and what Stage 7 receives
 - [Part 2: report-only sections](#part-2-report-only-sections): the sections of each run file that route nothing, and where each is shown
 
 ## How the rows apply
 
-Each agent replies with one `Status` value, taken from the `Allowed status:` line of its template. Every (source, Status) pair has a row in Part 1, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. No row depends on a heading or on any other text of a run file. Stage prose points to the table and does not restate outcomes.
+Each agent replies with one `Status` value, taken from the `Allowed status:` line of its template. One source is not an agent: the owner's answer at stop 3, whose row holds that answer in the Status column. Every (source, Status) pair has a row in Part 1, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. No row depends on a heading or on any other text of a run file. Stage prose points to the table and does not restate outcomes.
 
 - Route a reply only after `check-reply.mjs` exits 0 for it (`run-folder.md`). The first two rows cover a reply that fails the check. A Status that passes the script but that the template does not list for that writer (`template-build.md` has one list for four writers) counts as a failed check.
 - Each template gives the precedence that picks one Status when several conditions hold. Across the replies of one stage, a `Halt` row applies first, and after it a `loop: Stage 5` row applies before a `loop: Stage 7` row. `Halt` is defined in `resume-halt-start-over.md`: read that file in full before applying a `Halt` row.
@@ -65,6 +66,18 @@ Each agent replies with one `Status` value, taken from the `Allowed status:` lin
 | claude-integration-advisor | `DONE` | `advisories-claude.md` is written. | continue | none |
 | claude-integration-advisor | `NEEDS_INPUT` | `advisories-claude.md` is written. Stop 2 is held and shows its Conflicts with brief and its Failed and Topic missing Source health lines. | continue | none |
 | claude-integration-advisor | `BLOCKED` | No advice was written. | Halt | none |
+| owner (the stop 3 answer) | **Send `[?]` finding(s) to a correction pass** | Correction pass for the chosen `[?]` findings, as The stop 3 correction answer below says. | loop: Stage 7 | 1 correction |
+
+## The stop 3 correction answer
+
+The rules for the owner's stop 3 row in Part 1. `validation.md` is the latest one.
+
+- **Offer.** Stop 3 offers the third answer, **Send `[?]` finding(s) to a correction pass**, beside **Yes** and **No** when `validation.md` has at least one `[?]` finding and the correction budget has a unit left (remaining = cap − spent + granted, `decisions-record.md`). With no unit left, stop 3 offers **Yes** and **No** only and shows one line saying the correction budget is spent. Stop 3 never Halts on budget; no Halt row applies to it. A re-run of Stage 8 on Resume applies the same rule, read from `decisions.md`.
+- **Numbering.** The orchestrator numbers the `[?]` findings `[?1]`, `[?2]`, ... in `validation.md` order, afresh for each new `validation.md`. The validator does not number them.
+- **Choosing.** With exactly one `[?]` finding, the third answer sends it, with no further question. With 2 to 4, the owner picks in one multi-select question. With more than 4, the owner types the numbers as plain text; an invalid or repeated number is asked again, never guessed.
+- **Record.** The stop 3 entry and one "Spent correction budget" entry (stage 8, with the reason) are appended before the pass (`decisions-record.md`).
+- **Handoff.** Stage 7 sends the builder of the area that owns the file a finding cites the `validation.md` path plus the chosen finding numbers and their quotes, not pasted output. Findings in docs files go to the `docs` agent.
+- **After the pass.** Stages 5 and 6 repeat as for any Stage 7 pass, then stop 3 is asked again and may offer the answer again while a unit is left. A failure inside the pass with the budget spent follows the "budget spent" row. A new unmarked Must fix goes to a correction pass by the `MUST_FIX` row and spends the same budget.
 
 ## Part 2: report-only sections
 
@@ -79,7 +92,7 @@ These sections of the run files route nothing, and none is a Status value. Each 
 | `verify.md` | `gap:` items of Bugs or gaps found | Reported. |
 | `verify.md` | `unclear:` items of Probable bugs and possible issues | The notes, under Possible issues. |
 | `validation.md` | The `Verdict:` line (PASS, CONDITIONAL PASS or FAIL) | Shown at stop 3. |
-| `validation.md` | A finding marked `[?]`, in any section | Not reworked. Shown at stop 3 for the owner to decide. |
+| `validation.md` | A Must fix finding marked `[?]` (`[?]` appears only on Must fix findings) | Shown at stop 3 for the owner to decide. Reworked only when the owner sends it to a correction pass (the owner's stop 3 row in Part 1). On **Yes**, each one left goes in the PR body as a residual finding and in the notes under Possible issues. |
 | `validation.md` | Should fix | Not reworked. Shown at stop 3 and goes in the PR body as a residual finding. |
 | `validation.md` | Plan deviations | The notes, under Plan deviations. |
 | `advisories-claude.md` | Out of scope | The notes, under Follow-up candidates. |

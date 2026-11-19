@@ -18,7 +18,7 @@ Precedence: a Halt status wins over a loop Stage 3 status, then loop Stage 5, th
 ## Rules
 
 - Line 1 is the verdict line, exactly one of `Verdict: PASS`, `Verdict: CONDITIONAL PASS` (Should fix findings only) or `Verdict: FAIL` (any Must fix finding). The verdict is shown at stop 3; it is not the status.
-- A finding marked `[?]` stays in its section, with the mark at the start of the finding.
+- `[?]` appears only on Must fix findings, with the mark at the start of the finding.
 - Delete an empty section, and delete an empty group under `## Plan deviations`. Never write None as a section body.
 
 ## File layout

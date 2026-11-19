@@ -14,7 +14,7 @@ Do not rely on memory; these formats change. Fetch the current pages every run, 
 
 1. Claude Code docs index, `https://code.claude.com/docs/llms.txt`. Must cover: plugins and `plugin.json`, skills, sub-agents, MCP.
 2. MCP specification index, `https://modelcontextprotocol.io/llms.txt`. Must cover: the server tools page (names, schemas, annotations, error types).
-3. MCP C# SDK, `https://csharp.sdk.modelcontextprotocol.io/`. Must cover: tool registration and attributes. Check the SDK version in `assistant/src/TaskFlow.Mcp/TaskFlow.Mcp.csproj`.
+3. MCP C# SDK, `https://csharp.sdk.modelcontextprotocol.io/v2/concepts/tools/tools.html`. Must cover: tool registration and attributes. Check the SDK version in `assistant/src/TaskFlow.Mcp/TaskFlow.Mcp.csproj`.
 4. Anthropic, "Writing tools for agents", `https://www.anthropic.com/engineering/writing-tools-for-agents`. Must cover: tool naming, descriptions and response design.
 
 (Entries 3 and 4 have no `llms.txt`; they stay fixed URLs.)

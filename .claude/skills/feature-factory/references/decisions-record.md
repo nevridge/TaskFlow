@@ -9,6 +9,7 @@ The orchestrator appends one entry to `decisions.md` each time one of these is p
 - The run file check hold reads "stop 2 held: <file> contradicts <rule>", naming `brief.md`, `research.md` or both; it feeds the notes' Decisions section like any other entry.
 - **proceed anyway**: the entry lists the blocker issue numbers it covers.
 - A stop 3 answer is a new entry every time it is asked, including on a re-run of Stage 8.
+- A stop 3 answer that sends `[?]` findings to a correction pass (`outcome-table.md`) records the answer and the finding numbers sent. The unit it spends is a normal "Spent correction budget" entry, with stage 8 and the reason, appended before the pass.
 - Budget entries read "Spent respec budget" or "Spent correction budget" (with the stage and the reason), or "Granted one more unit of the <respec|correction> budget". Remaining = cap − spent + granted, with the caps from Rules in `SKILL.md`. Count only budget entries, so a repeated stop 3 answer is never counted. A FORMAT-ONLY pass adds no budget entry; the pass is recorded as its own entry.
 - The FORMAT-ONLY entry reads "Stage 5, FORMAT-ONLY pass used (no budget)" and is appended before the formatter runs. A record that holds it has used the run's one pass, so the count survives Resume; Start over (`resume-halt-start-over.md`) deletes the record and resets it.
 - If a line is a budget entry but its date, stage or budget cannot be read, say so and ask the owner how much of that budget was spent. Never read it as zero. Other malformed lines are ignored.

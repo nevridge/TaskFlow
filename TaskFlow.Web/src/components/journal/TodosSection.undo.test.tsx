@@ -76,6 +76,8 @@ const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms) })
 
 describe('TodosSection undoable delete', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     vi.useFakeTimers()
   })

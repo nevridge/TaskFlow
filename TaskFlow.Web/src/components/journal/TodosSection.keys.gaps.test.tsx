@@ -61,6 +61,8 @@ const title = (id: number) => document.querySelector(`[data-todo-title="${id}"]`
 
 describe('TodosSection row-click and key gaps (#468)', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     path = ''
     visits.length = 0

@@ -40,6 +40,8 @@ describe('TodosSection details link, touch and optimistic flows (#404)', () => {
   const sentMethods = () => fetchMock.mock.calls.map(([r]) => (r as Request).method)
 
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     fetchMock.mockImplementation((req: Request) => {
       if (req.method === 'GET') return Promise.resolve(jsonResponse(200, req.url.includes('/todos') ? [todo] : []))

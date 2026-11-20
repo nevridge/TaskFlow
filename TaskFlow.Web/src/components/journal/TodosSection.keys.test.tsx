@@ -55,6 +55,8 @@ const check = (id: number) => document.querySelector(`[data-todo-check="${id}"]`
 
 describe('TodosSection keyboard handle (#468)', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     path = ''
     load([row({ id: 1, title: 'A' }), row({ id: 2, title: 'B' }), row({ id: 3, title: 'C' })])

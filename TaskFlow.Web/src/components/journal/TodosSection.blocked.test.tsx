@@ -68,6 +68,8 @@ function titles() {
 
 describe('TodosSection blocked tasks', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     load([])
   })
@@ -342,7 +344,8 @@ describe('TodosSection blocked tasks', () => {
       const blocked = row({ id: 9, title: 'S3', status: 'Blocked', parentTaskItemId: 1 })
       load([{ ...todoRow, openChildCount: 2 }, done, open, blocked])
       renderSection()
-      expect(screen.getByText('1/3 subtasks complete')).toBeInTheDocument()
+      // The parent header shows above the open subtasks and again above the completed one.
+      expect(screen.getAllByText('1/3 subtasks complete')).toHaveLength(2)
       // Three subtask rows, one done, one blocked; the parent header is not counted
       expect(screen.getByText('1/3', { selector: '.todo-count' })).toBeInTheDocument()
       expect(screen.getByText('· 1 blocked')).toBeInTheDocument()
@@ -362,10 +365,10 @@ describe('TodosSection blocked tasks', () => {
       expect(titles()).toEqual(['Open A', 'Open D', 'Blocked B', 'Blocked E', 'Done C'])
     })
 
-    it('manual keeps the given order', () => {
+    it('manual keeps the given order, with completed rows moved to the Completed group at the end', () => {
       load([done, blocked, open, blocked2, open2])
       renderSection('manual')
-      expect(titles()).toEqual(['Done C', 'Blocked B', 'Open A', 'Blocked E', 'Open D'])
+      expect(titles()).toEqual(['Blocked B', 'Open A', 'Blocked E', 'Open D', 'Done C'])
     })
 
     it('a header is not sorted as a todo: it sits at its first subtask row', () => {

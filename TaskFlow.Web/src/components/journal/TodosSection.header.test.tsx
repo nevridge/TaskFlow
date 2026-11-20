@@ -59,6 +59,8 @@ const renderSection = (sort: 'manual' | 'open first' = 'manual') =>
 
 describe('TodosSection context headers', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     toggleTodoMutate.mockReset()
     createTodoMutate.mockReset()
@@ -71,7 +73,8 @@ describe('TodosSection context headers', () => {
   it('renders a parent with open subtasks as a header link with progress and no row controls', () => {
     load([parent(), sub(2), sub(3, { status: 'Completed' })])
     renderSection()
-    const link = screen.getByRole('link', { name: /^Parent task/ })
+    // The completed subtask sits under a second copy of the header, in the Completed group.
+    const link = screen.getAllByRole('link', { name: /^Parent task/ })[0]
     expect(link).toHaveAttribute('href', '/tasks/1')
     expect(link).toHaveTextContent('Parent task: Parent')
     const header = link.closest('li') as HTMLElement
@@ -134,7 +137,7 @@ describe('TodosSection context headers', () => {
     expect(screen.getByText('· 1 blocked')).toBeInTheDocument()
   })
 
-  it('keeps the completed subtask row in place, updates the header count in place, and shows the parent as a row', () => {
+  it('moves the completed subtask to the Completed group, updates the header count, and shows the parent as a row', () => {
     load([parent({ openChildCount: 1 }), sub(2)])
     const { rerender } = renderSection()
     const check = screen.getByRole('button', { name: 'Mark done' })
@@ -146,9 +149,8 @@ describe('TodosSection context headers', () => {
     rerender(<TodosSection entryId={10} isoDate={DAY} sort="manual" />)
 
     expect(screen.getByRole('link', { name: /^Parent task/ }).closest('li')).toHaveTextContent('1/1 subtasks complete')
-    const done = screen.getByRole('button', { name: 'Mark not done' })
-    expect(done).toBe(check)
-    expect(done).toHaveFocus()
+    // The finished subtask moves into the Completed group, so its row is a new element.
+    expect(screen.getByRole('button', { name: 'Mark not done' })).toBeInTheDocument()
     // The parent is no longer suppressed: it is a normal row (and keeps a header for its subtask row).
     expect(screen.getByText('Parent', { selector: '.todo-text' })).toBeInTheDocument()
   })

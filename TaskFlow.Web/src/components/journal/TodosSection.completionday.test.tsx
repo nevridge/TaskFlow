@@ -45,6 +45,8 @@ function show(list: TaskItemResponseDto[], isoDate = PAST, sort: 'manual' | 'ope
 
 describe('TodosSection completion-day behaviour', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
@@ -128,7 +130,8 @@ describe('TodosSection completion-day behaviour', () => {
     show([doneOn(2, 'Finished', TODAY), { ...base, id: 3, title: 'Waiting' }], TODAY, 'open first')
     const titles = screen.getAllByRole('listitem').map(li => li.textContent ?? '')
     expect(titles[0]).toContain('Waiting')
-    expect(titles[1]).toContain('Finished')
+    expect(titles[1]).toContain('Completed') // the group toggle
+    expect(titles[2]).toContain('Finished')
   })
 
   const openParent = { ...base, id: 9, title: 'Parent', openChildCount: 1 } as TaskItemResponseDto

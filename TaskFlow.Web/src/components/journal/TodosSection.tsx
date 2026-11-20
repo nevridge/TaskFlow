@@ -29,6 +29,7 @@ import {
   journalKeys,
 } from '@/hooks/useJournal'
 import { useUndoableDelete } from '@/hooks/useUndoableDelete'
+import { useCompletedCollapsed } from '@/hooks/useCompletedCollapsed'
 import { TodoBadges } from '@/components/journal/TodoBadges'
 import { journalOriginPath, readFocusTaskId, stateWithoutFocusTaskId, taskEditPath } from '@/lib/task-origin'
 import { getErrorCode, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
@@ -144,7 +145,11 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   useEffect(() => {
     const target = pendingFocus.current
     if (!target) return
-    sectionRef.current?.querySelector<HTMLElement>(`[data-todo-${target.kind}="${target.id}"]`)?.focus()
+    const section = sectionRef.current
+    const el = section?.querySelector<HTMLElement>(`[data-todo-${target.kind}="${target.id}"]`)
+    // A row that moved into the collapsed Completed group is not rendered: its toggle takes the focus instead.
+    if (el) el.focus()
+    else section?.querySelector<HTMLElement>('[data-todo-completed-toggle]')?.focus()
   })
 
   function requestFocus(id: number, kind: 'check' | 'block' | 'reason' | 'title') {
@@ -232,6 +237,27 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
     [todos, sort],
   )
   const workRows = useMemo(() => blocks.flatMap(b => b.rows), [blocks])
+
+  // Past days are history, so they show everything. Otherwise Completed rows (subtasks included) move to a
+  // collapsible group under the open work. A subtask group is split by row: both halves keep the parent's header,
+  // whose counts cover the whole group. Blocks keep the order the active sort gave them.
+  const completedGroup = useCompletedCollapsed()
+  const { activeBlocks, doneBlocks } = useMemo(() => {
+    type Block = (typeof blocks)[number]
+    if (isPastDay) return { activeBlocks: blocks, doneBlocks: [] as Block[] }
+    const isDone = (r: TaskItemResponseDto) => r.status === 'Completed'
+    const active: Block[] = []
+    const finished: Block[] = []
+    blocks.forEach(b => {
+      const openRows = b.rows.filter(r => !isDone(r))
+      const doneRows = b.rows.filter(isDone)
+      if (openRows.length > 0) active.push({ header: b.header, rows: openRows })
+      if (doneRows.length > 0) finished.push({ header: b.header, rows: doneRows })
+    })
+    return { activeBlocks: active, doneBlocks: finished }
+  }, [blocks, isPastDay])
+  const doneRowCount = doneBlocks.reduce((n, b) => n + b.rows.length, 0)
+  const doneCollapsed = completedGroup.collapsed
 
   // Runs on the render where loading ends. A row that is gone (completed, deleted, moved, other day) abandons the
   // request without forcing focus anywhere. Only the focus key is cleared so weekendRedirect survives a refresh.
@@ -469,7 +495,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }
 
   /** Controls shared by top-level todos and subtasks (both are flat work rows). */
-  function renderRow(td: TaskItemResponseDto, headerParentId?: number) {
+  function renderRow(td: TaskItemResponseDto, headerParentId?: number, scope: 'open' | 'done' = 'open') {
     const id = Number(td.id)
     const isChild = td.parentTaskItemId != null
     const isDone = td.status === 'Completed'
@@ -556,7 +582,7 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
                 aria-label={isChild ? 'Remove from day' : `Remove from day: ${td.title ?? ''}`}
                 title={isChild ? undefined : `Remove from day: ${td.title ?? ''}`}
                 // Subtask rows under a header are described by the parent title (disambiguates "Remove from day").
-                aria-describedby={isChild && headerParentId !== undefined ? `todo-ctx-${headerParentId}` : undefined}
+                aria-describedby={isChild && headerParentId !== undefined ? `todo-ctx-${scope}-${headerParentId}` : undefined}
               >
                 <DeleteSvg />
               </button>
@@ -640,16 +666,45 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
   }
 
   /** A parent shown as a group label over its subtask rows: one link, a progress count, no row actions. */
-  function renderContextHeader(header: JournalHeaderData) {
+  function renderContextHeader(header: JournalHeaderData, scope: 'open' | 'done') {
     return (
       <li key={`ctx:${header.parentId}`} className="todo todo-context-header">
         <Link to={`/tasks/${header.parentId}`} state={{ from: originPath }} className="todo-context-link">
           <span className="sr-only">Parent task: </span>
-          <span id={`todo-ctx-${header.parentId}`}>{header.title}</span>
+          <span id={`todo-ctx-${scope}-${header.parentId}`}>{header.title}</span>
         </Link>
         <span className="todo-context-progress">{formatSubtasksComplete(header.done, header.total)}</span>
       </li>
     )
+  }
+
+  function renderBlock(scope: 'open' | 'done', block: (typeof blocks)[number]) {
+    return [
+      ...(block.header
+        ? [renderContextHeader(block.header, scope)]
+        : []),
+      ...block.rows.map(td => (
+        // The whole row opens the todo on click. It is not focusable itself: the title button is the keyboard and
+        // screen-reader equivalent, so a row role or tab stop would only duplicate it.
+        <li
+          key={td.id}
+          data-todo-row={td.id}
+          onClick={e => {
+            if (e.target instanceof Element && e.target.closest(ROW_CONTROLS)) return
+            openTodo(Number(td.id))
+          }}
+          className={
+            'todo' +
+            // Subtask rows keep the compact .todo-child sizing; .todo-in-group adds the indent and rule.
+            (block.header ? ' todo-child todo-in-group' : '') +
+            (td.status === 'Completed' ? ' is-done' : '') +
+            (td.status === 'Blocked' ? ' is-blocked' : '')
+          }
+        >
+          {renderRow(td, block.header?.parentId, scope)}
+        </li>
+      )),
+    ]
   }
 
   return (
@@ -680,32 +735,25 @@ export const TodosSection = forwardRef<TodosSectionHandle, Props>(function Todos
           {blocks.length === 0 && (
             <li className="j-empty">No TODOs yet — add one below.</li>
           )}
-          {blocks.flatMap(block => [
-            ...(block.header
-              ? [renderContextHeader(block.header)]
-              : []),
-            ...block.rows.map(td => (
-              // The whole row opens the todo on click. It is not focusable itself: the title button is the keyboard and
-              // screen-reader equivalent, so a row role or tab stop would only duplicate it.
-              <li
-                key={td.id}
-                data-todo-row={td.id}
-                onClick={e => {
-                  if (e.target instanceof Element && e.target.closest(ROW_CONTROLS)) return
-                  openTodo(Number(td.id))
-                }}
-                className={
-                  'todo' +
-                  // Subtask rows keep the compact .todo-child sizing; .todo-in-group adds the indent and rule.
-                  (block.header ? ' todo-child todo-in-group' : '') +
-                  (td.status === 'Completed' ? ' is-done' : '') +
-                  (td.status === 'Blocked' ? ' is-blocked' : '')
-                }
+          {activeBlocks.flatMap(b => renderBlock('open', b))}
+          {doneBlocks.length > 0 && activeBlocks.length === 0 && (
+            <li className="j-empty">Nothing left to do.</li>
+          )}
+          {doneBlocks.length > 0 && (
+            <li className="done-group">
+              <button
+                type="button"
+                className="done-toggle"
+                aria-expanded={!doneCollapsed}
+                data-todo-completed-toggle
+                onClick={completedGroup.toggle}
               >
-                {renderRow(td, block.header?.parentId)}
-              </li>
-            )),
-          ])}
+                <span aria-hidden="true" className={`t-group-chevron${doneCollapsed ? ' t-group-chevron--collapsed' : ''}`}>{'▾'}</span>
+                Completed <span className="done-count">{'·'} {doneRowCount}</span>
+              </button>
+            </li>
+          )}
+          {!doneCollapsed && doneBlocks.flatMap(b => renderBlock('done', b))}
         </ul>
       )}
 

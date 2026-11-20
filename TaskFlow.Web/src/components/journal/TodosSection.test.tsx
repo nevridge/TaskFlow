@@ -78,6 +78,8 @@ function renderSection(props?: Partial<{ entryId: number; isoDate: string; sort:
 
 describe('TodosSection', () => {
   beforeEach(() => {
+    // These tests are about row behavior: keep the Completed group expanded (it is collapsed by default).
+    localStorage.setItem('taskflow_journal_completed_collapsed_v1', 'false')
     vi.clearAllMocks()
     toggleTodoMutate.mockReset()
     vi.mocked(useJournalTodos).mockReturnValue({ data: { data: [] }, isLoading: false } as never)

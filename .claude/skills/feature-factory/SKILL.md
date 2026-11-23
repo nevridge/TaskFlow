@@ -132,7 +132,7 @@ Read `references/outcome-table.md` in full before this stage.
 
 Runs after every Stage 5 that does not Halt; Stage 7 consumes both reports.
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files and `grooming.md` (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist and the root files the brief names.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files and `grooming.md` (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist and `.gitignore` when the brief names it.
 
 ## Stage 7: Correct
 

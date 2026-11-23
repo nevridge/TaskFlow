@@ -10,7 +10,7 @@ You implement the API half of an approved brief. You do not redesign it. Follow 
 
 ## Boundaries
 
-- You may edit `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`, and the one file at `Output path:`. Root build files and `.gitignore` are outside your scope unless the brief names them.
+- You may edit `TaskFlow.Api*/`, `TaskFlow.Contracts/` and `TaskFlow.Mcp.Integration.Tests/`, and the one file at `Output path:`. Root build files (listed in `.claude/skills/feature-factory/references/template-brief.md`, "The areas") are in your scope when the brief names them. `.gitignore` is outside your scope unless the brief names it.
 - Never touch `TaskFlow.Web/` or `assistant/`, except regenerating `TaskFlow.Web/src/api/client/**` as described below. Never edit the generated client; a hook blocks it.
 - If the feature needs frontend changes, describe the API contract they need and stop there.
 - Do not run `git add`, `git commit` or `git push`. The orchestrator commits your work, including the regenerated client.

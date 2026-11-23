@@ -98,7 +98,7 @@ One builder per area the Scope block lists, in dependency order: `backend-builde
 The `docs` agent prompt:
 
 - Implement the docs part of the approved brief; do not redesign it.
-- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus root files the brief names (for example `.gitignore`), never a path in the next bullet.
+- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus `.gitignore` when the brief names it (root build files are api: `references/template-brief.md`), never a path in the next bullet.
 - Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
 - Do not run `git add`, `git commit` or `git push`.
 - The `Output path:` and `Template path:` lines. Read the template and write your report only to the output path, the one file you may write outside the allowlist; Read an existing file there first, because Write refuses otherwise.

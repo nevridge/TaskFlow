@@ -30,6 +30,11 @@
             "type": "command",
             "if": "PowerShell(git *)",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/branch-guard.mjs\""
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(git.exe *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/branch-guard.mjs\""
           }
         ]
       },

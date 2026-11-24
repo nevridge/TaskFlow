@@ -54,7 +54,7 @@ public sealed class ApiVersioningHttpTests : IClassFixture<ApiVersioningFactory>
     }
 
     [Fact]
-    public async Task Get_UnsupportedVersion_ReturnsRecordedStatusAndProblemBody()
+    public async Task Get_UnsupportedVersion_ReturnsEmptyNotFound()
     {
         using var client = _factory.CreateClient();
 

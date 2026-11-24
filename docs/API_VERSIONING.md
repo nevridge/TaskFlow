@@ -73,7 +73,7 @@ curl -H "x-api-version: 1.0" http://localhost:8080/api/v1/TaskItems
 The URL segment is still required: an unversioned `/api/TaskItems` request returns 404, with or without the header.
 
 **Use cases:**
-- When URL structure must remain constant
+- When a client states the version in a header as well as the URL segment (the MCP client does this)
 - For advanced API consumers
 - Testing different versions
 

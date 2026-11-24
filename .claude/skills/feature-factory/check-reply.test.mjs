@@ -37,11 +37,17 @@ after(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function run(reply, args = [template, output]) {
+// Recorded when the test file loads, before any fixture is written, so every fixture is fresh.
+const defaultSince = String(Date.now());
+
+// `sinceEnv`: undefined keeps the default CHECK_REPLY_SINCE, null removes it, a string sets it.
+function run(reply, args = [template, output], sinceEnv = undefined) {
   // The test runner sets NODE_TEST_CONTEXT for its children; the script exits 0 at once when it
   // sees it, so remove it for the direct CLI call under test.
-  const env = { ...process.env };
+  const env = { ...process.env, CHECK_REPLY_SINCE: defaultSince };
   delete env.NODE_TEST_CONTEXT;
+  if (sinceEnv === null) delete env.CHECK_REPLY_SINCE;
+  else if (sinceEnv !== undefined) env.CHECK_REPLY_SINCE = sinceEnv;
   return spawnSync(process.execPath, [script, ...args], { input: reply, encoding: 'utf8', env });
 }
 
@@ -205,6 +211,80 @@ describe('invalid replies exit non-zero', () => {
       const result = run(block({ questions }));
       assert.equal(result.status, 1, `Open questions: "${questions}"`);
       assert.match(result.stderr, /Open questions is not an integer/);
+    }
+  });
+});
+
+describe('freshness of the output file (CHECK_REPLY_SINCE)', () => {
+  const second = 1_700_000_000; // whole second, in epoch seconds
+  const since = String(second * 1000 + 500); // partway through that second
+
+  function setMtime(seconds) {
+    writeOutput();
+    fs.utimesSync(output, seconds, seconds);
+  }
+
+  test('a file written after SINCE passes', () => {
+    setMtime(second + 10);
+    const result = run(block(), undefined, since);
+    assert.equal(result.status, 0, result.stderr);
+  });
+
+  test('a file modified exactly at the floored SINCE passes', () => {
+    setMtime(second);
+    const result = run(block(), undefined, since);
+    assert.equal(result.status, 0, result.stderr);
+  });
+
+  test('same second: a file 400 ms earlier than SINCE passes', () => {
+    setMtime(second + 0.1);
+    const result = run(block(), undefined, since);
+    assert.equal(result.status, 0, result.stderr);
+  });
+
+  test('same second: a file one second earlier fails', () => {
+    setMtime(second + 0.1 - 1);
+    const result = run(block(), undefined, since);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Output file not rewritten in this call/);
+  });
+
+  test('a file backdated to an earlier second fails', () => {
+    setMtime(second - 60);
+    const result = run(block(), undefined, since);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Output file not rewritten in this call/);
+  });
+
+  test('SINCE missing, empty, negative, non-numeric or fractional fails and names the variable', () => {
+    setMtime(second + 10);
+    for (const value of [null, '', '-5', 'abc', '12.5']) {
+      const result = run(block(), undefined, value);
+      assert.equal(result.status, 1, `CHECK_REPLY_SINCE: ${JSON.stringify(value)}`);
+      assert.match(result.stderr, /CHECK_REPLY_SINCE/);
+    }
+  });
+
+  test('a missing or empty file is reported as such, whatever SINCE holds', () => {
+    removeOutput();
+    for (const value of [null, 'abc', since]) {
+      const result = run(block(), undefined, value);
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Output file missing/);
+    }
+    setMtime(second - 60);
+    writeOutput(' \n');
+    fs.utimesSync(output, second - 60, second - 60);
+    const empty = run(block(), undefined, null);
+    assert.equal(empty.status, 1);
+    assert.match(empty.stderr, /Output file empty/);
+  });
+
+  test('a No-file reply passes with SINCE missing or malformed', () => {
+    removeOutput();
+    for (const value of [null, '', 'abc', '-5']) {
+      const result = run(block({ status: 'BLOCKED', out: 'none', summary: 'no input' }), undefined, value);
+      assert.equal(result.status, 0, `CHECK_REPLY_SINCE: ${JSON.stringify(value)}: ${result.stderr}`);
     }
   });
 });

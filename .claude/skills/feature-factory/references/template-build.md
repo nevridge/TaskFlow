@@ -73,7 +73,15 @@ The line above is the union for all four writers. Use only the values listed for
 
 ## The docs agent
 
-This section is for the `docs` agent only. It has no agent file, so its reply is stated here: after writing the file, reply with only these four lines, in this order.
+This section is for the `docs` agent only. It has no agent file, so the orchestrator builds its prompt from this section (Stage 4 of `SKILL.md`), and its reply is stated here.
+
+- Implement the docs part of the approved brief; do not redesign it.
+- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus `.gitignore` when the brief names it (root build files are api: `template-brief.md`), never a path in the next bullet.
+- Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
+- Do not run `git add`, `git commit` or `git push`.
+- Write your report only to the prompt's `Output path:`, the one file you may write outside the allowlist; Read an existing file there first, because Write refuses otherwise.
+
+After writing the file, reply with only these four lines, in this order.
 
 ```text
 Status: <a value this template lists for the docs agent>

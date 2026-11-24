@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- All packages in this group ship together on the same patch cadence.
-         Update this single property when a new .NET 10.x patch is released. -->
-    <MicrosoftPlatformVersion>10.0.15</MicrosoftPlatformVersion>
+         Update this single property when a new .NET 11.x patch is released. -->
+    <MicrosoftPlatformVersion>11.0.0</MicrosoftPlatformVersion>
   </PropertyGroup>
 </Project>

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-TaskFlow is a personal task and daily journal app: a .NET 10 REST API (`TaskFlow.Api`) and a React frontend (`TaskFlow.Web`), self-hosted via Docker and Portainer. Production runs at `taskflow.skalaforge.com`; a push to `main` deploys it automatically.
+TaskFlow is a personal task and daily journal app: a .NET 11 REST API (`TaskFlow.Api`) and a React frontend (`TaskFlow.Web`), self-hosted via Docker and Portainer. Production runs at `taskflow.skalaforge.com`; a push to `main` deploys it automatically.
 
 ## Commands
 

@@ -24,7 +24,7 @@ The development `docker-compose.yml` defines three services:
 
 | Service | Container | Port | Purpose |
 |---------|-----------|------|---------|
-| `taskflow-api` | `taskflow-api` | 8080 | .NET 10 REST API |
+| `taskflow-api` | `taskflow-api` | 8080 | .NET 11 REST API |
 | `taskflow-web` | `taskflow-web` | 3000 | React SPA frontend |
 | `seq` | `taskflow-seq` | 5380 (UI), 5341 (OTLP) | Structured log viewer |
 
@@ -39,7 +39,7 @@ A single multi-stage .NET Dockerfile used for both dev and prod. The build conte
 | Aspect | Value |
 |--------|-------|
 | **Build Context** | Repository root (`.`) |
-| **Base Images** | .NET 10 SDK → .NET 10 ASP.NET runtime |
+| **Base Images** | .NET 11 SDK → .NET 11 ASP.NET runtime |
 | **Environment** | Injected at runtime via `ASPNETCORE_ENVIRONMENT` |
 | **Port** | 8080 |
 | **Optimizations** | Release build with `--no-restore` |
@@ -573,7 +573,7 @@ docker run ...
 | Port | 8080 |
 | Volume mounts | `./data:/app/data`, `./logs:/app/logs` |
 | Health check configuration | 30s interval, 40s start period |
-| Base images | .NET 10 SDK and ASP.NET runtime |
+| Base images | .NET 11 SDK and ASP.NET runtime |
 | Directory permissions | `chmod 777 /app/logs /app/data` |
 
 ### New Additions for Consistency

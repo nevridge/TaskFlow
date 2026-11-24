@@ -13,7 +13,7 @@ A Claude Code plugin does **not** load in Chat: Chat ignores a plugin's local MC
 
 ## Claude Desktop (Chat)
 
-Needs the .NET 10 runtime on `PATH`, Claude Desktop, and TaskFlow running with the Projects API.
+Needs the .NET 11 runtime on `PATH`, Claude Desktop, and TaskFlow running with the Projects API.
 
 1. Stop any running TaskFlow server (disable `taskflow` in `/mcp` in Claude Code, and quit Claude Desktop completely), then publish the server: `./build.ps1`. The build stops and lists the blocking processes (PID and parent) if a server is still running, and a failed build leaves the old `plugin/bin` in place.
 2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open. Quitting also stops the server process Claude Desktop started, which would otherwise block the build.
@@ -29,7 +29,7 @@ A [Claude Code](https://code.claude.com) plugin for the terminal and IDEs.
 
 It bundles:
 
-- **An MCP server** (`src/TaskFlow.Mcp`, C# / .NET 10, stdio) wrapping the TaskFlow REST API.
+- **An MCP server** (`src/TaskFlow.Mcp`, C# / .NET 11, stdio) wrapping the TaskFlow REST API.
 - **An agent**, `work-task-assistant`, for delegated task work.
 - **Five skills** for interactive workflows (all user-invoked, nothing runs on its own):
 
@@ -45,7 +45,7 @@ Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` 
 
 ## Requirements
 
-- Claude Code (checked with 2.1.292) and the .NET 10 runtime on `PATH` (`dotnet`).
+- Claude Code (checked with 2.1.292) and the .NET 11 runtime on `PATH` (`dotnet`).
 - A running TaskFlow with the **Projects API** (TaskFlow PR [#221](https://github.com/nevridge/TaskFlow/pull/221)) and the journal update fix ([#224](https://github.com/nevridge/TaskFlow/pull/224); without it, `update_journal` with `summary` returns a 500 on days that have planned tasks). Both are merged to `main`. Start it with `docker compose up -d --build` in the TaskFlow repo.
 
 ## Install

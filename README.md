@@ -1,6 +1,6 @@
 # TaskFlow
 
-A full-stack task management application demonstrating modern development practices and containerized deployment patterns. The project consists of a **production-ready .NET 10 REST API** and a **React TypeScript frontend**, both containerised and deployed via Docker and Portainer GitOps.
+A full-stack task management application demonstrating modern development practices and containerized deployment patterns. The project consists of a **production-ready .NET 11 REST API** and a **React TypeScript frontend**, both containerised and deployed via Docker and Portainer GitOps.
 
 While functional as a task management system, this project serves as a portfolio piece showcasing professional engineering practices across the full stack — from API design and automated testing to CI/CD pipelines and on-premises Docker deployment.
 
@@ -8,7 +8,7 @@ While functional as a task management system, this project serves as a portfolio
 
 | Component | Stack | Purpose |
 |-----------|-------|---------|
-| **TaskFlow.Api** | .NET 10, EF Core, SQLite | REST API, business logic, data persistence |
+| **TaskFlow.Api** | .NET 11, EF Core, SQLite | REST API, business logic, data persistence |
 | **TaskFlow.Web** | React 19, TypeScript, Vite, Tailwind CSS v4 | SPA frontend, task and note management UI |
 
 ## Key Features
@@ -42,7 +42,7 @@ While functional as a task management system, this project serves as a portfolio
 ## Quick Start
 
 ### Prerequisites
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0)
 - [Node.js 26+](https://nodejs.org/) (for the frontend)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) (for the full stack via Compose)
 
@@ -110,7 +110,7 @@ See **[Getting Started](docs/GETTING_STARTED.md)** for the full setup walkthroug
 
 ```
 TaskFlow/
-├── TaskFlow.Api/               # .NET 10 REST API
+├── TaskFlow.Api/               # .NET 11 REST API
 │   ├── Controllers/V1/         # Versioned REST endpoints
 │   ├── Services/               # Business logic layer
 │   ├── Repositories/           # Data access layer
@@ -148,7 +148,7 @@ TaskFlow/
 ### Backend
 | Concern | Technology |
 |---------|-----------|
-| Framework | .NET 10, ASP.NET Core |
+| Framework | .NET 11, ASP.NET Core |
 | Database | Entity Framework Core + SQLite |
 | Validation | FluentValidation |
 | Observability | OpenTelemetry (traces, metrics, logs → Seq) |

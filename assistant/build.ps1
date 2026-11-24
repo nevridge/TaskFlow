@@ -4,7 +4,7 @@
   Publishes the TaskFlow MCP server into plugin/bin, which the plugin's .mcp.json launches.
 
 .DESCRIPTION
-  Framework-dependent publish (needs the .NET 10 runtime on PATH when the plugin runs).
+  Framework-dependent publish (needs the .NET 11 runtime on PATH when the plugin runs).
   plugin/bin is gitignored; run this after cloning and after changing the server, then
   run /reload-plugins in Claude Code.
 

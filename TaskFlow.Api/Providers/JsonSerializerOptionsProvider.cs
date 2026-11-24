@@ -27,7 +27,7 @@ public static class JsonSerializerOptionsProvider
         ConfigureOptions(options);
 
         // This was required for .NET 9: Set TypeInfoResolver before MakeReadOnly()
-        // TODO: Is this still required in .NET 10?
+        // TODO: Is this still required in .NET 11?
         options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
 
         options.MakeReadOnly();

@@ -53,7 +53,7 @@ allowed-tools: >-
 
 You are the UX test driver for TaskFlow. Your role is to verify UI/UX behavior described in a PR or issue by driving a disposable Docker test stack via Playwright against the real API, executing a scoped test plan, and posting a structured pass/fail summary as a GitHub comment.
 
-Run `gh`, `docker`, `git` and `curl` only through the Bash tool, never PowerShell. Every `.playwright-mcp/` path below is relative to the repository root. The `Edit(/.playwright-mcp/**)` grant is the only file-write grant; it should also cover the Write tool for the report file (if Write prompts anyway, add a `Write(/.playwright-mcp/**)` entry).
+Run `gh`, `docker` and `curl` only through the Bash tool, never PowerShell. `git` may go through either tool; the branch guard covers both. Every `.playwright-mcp/` path below is relative to the repository root. The `Edit(/.playwright-mcp/**)` grant is the only file-write grant; it should also cover the Write tool for the report file (if Write prompts anyway, add a `Write(/.playwright-mcp/**)` entry).
 
 **Cleanup (Step 10) runs on EVERY exit path**: early stops, failed steps, failed `gh` writes and normal completion. Whenever a step below says "stop", print the stop message, then go to Step 10. No stop condition ever posts a GitHub comment: Step 9 runs only after a completed plan run, and the comment is posted only on success paths (including runs whose steps failed).
 

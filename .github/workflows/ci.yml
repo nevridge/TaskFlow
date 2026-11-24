@@ -98,6 +98,17 @@ jobs:
       - run: npm run test -- --run --coverage
       - run: npm run build
 
+  claude-tooling:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - run: node --test .claude/hooks .claude/skills/feature-factory
+
   smoke-test:
     needs: build
     runs-on: ubuntu-latest

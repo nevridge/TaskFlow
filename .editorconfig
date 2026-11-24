@@ -262,6 +262,15 @@ indent_size = 2
 [*Tests.cs]
 dotnet_diagnostic.xUnit1051.severity = none
 
+# Asp.Versioning.OpenApi is deliberately not referenced: it caps Microsoft.OpenApi below 3.0 and would
+# block the Microsoft.OpenApi upgrade (#547). The hand-written OpenApiServiceExtensions covers this
+# until the spike in #549 decides otherwise, so the two analyzers that recommend it are off.
+[*.cs]
+# AV0029: suggests AddApiVersioning().AddOpenApi() from Asp.Versioning.OpenApi (not referenced, see above)
+dotnet_diagnostic.AV0029.severity = none
+# AV0030: suggests MapOpenApi().WithDocumentPerVersion() from Asp.Versioning.OpenApi (not referenced, see above)
+dotnet_diagnostic.AV0030.severity = none
+
 # Auto-generated migration files - skip formatting/charset enforcement
 [**/Migrations/*.cs]
 generated_code = true

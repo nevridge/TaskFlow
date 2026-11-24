@@ -15,8 +15,8 @@ TaskFlow.Api uses **URL path versioning** to manage multiple API versions. This 
 
 ### Technology Stack
 
-- **Asp.Versioning.Mvc** (v8.1.0) - Core versioning functionality
-- **Asp.Versioning.Mvc.ApiExplorer** (v8.1.0) - API Explorer integration for Swagger/OpenAPI
+- **Asp.Versioning.Mvc** (v10.2.1) - Core versioning functionality
+- **Asp.Versioning.Mvc.ApiExplorer** (v10.2.1) - API Explorer integration for Swagger/OpenAPI
 
 ### Configuration
 
@@ -28,9 +28,6 @@ services.AddApiVersioning(options =>
     // Default version when client doesn't specify
     options.DefaultApiVersion = new ApiVersion(1, 0);
     
-    // Assume default version when not specified
-    options.AssumeDefaultVersionWhenUnspecified = true;
-    
     // Return supported versions in response headers
     options.ReportApiVersions = true;
     
@@ -40,6 +37,7 @@ services.AddApiVersioning(options =>
         new HeaderApiVersionReader("x-api-version")
     );
 })
+.AddMvc()
 .AddApiExplorer(options =>
 {
     options.GroupNameFormat = "'v'VVV";
@@ -69,11 +67,13 @@ GET /api/v2/TaskItems
 Alternative method using custom header:
 
 ```bash
-curl -H "x-api-version: 1.0" http://localhost:8080/api/TaskItems
+curl -H "x-api-version: 1.0" http://localhost:8080/api/v1/TaskItems
 ```
 
+The URL segment is still required: an unversioned `/api/TaskItems` request returns 404, with or without the header.
+
 **Use cases:**
-- When URL structure must remain constant
+- When a client states the version in a header as well as the URL segment (the MCP client does this)
 - For advanced API consumers
 - Testing different versions
 
@@ -99,7 +99,7 @@ POST /api/v1/TaskItems
 ### Header Versioning
 
 ```bash
-curl -H "x-api-version: 1.0" http://localhost:8080/api/TaskItems
+curl -H "x-api-version: 1.0" http://localhost:8080/api/v1/TaskItems
 ```
 
 For complete usage examples and request/response formats, see [API Reference](API.md).
@@ -200,13 +200,15 @@ Scalar UI is automatically configured to:
 
 ## Testing
 
-Version-specific tests: `TaskFlow.Api.Tests/Controllers/V1/TaskItemsControllerV1Tests.cs`
+Controller-level tests: `TaskFlow.Api.Tests/Controllers/V1/TaskItemsControllerV1Tests.cs` (these call the controller directly, not over HTTP).
+
+HTTP-level versioning tests: `TaskFlow.Api.Tests/Versioning/ApiVersioningHttpTests.cs` and `OpenApiDocumentHttpTests.cs`. They run the real pipeline through `WebApplicationFactory` and record the behaviour for `/api/v1/` (with and without the header), an unsupported version (`/api/v9/` returns an empty 404), unversioned requests (404), the `Location` header and the `v1` OpenAPI document.
 
 Test both URL versioning (`/api/v1/TaskItems`) and header versioning (`x-api-version: 1.0`).
 
 ## Troubleshooting
 
-**"Unsupported API version" error:** Check `api-supported-versions` header or Scalar UI docs. Currently only v1.0 is supported.
+**"Unsupported API version" error:** Check `api-supported-versions` header or Scalar UI docs. Currently only v1.0 is supported. An unsupported version (for example `/api/v9/TaskItems`) returns an empty 404, not a problem+json body.
 
 ## References
 

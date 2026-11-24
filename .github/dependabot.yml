@@ -52,11 +52,21 @@ updates:
     ignore:
       - dependency-name: "Microsoft.OpenApi"
         update-types: ["version-update:semver-major"]
+    # Asp.Versioning.Mvc and Asp.Versioning.Mvc.ApiExplorer must move together, majors included (see #165).
     groups:
+      asp-versioning:
+        patterns:
+          - "Asp.Versioning.*"
+        update-types:
+          - "major"
+          - "minor"
+          - "patch"
       nuget-minor-patch:
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "Asp.Versioning.*"
 
   # Base images
   - package-ecosystem: "docker"

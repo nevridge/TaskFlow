@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.MTP" Version="10.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Moq" Version="4.21.0" />

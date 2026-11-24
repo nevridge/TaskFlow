@@ -20,9 +20,6 @@ public static class ApiVersioningServiceExtensions
             // Set default API version to 1.0
             options.DefaultApiVersion = new ApiVersion(1, 0);
 
-            // Assume default version when clients don't specify version
-            options.AssumeDefaultVersionWhenUnspecified = true;
-
             // Report API versions in response headers (api-supported-versions, api-deprecated-versions)
             options.ReportApiVersions = true;
 
@@ -34,6 +31,7 @@ public static class ApiVersioningServiceExtensions
                 new HeaderApiVersionReader("x-api-version")
             );
         })
+        .AddMvc()
         .AddApiExplorer(options =>
         {
             // Format API version as "'v'major[.minor][-status]"

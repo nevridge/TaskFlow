@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
@@ -37,13 +37,10 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.21.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.21.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftPlatformVersion)" />
-    <!-- Pinned to 2.x on purpose (#279). 2.7.5 is the patched 2.x release for CVE-2026-49451 (GHSA-v5pm-xwqc-g5wc);
-         do not downgrade. 3.x is blocked: the Microsoft.AspNetCore.OpenApi source generator fails with CS0200
-         on IOpenApiMediaType.Example. Dependabot major bumps are ignored in .github/dependabot.yml. -->
-    <PackageReference Include="Microsoft.OpenApi" Version="2.13.0" />
+    <PackageReference Include="Microsoft.OpenApi" Version="3.11.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="$(MicrosoftPlatformVersion)" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="$(MicrosoftPlatformVersion)" />
-    <!-- Explicit Design reference: Tools 10.0.8 declares a dependency on Design 8.0.0, which breaks `dotnet ef`. -->
+    <!-- Explicit Design reference: required by `dotnet ef`. Tools 11.0.0 declares no Design dependency (Tools 10.0.8 pulled Design 8.0.0). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftPlatformVersion)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftPlatformVersion)">
       <PrivateAssets>all</PrivateAssets>

@@ -1,11 +1,9 @@
 # syntax=docker/dockerfile:1
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS base
 WORKDIR /app
 
 # Install curl for container health checks (used by docker-compose healthcheck)
-# Upgrade apt for CVE-2026-109518 (fixed in 2.8.4ubuntu0.1); drop once the base image ships apt >= 2.8.4
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && apt-get install -y --only-upgrade apt libapt-pkg6.0t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create dirs, add placeholder files so Docker named-volume initialization
@@ -22,7 +20,7 @@ ENV ASPNETCORE_HTTP_PORTS=8080
 
 EXPOSE 8080
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 
 COPY ["Directory.Build.props", "./"]

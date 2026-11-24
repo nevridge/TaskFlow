@@ -71,7 +71,7 @@ public class JournalEntryRepositoryCompletionDayTests : IAsyncDisposable
         if (completedAtText is not null)
         {
             // Written as raw TEXT so the stored format is exactly what the test says.
-            await _context.Database.ExecuteSqlInterpolatedAsync($"UPDATE TaskItems SET CompletedAt = {completedAtText} WHERE Id = {task.Id}");
+            await _context.Database.ExecuteSqlAsync($"UPDATE TaskItems SET CompletedAt = {completedAtText} WHERE Id = {task.Id}");
         }
 
         _context.ChangeTracker.Clear();

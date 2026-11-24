@@ -46,13 +46,13 @@ Precedence: a Halt status wins over a loop Stage 3 status, then loop Stage 5, th
 
 - `## Verification results`: a table of each command, its result class and key numbers, with coverage against the threshold. With no gate to run, the fixed line `Gates: none applicable` and no table.
 - `## Coverage below threshold`: only when coverage is still short after the one top-up attempt: the number and the threshold.
-- `## AC coverage report`: one line per AC and edge case of the story, in one of these forms:
+- `## AC coverage report`: one line per AC and edge case of the story, in one of these forms (markers: `✅` covered, `⚠️` NOT COVERED, `➖` UNTESTABLE):
   - `✅ AC 3 → File.Test.Name (new)`
   - `✅ AC 4 → File.Test.Name (already exists in X — not duplicated)`
   - `⚠️ AC 5 → NOT COVERED: reason`
-  - `❌ AC 6 → UNTESTABLE: reason`
-  - On a docs-only diff, each AC is `⚠️ AC n → UNTESTABLE (docs-only): prompt-only change, no gates apply`.
-  - On a diff of only `.github/**` (including `*.md` there), each AC is `⚠️ AC n → UNTESTABLE: CI runs it on the PR`, with `Gates: none applicable`.
+  - `➖ AC 6 → UNTESTABLE: reason`
+  - On a docs-only diff, each AC is `➖ AC n → UNTESTABLE (docs-only): prompt-only change, no gates apply`.
+  - On a diff of only `.github/**` (including `*.md` there), each AC is `➖ AC n → UNTESTABLE: CI runs it on the PR`, with `Gates: none applicable`.
   - Every covered line cites the test file and name relied on. The only unverified outcomes are `UNTESTABLE` (cannot be automated, with the reason) and `NOT COVERED` (no test exists). "Not verified" because the story was not read is not allowed.
   - End the section by listing the test bodies you opened.
 - `## Tests added`: files and test names.

@@ -19,6 +19,13 @@ A run file that accurately restates a stage rule is not a contradiction. Only a 
 - **Contradiction (the #551 run):** `research.md` said "Route the edits to the owner's own change, not to the `docs` agent." This conflicts with Stage 4: the `docs` area is built by a general-purpose agent with the `docs` prompt, and the orchestrator never implements.
 - **Not a contradiction:** "The `docs` area is built by a general-purpose agent with the `docs` prompt in Stage 4." This restates Stage 4 accurately.
 
+## One-run exceptions
+
+- In a pipeline-editing run (`self-edit.md`), when a contradiction is a stage rule the change itself relaxes, the stop 2 listing offers the owner **Grant a one-run exception** for that item.
+- A recorded grant (`decisions-record.md`) resolves the matching contradiction, matched by the rule the entry names: it is not listed again, adds no "stop 2 held" entry, and is not found again on a respec.
+- An ungranted one is still a contradiction and holds stop 2 as before.
+- The orchestrator never grants it, and stop 3 offers none.
+
 ## When a contradiction is found
 
 - **No contradiction:** the check changes nothing. Stop 2 is skipped or held exactly as Stage 3 says.
@@ -47,6 +54,6 @@ The check is not repeated after these **Changes requested** re-runs at stop 2, s
 
 ## On a respec
 
-Step 5 of the Stage 4 Respec procedure runs the check on the revised `brief.md` and on `research.md`, after the advisor fold and before stop 2 is held in full. It runs on every respec, even when stop 2 was held by the check before. A contradiction is listed at stop 2 and recorded exactly as in "When a contradiction is found": quote, file and rule in the listing, and one `decisions.md` entry "stop 2 held: <file> contradicts <rule>". A contradiction the owner accepted earlier is found and listed again; no marker for accepted contradictions is kept. The stop 2 loop and the re-runs above then apply as for a Stage 3 hold.
+Step 5 of the Stage 4 Respec procedure runs the check on the revised `brief.md` and on `research.md`, after the advisor fold (when one ran) and before stop 2 is held in full. It runs on every respec, even when stop 2 was held by the check before. A contradiction is listed at stop 2 and recorded exactly as in "When a contradiction is found": quote, file and rule in the listing, and one `decisions.md` entry "stop 2 held: <file> contradicts <rule>". A contradiction the owner accepted earlier is found and listed again; no marker for accepted contradictions is kept. The stop 2 loop and the re-runs above then apply as for a Stage 3 hold.
 
 Run files are deleted after the PR opens, so the `decisions.md` entry is the only lasting record of a caught contradiction.

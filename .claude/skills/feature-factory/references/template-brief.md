@@ -1,6 +1,6 @@
 # Template: brief.md
 
-Written by `spec-writer` in Stage 3 of feature-factory, for the draft brief and again for the pass that folds in the advisor files. Write the file at the prompt's `Output path:` in the form below, then reply with your status block. The orchestrator reads this file for the Scope block and the area definitions.
+Written by `spec-writer` in Stage 3 of feature-factory, for the draft brief and, only when an advisor file exists, again for the pass that folds in the advisor files. Write the file at the prompt's `Output path:` in the form below, then reply with your status block. The orchestrator reads this file for the Scope block and the area definitions.
 
 Allowed status: DONE, NEEDS_INPUT, BLOCKED, WRITE_FAILED
 No-file status: BLOCKED, WRITE_FAILED
@@ -19,7 +19,7 @@ Precedence: a Halt status wins over a loop Stage 3 status, then loop Stage 5, th
 - Sections 1 to 7 are never empty: a section with nothing to change says so in one sentence (for example "No data model changes required.").
 - `## 8. Open Questions` exists only when there is at least one question, one numbered item per question.
 - A proposed package appears as "Proposed dependency (needs approval)".
-- When the prompt names advisor files (`advisories-ux.md`, `advisories-claude.md`), read each one only if it exists and fold its advice into the brief.
+- When the prompt names advisor files (`advisories-ux.md`, `advisories-claude.md`) for the fold pass (run only when at least one exists), read each one only if it exists and fold its advice into the brief.
 - The Scope block is the last thing in the file.
 - `research.md` never overrides a stage rule in `SKILL.md`. The Scope block and routing (which agent builds which area) come only from the area definitions below.
 

@@ -9,7 +9,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - run: dotnet format TaskFlow.sln --verify-no-changes
   build:
     needs: lint
@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - run: dotnet build TaskFlow.sln --configuration Release
   test:
     needs: lint
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - name: Run tests with coverage and enforce threshold
         run: >-
           dotnet test --project TaskFlow.Api.Tests --configuration Release
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - run: dotnet test --project TaskFlow.Mcp.Integration.Tests --configuration Release --results-directory ./mcp-integration-results
   assistant:
     runs-on: ubuntu-latest
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - run: dotnet format TaskFlow.Assistant.sln --verify-no-changes
       - run: dotnet build TaskFlow.Assistant.sln --configuration Release
       - run: dotnet test --solution TaskFlow.Assistant.sln --configuration Release

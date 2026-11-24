@@ -106,7 +106,7 @@ The `docs` agent prompt:
 
 Check each reply, then make one commit after each area (stage commits: `references/run-folder.md`).
 
-After a `docs` commit (Stage 4 or 7), if the diff changes `.claude/skills/feature-factory/**` or `.claude/agents/**`, apply `references/self-edit.md` (read in full).
+After a `docs` or owner-changes commit, if the diff changes `.claude/skills/feature-factory/**` or `.claude/agents/**`, apply `references/self-edit.md` (read in full).
 
 **Respec procedure** (the `loop: Stage 3` rows of the Outcome table, `references/outcome-table.md`), in this order:
 

@@ -5,7 +5,7 @@ This guide walks you through setting up the full TaskFlow stack (API + frontend)
 ## Prerequisites
 
 ### Required
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) — for the API
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0) — for the API
 - [Node.js 26+](https://nodejs.org/) — for the frontend
 - A terminal/command prompt
 - A code editor (Visual Studio, VS Code, Rider, etc.)

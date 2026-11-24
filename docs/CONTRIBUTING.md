@@ -15,7 +15,7 @@ Thank you for your interest in contributing to TaskFlow.Api! This guide outlines
 
 ### Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop) (for containerized testing)
 - [Git](https://git-scm.com/)
 - A code editor (Visual Studio, VS Code, or Rider)

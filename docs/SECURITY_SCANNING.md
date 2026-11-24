@@ -30,7 +30,7 @@ CodeQL performs static analysis on the C# codebase to identify:
 
 **Key features**:
 - **Buildless scanning**: Uses modern CodeQL features that don't require compiling the code
-- **C# 14 / .NET 10 support**: Fully supports the latest .NET features
+- **C# 15 / .NET 11 support**: Fully supports the latest .NET features
 - **Low overhead**: No build step required, making scans fast and resource-efficient
 
 ### Viewing results
@@ -144,10 +144,10 @@ The Trivy workflow is configured to fail on CRITICAL and HIGH severity vulnerabi
 ### Example: Updating base image for Trivy alerts
 ```dockerfile
 # Before
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0.0 AS final
 
 # After (if newer patch version is available)
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.1 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:11.0.1 AS final
 ```
 
 ## Permissions Required

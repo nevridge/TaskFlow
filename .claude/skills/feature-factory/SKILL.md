@@ -15,7 +15,7 @@ You are the feature-factory orchestrator of a multi-agent pipeline with three ap
 - One shared correction budget of 2 for the whole run, and one respec budget of 1.
 - Spec blockers from a builder go back to `spec-writer`, never to another builder.
 - When the Outcome table (`references/outcome-table.md`) and stage prose disagree, the table wins.
-- Every agent prompt, the `docs` prompt included, carries absolute `Output path:` and `Template path:` on their own lines and states no reply format. Pipe each reply to `node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` (reply on stdin). On exit 0, route on its `Status` by the Outcome table. A failed check or `WRITE_FAILED` gets one re-ask, then Halt. Never write an agent's file beyond the exceptions above.
+- Every agent prompt, the `docs` prompt included, carries absolute `Output path:` and `Template path:` on their own lines and states no reply format. Pipe each reply to `CHECK_REPLY_SINCE=<ms> node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` (reply on stdin; `<ms>`: `references/outcome-table.md`). On exit 0, route on its `Status` by the Outcome table. A failed check or `WRITE_FAILED` gets one re-ask, then Halt. Never write an agent's file beyond the exceptions above.
 - Every `git add` is plain `git add -A`; `.feature-factory/` and `.playwright-mcp/` are gitignored.
 - Every decision put to the owner uses the AskUserQuestion tool (or a plain-text list if it is unavailable). Free-form questions stay as plain text.
 - The orchestrator itself asks every owner question and runs every commit, reset, branch checkout, push and GitHub post. Never delegate these to an agent: agents cannot ask the owner questions and never commit.
@@ -95,14 +95,7 @@ Read `references/outcome-table.md` and `references/decisions-record.md` in full 
 
 One builder per area the Scope block lists, in dependency order: `backend-builder` (api, regenerates the client), `frontend-builder` (web), `assistant-builder` (assistant), then `docs`. An area not listed is skipped. Each builder gets `brief.md`, `research.md` and the earlier `build-<area>.md` files. `Output path:` is `build-<area>.md` (`build-docs.md` for `docs`); `Template path:` is `references/template-build.md`. The `frontend-builder` and `assistant-builder` prompts also name `advisories-ux.md` and `advisories-claude.md` and say to read each only if it exists.
 
-The `docs` agent prompt:
-
-- Implement the docs part of the approved brief; do not redesign it.
-- Allowlist: root `docs/**`, `.claude/skills/**`, `.claude/agents/**`, `.claude/rules/**` and `*.md` files outside `docs/`, excluding anything under `TaskFlow.Api*/`, `TaskFlow.Contracts/`, `TaskFlow.Mcp.Integration.Tests/`, `TaskFlow.Web/`, `assistant/` and `.github/`; plus `.gitignore` when the brief names it (root build files are api: `references/template-brief.md`), never a path in the next bullet.
-- Never touch `.claude/settings*.json`, `.claude/hooks/**`, `.github/**`, compose files, `.env`, any source or test file, or any other area.
-- Do not run `git add`, `git commit` or `git push`.
-- The `Output path:` and `Template path:` lines. Read the template and write your report only to the output path, the one file you may write outside the allowlist; Read an existing file there first, because Write refuses otherwise.
-- Follow the template's section for the `docs` agent: it gives the js-yaml check and how to reply.
+The `docs` agent prompt is built from the `docs` section of `references/template-build.md` ("The docs agent": the allowlist, the never-touch list and the rules). Give it the brief, `research.md`, `story.md` and the `Output path:` and `Template path:` lines.
 
 Check each reply, then make one commit after each area (stage commits: `references/run-folder.md`).
 
@@ -134,7 +127,7 @@ Read `references/outcome-table.md` first.
 
 Runs after every Stage 5 that does not Halt; Stage 7 consumes both reports.
 
-Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files and `grooming.md` (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist and `.gitignore` when the brief names it.
+Write `diff.patch` (the branch against `main`) and `changed-files.txt` fresh before every run. `implementation-validator` gets `story.md`, `brief.md`, the `build-*.md` files, `verify.md`, both advisor files and `grooming.md` (each read only if it exists), `diff.patch` and `changed-files.txt`. `Output path:` is `validation.md`; `Template path:` is `references/template-validation.md`. For a docs-only diff, the validator's Scope check expects no changes under the code-area paths (`references/template-brief.md`) and no paths outside the docs allowlist (`references/template-build.md`, The docs agent) and `.gitignore` when the brief names it.
 
 ## Stage 7: Correct
 

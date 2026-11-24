@@ -123,4 +123,23 @@ if (content.trim() === '') {
   fail(`Output file empty: expected text in ${expectedOutput}, got ${content.length} characters of whitespace`);
 }
 
+// A file reply must come from a file written during this call. The orchestrator records the time
+// before the call and passes it as CHECK_REPLY_SINCE (epoch milliseconds). It is floored to the
+// whole second, so a file system with coarse timestamps cannot make a fresh file look stale.
+const since = process.env.CHECK_REPLY_SINCE;
+if (since === undefined || !/^\d+$/.test(since)) {
+  fail(
+    `CHECK_REPLY_SINCE is missing or not a whole number of epoch milliseconds: expected digits only, such as the output of node -e "console.log(Date.now())", got ${
+      since === undefined ? 'nothing' : `"${since}"`
+    }`,
+  );
+}
+const floor = Math.floor(Number(since) / 1000) * 1000;
+const modified = fs.statSync(expectedOutput).mtimeMs;
+if (modified < floor) {
+  fail(
+    `Output file not rewritten in this call: expected ${expectedOutput} modified at or after ${new Date(floor).toISOString()}, got ${new Date(modified).toISOString()}`,
+  );
+}
+
 process.exit(0);

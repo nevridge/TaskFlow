@@ -44,7 +44,7 @@ Output path: <absolute path of the run file>
 Template path: <absolute path of the template>
 ```
 
-The agent reads the template, writes the one file and replies with four lines: `Status:`, `Output:`, `Open questions:` and `Summary:`. The orchestrator pipes the reply to `node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` from the repo root and routes on `Status` by the Outcome table (`outcome-table.md`) only when the script exits 0. The script prints what is wrong on standard error; use that text in the one re-ask.
+The agent reads the template, writes the one file and replies with four lines: `Status:`, `Output:`, `Open questions:` and `Summary:`. The orchestrator pipes the reply to `CHECK_REPLY_SINCE=<ms> node .claude/skills/feature-factory/check-reply.mjs <template-path> <expected-output-path>` from the repo root (`<ms>`: the call's start time, `outcome-table.md`) and routes on `Status` by the Outcome table (`outcome-table.md`) only when the script exits 0. The script prints what is wrong on standard error; use that text in the one re-ask.
 
 ## State
 

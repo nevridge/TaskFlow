@@ -13,6 +13,8 @@ The feature-factory orchestrator reads this file in full when a stage in `../SKI
 
 Each agent replies with one `Status` value, taken from the `Allowed status:` line of its template. One source is not an agent: the owner's answer at stop 3, whose row holds that answer in the Status column. Every (source, Status) pair has a row in Part 1, and each row has exactly one destination: `continue`, `loop: Stage N` or `Halt`. No row depends on a heading or on any other text of a run file. Stage prose points to the table and does not restate outcomes.
 
+- Before each agent call that names an output file (the `docs` agent and FORMAT-ONLY re-runs included), record the time with `node -e "console.log(Date.now())"` and pass it as `CHECK_REPLY_SINCE` to the check. The script rejects a file not touched during the call (an in-place edit counts). Record a fresh time immediately before a row 28 re-ask, and for the first call after a Halt resume. A missing or malformed value fails the check; a No-file reply needs none.
+- When `ux-advisor` replies `NO_UI_WORK`, or the claude advisor replies any No-file status, delete that advisor's file (`advisories-ux.md`, `advisories-claude.md`) if it exists; a missing file is not an error.
 - Route a reply only after `check-reply.mjs` exits 0 for it (`run-folder.md`). The first two rows cover a reply that fails the check. A Status that passes the script but that the template does not list for that writer (`template-build.md` has one list for four writers) counts as a failed check.
 - Each template gives the precedence that picks one Status when several conditions hold. Across the replies of one stage, a `Halt` row applies first, and after it a `loop: Stage 5` row applies before a `loop: Stage 7` row. `Halt` is defined in `resume-halt-start-over.md`: read that file in full before applying a `Halt` row.
 - Budget is what the row spends, recorded before the pass runs. A row that spends a budget applies while that budget has a unit left; otherwise the "budget spent" row applies. On a resumed run, see Resume after a budget Halt in `resume-halt-start-over.md`.
@@ -61,7 +63,7 @@ Each agent replies with one `Status` value, taken from the `Allowed status:` lin
 | implementation-validator | `BLOCKED` | The validator had no story or brief. | Halt | none |
 | ux-advisor | `DONE` | `advisories-ux.md` is written. | continue | none |
 | ux-advisor | `NEEDS_INPUT` | `advisories-ux.md` is written. Stop 2 is held and shows its DESIGN_CONFLICTS, and its DEPENDENCY_PROPOSALS as "Proposed dependency (needs approval)". | continue | none |
-| ux-advisor | `NO_UI_WORK` | `Output: none`: no file is written. | continue | none |
+| ux-advisor | `NO_UI_WORK` | `Output: none`: no file is written. Delete any earlier `advisories-ux.md` (see "How the rows apply"). | continue | none |
 | ux-advisor | `BLOCKED` | No advice was written. | Halt | none |
 | claude-integration-advisor | `DONE` | `advisories-claude.md` is written. | continue | none |
 | claude-integration-advisor | `NEEDS_INPUT` | `advisories-claude.md` is written. Stop 2 is held and shows its Conflicts with brief and its Failed and Topic missing Source health lines. | continue | none |

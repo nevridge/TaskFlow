@@ -265,6 +265,15 @@ describe('freshness of the output file (CHECK_REPLY_SINCE)', () => {
     }
   });
 
+  test('SINCE padded with spaces, in exponent or hex form is not accepted (AC 4: not a plain integer)', () => {
+    setMtime(second + 10);
+    for (const value of [' 1700000000500', '1700000000500 ', '1e12', '0x10', '+5']) {
+      const result = run(block(), undefined, value);
+      assert.equal(result.status, 1, `CHECK_REPLY_SINCE: ${JSON.stringify(value)}`);
+      assert.match(result.stderr, /CHECK_REPLY_SINCE/);
+    }
+  });
+
   test('a missing or empty file is reported as such, whatever SINCE holds', () => {
     removeOutput();
     for (const value of [null, 'abc', since]) {

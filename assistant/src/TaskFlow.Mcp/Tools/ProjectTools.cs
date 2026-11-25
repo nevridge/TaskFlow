@@ -12,7 +12,7 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
     private const int DueSoonDays = 7;
 
     [McpServerTool(Name = "list_projects", ReadOnly = true)]
-    [Description("Lists work projects with their open/done task counts. Use this to see which projects exist before assigning tasks or when the user mentions a project by name.")]
+    [Description("Lists work projects with their open/done task counts and each project's area. Use this to see which projects exist before assigning tasks or when the user mentions a project by name.")]
     public Task<string> ListProjects(
         [Description("Include archived projects. Default false.")] bool includeArchived = false,
         CancellationToken ct = default) =>
@@ -28,12 +28,13 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "save_project", Idempotent = true)]
-    [Description("Creates a project, or updates one (rename, change description, archive/unarchive). Omit 'project' to create; pass 'project' (name or id) to update. Only the fields you pass are changed.")]
+    [Description("Creates a project, or updates one (rename, change description, set or remove its area, archive/unarchive). Omit 'project' to create; pass 'project' (name or id) to update. Only the fields you pass are changed.")]
     public Task<string> SaveProject(
         [Description("Existing project to update, by name or id. Omit to create a new project.")] string? project = null,
         [Description("Project name (max 100 characters). Required when creating; renames when updating. Names are unique, case-insensitive.")] string? name = null,
         [Description("Description (max 2000 characters). Pass an empty string to clear it.")] string? description = null,
         [Description("Set true to archive, false to unarchive. Only applies when updating.")] bool? archived = null,
+        [Description("Area for the project: name or id of an existing area (see list_areas). Omit to keep the current area; pass an empty string or 'none' to remove it.")] string? area = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -44,23 +45,26 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
                     throw ToolGuard.Invalid("To create a project, pass 'name'. To update one, pass 'project' (name or id).");
                 }
 
-                var created = await api.CreateProjectAsync(name.Trim(), NullIfEmpty(description), ct);
+                var newAreaId = area is null ? null : await AreaIdAsync(area, ct);
+                var created = await api.CreateProjectAsync(name.Trim(), NullIfEmpty(description), newAreaId, ct);
                 return "Created project: " + Formatting.Project(created);
             }
 
             var existing = await ProjectResolver.ResolveAsync(api, project, ct);
+            var areaId = area is null ? existing.AreaId : await AreaIdAsync(area, ct);
             var updated = await api.UpdateProjectAsync(
                 existing.Id,
                 string.IsNullOrWhiteSpace(name) ? existing.Name : name.Trim(),
                 description is null ? existing.Description : NullIfEmpty(description),
                 archived ?? existing.IsArchived,
+                areaId,
                 ct);
 
             return "Updated project: " + Formatting.Project(updated);
         });
 
     [McpServerTool(Name = "project_status", ReadOnly = true)]
-    [Description("Summarizes one project's health: open/done counts, overdue tasks, tasks due within 7 days, stalled tasks (moved 3+ times or tagged 7+ days) and the most urgent open tasks. Blocked tasks are listed in their own section. Use for status updates and project check-ins.")]
+    [Description("Summarizes one project's health: open/done counts, overdue tasks, tasks due within 7 days, stalled tasks (moved 3+ times or tagged 7+ days) and the most urgent open tasks. Blocked tasks are listed in their own section. Shows the project's area when it has one. Use for status updates and project check-ins.")]
     public Task<string> ProjectStatus(
         [Description("Project name or id.")] string project,
         CancellationToken ct = default) =>
@@ -75,6 +79,11 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
 
             var sb = new StringBuilder();
             sb.AppendLine($"Project {target.Name} (#{target.Id}){(target.IsArchived ? " [archived]" : string.Empty)}: {open.Count} open{Formatting.BlockedCountText(blocked.Count)} / {tasks.Count - open.Count} done");
+
+            if (!string.IsNullOrWhiteSpace(target.AreaName))
+            {
+                sb.AppendLine($"Area: {target.AreaName}");
+            }
 
             if (open.Count == 0)
             {
@@ -112,6 +121,18 @@ public sealed class ProjectTools(TaskFlowApiClient api, TimeProvider time)
         {
             sb.AppendLine($"  ... and {list.Count - SectionLimit} more");
         }
+    }
+
+    /// <summary>An empty string or "none" means no area; anything else must name an existing one.</summary>
+    private async Task<int?> AreaIdAsync(string area, CancellationToken ct)
+    {
+        var key = area.Trim();
+        if (key.Length == 0 || string.Equals(key, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return (await AreaResolver.ResolveAsync(api, key, ct)).Id;
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

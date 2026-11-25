@@ -8,7 +8,7 @@ allowed-tools: mcp__plugin_taskflow-assistant_taskflow__list_projects mcp__plugi
 
 Capture tasks from the user's notes into TaskFlow. Notes may be in the argument or in the previous message: $ARGUMENTS
 
-1. Call `list_projects` so you can match tasks to real projects, and `list_tasks` (open) to spot duplicates of tasks that already exist.
+1. Call `list_projects` so you can match tasks to real projects, and `list_tasks` (open) to spot duplicates of tasks that already exist. Each `list_projects` line shows the project's area (`area: <name>`) when it has one, and so does `project_status`.
 2. Extract the concrete action items. Each becomes a task with:
    - a short imperative title (max 100 characters),
    - `project` only when the notes make it clear and it exists in `list_projects`,

@@ -1012,6 +1012,99 @@ public class ProjectToolsTests
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("already exists");
     }
 
+    private static readonly object[] Areas = [Fixtures.Area(3, "Work"), Fixtures.Area(4, "Home")];
+
+    [Fact]
+    public async Task SaveProject_Creates_InTheNamedArea()
+    {
+        var handler = new StubHandler()
+            .Get("Areas", Areas)
+            .Post("Projects", Fixtures.Project(5, "New", areaId: 4, areaName: "Home"), HttpStatusCode.Created);
+
+        var text = await Tools(handler).SaveProject(name: "New", area: "home");
+
+        handler.BodyOf(HttpMethod.Post, "Projects").GetProperty("areaId").GetInt32().Should().Be(4);
+        text.Should().Contain("| area: Home");
+    }
+
+    [Fact]
+    public async Task SaveProject_MovesAProjectToAnotherArea()
+    {
+        var handler = new StubHandler()
+            .Get("Areas", Areas)
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha", areaId: 3, areaName: "Work") })
+            .Put("Projects/1", Fixtures.Project(1, "Alpha", areaId: 4, areaName: "Home"));
+
+        await Tools(handler).SaveProject(project: "Alpha", area: "4");
+
+        handler.BodyOf(HttpMethod.Put, "Projects/1").GetProperty("areaId").GetInt32().Should().Be(4);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    public async Task SaveProject_WithoutArea_KeepsTheExistingArea(bool? archived)
+    {
+        var handler = new StubHandler()
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha", areaId: 3, areaName: "Work") })
+            .Put("Projects/1", Fixtures.Project(1, "Alpha", areaId: 3, areaName: "Work"));
+
+        await Tools(handler).SaveProject(project: "Alpha", description: "d", archived: archived);
+
+        handler.BodyOf(HttpMethod.Put, "Projects/1").GetProperty("areaId").GetInt32().Should().Be(3);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("none")]
+    [InlineData(" NoNe ")]
+    public async Task SaveProject_EmptyOrNone_RemovesTheArea_WithoutLookingItUp(string area)
+    {
+        var handler = new StubHandler()
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha", areaId: 3, areaName: "Work") })
+            .Put("Projects/1", Fixtures.Project(1, "Alpha"));
+
+        await Tools(handler).SaveProject(project: "Alpha", area: area);
+
+        handler.BodyOf(HttpMethod.Put, "Projects/1").GetProperty("areaId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.Sent(HttpMethod.Get, "Areas").Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(null, "Garden", "*No area matches 'Garden'*'Work' (#3)*")]
+    [InlineData("Alpha", "o", "*ambiguous*'Work'*'Home'*")]
+    public async Task SaveProject_UnknownOrAmbiguousArea_WritesNothing(string? project, string area, string expected)
+    {
+        var handler = new StubHandler()
+            .Get("Areas", Areas)
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha") });
+
+        var act = () => Tools(handler).SaveProject(project: project, name: "Beta", area: area);
+
+        await act.Should().ThrowAsync<McpException>().WithMessage(expected);
+        handler.Requests.Should().OnlyContain(r => r.Method == HttpMethod.Get);
+    }
+
+    [Fact]
+    public async Task ListProjects_ShowsTheAreaBeforeTheDescription()
+    {
+        var handler = new StubHandler().Get("Projects", new[] { Fixtures.Project(1, "Alpha", description: "Main | product", areaId: 3, areaName: "Work") });
+
+        (await Tools(handler).ListProjects()).Should().Contain("#1 Alpha - 0 open / 0 done | area: Work | Main | product");
+    }
+
+    [Fact]
+    public async Task ProjectStatus_ShowsTheAreaUnderTheHeader()
+    {
+        var handler = new StubHandler()
+            .Get("Projects", new[] { Fixtures.Project(1, "Alpha", areaId: 3, areaName: "Work") })
+            .Get("TaskItems", Array.Empty<object>());
+
+        var lines = (await Tools(handler).ProjectStatus("Alpha")).ReplaceLineEndings("\n").Split('\n');
+
+        lines.Should().Equal("Project Alpha (#1): 0 open / 0 done", "Area: Work", "No open tasks.");
+    }
+
     [Fact]
     public async Task ProjectStatus_SummarizesHealth()
     {

@@ -2,7 +2,7 @@
 
 Goal: turn the user's notes, meeting minutes or rough list into well-formed tasks, created only after they confirm.
 
-1. Call `list_projects` so tasks can be matched to real projects, and `list_tasks` (default view) to spot duplicates of tasks that already exist.
+1. Call `list_projects` so tasks can be matched to real projects, and `list_tasks` (default view) to spot duplicates of tasks that already exist. Each `list_projects` line shows the project's area (`area: <name>`) when it has one, and so does `project_status`.
 2. Extract the concrete action items. Each becomes a task with:
    - a short imperative title (max 100 characters),
    - `project` only when the notes make it clear and the project exists,

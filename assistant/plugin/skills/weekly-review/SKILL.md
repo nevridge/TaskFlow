@@ -9,7 +9,7 @@ allowed-tools: mcp__plugin_taskflow-assistant_taskflow__weekly_review mcp__plugi
 Review the user's work in TaskFlow and draft a status update. Optional arguments (a date range as `yyyy-MM-dd` dates, or a project name): $ARGUMENTS
 
 1. Call `weekly_review` (default: the last 7 days; pass `from`/`to` if the user gave a range).
-2. For each project that has open overdue or stalled work, or that the user named, call `project_status`.
+2. For each project that has open overdue or stalled work, or that the user named, call `project_status`. It and `list_projects` show each project's area when it has one.
 3. Draft the update in the user's voice with these sections, omitting empty ones:
    - **Done**: completed work grouped by project.
    - **Next up**: the most urgent open tasks per project. Tasks with status InProgress (work has started) may appear here.

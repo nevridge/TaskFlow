@@ -533,6 +533,7 @@ public class ToolSurfaceTests
         "list_tasks", "get_task", "create_tasks", "update_task", "update_tasks", "delete_task", "add_task_note",
         "get_journal", "set_journal_todos", "add_log_entry", "update_journal",
         "weekly_review",
+        "list_areas", "save_area", "delete_area",
     ];
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute Attribute)> Tools() =>
@@ -688,11 +689,24 @@ public class ToolSurfaceTests
     {
         var byName = Tools().ToDictionary(t => t.Attribute.Name!, t => t.Attribute);
 
-        foreach (var name in new[] { "list_projects", "project_status", "list_tasks", "get_task", "weekly_review" })
+        foreach (var name in new[] { "list_projects", "project_status", "list_tasks", "get_task", "weekly_review", "list_areas" })
         {
             byName[name].ReadOnly.Should().BeTrue(name);
         }
 
         byName["delete_task"].Destructive.Should().BeTrue();
+        byName["delete_area"].Destructive.Should().BeTrue();
+        byName["delete_area"].Idempotent.Should().BeFalse();
+        byName["save_area"].Idempotent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SaveArea_RequiresOnlyTheName()
+    {
+        var method = Tools().Single(t => t.Attribute.Name == "save_area").Method;
+
+        var schema = McpServerTool.Create(method, new AreaTools(Fixtures.Client(new StubHandler()))).ProtocolTool.InputSchema;
+
+        RequiredNames(schema).Should().Equal("name");
     }
 }

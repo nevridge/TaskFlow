@@ -7,7 +7,7 @@ using TaskFlow.Mcp.Api;
 
 namespace TaskFlow.Mcp.Tests;
 
-internal sealed record RecordedRequest(HttpMethod Method, string Path, string? Body);
+internal sealed record RecordedRequest(HttpMethod Method, string Path, string? Body, string Query = "");
 
 /// <summary>
 /// Stub for the TaskFlow API. Routes match on method + path (relative to /api/v1/). Several responses for the
@@ -74,7 +74,7 @@ internal sealed class StubHandler : HttpMessageHandler
         Func<HttpResponseMessage>? next = null;
         lock (_gate)
         {
-            Requests.Add(new RecordedRequest(request.Method, path, body));
+            Requests.Add(new RecordedRequest(request.Method, path, body, request.RequestUri.Query));
             if (_routes.TryGetValue((request.Method, path), out var queue))
             {
                 next = queue.Count > 1 ? queue.Dequeue() : queue.Peek();
@@ -200,7 +200,7 @@ internal static class Fixtures
             openChildCount,
         };
 
-    public static object Project(int id, string name, bool archived = false, int open = 0, int done = 0, string? description = null, int blockedCount = 0) => new
+    public static object Project(int id, string name, bool archived = false, int open = 0, int done = 0, string? description = null, int blockedCount = 0, int? areaId = null, string? areaName = null) => new
     {
         id,
         name,
@@ -210,6 +210,18 @@ internal static class Fixtures
         openTaskCount = open,
         completedTaskCount = done,
         blockedCount,
+        areaId,
+        areaName,
+    };
+
+    public static object Area(int id, string name, int projectCount = 0, int displayOrder = 0) => new
+    {
+        id,
+        name,
+        displayOrder,
+        createdAt = "2026-10-01T00:00:00Z",
+        updatedAt = (string?)null,
+        projectCount,
     };
 
     public static object Journal(int id, string date, string? summary = null, object[]? logs = null) => new

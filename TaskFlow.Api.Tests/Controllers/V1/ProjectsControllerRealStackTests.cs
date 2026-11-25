@@ -185,6 +185,12 @@ public sealed class ProjectsControllerRealStackTests : IDisposable
         Assert.Null((await verify.Projects.AsNoTracking().SingleAsync()).AreaId);
     }
 
+    private static void AssertAreaNotFound(ActionResult? result)
+    {
+        var body = Assert.IsType<BadRequestObjectResult>(result).Value;
+        Assert.Equal("Area not found.", body?.GetType().GetProperty("message")?.GetValue(body));
+    }
+
     [Fact]
     public async Task Create_And_Update_WithUnknownArea_ReturnBadRequest_AndSaveNothing()
     {
@@ -193,13 +199,13 @@ public sealed class ProjectsControllerRealStackTests : IDisposable
         await using (var ctx = NewContext())
         {
             var create = await NewController(ctx).Create(new CreateProjectDto { Name = "New", AreaId = 999 });
-            Assert.IsType<BadRequestObjectResult>(create.Result);
+            AssertAreaNotFound(create.Result);
         }
 
         await using (var ctx = NewContext())
         {
             var update = await NewController(ctx).Update(projectId, new UpdateProjectDto { Name = "Beta", AreaId = 999 });
-            Assert.IsType<BadRequestObjectResult>(update.Result);
+            AssertAreaNotFound(update.Result);
         }
 
         Assert.Empty(_interceptor.Saved);

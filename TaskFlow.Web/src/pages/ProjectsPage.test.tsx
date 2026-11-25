@@ -5,6 +5,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { ProjectsPage } from './ProjectsPage'
 import type { ProjectResponseDto } from '@/api/projects'
 
+vi.mock('@/hooks/useAreas', () => ({
+  useAreasQuery: vi.fn(),
+  useCreateAreaMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}))
 vi.mock('@/hooks/useProjects', () => ({
   useProjectsQuery: vi.fn(),
   useCreateProjectMutation: vi.fn(),
@@ -12,6 +16,7 @@ vi.mock('@/hooks/useProjects', () => ({
 }))
 
 import { useProjectsQuery, useCreateProjectMutation, useUpdateProjectMutation } from '@/hooks/useProjects'
+import { useAreasQuery } from '@/hooks/useAreas'
 
 const make = (over: Partial<ProjectResponseDto>): ProjectResponseDto => ({
   id: 1,
@@ -27,6 +32,21 @@ const make = (over: Partial<ProjectResponseDto>): ProjectResponseDto => ({
 const alpha = make({ areaId: 5, areaName: 'Work' })
 const beta = make({ id: 2, name: 'Beta', description: null, isArchived: true, openTaskCount: 0, completedTaskCount: 1, areaId: 6, areaName: 'Home' })
 
+const WORK = { id: 5, name: 'Work', displayOrder: 0, projectCount: 1 }
+const HOME = { id: 6, name: 'Home', displayOrder: 1, projectCount: 1 }
+
+function mockAreas(state: Record<string, unknown>) {
+  vi.mocked(useAreasQuery).mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    isFetched: true,
+    isError: false,
+    refetch: refetchAreas,
+    ...state,
+  } as never)
+}
+
+const refetchAreas = vi.fn()
 const createAsync = vi.fn()
 const updateAsync = vi.fn()
 const refetch = vi.fn()
@@ -49,6 +69,9 @@ function renderPage() {
   )
 }
 
+/** The list item holding the open edit form. */
+const editRow = () => screen.getAllByRole('listitem').find((li) => li.querySelector('form'))!
+
 describe('ProjectsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -57,6 +80,7 @@ describe('ProjectsPage', () => {
     vi.mocked(useCreateProjectMutation).mockReturnValue({ mutateAsync: createAsync, isPending: false } as never)
     vi.mocked(useUpdateProjectMutation).mockReturnValue({ mutateAsync: updateAsync, isPending: false } as never)
     mockQuery({ data: { data: [alpha, beta] } })
+    mockAreas({ data: { data: [WORK, HOME] } })
   })
 
   it('lists active projects with name, open and completed counts', () => {
@@ -103,6 +127,7 @@ describe('ProjectsPage', () => {
   })
 
   it('shows the no projects empty state', () => {
+    mockAreas({ data: { data: [] } })
     mockQuery({ data: { data: [] } })
     renderPage()
     expect(screen.getByText('No projects yet. Create one above.')).toBeInTheDocument()
@@ -115,6 +140,7 @@ describe('ProjectsPage', () => {
   })
 
   it('handles an undefined payload as empty', () => {
+    mockAreas({ data: { data: [] } })
     mockQuery({ data: undefined })
     renderPage()
     expect(screen.getByText('No projects yet. Create one above.')).toBeInTheDocument()
@@ -126,7 +152,7 @@ describe('ProjectsPage', () => {
     await user.type(screen.getByLabelText('Name'), 'Gamma')
     await user.type(screen.getByLabelText('Description'), 'G desc')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(createAsync).toHaveBeenCalledWith({ name: 'Gamma', description: 'G desc' })
+    expect(createAsync).toHaveBeenCalledWith({ name: 'Gamma', description: 'G desc', areaId: null })
     expect(screen.getByLabelText('Name')).toHaveValue('')
   })
 
@@ -135,7 +161,7 @@ describe('ProjectsPage', () => {
     renderPage()
     await user.type(screen.getByLabelText('Name'), 'Gamma')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(createAsync).toHaveBeenCalledWith({ name: 'Gamma', description: null })
+    expect(createAsync).toHaveBeenCalledWith({ name: 'Gamma', description: null, areaId: null })
   })
 
   it('does not call the API for an invalid name', async () => {
@@ -154,14 +180,14 @@ describe('ProjectsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Create project' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('A project with that name already exists.')
     expect(screen.getByLabelText('Name')).toHaveValue('Alpha')
-    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getAllByRole('link')).toHaveLength(1)
   })
 
   it('rename sends name, description, isArchived and the current area', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
-    const row = screen.getByRole('listitem')
+    const row = editRow()
     const name = within(row).getByLabelText('Name')
     await user.clear(name)
     await user.type(name, 'Alpha 2')
@@ -176,7 +202,7 @@ describe('ProjectsPage', () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
-    await user.clear(within(screen.getByRole('listitem')).getByLabelText('Description'))
+    await user.clear(within(editRow()).getByLabelText('Description'))
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 1,
@@ -191,7 +217,7 @@ describe('ProjectsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Name taken')
-    expect(within(screen.getByRole('listitem')).getByLabelText('Name')).toHaveValue('Alpha')
+    expect(within(editRow()).getByLabelText('Name')).toHaveValue('Alpha')
   })
 
   it('archive sends isArchived true with current name and description', async () => {
@@ -281,5 +307,129 @@ describe('ProjectsPage', () => {
     mockQuery({ data: { data: [make({ name: long })] } })
     renderPage()
     expect(screen.getByRole('link', { name: long })).toHaveClass('p-row-name')
+  })
+
+  describe('grouping by area', () => {
+    const headings = () => screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+    const listText = () => screen.getAllByRole('listitem').map((li) => li.querySelector('h2, a')?.textContent ?? li.textContent)
+
+    it('lists areas in display order with empty text, then "No area" last', () => {
+      mockAreas({ data: { data: [HOME, WORK] } })
+      mockQuery({
+        data: {
+          data: [alpha, make({ id: 3, name: 'Loose' }), make({ id: 4, name: 'Orphan', areaId: 99 })],
+        },
+      })
+      renderPage()
+      expect(headings()).toEqual(['New project', 'Home', 'Work', 'No area'])
+      expect(listText()).toEqual(['Home', 'No projects in this area yet.', 'Work', 'Alpha', 'No area', 'Loose', 'Orphan'])
+    })
+
+    it('shows only "No area" when there are no areas', () => {
+      mockAreas({ data: { data: [] } })
+      renderPage()
+      expect(headings()).toEqual(['New project', 'No area'])
+    })
+
+    it('applies "Show archived" inside each group and hides "No area" without visible projects', async () => {
+      const user = userEvent.setup()
+      mockQuery({ data: { data: [alpha, beta, make({ id: 3, name: 'Old', isArchived: true })] } })
+      renderPage()
+      expect(listText()).toEqual(['Work', 'Alpha', 'Home', 'No projects in this area yet.'])
+      await user.click(screen.getByLabelText('Show archived'))
+      expect(listText()).toEqual(['Work', 'Alpha', 'Home', 'Beta', 'No area', 'Old'])
+    })
+
+    it('shows the archived hint above the groups when every project is archived', () => {
+      mockQuery({ data: { data: [beta] } })
+      renderPage()
+      const hint = screen.getByText(/No active projects/)
+      const work = screen.getByRole('heading', { name: 'Work' })
+      expect(hint.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('lists areas rather than "No projects yet" when there are areas but no projects', () => {
+      mockQuery({ data: { data: [] } })
+      renderPage()
+      expect(screen.queryByText(/No projects yet\. Create one above/)).not.toBeInTheDocument()
+      expect(screen.getAllByText('No projects in this area yet.')).toHaveLength(2)
+    })
+
+    it('waits for the first areas load before listing, so rows do not jump into groups', () => {
+      mockAreas({ isLoading: true, isFetched: false })
+      renderPage()
+      expect(screen.getByRole('status')).toHaveTextContent('Loading projects')
+      expect(screen.queryByRole('link', { name: 'Alpha' })).not.toBeInTheDocument()
+    })
+
+    it('falls back to a flat list with Retry when areas fail with no data', async () => {
+      const user = userEvent.setup()
+      mockAreas({ isError: true })
+      renderPage()
+      // The create form reports the same failure for its own select; this is the list's message.
+      const listError = document.querySelector<HTMLElement>('.p-load-error')!
+      expect(within(listError).getByRole('alert')).toHaveTextContent('Failed to load areas.')
+      expect(screen.getByRole('link', { name: 'Alpha' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'No area' })).not.toBeInTheDocument()
+      await user.click(within(listError).getByRole('button', { name: 'Retry' }))
+      expect(refetchAreas).toHaveBeenCalledOnce()
+    })
+
+    it('keeps the grouping and the open edit form when a background areas refetch fails', async () => {
+      const user = userEvent.setup()
+      const view = renderPage()
+      await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+      await user.type(within(editRow()).getByLabelText('Name'), ' typed')
+      mockAreas({ data: { data: [WORK, HOME] }, isError: true })
+      view.rerender(
+        <MemoryRouter>
+          <ProjectsPage />
+        </MemoryRouter>,
+      )
+      expect(screen.getByRole('heading', { name: 'Work' })).toBeInTheDocument()
+      expect(screen.queryByText('Failed to load areas.')).not.toBeInTheDocument()
+      expect(within(editRow()).getByLabelText('Name')).toHaveValue('Alpha typed')
+    })
+
+    it('keeps an edit form open when its project changes group', async () => {
+      const user = userEvent.setup()
+      const view = renderPage()
+      await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+      await user.type(within(editRow()).getByLabelText('Name'), ' typed')
+      mockQuery({ data: { data: [{ ...alpha, areaId: 6 }, beta] } })
+      view.rerender(
+        <MemoryRouter>
+          <ProjectsPage />
+        </MemoryRouter>,
+      )
+      expect(listText().slice(0, 2)).toEqual(['Work', 'No projects in this area yet.'])
+      expect(within(editRow()).getByLabelText('Name')).toHaveValue('Alpha typed')
+    })
+
+    // The refetch moves the row after the form has closed, which drops focus without the second restore.
+    it('keeps focus on the Edit button, in view, after a save moves the project to another group', async () => {
+      const user = userEvent.setup()
+      const scrollIntoView = vi.fn()
+      Element.prototype.scrollIntoView = scrollIntoView
+      const view = renderPage()
+      await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+      await user.selectOptions(within(editRow()).getByLabelText('Area'), 'Home')
+      await user.click(within(editRow()).getByRole('button', { name: 'Save' }))
+      expect(updateAsync).toHaveBeenCalledWith({
+        id: 1,
+        data: { name: 'Alpha', description: 'Alpha desc', isArchived: false, areaId: 6 },
+      })
+      scrollIntoView.mockClear()
+      ;(document.activeElement as HTMLElement).blur()
+      mockQuery({ data: { data: [{ ...alpha, areaId: 6 }, beta] } })
+      view.rerender(
+        <MemoryRouter>
+          <ProjectsPage />
+        </MemoryRouter>,
+      )
+      expect(screen.getByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
+      expect(scrollIntoView).toHaveBeenCalled()
+      delete (Element.prototype as Partial<Element>).scrollIntoView
+    })
   })
 })

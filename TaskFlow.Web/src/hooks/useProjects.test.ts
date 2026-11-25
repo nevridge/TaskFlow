@@ -17,6 +17,7 @@ import {
 } from './useProjects'
 import { projectKeys as projectKeysDirect } from './projectKeys'
 import { taskKeys } from './useTasks'
+import { areaKeys } from './areaKeys'
 
 vi.mock('@/api/projects', () => ({
   getProjects: vi.fn(),
@@ -128,24 +129,24 @@ describe('project mutations and invalidation', () => {
     return { result, invalidatedKeys, removedKeys }
   }
 
-  it('create invalidates the list only', async () => {
+  it('create invalidates the project list and the area counts', async () => {
     vi.mocked(api.createProject).mockResolvedValue(ok)
     const { result, invalidatedKeys, removedKeys } = setup(useCreateProjectMutation)
     result.current.mutate({ name: 'A' })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.createProject).toHaveBeenCalledWith({ name: 'A' })
-    expect(invalidatedKeys()).toEqual([projectKeys.all])
+    expect(invalidatedKeys()).toEqual([projectKeys.all, areaKeys.all])
     expect(removedKeys()).toEqual([])
   })
 
-  it('update invalidates list and detail', async () => {
+  it('update invalidates list, detail and area counts', async () => {
     vi.mocked(api.updateProject).mockResolvedValue(ok)
     const { result, invalidatedKeys } = setup(useUpdateProjectMutation)
     const data = { name: 'A', description: null, isArchived: true, areaId: null }
     result.current.mutate({ id: 7, data })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.updateProject).toHaveBeenCalledWith(7, data)
-    expect(invalidatedKeys()).toEqual([projectKeys.all, projectKeys.detail(7)])
+    expect(invalidatedKeys()).toEqual([projectKeys.all, projectKeys.detail(7), areaKeys.all])
   })
 
   it('delete invalidates list and tasks, removes detail and project tasks', async () => {
@@ -154,7 +155,7 @@ describe('project mutations and invalidation', () => {
     result.current.mutate(7)
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.deleteProject).toHaveBeenCalledWith(7)
-    expect(invalidatedKeys()).toEqual([projectKeys.all, taskKeys.all])
+    expect(invalidatedKeys()).toEqual([projectKeys.all, taskKeys.all, areaKeys.all])
     expect(removedKeys()).toEqual([projectKeys.detail(7), projectKeys.tasks(7)])
   })
 
@@ -176,12 +177,21 @@ describe('project mutations and invalidation', () => {
     expect(invalidatedKeys()).toEqual([projectKeys.all, projectKeys.tasks(2), taskKeys.all])
   })
 
-  it('does not invalidate when the mutation fails', async () => {
-    vi.mocked(api.createProject).mockRejectedValue({ message: 'dup' })
+  // "Area not found." means the cached areas are stale; without this the form keeps offering the deleted one.
+  it('a failed create reloads areas only', async () => {
+    vi.mocked(api.createProject).mockRejectedValue({ message: 'Area not found.' })
     const { result, invalidatedKeys } = setup(useCreateProjectMutation)
     result.current.mutate({ name: 'A' })
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(invalidatedKeys()).toEqual([])
+    expect(invalidatedKeys()).toEqual([areaKeys.all])
+  })
+
+  it('a failed update reloads areas only', async () => {
+    vi.mocked(api.updateProject).mockRejectedValue({ message: 'Area not found.' })
+    const { result, invalidatedKeys } = setup(useUpdateProjectMutation)
+    result.current.mutate({ id: 7, data: { name: 'A', description: null, isArchived: false, areaId: 3 } })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(invalidatedKeys()).toEqual([areaKeys.all])
   })
 })
 

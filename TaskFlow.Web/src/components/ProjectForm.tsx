@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { ProjectAreaSelect, type ProjectAreaSelectHandle } from '@/components/ProjectAreaSelect'
 import { getApiErrorMessage } from '@/lib/api-error'
 import {
   PROJECT_DESCRIPTION_MAX,
@@ -11,11 +12,15 @@ export interface ProjectFormSubmit {
   name: string
   /** Trimmed-empty descriptions are sent as null, never "". */
   description: string | null
+  areaId: number | null
 }
 
 interface ProjectFormProps {
   initialName?: string
   initialDescription?: string | null
+  initialAreaId?: number | null
+  /** Shown for the initial area while the area list is unavailable. */
+  initialAreaName?: string | null
   submitLabel: string
   errorFallback: string
   /** Should reject on failure; the form shows the error and stays open. */
@@ -29,6 +34,8 @@ interface ProjectFormProps {
 export function ProjectForm({
   initialName = '',
   initialDescription = '',
+  initialAreaId = null,
+  initialAreaName,
   submitLabel,
   errorFallback,
   onSubmit,
@@ -46,6 +53,8 @@ export function ProjectForm({
   const nameRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription ?? '')
+  const [areaId, setAreaId] = useState(initialAreaId)
+  const areaRef = useRef<ProjectAreaSelectHandle>(null)
   const [errors, setErrors] = useState<ProjectFormErrors>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -59,15 +68,23 @@ export function ProjectForm({
     const found = validateProject({ name, description })
     setErrors(found)
     setSubmitError(null)
-    if (found.name || found.description) return
+    // Asked before returning, so its message shows alongside name and description errors.
+    const areaBlocked = areaRef.current?.blockSave() ?? false
+    if (found.name || found.description || areaBlocked) return
     setSubmitting(true)
     try {
       // Only a whitespace-only description becomes null; otherwise send it as typed so
       // the payload matches what validation measured.
-      await onSubmit({ name: name.trim(), description: description.trim() ? description : null })
+      await onSubmit({
+        name: name.trim(),
+        description: description.trim() ? description : null,
+        areaId: areaRef.current?.resolveValue() ?? null,
+      })
       if (resetOnSuccess) {
         setName('')
         setDescription('')
+        setAreaId(null)
+        areaRef.current?.closeEmptyField()
       }
     } catch (err) {
       setSubmitError(getApiErrorMessage(err, errorFallback))
@@ -114,6 +131,13 @@ export function ProjectForm({
           <p id={descErrId} className="p-field-error" role="alert">{errors.description}</p>
         )}
       </div>
+      <ProjectAreaSelect
+        ref={areaRef}
+        value={areaId}
+        onChange={setAreaId}
+        currentAreaId={initialAreaId}
+        currentAreaName={initialAreaName}
+      />
       {submitError && <p id={submitErrId} className="p-error" role="alert">{submitError}</p>}
       <div className="p-form-actions">
         <button type="submit" className="p-btn p-btn--primary" disabled={busy}>{submitLabel}</button>

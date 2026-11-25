@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { TasksPage } from './TasksPage'
 
+const areaState = vi.hoisted(() => ({ list: [] as Array<{ id: number; name: string }> }))
+vi.mock('@/hooks/useAreas', () => ({ useAreasQuery: () => ({ data: { data: areaState.list } }) }))
 vi.mock('@/hooks/useTasks', () => ({
   useTasksQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),
@@ -270,6 +272,29 @@ describe('TasksPage', () => {
   })
 
   describe('project filter', () => {
+    it('groups by area, keeps the fixed options outside the groups and still lists archived projects', () => {
+      areaState.list = [{ id: 7, name: 'Work' }]
+      mockProjects([
+        { id: 1, name: 'Alpha', isArchived: false },
+        { id: 2, name: 'Beta', isArchived: false, areaId: 7 },
+        { id: 3, name: 'Old', isArchived: true, areaId: 7 },
+      ] as typeof projectList)
+      renderPage()
+      const select = filterSelect()
+      const shape = Array.from(select.children, child =>
+        child instanceof HTMLOptGroupElement
+          ? [child.label, ...Array.from(child.children, o => o.textContent)]
+          : child.textContent,
+      )
+      expect(shape).toEqual([
+        'All projects',
+        'No project',
+        ['Work', 'Beta', 'Old (archived)'],
+        ['No area', 'Alpha'],
+      ])
+      areaState.list = []
+    })
+
     it('lists All projects, No project, active projects, then archived projects with a suffix', () => {
       renderPage()
       const labels = within(filterSelect()).getAllByRole('option').map(o => o.textContent)

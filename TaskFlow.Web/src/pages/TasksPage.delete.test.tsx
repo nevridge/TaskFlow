@@ -8,6 +8,7 @@ import { makeProviders } from '@/test/renderWithToast'
 import { TasksPage } from './TasksPage'
 
 // Real ToastProvider, real hooks and a real QueryClient. Only the network layer is mocked.
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/api/client/sdk.gen', () => ({
   getApiV1TaskItems: vi.fn(),
   postApiV1TaskItems: vi.fn(),

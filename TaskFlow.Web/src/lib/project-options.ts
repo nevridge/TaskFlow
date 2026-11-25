@@ -4,6 +4,16 @@ export type ProjectOption = {
   id: number
   name: string
   isArchived: boolean
+  areaId?: number | null
+}
+
+export type ProjectOptionItem = { value: string; label: string }
+
+export type ProjectOptionGroup = {
+  key: string
+  /** null = no <optgroup>. */
+  label: string | null
+  options: ProjectOptionItem[]
 }
 
 interface CurrentProjectSource {
@@ -53,4 +63,35 @@ export function buildProjectOptions(
     .sort((a, b) => a.name.localeCompare(b.name))
     .forEach(p => options.push({ value: String(p.id), label: p.name }))
   return options
+}
+
+/**
+ * Groups project select options by area, in area display order with "No area" last, sorted by project
+ * name inside each group. Empty groups are left out. With no areas (none, or not loaded) the options stay a
+ * flat list in their existing order.
+ */
+export function groupProjectOptions(
+  options: ProjectOptionItem[],
+  projects: ProjectOption[],
+  areas: ReadonlyArray<{ id: number; name: string }>,
+): ProjectOptionGroup[] {
+  if (areas.length === 0) return [{ key: 'flat', label: null, options }]
+
+  const byValue = new Map(projects.map(p => [String(p.id), p]))
+  const known = new Set(areas.map(a => a.id))
+  const areaOf = (o: ProjectOptionItem) => {
+    const areaId = byValue.get(o.value)?.areaId
+    return areaId != null && known.has(areaId) ? areaId : null
+  }
+  const nameOf = (o: ProjectOptionItem) => byValue.get(o.value)?.name ?? o.label
+  const group = (key: string, label: string, areaId: number | null): ProjectOptionGroup => ({
+    key,
+    label,
+    options: options.filter(o => areaOf(o) === areaId).sort((a, b) => nameOf(a).localeCompare(nameOf(b))),
+  })
+
+  return [
+    ...areas.map(a => group(`area-${a.id}`, a.name, a.id)),
+    group('area-none', 'No area', null),
+  ].filter(g => g.options.length > 0)
 }

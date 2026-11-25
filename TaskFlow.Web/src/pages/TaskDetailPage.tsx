@@ -7,7 +7,9 @@ import {
 } from '@/hooks/useTasks'
 import { useChangeTaskProject, useProjectsQuery } from '@/hooks/useProjects'
 import { useSaveTaskWithProject } from '@/hooks/useSaveTaskWithProject'
-import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { buildProjectOptions, groupProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { useAreasQuery } from '@/hooks/useAreas'
+import { ProjectOptionElements } from '@/components/ProjectOptionElements'
 import { getProjectMutationErrorMessage, normalizeProjectId } from '@/lib/project-errors'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation } from '@/hooks/useNotes'
 import { useDeleteNoteUndoable, useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
@@ -43,6 +45,8 @@ export function TaskDetailPage() {
   const { data: allTasksData } = useTasksQuery()
   const { data: notesData, isLoading: notesLoading } = useNotesQuery(taskId)
   const { data: projectsData } = useProjectsQuery()
+  const { data: areasData } = useAreasQuery()
+  const areas = areasData?.data ?? []
   const saveWithProject = useSaveTaskWithProject(getTaskPlanSaveErrorMessage)
   const changeProject = useChangeTaskProject()
   const deleteTaskUndoable = useDeleteTaskUndoable()
@@ -92,7 +96,12 @@ export function TaskDetailPage() {
   // Render-only: derived from the full task list, never written to the cache.
   const derivedInfo = useMemo(() => deriveTaskStatuses(allTasks).get(taskId), [allTasks, taskId])
   const projects: ProjectOption[] = useMemo(
-    () => (projectsData?.data ?? []).map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived })),
+    () => (projectsData?.data ?? []).map(p => ({
+      id: Number(p.id),
+      name: p.name,
+      isArchived: !!p.isArchived,
+      areaId: p.areaId ?? null,
+    })),
     [projectsData],
   )
   const serverProjectId = normalizeProjectId(task?.projectId)
@@ -263,6 +272,7 @@ export function TaskDetailPage() {
                 displayStatus={shownStatus}
                 availableParents={parentOptions}
                 projects={projects}
+                areas={areas}
                 titleInputRef={titleRef}
                 projectInvalid={saveWithProject.projectInvalid}
                 plannedDayRevertToken={saveWithProject.plannedDayRevertToken}
@@ -317,9 +327,7 @@ export function TaskDetailPage() {
                     onChange={e => handleQuickProjectChange(e.target.value)}
                   >
                     <option value="">No project</option>
-                    {projectOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
+                    <ProjectOptionElements groups={groupProjectOptions(projectOptions, projects, areas)} />
                   </select>
                   {selectedProjectLabel && (
                     <span className="t-detail-project-name" aria-hidden="true">{selectedProjectLabel}</span>

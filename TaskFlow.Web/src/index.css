@@ -762,12 +762,351 @@ html.is-dark .settings-seg-btn {
  * .settings-date-input and the 0-1-1 `font: inherit` resets, regardless of stylesheet order.
  */
 @media (hover: none), (pointer: coarse) {
-  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]) {
+  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer, .area-dialog) :is(input, textarea, select):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]) {
     font-size: max(var(--input-font-min), 1em);
   }
-  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input:is([type="text"], [type="date"], [type="search"], [type="email"], [type="number"], [type="url"], [type="password"], [type="time"]), input:not([type]), select) {
+  :is(.journal-page, .tasks-page, .projects-page, .settings-drawer, .area-dialog) :is(input:is([type="text"], [type="date"], [type="search"], [type="email"], [type="number"], [type="url"], [type="password"], [type="time"]), input:not([type]), select) {
     min-height: var(--tap-min);
   }
+}
+
+/* ─── Areas (drawer section and delete dialog) ─────────────────────────────── */
+
+.area-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.area-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.settings-row.area-row {
+  position: relative;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 12px 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+}
+.settings-row.area-row.is-dragging {
+  background: var(--paper-2);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+.area-drop-line {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.area-drop-line--before { top: -2px; }
+.area-drop-line--after { bottom: -2px; }
+
+.area-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-2);
+  cursor: grab;
+}
+.area-handle:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.settings-row-label.area-label {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  min-width: 0;
+}
+.area-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.area-count {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.area-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.area-icon-btn:hover:not(:disabled) {
+  background: var(--hover-soft);
+  color: var(--ink);
+}
+.area-icon-btn:disabled {
+  opacity: .55;
+  cursor: default;
+}
+.area-icon-btn--save { color: var(--accent); }
+.area-icon-btn--danger:hover:not(:disabled),
+.area-icon-btn--danger:focus-visible {
+  color: var(--danger-ink);
+}
+
+.area-handle:focus-visible,
+.area-icon-btn:focus-visible,
+.area-text-btn:focus-visible,
+.area-input:focus-visible,
+.area-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.area-text-btn {
+  margin: 4px 20px 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.area-hint,
+.area-hint-status {
+  margin: 6px 20px 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.area-hint-keys { display: none; }
+
+.area-error {
+  margin: 4px 20px;
+  font-size: 12px;
+  color: var(--danger-ink);
+  overflow-wrap: anywhere;
+}
+
+.area-add-row {
+  display: flex;
+  padding: 4px 12px 4px 20px;
+}
+.area-editor,
+.settings-row.area-row > .area-editor {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.area-input {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+}
+.area-editor > .area-input { flex: 1 1 0; }
+.area-input[aria-invalid='true'] { border-color: var(--danger-ink); }
+.area-editor-error {
+  flex: 0 0 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger-ink);
+  overflow-wrap: anywhere;
+}
+
+/* While dragging: grabbing cursor everywhere, no text selection. */
+html.area-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+html.area-dragging * { cursor: grabbing; }
+
+/* Layer 210: above the settings backdrop (200) and drawer (201), which the dialog dims. */
+.area-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .35);
+  z-index: 210;
+}
+/* Layer 211: the panel, above its own backdrop. */
+.area-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 211;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-sizing: border-box;
+  padding: 20px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.area-dialog-title {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.area-dialog-projects {
+  margin: 8px 0 0;
+  padding: 8px 12px 8px 28px;
+  list-style: disc;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.area-dialog-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.area-dialog-status { color: var(--muted); }
+.area-dialog-error {
+  margin: 6px 0;
+  color: var(--danger-ink);
+}
+.area-dialog-fieldset {
+  min-width: 0;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+.area-dialog-fieldset legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 600;
+}
+.area-choice {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.area-choice.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.area-choice-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.area-choice-control {
+  display: block;
+  width: min(240px, calc(100% - 24px));
+  margin: 4px 0 0 24px;
+}
+.area-choice-hint {
+  margin: 4px 0 0 24px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.area-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+.area-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.area-btn--danger {
+  border-color: var(--danger-ink);
+  background: var(--danger-bg);
+  color: var(--danger-ink);
+}
+.area-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+/* Touch: no drag reorder. The handle and drag wording are hidden visually only, so an attached keyboard
+   can still Tab to the handle (which then appears) and use Alt+Arrow. */
+@media (hover: none), (pointer: coarse) {
+  .settings-row.area-row {
+    gap: 4px;
+    padding: 2px 8px;
+  }
+  .settings-row-label.area-label {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .area-handle:not(:focus) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .area-handle:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .area-hint {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .area-hint-drag { display: none; }
+  .area-hint-keys { display: inline; }
+  .area-choice-label { min-height: var(--tap-min); }
 }
 
 /* ─── Theme picker swatches ─────────────────────────────────────────────────── */

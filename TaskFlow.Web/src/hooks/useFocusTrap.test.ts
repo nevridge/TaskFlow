@@ -102,4 +102,51 @@ describe('useFocusTrap', () => {
     rerender({ active: false })
     expect(fallback).toHaveFocus()
   })
+
+  // Browsers skip unchecked radios in a checked group, so counting them lets Shift+Tab leave the container.
+  it('treats a checked radio group as one tab stop', () => {
+    const { box } = setup(
+      '<input id="r1" type="radio" name="g"><input id="t" type="text"><input id="r2" type="radio" name="g" checked>' +
+        '<input id="r3" type="radio" name="g">',
+    )
+    renderHook(() => useFocusTrap({ current: box }, true))
+    document.getElementById('t')!.focus()
+    expect(tab(true).defaultPrevented).toBe(true)
+    expect(document.getElementById('r2')).toHaveFocus()
+    expect(tab().defaultPrevented).toBe(true)
+    expect(document.getElementById('t')).toHaveFocus()
+  })
+
+  it('wraps from an unchecked radio that sits before the first tab stop', () => {
+    const { box } = setup(
+      '<input id="r1" type="radio" name="g"><input id="r2" type="radio" name="g" checked><button id="b">b</button>',
+    )
+    renderHook(() => useFocusTrap({ current: box }, true))
+    document.getElementById('r1')!.focus()
+    expect(tab(true).defaultPrevented).toBe(true)
+    expect(document.getElementById('b')).toHaveFocus()
+  })
+
+  it('keeps every radio of an unchecked group', () => {
+    const { box } = setup('<input id="r1" type="radio" name="g"><input id="r2" type="radio" name="g">')
+    renderHook(() => useFocusTrap({ current: box }, true))
+    document.getElementById('r2')!.focus()
+    tab()
+    expect(document.getElementById('r1')).toHaveFocus()
+  })
+
+  // Re-running the effect on pause would restore focus to the opener underneath the nested dialog.
+  it('stops trapping while paused without moving focus, then resumes', () => {
+    const { box, opener } = setup('<button id="a">a</button>')
+    opener.focus()
+    const { rerender } = renderHook(({ paused }) => useFocusTrap({ current: box }, true, { paused }), {
+      initialProps: { paused: false },
+    })
+    document.getElementById('a')!.focus()
+    rerender({ paused: true })
+    expect(document.getElementById('a')).toHaveFocus()
+    expect(tab().defaultPrevented).toBe(false)
+    rerender({ paused: false })
+    expect(tab().defaultPrevented).toBe(true)
+  })
 })

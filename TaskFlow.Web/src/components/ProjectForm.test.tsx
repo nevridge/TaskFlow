@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProjectForm } from './ProjectForm'
 
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
+
 function setup(overrides: Partial<React.ComponentProps<typeof ProjectForm>> = {}) {
   const onSubmit = vi.fn().mockResolvedValue(undefined)
   const utils = render(
@@ -20,7 +22,7 @@ describe('ProjectForm', () => {
     await user.type(screen.getByLabelText('Name'), '  Alpha  ')
     await user.type(screen.getByLabelText('Description'), 'About it')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'Alpha', description: 'About it' })
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'Alpha', description: 'About it', areaId: null })
   })
 
   it('sends an empty description as null', async () => {
@@ -29,7 +31,7 @@ describe('ProjectForm', () => {
     await user.type(screen.getByLabelText('Name'), 'Alpha')
     await user.type(screen.getByLabelText('Description'), '   ')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'Alpha', description: null })
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'Alpha', description: null, areaId: null })
   })
 
   it('sends a description with content as typed (untrimmed); whitespace-only becomes null', async () => {
@@ -38,11 +40,11 @@ describe('ProjectForm', () => {
     await user.type(screen.getByLabelText('Name'), 'Alpha')
     await user.type(screen.getByLabelText('Description'), '  keep me  ')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: '  keep me  ' })
+    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: '  keep me  ', areaId: null })
     await user.clear(screen.getByLabelText('Description'))
     await user.type(screen.getByLabelText('Description'), '   ')
     await user.click(screen.getByRole('button', { name: 'Create project' }))
-    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: null })
+    expect(onSubmit).toHaveBeenLastCalledWith({ name: 'Alpha', description: null, areaId: null })
   })
 
   it('ties the submit error alert to the form via aria-describedby', async () => {

@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PrefsProvider } from '@/context/PrefsContext'
 import { Layout } from './Layout'
+
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 
 // Unlike Layout.test.tsx, Nav and SettingsDrawer are NOT mocked here: this proves the real chain
 // Nav hamburger ref -> Layout returnFocusRef -> SettingsDrawer / useFocusTrap fallback.

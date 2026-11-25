@@ -19,11 +19,27 @@ export function ProjectRow({ project, onSave, onToggleArchive, disabled = false 
   const [archiveError, setArchiveError] = useState<string | null>(null)
   const editBtnRef = useRef<HTMLButtonElement>(null)
   const wasEditing = useRef(false)
+  /** Set by a save that changes the area, until the row has moved to its new group. */
+  const movingFromRef = useRef<{ areaId: number | null } | null>(null)
 
   useEffect(() => {
     if (wasEditing.current && !editing) editBtnRef.current?.focus()
     wasEditing.current = editing
   }, [editing])
+
+  // The effect above can run before the refetch moves the row, and moving it drops focus.
+  const areaId = project.areaId ?? null
+  useEffect(() => {
+    const moving = movingFromRef.current
+    const button = editBtnRef.current
+    if (!moving || editing || disabled || !button) return
+    // Leave focus alone if the user has already put it somewhere else.
+    if (document.activeElement === document.body || document.activeElement === button) {
+      button.focus()
+      button.closest('li')?.scrollIntoView?.({ block: 'nearest' })
+    }
+    if (moving.areaId !== areaId) movingFromRef.current = null
+  }, [areaId, editing, disabled])
 
   if (editing) {
     return (
@@ -32,11 +48,16 @@ export function ProjectRow({ project, onSave, onToggleArchive, disabled = false 
           <ProjectForm
             initialName={project.name}
             initialDescription={project.description}
+            initialAreaId={project.areaId ?? null}
+            initialAreaName={project.areaName}
             submitLabel="Save"
             errorFallback="Could not save project."
             autoFocusName
             onSubmit={async (values) => {
               await onSave(project, values)
+              if (values.areaId !== (project.areaId ?? null)) {
+                movingFromRef.current = { areaId: project.areaId ?? null }
+              }
               setEditing(false)
             }}
             onCancel={() => setEditing(false)}
@@ -73,7 +94,10 @@ export function ProjectRow({ project, onSave, onToggleArchive, disabled = false 
           className="p-btn"
           aria-label={`Edit ${project.name}`}
           disabled={disabled}
-          onClick={() => setEditing(true)}
+          onClick={() => {
+            movingFromRef.current = null
+            setEditing(true)
+          }}
         >
           Edit
         </button>

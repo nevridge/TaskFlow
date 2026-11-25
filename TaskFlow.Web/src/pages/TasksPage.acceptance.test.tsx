@@ -9,6 +9,7 @@ import { __resetCoarsePointerCache } from '@/lib/pointer'
 import { TasksPage } from './TasksPage'
 
 // Real hooks (including the real update mutation) over a mocked SDK, so a failed status cycle exercises real behaviour.
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/api/client/sdk.gen', async importOriginal => {
   const actual = await importOriginal<typeof import('@/api/client/sdk.gen')>()
   return {

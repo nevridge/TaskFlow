@@ -24,6 +24,8 @@ vi.mock('@/api/journal', () => ({
   removeJournalTodo: vi.fn(),
 }))
 
+const areaState = vi.hoisted(() => ({ list: [] as Array<{ id: number; name: string }> }))
+vi.mock('@/hooks/useAreas', () => ({ useAreasQuery: () => ({ data: { data: areaState.list } }) }))
 vi.mock('@/hooks/useProjects', () => ({
   useProjectsQuery: vi.fn(),
   useChangeTaskProject: vi.fn(),
@@ -1344,6 +1346,29 @@ describe('TaskDetailPage', () => {
   })
 
   describe('project', () => {
+    it('groups both the quick select and the edit form by area, keeping an archived current project', () => {
+      areaState.list = [{ id: 7, name: 'Work' }]
+      vi.mocked(useProjectsQuery).mockReturnValue({
+        data: { data: [projects[0], { ...projects[1], areaId: 7 }, { ...projects[2], areaId: 7 }] },
+        isSuccess: true,
+      } as never)
+      mockTask({ projectId: 3, projectName: 'Old' })
+      const groups = () =>
+        Array.from(screen.getByRole('combobox', { name: /project/i }).querySelectorAll('optgroup'), g => [
+          g.label,
+          ...Array.from(g.children, o => o.textContent),
+        ])
+      const expected = [
+        ['Work', 'Beta', 'Old (archived)'],
+        ['No area', 'Alpha'],
+      ]
+      renderPage()
+      expect(groups()).toEqual(expected)
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      expect(groups()).toEqual(expected)
+      areaState.list = []
+    })
+
     it('shows the project name of the task', () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
       renderPage()

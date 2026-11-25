@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import userEvent from '@testing-library/user-event'
 import type { PrefsContextValue } from '@/context/PrefsContextDef'
 
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/context/usePrefs', () => ({
   usePrefs: vi.fn(),
 }))
@@ -155,6 +156,12 @@ describe('SettingsDrawer', () => {
       await userEvent.keyboard('{Escape}')
       expect(screen.getByRole('button', { name: 'Hamburger' })).toHaveFocus()
     })
+  })
+
+  it('places Areas between Tasks and Appearance', () => {
+    renderDrawer(true)
+    const titles = screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent)
+    expect(titles).toEqual(['Journal', 'Tasks', 'Areas', 'Appearance'])
   })
 
   it('does not have is-open class when closed', () => {

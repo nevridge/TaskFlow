@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { TasksPage } from './TasksPage'
 import { TaskDetailPage } from './TaskDetailPage'
 
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/hooks/useTasks', () => ({
   useTaskQuery: vi.fn(),
   useTasksQuery: vi.fn(),

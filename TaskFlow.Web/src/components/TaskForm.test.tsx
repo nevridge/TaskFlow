@@ -915,3 +915,31 @@ describe('TaskForm parent picker', () => {
     })
   })
 })
+
+describe('TaskForm project picker grouped by area', () => {
+  const areas = [
+    { id: 2, name: 'Work' },
+    { id: 1, name: 'Home' },
+  ]
+  const projects = [
+    { id: 1, name: 'Zed', isArchived: false, areaId: 2 },
+    { id: 2, name: 'Abe', isArchived: false, areaId: 2 },
+    { id: 3, name: 'Garden', isArchived: false, areaId: 1 },
+    { id: 4, name: 'Loose', isArchived: false },
+  ]
+
+  it('renders one optgroup per area with "No project" outside them', () => {
+    render(<TaskForm projects={projects} areas={areas} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+    const select = screen.getByLabelText('Project')
+    expect(Array.from(select.querySelectorAll('optgroup'), g => g.label)).toEqual(['Work', 'Home', 'No area'])
+    expect(Array.from(select.querySelectorAll('option'), o => o.textContent)).toEqual([
+      'No project', 'Abe', 'Zed', 'Garden', 'Loose',
+    ])
+    expect(select.firstElementChild).toHaveTextContent('No project')
+  })
+
+  it('stays flat without areas', () => {
+    render(<TaskForm projects={projects} onSubmit={vi.fn()} onCancel={vi.fn()} />)
+    expect(screen.getByLabelText('Project').querySelector('optgroup')).toBeNull()
+  })
+})

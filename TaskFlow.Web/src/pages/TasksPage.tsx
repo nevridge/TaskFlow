@@ -12,6 +12,9 @@ import {
   type UpdateTaskPayload,
 } from '@/hooks/useTasks'
 import { useProjectsQuery } from '@/hooks/useProjects'
+import { useAreasQuery } from '@/hooks/useAreas'
+import { groupProjectOptions } from '@/lib/project-options'
+import { ProjectOptionElements } from '@/components/ProjectOptionElements'
 import { useDeleteTaskUndoable } from '@/hooks/useDeleteTaskUndoable'
 import { getErrorCode, getTaskMutationErrorMessage } from '@/lib/task-errors'
 import { normalizeProjectId, PROJECT_CREATE_NOT_FOUND_MESSAGE } from '@/lib/project-errors'
@@ -137,6 +140,7 @@ export function TasksPage() {
   const setProjectFilter = (project: ProjectFilter) => writeFilters({ ...filters, project })
   const [createProjectInvalid, setCreateProjectInvalid] = useState(false)
   const projectsQuery = useProjectsQuery()
+  const areas = useAreasQuery().data?.data ?? []
   // Local text keeps typing instant; the URL is written from the debounce below.
   const [searchQuery, setSearchQuery] = useState(initialFilters.search)
   const [debouncedSearch, setDebouncedSearch] = useState(initialFilters.search)
@@ -268,7 +272,7 @@ export function TasksPage() {
   const projects: ProjectOption[] = useMemo(
     () =>
       [...(projectsQuery.data?.data ?? [])]
-        .map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived }))
+        .map(p => ({ id: Number(p.id), name: p.name, isArchived: !!p.isArchived, areaId: p.areaId ?? null }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [projectsQuery.data],
   )
@@ -689,6 +693,7 @@ export function TasksPage() {
             <TaskForm
               availableParents={parentOptions}
               projects={projects}
+              areas={areas}
               // Preselect the filtered project when creating a task.
               defaultProjectId={typeof projectFilter === 'number' ? projectFilter : null}
               projectInvalid={createProjectInvalid}
@@ -792,9 +797,16 @@ export function TasksPage() {
             >
               <option value="all">All projects</option>
               <option value="none">No project</option>
-              {filterProjects.map(p => (
-                <option key={p.id} value={String(p.id)}>{p.isArchived ? `${p.name} (archived)` : p.name}</option>
-              ))}
+              <ProjectOptionElements
+                groups={groupProjectOptions(
+                  filterProjects.map(p => ({
+                    value: String(p.id),
+                    label: p.isArchived ? `${p.name} (archived)` : p.name,
+                  })),
+                  filterProjects,
+                  areas,
+                )}
+              />
             </select>
           </span>
           </div>

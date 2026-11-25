@@ -9,6 +9,7 @@ import { taskKeys } from '@/hooks/useTasks'
 import { TasksPage } from './TasksPage'
 
 // Gap tests for #479 (AC4 subtask, AC6 gates, AC11 history, parent in two sections, accessible names).
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/api/client/sdk.gen', () => ({
   getApiV1TaskItems: vi.fn(),
   postApiV1TaskItems: vi.fn(),

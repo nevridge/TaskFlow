@@ -20,7 +20,7 @@ public class ContractsProjectTests
     public void ErrorCodes_AreDefinedAsConstStrings_NotAnEnum()
     {
         Assert.True(typeof(ErrorCodes).IsAbstract && typeof(ErrorCodes).IsSealed, "ErrorCodes must be a static class");
-        Assert.Equal(19, typeof(ErrorCodes).GetFields().Count(f => f.IsLiteral && f.FieldType == typeof(string)));
+        Assert.Equal(22, typeof(ErrorCodes).GetFields().Count(f => f.IsLiteral && f.FieldType == typeof(string)));
     }
 
     [Fact]
@@ -37,5 +37,16 @@ public class ContractsProjectTests
         Assert.Equal(2, (int)Priority.High);
         Assert.Equal(5, Enum.GetValues<Status>().Length);
         Assert.Equal(3, Enum.GetValues<Priority>().Length);
+    }
+
+    [Fact]
+    public void GoalStatus_KeepsItsStoredIntValues()
+    {
+        Assert.Equal(0, (int)GoalStatus.Next);
+        Assert.Equal(1, (int)GoalStatus.Now);
+        Assert.Equal(2, (int)GoalStatus.Parked);
+        Assert.Equal(3, (int)GoalStatus.Done);
+        Assert.Equal(4, (int)GoalStatus.Dropped);
+        Assert.Equal(5, Enum.GetValues<GoalStatus>().Length);
     }
 }

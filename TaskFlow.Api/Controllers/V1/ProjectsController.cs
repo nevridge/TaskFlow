@@ -67,6 +67,8 @@ public class ProjectsController(
             ParentTaskItemId = t.ParentTaskItemId,
             ProjectId = t.ProjectId,
             ProjectName = t.Project?.Name,
+            GoalId = t.GoalId,
+            GoalTitle = t.Goal?.Title,
             CurrentJournalEntryId = t.CurrentJournalEntryId,
             FirstTaggedDate = t.FirstTaggedDate,
             MoveCount = t.MoveCount,

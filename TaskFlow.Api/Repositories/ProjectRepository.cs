@@ -37,6 +37,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         await _context.TaskItems
             .AsNoTracking()
             .Include(t => t.Project)
+            .Include(t => t.Goal)
             .Where(t => t.ProjectId == projectId)
             .ToListAsync();
 
@@ -98,6 +99,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         var previousName = task.Project?.Name;
         task.ProjectId = projectId;
         task.Project = project;
+        await ResetGoalsAfterMoveAsync(task);
 
         _context.TaskItemEvents.Add(new TaskItemEvent
         {
@@ -126,6 +128,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         var previousName = task.Project?.Name;
         task.ProjectId = null;
         task.Project = null;
+        await ResetGoalsAfterMoveAsync(task);
 
         _context.TaskItemEvents.Add(new TaskItemEvent
         {
@@ -137,5 +140,24 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
 
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// A goal belongs to one project, so a move clears the task's goal and its subtasks' goals. A moved subtask that
+    /// lands in its parent goal's project takes that goal again. The caller saves.
+    /// </summary>
+    private async Task ResetGoalsAfterMoveAsync(TaskItem task)
+    {
+        task.GoalId = task.ParentTaskItemId is int parentId && task.ProjectId is int projectId
+            ? await TaskRepository.InheritedGoalIdAsync(_context, parentId, projectId)
+            : null;
+
+        var subtasks = await _context.TaskItems
+            .Where(t => t.ParentTaskItemId == task.Id && t.GoalId != null)
+            .ToListAsync();
+        foreach (var subtask in subtasks)
+        {
+            subtask.GoalId = null;
+        }
     }
 }

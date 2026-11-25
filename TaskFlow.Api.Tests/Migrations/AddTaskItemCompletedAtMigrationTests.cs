@@ -219,9 +219,10 @@ public class AddTaskItemCompletedAtMigrationTests : IDisposable
 
         Assert.Equal("2026-06-03 10:00:00.1234567", CompletedAtOf(1));
         using var verify = new TaskDbContext(new DbContextOptionsBuilder<TaskDbContext>().UseSqlite(_connection).Options);
-        var task = verify.TaskItems.AsNoTracking().Single(t => t.Id == 1);
-        Assert.Equal(new DateTime(2026, 6, 3, 10, 0, 0, DateTimeKind.Utc).AddTicks(1234567), task.CompletedAt);
-        Assert.Equal(DateTimeKind.Utc, task.CompletedAt!.Value.Kind);
+        // Only CompletedAt is selected: the database stops at this migration, so later TaskItem columns do not exist.
+        var completedAt = verify.TaskItems.Where(t => t.Id == 1).Select(t => t.CompletedAt).Single();
+        Assert.Equal(new DateTime(2026, 6, 3, 10, 0, 0, DateTimeKind.Utc).AddTicks(1234567), completedAt);
+        Assert.Equal(DateTimeKind.Utc, completedAt!.Value.Kind);
     }
 
     [Fact]

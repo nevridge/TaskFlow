@@ -59,4 +59,13 @@ public static class ErrorCodes
 
     /// <summary>Returned when a task with open subtasks is planned onto a day.</summary>
     public const string PlanHasOpenSubtasks = "TASK_PLAN_HAS_OPEN_SUBTASKS";
+
+    /// <summary>Returned when a task in a Next or Parked goal would be started or completed while its project has a Now goal.</summary>
+    public const string TaskGoalNotNow = "TASK_GOAL_NOT_NOW";
+
+    /// <summary>Returned when the Now goal would be moved back to Next or Parked while it has tasks in progress.</summary>
+    public const string GoalNowHasInProgressTasks = "GOAL_NOW_HAS_INPROGRESS_TASKS";
+
+    /// <summary>Returned when a goal with open tasks would be set to Done or Dropped.</summary>
+    public const string GoalHasOpenTasks = "GOAL_HAS_OPEN_TASKS";
 }

@@ -114,6 +114,8 @@ public class JournalTodosController(
             ParentTaskItemId = task.ParentTaskItemId,
             ProjectId = task.ProjectId,
             ProjectName = task.Project?.Name,
+            GoalId = task.GoalId,
+            GoalTitle = task.Goal?.Title,
             CurrentJournalEntryId = task.CurrentJournalEntryId,
             FirstTaggedDate = task.FirstTaggedDate,
             MoveCount = task.MoveCount,

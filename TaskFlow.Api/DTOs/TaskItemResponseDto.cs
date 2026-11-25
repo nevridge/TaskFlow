@@ -13,6 +13,10 @@ public class TaskItemResponseDto
     public int? ParentTaskItemId { get; set; }
     public int? ProjectId { get; set; }
     public string? ProjectName { get; set; }
+
+    /// <summary>Read-only: changed through the goal endpoints, or taken from a new parent.</summary>
+    public int? GoalId { get; set; }
+    public string? GoalTitle { get; set; }
     public int? CurrentJournalEntryId { get; set; }
     public DateOnly? FirstTaggedDate { get; set; }
     public DateOnly? LastMovedDate { get; set; }

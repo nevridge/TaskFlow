@@ -176,8 +176,14 @@ public class TaskItemsController(
             });
         }
 
+        // A new task's goal comes only from its parent.
+        var goalId = createDto.ParentTaskItemId is int goalParentId && createDto.ProjectId is int goalProjectId
+            ? await _repo.GetInheritedGoalIdAsync(goalParentId, goalProjectId)
+            : null;
+
         var item = new TaskItem
         {
+            GoalId = goalId,
             Title = createDto.Title,
             Description = createDto.Description,
             Status = createDto.Status,
@@ -192,6 +198,14 @@ public class TaskItemsController(
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
+        }
+
+        // Before AddAsync, so a refusal saves nothing, the journal link included.
+        if (goalId is int newGoalId &&
+            item.Status is Status.InProgress or Status.Completed &&
+            await _repo.GetBlockingNowGoalAsync(newGoalId) is { } blockingGoal)
+        {
+            return UnprocessableEntity(GoalRuleErrors.TaskGoalNotNow(null, newGoalId, blockingGoal));
         }
 
         var createdItem = await _repo.AddAsync(item);
@@ -240,6 +254,12 @@ public class TaskItemsController(
     /// <c>TASK_BLOCK_DRAFT_NOT_ALLOWED</c>, <c>TASK_BLOCK_COMPLETED_NOT_ALLOWED</c>,
     /// <c>TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS</c>, <c>TASK_START_NOT_ALLOWED</c>,
     /// <c>TASK_CREATION_PAST_DAY_NOT_ALLOWED</c>.</item>
+    /// <item><c>TASK_GOAL_NOT_NOW</c>: while the project has a Now goal, a task whose resulting goal is Next or Parked
+    /// cannot be changed to InProgress or Completed, and cannot take that goal from a new parent while InProgress.
+    /// Re-sending the stored status is accepted. Checked after the other rules. <c>details</c> holds
+    /// <c>taskItemId</c>, <c>goalId</c>, <c>nowGoalId</c> and <c>nowGoalTitle</c>. Nothing is saved. Exception:
+    /// <c>status=todo</c> on a Blocked task is not refused; it unblocks to Todo, not InProgress, when this rule forbids
+    /// InProgress.</item>
     /// </list>
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
@@ -292,7 +312,10 @@ public class TaskItemsController(
     /// have its status changed directly; re-sending the stored status is accepted), and
     /// <c>TASK_PARENT_COMPLETED_NOT_ALLOWED</c> (a task whose resulting status is not Completed cannot be moved under a
     /// Completed parent, and a Completed task cannot be reopened while its resulting direct parent is Completed;
-    /// completing it in the same request, or an open task re-sending its current parent, is accepted).
+    /// completing it in the same request, or an open task re-sending its current parent, is accepted), and
+    /// <c>TASK_GOAL_NOT_NOW</c> (a task in a Next or Parked goal cannot be started or completed while the project has a
+    /// Now goal). <c>status=todo</c> on a Blocked task is not refused by that rule: it unblocks to Todo, not InProgress,
+    /// when the rule forbids InProgress.
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
@@ -505,7 +528,44 @@ public class TaskItemsController(
             }
         }
 
+        // A new parent hands its goal down; detaching or re-sending the stored parent keeps the task's goal.
+        var resultingGoalId = existing.GoalId;
+        if (changes.HasParent &&
+            changes.ParentTaskItemId is int goalParentId &&
+            goalParentId != existing.ParentTaskItemId)
+        {
+            resultingGoalId = existing.ProjectId is int goalProjectId
+                ? await _repo.GetInheritedGoalIdAsync(goalParentId, goalProjectId)
+                : null;
+        }
+
+        var goalChanged = resultingGoalId != existing.GoalId;
+
+        // Single-Now rule, checked after the other rules so their codes keep precedence. Only a change is judged, so
+        // field edits that re-send a stored InProgress or Completed status pass.
+        var startsOrCompletes = nextStatus != existing.Status && nextStatus is Status.InProgress or Status.Completed;
+        if (resultingGoalId is int ruleGoalId &&
+            (startsOrCompletes || (goalChanged && nextStatus == Status.InProgress)) &&
+            await _repo.GetBlockingNowGoalAsync(ruleGoalId) is { } blockingGoal)
+        {
+            // An unblock that would restore InProgress is not refused; the task lands on Todo instead.
+            var restoresInProgress = existing.Status == Status.Blocked &&
+                changes.Status == Status.Todo &&
+                nextStatus == Status.InProgress;
+            if (!restoresInProgress)
+            {
+                return UnprocessableEntity(GoalRuleErrors.TaskGoalNotNow(id, ruleGoalId, blockingGoal));
+            }
+
+            nextStatus = Status.Todo;
+        }
+
         // Apply incoming changes
+        if (goalChanged)
+        {
+            await _repo.SetGoalAsync(existing, resultingGoalId);
+        }
+
         if (changes.HasTitle)
         {
             existing.Title = changes.Title;
@@ -707,6 +767,12 @@ public class TaskItemsController(
             return;
         }
 
+        // The child's change stands; the parent just stays open when the single-Now rule forbids completing it.
+        if (parent.GoalId is int goalId && await _repo.GetBlockingNowGoalAsync(goalId) is not null)
+        {
+            return;
+        }
+
         parent.Status = Status.Completed;
 
         var validationResult = await _validator.ValidateAsync(parent);
@@ -865,6 +931,8 @@ public class TaskItemsController(
             ParentTaskItemId = item.ParentTaskItemId,
             ProjectId = item.ProjectId,
             ProjectName = item.Project?.Name,
+            GoalId = item.GoalId,
+            GoalTitle = item.Goal?.Title,
             CurrentJournalEntryId = item.CurrentJournalEntryId,
             FirstTaggedDate = item.FirstTaggedDate,
             LastMovedDate = lastMovedDate,

@@ -208,6 +208,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         var candidates = await _context.TaskItems
             .AsNoTracking()
             .Include(t => t.Project)
+            .Include(t => t.Goal)
             .Include(t => t.CurrentJournalEntry)
             .Include(t => t.ParentTaskItem)
             .Include(t => t.ChildTaskItems)

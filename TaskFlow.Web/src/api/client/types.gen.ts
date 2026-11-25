@@ -21,6 +21,10 @@ export type AreaResponseDto = {
     projectCount?: number | string;
 };
 
+export type AssignGoalTaskDto = {
+    taskItemId?: number | string;
+};
+
 export type AssignProjectTaskDto = {
     taskItemId?: number | string;
 };
@@ -39,6 +43,14 @@ export type CarryForwardResponseDto = {
 
 export type CreateAreaDto = {
     name?: string;
+};
+
+export type CreateGoalDto = {
+    projectId?: number | string;
+    title?: string;
+    description?: null | string;
+    doneWhen?: null | string;
+    status?: null | GoalStatus;
 };
 
 export type CreateJournalEntryDto = {
@@ -88,6 +100,28 @@ export type CreateTaskItemDto = {
      */
     timezoneOffsetMinutes?: null | number | string;
 };
+
+export type GoalResponseDto = {
+    id?: number | string;
+    projectId?: number | string;
+    title: string;
+    description?: null | string;
+    doneWhen?: null | string;
+    status: string;
+    parkedReason?: null | string;
+    displayOrder?: number | string;
+    statusChangedAt?: string;
+    closedAt?: null | string;
+    createdAt?: string;
+    updatedAt?: null | string;
+    /**
+     * Tasks of the goal that are not Completed, subtasks included.
+     */
+    openTaskCount?: number | string;
+    doneTaskCount?: number | string;
+};
+
+export type GoalStatus = 'next' | 'now' | 'parked' | 'done' | 'dropped';
 
 export type JournalEntryResponseDto = {
     id?: number | string;
@@ -197,6 +231,14 @@ export type ReorderAreasDto = {
     areaIds?: Array<number | string>;
 };
 
+export type ReorderGoalsDto = {
+    projectId?: number | string;
+    /**
+     * Every Next goal of the project exactly once, in the wanted display order.
+     */
+    goalIds?: Array<number | string>;
+};
+
 export type Status = 'draft' | 'todo' | 'completed' | 'blocked' | 'inProgress';
 
 export type TaskItemEventResponseDto = {
@@ -221,6 +263,11 @@ export type TaskItemResponseDto = {
     parentTaskItemId?: null | number | string;
     projectId?: null | number | string;
     projectName?: null | string;
+    /**
+     * Read-only: changed through the goal endpoints, or taken from a new parent.
+     */
+    goalId?: null | number | string;
+    goalTitle?: null | string;
     currentJournalEntryId?: null | number | string;
     firstTaggedDate?: null | string;
     lastMovedDate?: null | string;
@@ -271,6 +318,20 @@ export type TaskRuleErrorResponseDto = {
 
 export type UpdateAreaDto = {
     name?: string;
+};
+
+/**
+ * Full replacement of a goal's editable fields. A goal's project cannot be changed.
+ */
+export type UpdateGoalDto = {
+    title?: string;
+    description?: null | string;
+    doneWhen?: null | string;
+    status?: null | GoalStatus;
+    /**
+     * Required when `status` is Parked, ignored otherwise.
+     */
+    parkedReason?: null | string;
 };
 
 export type UpdateJournalEntryDto = {
@@ -449,6 +510,189 @@ export type PutApiV1AreasOrderResponses = {
 };
 
 export type PutApiV1AreasOrderResponse = PutApiV1AreasOrderResponses[keyof PutApiV1AreasOrderResponses];
+
+export type GetApiV1GoalsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        projectId?: number | string;
+        status?: 'Next' | 'Now' | 'Parked' | 'Done' | 'Dropped';
+    };
+    url: '/api/v1/Goals';
+};
+
+export type GetApiV1GoalsResponses = {
+    /**
+     * OK
+     */
+    200: Array<GoalResponseDto>;
+};
+
+export type GetApiV1GoalsResponse = GetApiV1GoalsResponses[keyof GetApiV1GoalsResponses];
+
+export type PostApiV1GoalsData = {
+    body: CreateGoalDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/Goals';
+};
+
+export type PostApiV1GoalsResponses = {
+    /**
+     * OK
+     */
+    200: GoalResponseDto;
+};
+
+export type PostApiV1GoalsResponse = PostApiV1GoalsResponses[keyof PostApiV1GoalsResponses];
+
+export type DeleteApiV1GoalsByIdData = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}';
+};
+
+export type DeleteApiV1GoalsByIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type GetGoalV1Data = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}';
+};
+
+export type GetGoalV1Responses = {
+    /**
+     * OK
+     */
+    200: GoalResponseDto;
+};
+
+export type GetGoalV1Response = GetGoalV1Responses[keyof GetGoalV1Responses];
+
+export type PutApiV1GoalsByIdData = {
+    body: UpdateGoalDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}';
+};
+
+export type PutApiV1GoalsByIdErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: TaskRuleErrorResponseDto;
+};
+
+export type PutApiV1GoalsByIdError = PutApiV1GoalsByIdErrors[keyof PutApiV1GoalsByIdErrors];
+
+export type PutApiV1GoalsByIdResponses = {
+    /**
+     * OK
+     */
+    200: GoalResponseDto;
+};
+
+export type PutApiV1GoalsByIdResponse = PutApiV1GoalsByIdResponses[keyof PutApiV1GoalsByIdResponses];
+
+export type PutApiV1GoalsOrderData = {
+    body: ReorderGoalsDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/Goals/order';
+};
+
+export type PutApiV1GoalsOrderResponses = {
+    /**
+     * OK
+     */
+    200: Array<GoalResponseDto>;
+};
+
+export type PutApiV1GoalsOrderResponse = PutApiV1GoalsOrderResponses[keyof PutApiV1GoalsOrderResponses];
+
+export type PostApiV1GoalsByIdSwapNowData = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}/swap-now';
+};
+
+export type PostApiV1GoalsByIdSwapNowErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: TaskRuleErrorResponseDto;
+};
+
+export type PostApiV1GoalsByIdSwapNowError = PostApiV1GoalsByIdSwapNowErrors[keyof PostApiV1GoalsByIdSwapNowErrors];
+
+export type PostApiV1GoalsByIdSwapNowResponses = {
+    /**
+     * OK
+     */
+    200: GoalResponseDto;
+};
+
+export type PostApiV1GoalsByIdSwapNowResponse = PostApiV1GoalsByIdSwapNowResponses[keyof PostApiV1GoalsByIdSwapNowResponses];
+
+export type PostApiV1GoalsByIdTasksData = {
+    body: AssignGoalTaskDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}/tasks';
+};
+
+export type PostApiV1GoalsByIdTasksErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: TaskRuleErrorResponseDto;
+};
+
+export type PostApiV1GoalsByIdTasksError = PostApiV1GoalsByIdTasksErrors[keyof PostApiV1GoalsByIdTasksErrors];
+
+export type PostApiV1GoalsByIdTasksResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type PostApiV1GoalsByIdTasksResponse = PostApiV1GoalsByIdTasksResponses[keyof PostApiV1GoalsByIdTasksResponses];
+
+export type DeleteApiV1GoalsByIdTasksByTaskItemIdData = {
+    body?: never;
+    path: {
+        id: number | string;
+        taskItemId: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Goals/{id}/tasks/{taskItemId}';
+};
+
+export type DeleteApiV1GoalsByIdTasksByTaskItemIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
 
 export type GetApiV1JournalEntriesData = {
     body?: never;

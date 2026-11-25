@@ -9,6 +9,7 @@ import { makeProviders } from '@/test/renderWithToast'
 import { TasksPage } from './TasksPage'
 
 // Real hooks and QueryClient; only the network layer is mocked (same shape as TasksPage.delete.test).
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/api/client/sdk.gen', () => ({
   getApiV1TaskItems: vi.fn(),
   postApiV1TaskItems: vi.fn(),

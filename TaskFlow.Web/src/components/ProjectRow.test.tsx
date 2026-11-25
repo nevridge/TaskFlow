@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { ProjectRow } from './ProjectRow'
 import type { ProjectResponseDto } from '@/api/projects'
 
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
+
 const project: ProjectResponseDto = {
   id: 3,
   name: 'Alpha',
@@ -68,7 +70,7 @@ describe('ProjectRow', () => {
     await user.clear(name)
     await user.type(name, 'Beta')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    expect(onSave).toHaveBeenCalledWith(project, { name: 'Beta', description: 'About alpha' })
+    expect(onSave).toHaveBeenCalledWith(project, { name: 'Beta', description: 'About alpha', areaId: null })
     expect(await screen.findByRole('link', { name: 'Alpha' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
   })

@@ -9,6 +9,7 @@ import { __resetCoarsePointerCache } from '@/lib/pointer'
 import { TasksPage } from './TasksPage'
 
 // Real PrefsProvider and real hooks except the API-backed ones.
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/hooks/useTasks', () => ({
   useTasksQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),

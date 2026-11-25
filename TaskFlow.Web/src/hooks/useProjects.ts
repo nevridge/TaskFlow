@@ -13,6 +13,7 @@ import {
 import type { CreateProjectDto, ProjectTaskDto, UpdateProjectDto } from '@/api/projects'
 import { taskKeys } from '@/hooks/useTasks'
 import { projectKeys } from '@/hooks/projectKeys'
+import { areaKeys } from '@/hooks/areaKeys'
 import { filterPending, usePendingDeleteIds } from '@/hooks/useUndoableDelete'
 
 // Re-exported so existing imports from '@/hooks/useProjects' keep working.
@@ -68,11 +69,18 @@ export function useProjectTasksQuery(id: number) {
   })
 }
 
+// Areas carry project counts, so project mutations invalidate them too. Create and update also do so on
+// failure: an "Area not found." rejection means the cached area list is stale.
 export function useCreateProjectMutation() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (data: CreateProjectDto) => createProject(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: projectKeys.all }),
+        qc.invalidateQueries({ queryKey: areaKeys.all }),
+      ]),
+    onError: () => qc.invalidateQueries({ queryKey: areaKeys.all }),
   })
 }
 
@@ -84,7 +92,9 @@ export function useUpdateProjectMutation() {
       Promise.all([
         qc.invalidateQueries({ queryKey: projectKeys.all }),
         qc.invalidateQueries({ queryKey: projectKeys.detail(id) }),
+        qc.invalidateQueries({ queryKey: areaKeys.all }),
       ]),
+    onError: () => qc.invalidateQueries({ queryKey: areaKeys.all }),
   })
 }
 
@@ -98,6 +108,7 @@ export function useDeleteProjectMutation() {
       qc.removeQueries({ queryKey: projectKeys.detail(id) })
       qc.removeQueries({ queryKey: projectKeys.tasks(id) })
       qc.invalidateQueries({ queryKey: taskKeys.all })
+      qc.invalidateQueries({ queryKey: areaKeys.all })
     },
   })
 }

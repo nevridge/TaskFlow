@@ -5,6 +5,11 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { ProjectDetailPage } from './ProjectDetailPage'
 import type { ProjectResponseDto, ProjectTaskDto } from '@/api/projects'
 
+// The project's area must exist in the list, or the form would (rightly) save "No area".
+vi.mock('@/hooks/useAreas', () => ({
+  useAreasQuery: () => ({ data: { data: [{ id: 5, name: 'Work', displayOrder: 0, projectCount: 1 }] } }),
+  useCreateAreaMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}))
 vi.mock('@/hooks/useProjects', () => ({
   useProjectQuery: vi.fn(),
   useProjectTasksQuery: vi.fn(),
@@ -201,6 +206,19 @@ describe('ProjectDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1, name: 'Alpha' })).toBeInTheDocument()
+  })
+
+  it('saves the area chosen in the form, not the one the project had', async () => {
+    const user = userEvent.setup()
+    renderAt('/projects/7')
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    expect(screen.getByRole('combobox', { name: 'Area' })).toHaveDisplayValue('Work')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Area' }), 'No area')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(updateAsync).toHaveBeenCalledWith({
+      id: 7,
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: false, areaId: null },
+    })
   })
 
   it('editing an archived project preserves isArchived true', async () => {

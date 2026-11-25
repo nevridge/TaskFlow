@@ -110,6 +110,8 @@ export function ProjectDetailPage() {
               <ProjectForm
                 initialName={project.name}
                 initialDescription={project.description}
+                initialAreaId={project.areaId ?? null}
+                initialAreaName={project.areaName}
                 submitLabel="Save"
                 errorFallback="Could not save project."
                 autoFocusName
@@ -120,7 +122,7 @@ export function ProjectDetailPage() {
                       name: values.name,
                       description: values.description,
                       isArchived: project.isArchived,
-                      areaId: project.areaId ?? null,
+                      areaId: values.areaId,
                     },
                   })
                   setEditing(false)

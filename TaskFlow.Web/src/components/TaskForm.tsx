@@ -4,7 +4,8 @@ import { normalizeProjectId } from '@/lib/project-errors'
 import { BLOCK_REASON_MAX_LENGTH } from '@/components/BlockControls'
 import { isCompleted, normalizeStatus, toRequestStatus, type RequestStatus } from '@/lib/task-status'
 import { todayISO } from '@/lib/journal-utils'
-import { buildProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { buildProjectOptions, groupProjectOptions, type ProjectOption } from '@/lib/project-options'
+import { ProjectOptionElements } from '@/components/ProjectOptionElements'
 import {
   COMPLETED_PARENT_STATUS_HINT,
   isParentOptionDisabled,
@@ -38,6 +39,8 @@ interface Props {
   availableParents?: ParentTaskOption[]
   /** All projects (archived included); the form filters archived ones itself. Parents fetch, the form does not. */
   projects?: ProjectOption[]
+  /** Areas in display order; they group the project select. Empty = flat list. */
+  areas?: ReadonlyArray<{ id: number; name: string }>
   /** Preselected project for a new task. Ignored when editing or when the project is archived/unknown. */
   defaultProjectId?: number | null
   /** Marks the Project select invalid and focuses it (e.g. after a 422/404). */
@@ -62,6 +65,7 @@ export function TaskForm({
   task,
   availableParents = [],
   projects = [],
+  areas = [],
   defaultProjectId,
   projectInvalid = false,
   onProjectChange,
@@ -296,9 +300,7 @@ export function TaskForm({
           onChange={e => { setProjectId(e.target.value); onProjectChange?.() }}
         >
           <option value="">No project</option>
-          {projectOptions.map(opt => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
+          <ProjectOptionElements groups={groupProjectOptions(projectOptions, projects, areas)} />
         </select>
       </div>
       <div className="t-field">

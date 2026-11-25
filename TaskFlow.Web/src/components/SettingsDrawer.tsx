@@ -1,4 +1,5 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { AreasSection } from '@/components/AreasSection'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { usePrefs } from '@/context/usePrefs'
 import type { SortMode, HeaderStyle } from '@/lib/prefs'
@@ -30,15 +31,25 @@ export function SettingsDrawer({ open, onClose, returnFocusRef }: SettingsDrawer
   } = usePrefs()
   const drawerRef = useRef<HTMLDivElement>(null)
 
+  // While the delete-area dialog is open it owns Tab and Escape. The ref keeps the Escape listener stable.
+  const [areaDialogOpen, setAreaDialogOpen] = useState(false)
+  const areaDialogOpenRef = useRef(false)
+  const handleAreaDialogChange = useCallback((dialogOpen: boolean) => {
+    areaDialogOpenRef.current = dialogOpen
+    setAreaDialogOpen(dialogOpen)
+  }, [])
+
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !areaDialogOpenRef.current) onClose()
+    }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [open, onClose])
 
   // Must precede the focus effect below so the opener is captured before the drawer takes focus.
-  useFocusTrap(drawerRef, open, { fallbackRef: returnFocusRef })
+  useFocusTrap(drawerRef, open, { fallbackRef: returnFocusRef, paused: areaDialogOpen })
 
   useEffect(() => {
     if (open) drawerRef.current?.focus()
@@ -130,6 +141,8 @@ export function SettingsDrawer({ open, onClose, returnFocusRef }: SettingsDrawer
               </button>
             </DrawerRow>
           </section>
+
+          <AreasSection open={open} onDialogOpenChange={handleAreaDialogChange} />
 
           <section className="settings-section">
             <h3 className="settings-section-title">Appearance</h3>

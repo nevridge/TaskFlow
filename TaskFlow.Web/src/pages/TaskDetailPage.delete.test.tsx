@@ -9,6 +9,7 @@ import { TaskDetailPage } from './TaskDetailPage'
 import { TasksPage } from './TasksPage'
 
 // Real ToastProvider, hooks and routing. Only the network layer is mocked.
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/api/client/sdk.gen', () => ({
   getApiV1TaskItems: vi.fn(),
   postApiV1TaskItems: vi.fn(),

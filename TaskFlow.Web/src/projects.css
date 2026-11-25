@@ -284,6 +284,62 @@
   margin: 4px 0 0;
 }
 
+/* ─── Area select and inline new-area field ───────────────────────────────── */
+
+.projects-page .p-select {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+}
+
+.projects-page .p-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.projects-page .p-new-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-page .p-new-area > .p-input {
+  flex: 1 1 180px;
+  width: auto;
+  min-width: 0;
+}
+
+/* ─── Area groups ─────────────────────────────────────────────────────────── */
+
+/* With the list's 10px gap this gives 24px above each group but the first. */
+.projects-page .p-group-heading {
+  margin-top: 14px;
+}
+
+.projects-page .p-group-heading:first-child {
+  margin-top: 0;
+}
+
+.projects-page .p-group-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.projects-page .p-group-title--none {
+  color: var(--muted);
+}
+
+.projects-page .p-load-error {
+  margin-bottom: 12px;
+}
+
 /* ==== MOBILE (#320) ==== */
 /* Projects pages. Selectors are .projects-page .p-* (0-2-0) so they beat the 0-1-1 reset. Layout is keyed to
    width; 44px sizing and touch gaps live in the touch query. */

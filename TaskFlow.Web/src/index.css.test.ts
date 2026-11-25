@@ -311,7 +311,7 @@ describe('shared sheet primitive', () => {
   })
 
   it('leaves the 0-8-1 input font floor untouched and uses no !important in the sheet or editor styles', () => {
-    expect(css).toContain(':is(.journal-page, .tasks-page, .projects-page, .settings-drawer) :is(input, textarea, select)')
+    expect(css).toContain(':is(.journal-page, .tasks-page, .projects-page, .settings-drawer, .area-dialog) :is(input, textarea, select)')
     const added = css.slice(css.indexOf('/* ─── Sheet'))
     expect(added).not.toMatch(/!important/)
   })
@@ -415,5 +415,68 @@ describe('toast region', () => {
     expect(css.slice(toastsAt, sheetAt)).not.toMatch(/!important/)
     expect(css.slice(toastsAt, sheetAt)).not.toMatch(/\.journal-page/)
     expect(journalCss).not.toMatch(/\.toast/)
+  })
+})
+
+describe('areas styles', () => {
+  const section = css.slice(css.indexOf('/* ─── Areas'), css.indexOf('/* ─── Theme picker'))
+  const touch = media(section, TOUCH)
+  const rule = (selector: string) => body(touch.replace(/\n {2}/g, '\n'), selector)
+
+  // display:none or visibility:hidden would remove the handle from an attached keyboard's tab order.
+  it('hides the handle on touch only visually, and only while unfocused', () => {
+    const hidden = rule('.area-handle:not(:focus)')
+    expect(hidden).toMatch(/position:\s*absolute/)
+    expect(hidden).toMatch(/clip-path:\s*inset\(50%\)/)
+    expect(hidden).toMatch(/min-width:\s*0;[^}]*min-height:\s*0/)
+    expect(hidden).not.toMatch(/display:|visibility:/)
+    expect(touch).not.toMatch(/\.area-handle \{/)
+    expect(rule('.area-handle:focus')).toMatch(/outline:\s*2px solid var\(--accent\)/)
+  })
+
+  it('shows no drag wording on touch', () => {
+    expect(rule('.area-hint-drag')).toMatch(/display:\s*none/)
+    expect(rule('.area-hint-keys')).toMatch(/display:\s*inline/)
+    expect(rule('.area-hint')).toMatch(/clip-path:\s*inset\(50%\)/)
+    expect(section).toMatch(/\n\.area-hint-keys \{ display: none; \}/)
+  })
+
+  it('stacks the portalled dialog above the drawer', () => {
+    const z = (selector: string) => Number(/z-index:\s*(\d+)/.exec(body(css, selector))![1])
+    expect(z('.area-dialog-backdrop')).toBeGreaterThan(z('.settings-drawer'))
+    expect(z('.area-dialog')).toBeGreaterThan(z('.area-dialog-backdrop'))
+    expect(body(css, '.area-dialog')).toMatch(/overflow-y:\s*auto/)
+  })
+
+  it('uses tokens only, apart from the backdrop scrim', () => {
+    const literals = section.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/gi)
+    expect(literals).toEqual(['rgba(0, 0, 0, .35)'])
+  })
+
+  const projectsCss = read('./projects.css')
+  const projectsSection = projectsCss.slice(
+    projectsCss.indexOf('/* ─── Area select'),
+    projectsCss.indexOf('/* ==== MOBILE'),
+  )
+
+  it('uses no literal colours in the Area select and group heading styles', () => {
+    expect(projectsSection).toContain('.p-group-title')
+    expect(projectsSection).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|:\s*(white|black)\b/i)
+  })
+
+  // A misspelled token fails silently; the portalled dialog only sees tokens defined on the root.
+  it('references only tokens that index.css defines', () => {
+    const used = [...(section + projectsSection).matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1])
+    expect(used.length).toBeGreaterThan(0)
+    expect(used.filter(token => !new RegExp(`\\s${token}:`).test(css))).toEqual([])
+  })
+
+  // The generic hover rule has the same specificity, so the danger rule must come after it.
+  it('turns the trash button the danger colour on hover', () => {
+    const generic = section.indexOf('.area-icon-btn:hover:not(:disabled)')
+    const danger = section.indexOf('.area-icon-btn--danger:hover:not(:disabled)')
+    expect(generic).toBeGreaterThan(-1)
+    expect(danger).toBeGreaterThan(generic)
+    expect(section.slice(danger, section.indexOf('}', danger))).toMatch(/color:\s*var\(--danger-ink\)/)
   })
 })

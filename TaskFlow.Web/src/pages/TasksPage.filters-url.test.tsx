@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Link, MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { TasksPage } from './TasksPage'
 
+vi.mock('@/hooks/useAreas', () => import('@/test/areasMock'))
 vi.mock('@/hooks/useTasks', () => ({
   useTasksQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),

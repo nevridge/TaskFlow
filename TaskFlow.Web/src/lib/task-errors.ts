@@ -13,6 +13,16 @@ export function getErrorCode(error: unknown): string | null {
   return typeof maybeCode === 'string' ? maybeCode : null
 }
 
+/** Messages for the goal rules (#491), or null for any other code. Shared with the journal so wording cannot drift. */
+export function getGoalErrorMessage(code: string | null): string | null {
+  if (code === 'TASK_GOAL_NOT_NOW') {
+    return "This task's goal is not the current goal, so it can't be started or completed. Swap the goal to Now with the assistant first."
+  }
+  if (code === 'GOAL_NOW_HAS_INPROGRESS_TASKS') return 'The current goal has tasks in progress. Pause or block them first.'
+  if (code === 'GOAL_HAS_OPEN_TASKS') return 'This goal still has open tasks.'
+  return null
+}
+
 /** Shared by the Tasks list and the task detail page. The journal keeps its own getTaskActionErrorMessage. */
 export function getTaskMutationErrorMessage(error: unknown): string {
   const code = getErrorCode(error)
@@ -28,6 +38,8 @@ export function getTaskMutationErrorMessage(error: unknown): string {
   if (code === 'TASK_PLAN_COMPLETED_NOT_ALLOWED') return PLAN_COMPLETED_MESSAGE
   const blockMessage = getBlockErrorMessage(code)
   if (blockMessage) return blockMessage
+  const goalMessage = getGoalErrorMessage(code)
+  if (goalMessage) return goalMessage
   return 'Unable to save task changes. Please try again.'
 }
 

@@ -32,7 +32,7 @@ import { useUndoableDelete } from '@/hooks/useUndoableDelete'
 import { useCompletedCollapsed } from '@/hooks/useCompletedCollapsed'
 import { TodoBadges } from '@/components/journal/TodoBadges'
 import { journalOriginPath, readFocusTaskId, stateWithoutFocusTaskId, taskEditPath } from '@/lib/task-origin'
-import { getErrorCode, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
+import { getErrorCode, getGoalErrorMessage, PARENT_COMPLETED_MESSAGE } from '@/lib/task-errors'
 import {
   todayISO,
   formatMonthDay,
@@ -819,5 +819,7 @@ function getTaskActionErrorMessage(error: unknown): string {
   if (code === 'TASK_PARENT_STATUS_DERIVED') return "This task's status follows its subtasks. Change a subtask instead."
   const blockMessage = getBlockErrorMessage(code)
   if (blockMessage) return blockMessage
+  const goalMessage = getGoalErrorMessage(code)
+  if (goalMessage) return goalMessage
   return 'Unable to save task changes. Please try again.'
 }

@@ -50,6 +50,19 @@ describe('TASK_START_NOT_ALLOWED', () => {
   })
 })
 
+describe('goal rule codes (#491)', () => {
+  it.each([
+    [
+      'TASK_GOAL_NOT_NOW',
+      "This task's goal is not the current goal, so it can't be started or completed. Swap the goal to Now with the assistant first.",
+    ],
+    ['GOAL_NOW_HAS_INPROGRESS_TASKS', 'The current goal has tasks in progress. Pause or block them first.'],
+    ['GOAL_HAS_OPEN_TASKS', 'This goal still has open tasks.'],
+  ])('maps %s', (code, message) => {
+    expect(getTaskMutationErrorMessage({ code })).toBe(message)
+  })
+})
+
 describe('getTaskPlanSaveErrorMessage', () => {
   it.each([
     ['TASK_CREATION_PAST_DAY_NOT_ALLOWED', 'You cannot plan a task on a past journal day. Nothing was saved.'],

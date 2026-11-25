@@ -39,6 +39,9 @@ export type ProjectTaskDto = {
   parentTaskItemId?: number | null
   projectId?: number | null
   projectName?: string | null
+  /** The task's goal; both null when it has none. */
+  goalId?: number | null
+  goalTitle?: string | null
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' }

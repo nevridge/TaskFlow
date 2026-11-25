@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Goal refusals and Park reason</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.t-light{--bg:#f6f7f9;--paper:#ffffff;--paper-2:#fdfdfb;--ink:#0f172a;--ink-2:#334155;--muted:#64748b;--muted-2:#94a3b8;--line:#e2e8f0;--line-2:#cbd5e1;--accent:#2563eb;--accent-ink:#1d4ed8;--accent-soft:color-mix(in oklab,#2563eb 10%,white);--hover-soft:#eef2f7;--danger-bg:#fee2e2;--danger-ink:#b91c1c;--danger-solid:#b91c1c;--warn-ink:#a16207;--shadow-md:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06)}
+.t-dark{--bg:#0b1220;--paper:#131b2c;--paper-2:#161f33;--ink:#e8edf6;--ink-2:#c2cbdc;--muted:#8b97ad;--muted-2:#5b6781;--line:#1f2a40;--line-2:#2b3853;--accent:#2563eb;--accent-ink:#93b4fb;--accent-soft:color-mix(in oklab,#2563eb 22%,#131b2c);--hover-soft:#1a2438;--danger-bg:#3a1316;--danger-ink:#fca5a5;--danger-solid:#b91c1c;--warn-ink:#fcd34d;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.t-tokyo{--bg:#1a1b26;--paper:#24283b;--paper-2:#292e42;--ink:#c0caf5;--ink-2:#a9b1d6;--muted:#9aa5ce;--muted-2:#565f89;--line:#2f3549;--line-2:#3b4261;--accent:#7aa2f7;--accent-ink:#7aa2f7;--accent-soft:color-mix(in oklab,#7aa2f7 30%,#24283b);--hover-soft:#2e3558;--danger-bg:color-mix(in oklab,#f7768e 28%,#24283b);--danger-ink:#f7768e;--danger-solid:#c0485f;--warn-ink:#e0af68;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.cap{margin:0 0 12px;font:600 18px/1.3 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#475569}
+.pg{position:relative;width:1000px;height:800px;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-radius:10px;box-shadow:0 0 0 1px rgba(15,23,42,.12);padding:24px 40px;box-sizing:border-box}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 22px;box-shadow:var(--shadow-md)}
+.sub{margin:0;font-size:16px;font-weight:700}
+.btn{padding:6px 12px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper);font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;padding:0}
+.grp{margin:16px 0 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.g{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--paper-2)}
+.g.now{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.gh{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.gm{flex:1;min-width:0}
+.gt{font-weight:600;font-size:14.5px}
+.pill{display:inline-block;margin-left:8px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;vertical-align:1px;border:1px solid var(--line-2);color:var(--muted)}
+.pill.now{background:var(--accent);border-color:var(--accent);color:#fff}
+.gc{font-size:12.5px;color:var(--muted)}
+.gd{font-size:12.5px;color:var(--ink-2)}
+.ga{display:flex;align-items:center;gap:6px}
+.alert{margin:0 12px 12px;padding:12px 14px;border-radius:8px;background:var(--danger-bg);color:var(--ink);font-size:13.5px;border:1px solid color-mix(in oklab,var(--danger-ink) 35%,transparent)}
+.alert strong{color:var(--danger-ink)}
+.alert ul{margin:6px 0 0;padding-left:20px}
+.alert a{color:var(--accent-ink)}
+.alert .more{color:var(--muted);list-style:none;margin-left:-20px;margin-top:2px}
+.form{margin:0 12px 12px;padding:12px 14px;border:1px solid var(--accent);border-radius:10px;background:var(--paper);display:flex;flex-direction:column;gap:8px}
+.lbl{font-size:12.5px;font-weight:600;color:var(--ink-2);display:flex;justify-content:space-between}
+.lbl span{font-weight:400;color:var(--muted)}
+.inp{width:100%;box-sizing:border-box;padding:8px 10px;background:var(--bg);border:1px solid var(--line-2);border-radius:8px;font:inherit;font-size:14px;color:var(--ink)}
+.inp.err{border-color:var(--danger-ink);box-shadow:0 0 0 3px color-mix(in oklab,var(--danger-ink) 20%,transparent)}
+.ferr{margin:0;font-size:12.5px;color:var(--danger-ink)}
+.dots{width:16px;height:16px}
+</style>
+</helmet>
+<div style="display: flex; gap: 40px; padding: 40px; background: #e9ecf1">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div>
+<p class="cap">{{t.label}}</p>
+<div class="pg {{t.cls}}">
+<section class="panel" aria-labelledby="goals-h">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<h2 class="sub" id="goals-h">Goals</h2>
+<button class="btn btn-p" type="button">+ New goal</button>
+</div>
+
+<h3 class="grp">Now</h3>
+<ul class="gl">
+<li class="g now">
+<div class="gh">
+<div class="gm"><span class="gt">Goals in the app</span><span class="pill now">Now</span><div class="gd">Done when: the pinned roadmap is retired</div><div class="gc">7 open · 5 done</div></div>
+<div class="ga"><button class="icon" type="button" aria-label="Actions for Goals in the app"><svg class="dots" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+<sc-if value="{{t.done}}" hint-placeholder-val="{{ false }}">
+<div class="alert" role="alert">
+<strong>Can’t mark “Goals in the app” done: 7 tasks are still open.</strong> Complete them, or move them to another goal or to Unsorted, first.
+<ul>
+<li><a href="#">Goals API and assistant tools</a></li>
+<li><a href="#">Goals section on the project page</a></li>
+<li><a href="#">Goal picker on tasks</a></li>
+<li><a href="#">Now-goal message on the Tasks page</a></li>
+<li><a href="#">FRONTEND.md goals section</a></li>
+<li class="more">and 2 more</li>
+</ul>
+</div>
+</sc-if>
+<sc-if value="{{t.park}}" hint-placeholder-val="{{ false }}">
+<form class="form" aria-label="Park Goals in the app">
+<label class="lbl" for="pk">Why is this goal parked? <span>0 / 200</span></label>
+<input class="inp err" id="pk" aria-invalid="true" aria-describedby="pk-e" placeholder="For example: waiting on the hosting decision">
+<p class="ferr" id="pk-e">Enter a reason to park this goal.</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px"><button class="btn" type="button">Cancel</button><button class="btn btn-p" type="submit">Park goal</button></div>
+</form>
+</sc-if>
+</li>
+</ul>
+
+<h3 class="grp">Next</h3>
+<ul class="gl">
+<li class="g">
+<div class="gh">
+<div class="gm"><span class="gt">Faster CI</span><div class="gc">2 open · 0 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon" type="button" aria-label="Actions for Faster CI"><svg class="dots" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+<sc-if value="{{t.swap}}" hint-placeholder-val="{{ false }}">
+<div class="alert" role="alert">
+<strong>Can’t make “Faster CI” the Now goal yet.</strong> The current Now goal, “Goals in the app”, has 2 tasks in progress. Pause or block them first:
+<ul>
+<li><a href="#">Goals API and assistant tools</a></li>
+<li><a href="#">Goals section on the project page</a></li>
+</ul>
+</div>
+</sc-if>
+</li>
+<li class="g">
+<div class="gh">
+<div class="gm"><span class="gt">Dependency upgrades</span><div class="gc">6 open · 1 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon" type="button" aria-label="Actions for Dependency upgrades"><svg class="dots" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+</ul>
+</section>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3160,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+themes: [
+{ label: 'Default · light — Make Now refused (tasks in progress)', cls: 't-light', swap: true, done: false, park: false },
+{ label: 'Default · dark — Mark done refused (open tasks, capped list)', cls: 't-dark', swap: false, done: true, park: false },
+{ label: 'Tokyo Night · dark — Park needs a reason', cls: 't-tokyo', swap: false, done: false, park: true }
+]
+};
+}
+}
+</script>
+</body>
+</html>

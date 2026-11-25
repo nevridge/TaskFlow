@@ -56,6 +56,9 @@ public partial class AddAreas : Migration
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
+        // SQLite drops Areas before it rebuilds Projects without the foreign key, so no project may still point at one.
+        migrationBuilder.Sql("UPDATE \"Projects\" SET \"AreaId\" = NULL;");
+
         migrationBuilder.DropForeignKey(
             name: "FK_Projects_Areas_AreaId",
             table: "Projects");

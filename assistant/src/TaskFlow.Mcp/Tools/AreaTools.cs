@@ -59,7 +59,7 @@ public sealed class AreaTools(TaskFlowApiClient api)
         + "The three choices for where the projects go are mutually exclusive: moveToArea, newAreaName or leaveProjectsWithoutArea=true. "
         + "Set confirmed=true only after the user has seen that list and agreed. Projects and their tasks are not deleted.")]
     public Task<string> DeleteArea(
-        [Description("Area to delete, by name or id.")] string area,
+        [Description("Area to delete: its id or exact name (any casing). A partial name is not accepted.")] string area,
         [Description("Where the projects go: name or id of an existing area.")] string? moveToArea = null,
         [Description("Where the projects go: name for an area to create (max 100 characters).")] string? newAreaName = null,
         [Description("Set true to keep the projects with no area. Default false.")] bool leaveProjectsWithoutArea = false,
@@ -67,8 +67,13 @@ public sealed class AreaTools(TaskFlowApiClient api)
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
+            if (string.IsNullOrWhiteSpace(area))
+            {
+                throw ToolGuard.Invalid("Pass 'area': the exact name or id of the area to delete. Nothing was deleted.");
+            }
+
             var areas = await api.GetAreasAsync(ct);
-            var target = AreaResolver.Resolve(areas, area);
+            var target = ResolveForDelete(areas, area);
             var projects = (await api.GetProjectsAsync(ct)).Where(p => p.AreaId == target.Id).ToList();
             var moveToKey = string.IsNullOrWhiteSpace(moveToArea) ? null : moveToArea.Trim();
             var newName = string.IsNullOrWhiteSpace(newAreaName) ? null : newAreaName.Trim();
@@ -117,6 +122,20 @@ public sealed class AreaTools(TaskFlowApiClient api)
 
             return $"Deleted area {label}. {outcome}, {projects.Count} project(s): {string.Join(", ", projects.Select(ProjectLabel))}";
         });
+
+    /// <summary>
+    /// An empty area is deleted on the first call, so the area to delete is never guessed from a partial name.
+    /// </summary>
+    private static AreaDto ResolveForDelete(IReadOnlyList<AreaDto> areas, string area)
+    {
+        var target = AreaResolver.Resolve(areas, area);
+        var key = area.Trim();
+        var isId = int.TryParse(key, out var id) && target.Id == id;
+
+        return isId || string.Equals(target.Name, key, StringComparison.OrdinalIgnoreCase)
+            ? target
+            : throw ToolGuard.Invalid($"No area is named '{key}'. Did you mean {Label(target)}? delete_area needs the exact name or id. Nothing was deleted.");
+    }
 
     /// <summary>
     /// The API's delete errors name its query parameters, so each one gets a line in this tool's parameter names.

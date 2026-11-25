@@ -104,15 +104,47 @@ public class AreaToolsTests
         AssertNoWrites(handler);
     }
 
-    [Fact]
-    public async Task DeleteArea_Empty_DeletesAtOnce_AndNamesTheArea()
+    [Theory]
+    [InlineData("Empty")]
+    [InlineData(" EMPTY ")]
+    [InlineData("3")]
+    public async Task DeleteArea_Empty_DeletesAtOnce_AndNamesTheArea(string area)
     {
         var handler = Handler().Delete("Areas/3");
 
-        var text = await Tools(handler).DeleteArea("Emp");
+        var text = await Tools(handler).DeleteArea(area);
 
         handler.Sent(HttpMethod.Delete, "Areas/3").Should().ContainSingle().Which.Query.Should().BeEmpty();
         text.Should().Be("Deleted area #3 'Empty'. It had no projects.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public async Task DeleteArea_BlankArea_SendsNothing(string area)
+    {
+        var handler = new StubHandler()
+            .Get("Areas", new[] { Fixtures.Area(3, "Empty", 0) })
+            .Get("Projects", Array.Empty<object>())
+            .Delete("Areas/3");
+
+        var message = await ErrorOf(() => Tools(handler).DeleteArea(area));
+
+        message.Should().Be("Pass 'area': the exact name or id of the area to delete. Nothing was deleted.");
+        handler.Requests.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Emp", "#3 'Empty'")]
+    [InlineData("wor", "#1 'Work'")]
+    public async Task DeleteArea_PartialName_SuggestsTheArea_AndDeletesNothing(string area, string suggestion)
+    {
+        var handler = Handler().Delete("Areas/1").Delete("Areas/3");
+
+        var message = await ErrorOf(() => Tools(handler).DeleteArea(area, leaveProjectsWithoutArea: true, confirmed: true));
+
+        message.Should().Be($"No area is named '{area}'. Did you mean {suggestion}? delete_area needs the exact name or id. Nothing was deleted.");
+        AssertNoWrites(handler);
     }
 
     [Theory]

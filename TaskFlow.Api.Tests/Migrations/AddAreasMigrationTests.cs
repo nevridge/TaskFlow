@@ -77,6 +77,8 @@ public sealed class AddAreasMigrationTests : IDisposable
         MigrateTo(BeforeMigration);
         SeedProjectWithTask();
         MigrateTo(TargetMigration);
+        Exec("INSERT INTO \"Areas\" (\"Id\", \"Name\", \"DisplayOrder\", \"CreatedAt\") VALUES (3, 'Home', 0, '2026-05-01 00:00:00')");
+        Exec("UPDATE \"Projects\" SET \"AreaId\" = 3 WHERE \"Id\" = 7");
 
         MigrateTo(BeforeMigration);
 

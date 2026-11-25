@@ -44,17 +44,52 @@ public sealed class TaskFlowApiClient(HttpClient http)
     public Task<List<ProjectDto>> GetProjectsAsync(CancellationToken ct) =>
         SendAsync<List<ProjectDto>>(HttpMethod.Get, "Projects", null, ct);
 
-    public Task<ProjectDto> CreateProjectAsync(string name, string? description, CancellationToken ct) =>
-        SendAsync<ProjectDto>(HttpMethod.Post, "Projects", new { name, description }, ct);
+    public Task<ProjectDto> CreateProjectAsync(string name, string? description, int? areaId, CancellationToken ct) =>
+        SendAsync<ProjectDto>(HttpMethod.Post, "Projects", new { name, description, areaId }, ct);
 
-    public Task<ProjectDto> UpdateProjectAsync(int id, string name, string? description, bool isArchived, CancellationToken ct) =>
-        SendAsync<ProjectDto>(HttpMethod.Put, $"Projects/{id}", new { name, description, isArchived }, ct);
+    /// <summary>The project PUT is full-replace: a null areaId removes the project from its area.</summary>
+    public Task<ProjectDto> UpdateProjectAsync(int id, string name, string? description, bool isArchived, int? areaId, CancellationToken ct) =>
+        SendAsync<ProjectDto>(HttpMethod.Put, $"Projects/{id}", new { name, description, isArchived, areaId }, ct);
 
     public Task AssignTaskToProjectAsync(int projectId, int taskItemId, CancellationToken ct) =>
         SendAsync(HttpMethod.Post, $"Projects/{projectId}/tasks", new { taskItemId }, ct);
 
     public Task UnassignTaskFromProjectAsync(int projectId, int taskItemId, CancellationToken ct) =>
         SendAsync(HttpMethod.Delete, $"Projects/{projectId}/tasks/{taskItemId}", null, ct);
+
+    // --- Areas ---
+
+    public Task<List<AreaDto>> GetAreasAsync(CancellationToken ct) =>
+        SendAsync<List<AreaDto>>(HttpMethod.Get, "Areas", null, ct);
+
+    public Task<AreaDto> CreateAreaAsync(string name, CancellationToken ct) =>
+        SendAsync<AreaDto>(HttpMethod.Post, "Areas", new { name }, ct);
+
+    public Task<AreaDto> UpdateAreaAsync(int id, string name, CancellationToken ct) =>
+        SendAsync<AreaDto>(HttpMethod.Put, $"Areas/{id}", new { name }, ct);
+
+    /// <summary>Sends only the choices that are supplied; the API rejects more than one.</summary>
+    public Task DeleteAreaAsync(int id, int? moveToAreaId, string? newAreaName, bool noArea, CancellationToken ct)
+    {
+        var query = new List<string>();
+        if (moveToAreaId is { } target)
+        {
+            query.Add($"moveToAreaId={target}");
+        }
+
+        if (newAreaName is not null)
+        {
+            query.Add($"newAreaName={Uri.EscapeDataString(newAreaName)}");
+        }
+
+        if (noArea)
+        {
+            query.Add("noArea=true");
+        }
+
+        var path = query.Count == 0 ? $"Areas/{id}" : $"Areas/{id}?{string.Join('&', query)}";
+        return SendAsync(HttpMethod.Delete, path, null, ct);
+    }
 
     // --- Journal ---
 

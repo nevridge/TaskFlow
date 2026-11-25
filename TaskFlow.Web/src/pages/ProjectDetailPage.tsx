@@ -120,6 +120,7 @@ export function ProjectDetailPage() {
                       name: values.name,
                       description: values.description,
                       isArchived: project.isArchived,
+                      areaId: project.areaId ?? null,
                     },
                   })
                   setEditing(false)

@@ -21,6 +21,8 @@ const project: ProjectResponseDto = {
   createdAt: '2026-01-01T00:00:00Z',
   openTaskCount: 1,
   completedTaskCount: 2,
+  areaId: 5,
+  areaName: 'Work',
 }
 
 const task = (over: Partial<ProjectTaskDto>): ProjectTaskDto => ({
@@ -188,7 +190,7 @@ describe('ProjectDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 7,
-      data: { name: 'Renamed', description: 'Alpha desc', isArchived: false },
+      data: { name: 'Renamed', description: 'Alpha desc', isArchived: false, areaId: 5 },
     })
     expect(await screen.findByRole('button', { name: 'Edit Alpha' })).toHaveFocus()
   })
@@ -209,7 +211,19 @@ describe('ProjectDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 7,
-      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true },
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true, areaId: 5 },
+    })
+  })
+
+  it('edit sends a null area for a project without one', async () => {
+    const user = userEvent.setup()
+    mockProject({ data: { data: { ...project, areaId: undefined, areaName: undefined } } })
+    renderAt('/projects/7')
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(updateAsync).toHaveBeenCalledWith({
+      id: 7,
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: false, areaId: null },
     })
   })
 

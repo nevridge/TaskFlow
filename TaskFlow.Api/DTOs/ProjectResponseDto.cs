@@ -11,4 +11,6 @@ public class ProjectResponseDto
     public int OpenTaskCount { get; set; }
     public int CompletedTaskCount { get; set; }
     public int BlockedCount { get; set; }
+    public int? AreaId { get; set; }
+    public string? AreaName { get; set; }
 }

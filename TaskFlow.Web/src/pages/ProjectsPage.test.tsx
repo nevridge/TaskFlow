@@ -24,8 +24,8 @@ const make = (over: Partial<ProjectResponseDto>): ProjectResponseDto => ({
   ...over,
 })
 
-const alpha = make({})
-const beta = make({ id: 2, name: 'Beta', description: null, isArchived: true, openTaskCount: 0, completedTaskCount: 1 })
+const alpha = make({ areaId: 5, areaName: 'Work' })
+const beta = make({ id: 2, name: 'Beta', description: null, isArchived: true, openTaskCount: 0, completedTaskCount: 1, areaId: 6, areaName: 'Home' })
 
 const createAsync = vi.fn()
 const updateAsync = vi.fn()
@@ -157,7 +157,7 @@ describe('ProjectsPage', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
   })
 
-  it('rename sends name, description and isArchived', async () => {
+  it('rename sends name, description, isArchived and the current area', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
@@ -168,11 +168,11 @@ describe('ProjectsPage', () => {
     await user.click(within(row).getByRole('button', { name: 'Save' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 1,
-      data: { name: 'Alpha 2', description: 'Alpha desc', isArchived: false },
+      data: { name: 'Alpha 2', description: 'Alpha desc', isArchived: false, areaId: 5 },
     })
   })
 
-  it('edit description sends all three fields, clearing to null', async () => {
+  it('edit description sends every field, clearing to null', async () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
@@ -180,7 +180,7 @@ describe('ProjectsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 1,
-      data: { name: 'Alpha', description: null, isArchived: false },
+      data: { name: 'Alpha', description: null, isArchived: false, areaId: 5 },
     })
   })
 
@@ -200,7 +200,7 @@ describe('ProjectsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Archive Alpha' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 1,
-      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true },
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true, areaId: 5 },
     })
   })
 
@@ -211,7 +211,24 @@ describe('ProjectsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Unarchive Beta' }))
     expect(updateAsync).toHaveBeenCalledWith({
       id: 2,
-      data: { name: 'Beta', description: null, isArchived: false },
+      data: { name: 'Beta', description: null, isArchived: false, areaId: 6 },
+    })
+  })
+
+  it('save and archive send a null area for a project without one', async () => {
+    const user = userEvent.setup()
+    mockQuery({ data: { data: [make({})] } })
+    renderPage()
+    await user.click(screen.getByRole('button', { name: 'Archive Alpha' }))
+    expect(updateAsync).toHaveBeenLastCalledWith({
+      id: 1,
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: true, areaId: null },
+    })
+    await user.click(screen.getByRole('button', { name: 'Edit Alpha' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    expect(updateAsync).toHaveBeenLastCalledWith({
+      id: 1,
+      data: { name: 'Alpha', description: 'Alpha desc', isArchived: false, areaId: null },
     })
   })
 

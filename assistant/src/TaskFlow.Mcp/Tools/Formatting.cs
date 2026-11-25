@@ -116,6 +116,7 @@ internal static class Formatting
 
     public static string Project(ProjectDto p) =>
         $"#{p.Id} {p.Name}{(p.IsArchived ? " (archived)" : string.Empty)} - {p.OpenTaskCount} open{BlockedCountText(p.BlockedCount)} / {p.CompletedTaskCount} done"
+        + (string.IsNullOrWhiteSpace(p.AreaName) ? string.Empty : $" | area: {p.AreaName}")
         + (string.IsNullOrWhiteSpace(p.Description) ? string.Empty : $" | {Preview(p.Description)}");
 
     /// <summary>" (N blocked)" when N is above 0, otherwise empty.</summary>

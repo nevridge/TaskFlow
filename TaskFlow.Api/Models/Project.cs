@@ -8,5 +8,7 @@ public class Project
     public bool IsArchived { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+    public int? AreaId { get; set; }
+    public Area? Area { get; set; }
     public ICollection<TaskItem> Tasks { get; set; } = [];
 }

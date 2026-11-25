@@ -40,7 +40,18 @@ public sealed record ProjectDto(
     DateTime? UpdatedAt,
     int OpenTaskCount,
     int CompletedTaskCount,
-    int BlockedCount = 0);
+    int BlockedCount = 0,
+    int? AreaId = null,
+    string? AreaName = null);
+
+/// <summary>ProjectCount includes archived projects.</summary>
+public sealed record AreaDto(
+    int Id,
+    string Name,
+    int DisplayOrder,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    int ProjectCount);
 
 public sealed record NoteDto(
     int Id,

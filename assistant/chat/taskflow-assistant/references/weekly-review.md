@@ -3,7 +3,7 @@
 Goal: summarize a period from real data and draft a status update in the user's voice.
 
 1. Call `weekly_review` (default: the last 7 days; pass `from` and `to` as `yyyy-MM-dd` if the user gave a range).
-2. For each project that has overdue or stalled work, or that the user named, call `project_status`.
+2. For each project that has overdue or stalled work, or that the user named, call `project_status`. It and `list_projects` show each project's area when it has one.
 3. Draft the update with these sections, omitting empty ones:
    - **Done**: completed work grouped by project.
    - **Next up**: the most urgent open tasks per project. Tasks with status InProgress (work has started) may appear here.

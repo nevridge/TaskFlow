@@ -141,7 +141,7 @@ describe('project mutations and invalidation', () => {
   it('update invalidates list and detail', async () => {
     vi.mocked(api.updateProject).mockResolvedValue(ok)
     const { result, invalidatedKeys } = setup(useUpdateProjectMutation)
-    const data = { name: 'A', description: null, isArchived: true }
+    const data = { name: 'A', description: null, isArchived: true, areaId: null }
     result.current.mutate({ id: 7, data })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.updateProject).toHaveBeenCalledWith(7, data)

@@ -65,7 +65,21 @@ public sealed class ProjectsControllerRealStackTests : IDisposable
     }
 
     private static ProjectsController NewController(TaskDbContext ctx) =>
-        new(new ProjectRepository(ctx), new ProjectValidator(), new Mock<FluentValidation.IValidator<AssignProjectTaskDto>>().Object);
+        new(
+            new ProjectRepository(ctx),
+            new AreaRepository(ctx),
+            new ProjectValidator(),
+            new Mock<FluentValidation.IValidator<AssignProjectTaskDto>>().Object);
+
+    private async Task<int> SeedAreaAsync(string name)
+    {
+        await using var ctx = NewContext();
+        var area = new Area { Name = name };
+        ctx.Areas.Add(area);
+        await ctx.SaveChangesAsync();
+        _interceptor.Saved.Clear();
+        return area.Id;
+    }
 
     private async Task<int> SeedProjectWithTasksAsync()
     {
@@ -118,6 +132,85 @@ public sealed class ProjectsControllerRealStackTests : IDisposable
         Assert.Equal(1, dto.OpenTaskCount);
         Assert.Equal(1, dto.CompletedTaskCount);
         Assert.Empty(ctx.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public async Task Create_And_Update_WithArea_ReturnIt_AndWriteOnlyTheProject()
+    {
+        var work = await SeedAreaAsync("Work");
+        var home = await SeedAreaAsync("Home");
+        int projectId;
+        await using (var ctx = NewContext())
+        {
+            var result = await NewController(ctx).Create(new CreateProjectDto { Name = "Alpha", AreaId = work });
+
+            var dto = Assert.IsType<ProjectResponseDto>(Assert.IsType<CreatedAtRouteResult>(result.Result).Value);
+            Assert.Equal((work, "Work"), (dto.AreaId, dto.AreaName));
+            projectId = dto.Id;
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var result = await NewController(ctx).Update(projectId, new UpdateProjectDto { Name = "Alpha", AreaId = home });
+
+            var dto = Assert.IsType<ProjectResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+            Assert.Equal((home, "Home"), (dto.AreaId, dto.AreaName));
+        }
+
+        Assert.DoesNotContain(_interceptor.Saved, s => s.EntityType == nameof(Area));
+        await using var verify = NewContext();
+        Assert.Equal(home, (await verify.Projects.AsNoTracking().SingleAsync()).AreaId);
+    }
+
+    [Fact]
+    public async Task Update_WithNullArea_ClearsIt()
+    {
+        var work = await SeedAreaAsync("Work");
+        var projectId = await SeedProjectWithTasksAsync();
+        await using (var ctx = NewContext())
+        {
+            await NewController(ctx).Update(projectId, new UpdateProjectDto { Name = "Alpha", AreaId = work });
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var result = await NewController(ctx).Update(projectId, new UpdateProjectDto { Name = "Alpha" });
+
+            var dto = Assert.IsType<ProjectResponseDto>(Assert.IsType<OkObjectResult>(result.Result).Value);
+            Assert.Null(dto.AreaId);
+            Assert.Null(dto.AreaName);
+        }
+
+        await using var verify = NewContext();
+        Assert.Null((await verify.Projects.AsNoTracking().SingleAsync()).AreaId);
+    }
+
+    private static void AssertAreaNotFound(ActionResult? result)
+    {
+        var body = Assert.IsType<BadRequestObjectResult>(result).Value;
+        Assert.Equal("Area not found.", body?.GetType().GetProperty("message")?.GetValue(body));
+    }
+
+    [Fact]
+    public async Task Create_And_Update_WithUnknownArea_ReturnBadRequest_AndSaveNothing()
+    {
+        var projectId = await SeedProjectWithTasksAsync();
+
+        await using (var ctx = NewContext())
+        {
+            var create = await NewController(ctx).Create(new CreateProjectDto { Name = "New", AreaId = 999 });
+            AssertAreaNotFound(create.Result);
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var update = await NewController(ctx).Update(projectId, new UpdateProjectDto { Name = "Beta", AreaId = 999 });
+            AssertAreaNotFound(update.Result);
+        }
+
+        Assert.Empty(_interceptor.Saved);
+        await using var verify = NewContext();
+        Assert.Equal("Alpha", (await verify.Projects.AsNoTracking().SingleAsync()).Name);
     }
 
     [Fact]

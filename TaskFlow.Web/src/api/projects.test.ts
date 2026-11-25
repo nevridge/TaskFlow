@@ -59,11 +59,11 @@ describe('projects api (mocked client)', () => {
   })
 
   it('updateProject', () => {
-    updateProject(2, { name: 'A', description: 'd', isArchived: true })
+    updateProject(2, { name: 'A', description: 'd', isArchived: true, areaId: 5 })
     expect(client.put).toHaveBeenCalledWith({
       url: '/api/v1/Projects/{id}',
       path: { id: 2 },
-      body: { name: 'A', description: 'd', isArchived: true },
+      body: { name: 'A', description: 'd', isArchived: true, areaId: 5 },
       headers: { 'Content-Type': 'application/json' },
       throwOnError: true,
     })

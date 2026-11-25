@@ -74,6 +74,39 @@ public sealed class AreasHttpTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task PostLocation_ServesTheArea_WithArchivedProjectsCounted()
+    {
+        using var created = await _client.PostAsJsonAsync("/api/v1/Areas", new { name = "Work" }, Ct);
+        var areaId = (await created.Content.ReadFromJsonAsync<JsonElement>(Ct)).GetProperty("id").GetInt32();
+        var projectId = await CreateProjectAsync("Alpha", areaId);
+        using var archived = await _client.PutAsJsonAsync(
+            $"/api/v1/Projects/{projectId}", new { name = "Alpha", isArchived = true, areaId }, Ct);
+        Assert.Equal(HttpStatusCode.OK, archived.StatusCode);
+
+        var area = await GetJsonAsync(created.Headers.Location!.ToString());
+
+        Assert.Equal("Work", area.GetProperty("name").GetString());
+        Assert.Equal(1, area.GetProperty("projectCount").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"areaIds\":null}")]
+    [InlineData("{\"areaIds\":[]}")]
+    public async Task PutOrder_WithoutIds_IsRejected_AndKeepsTheOrder(string json)
+    {
+        var a = await CreateAreaAsync("A");
+        var b = await CreateAreaAsync("B");
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+        using var response = await _client.PutAsync("/api/v1/Areas/order", content, Ct);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var areas = await GetJsonAsync("/api/v1/Areas");
+        Assert.Equal([a, b], areas.EnumerateArray().Select(x => x.GetProperty("id").GetInt32()));
+    }
+
+    [Fact]
     public async Task Delete_BindsMoveToAreaId()
     {
         var source = await CreateAreaAsync("Work");

@@ -237,6 +237,39 @@ public sealed class AreasControllerV1Tests : IDisposable
     }
 
     [Fact]
+    public async Task Delete_ShouldUseTheProjectsPresentAtRequestTime_NotAnEarlierRead()
+    {
+        var area = await CreateAsync("Work");
+        var target = await CreateAsync("Home");
+        var seen = await RequestAsync(c => c.Get(area.Id));
+        Assert.Equal(0, Assert.IsType<AreaResponseDto>(Assert.IsType<OkObjectResult>(seen.Result).Value).ProjectCount);
+
+        // Added after the caller saw an empty area.
+        await AddProjectAsync(area.Id);
+
+        Assert.IsType<ConflictObjectResult>(await RequestAsync(c => c.Delete(area.Id)));
+        Assert.IsType<NoContentResult>(await RequestAsync(c => c.Delete(area.Id, moveToAreaId: target.Id)));
+        await using var context = NewContext();
+        Assert.Equal(target.Id, (await context.Projects.AsNoTracking().SingleAsync()).AreaId);
+    }
+
+    [Fact]
+    public async Task CreateAndRename_ShouldMeasureTheNameLengthAfterTrimming()
+    {
+        var longest = new string('a', 100);
+        var renamed = new string('b', 100);
+
+        var created = await CreateAsync($"  {longest}  ");
+        var rename = await RequestAsync(c => c.Update(created.Id, new UpdateAreaDto { Name = $"  {renamed}  " }));
+        var tooLong = await RequestAsync(c => c.Create(new CreateAreaDto { Name = new string('c', 101) }));
+
+        Assert.Equal(longest, created.Name);
+        Assert.IsType<OkObjectResult>(rename.Result);
+        Assert.IsType<BadRequestObjectResult>(tooLong.Result);
+        Assert.Equal([renamed], await NamesAsync());
+    }
+
+    [Fact]
     public async Task Delete_ShouldCreateTheTrimmedNewName_EvenForAnEmptyArea()
     {
         var area = await CreateAsync("Work");

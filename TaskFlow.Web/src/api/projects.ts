@@ -10,10 +10,18 @@ export type ProjectResponseDto = {
   openTaskCount: number
   completedTaskCount: number
   blockedCount?: number
+  areaId?: number | null
+  areaName?: string | null
 }
 
-export type CreateProjectDto = { name: string; description?: string | null }
-export type UpdateProjectDto = { name: string; description?: string | null; isArchived: boolean }
+export type CreateProjectDto = { name: string; description?: string | null; areaId?: number | null }
+export type UpdateProjectDto = {
+  name: string
+  description?: string | null
+  isArchived: boolean
+  /** Required because the PUT is a full replace: null removes the project from its area. */
+  areaId: number | null
+}
 
 export type ProjectTaskDto = {
   id: number

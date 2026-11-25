@@ -24,7 +24,12 @@ export function ProjectsPage() {
   const handleSave = (project: ProjectResponseDto, values: ProjectFormSubmit) =>
     updateMutation.mutateAsync({
       id: project.id,
-      data: { name: values.name, description: values.description, isArchived: project.isArchived },
+      data: {
+        name: values.name,
+        description: values.description,
+        isArchived: project.isArchived,
+        areaId: project.areaId ?? null,
+      },
     })
 
   const handleToggleArchive = (project: ProjectResponseDto) =>
@@ -34,6 +39,7 @@ export function ProjectsPage() {
         name: project.name,
         description: project.description ?? null,
         isArchived: !project.isArchived,
+        areaId: project.areaId ?? null,
       },
     })
 

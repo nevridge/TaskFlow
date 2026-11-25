@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delete goal dialog</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.t-light{--bg:#f6f7f9;--paper:#ffffff;--paper-2:#fdfdfb;--ink:#0f172a;--ink-2:#334155;--muted:#64748b;--line:#e2e8f0;--line-2:#cbd5e1;--accent:#2563eb;--danger-solid:#b91c1c;--shadow-md:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06)}
+.t-dark{--bg:#0b1220;--paper:#131b2c;--paper-2:#161f33;--ink:#e8edf6;--ink-2:#c2cbdc;--muted:#8b97ad;--line:#1f2a40;--line-2:#2b3853;--accent:#2563eb;--danger-solid:#b91c1c;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.t-tokyo{--bg:#1a1b26;--paper:#24283b;--paper-2:#292e42;--ink:#c0caf5;--ink-2:#a9b1d6;--muted:#9aa5ce;--line:#2f3549;--line-2:#3b4261;--accent:#7aa2f7;--danger-solid:#c0485f;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.cap{margin:0 0 12px;font:600 18px/1.3 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#475569}
+.pg{position:relative;width:1000px;height:800px;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-radius:10px;box-shadow:0 0 0 1px rgba(15,23,42,.12);padding:24px 40px;box-sizing:border-box}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 22px;box-shadow:var(--shadow-md)}
+.row{border:1px solid var(--line);border-radius:10px;background:var(--paper-2);padding:12px 14px;margin-top:8px;font-weight:600;font-size:14.5px}
+.rc{display:block;font-weight:400;font-size:12.5px;color:var(--muted)}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.dlg{position:absolute;left:220px;top:150px;width:560px;box-sizing:border-box;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md),0 24px 64px rgba(0,0,0,.3);padding:22px 24px}
+.h{margin:0 0 8px;font-size:18px;font-weight:700}
+.p{margin:0 0 8px;font-size:14px;color:var(--ink-2)}
+.btn{padding:7px 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper);font:inherit;font-size:13px;font-weight:600;color:var(--ink)}
+.btn-d{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff}
+</style>
+</helmet>
+<div style="display: flex; gap: 40px; padding: 40px; background: #e9ecf1">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div>
+<p class="cap">{{t.label}}</p>
+<div class="pg {{t.cls}}">
+<section class="panel" aria-hidden="true">
+<h2 style="margin: 0; font-size: 16px">Goals</h2>
+<div class="row">Goals in the app<span class="rc">7 open · 5 done</span></div>
+<div class="row">Faster CI<span class="rc">2 open · 0 done</span></div>
+<div class="row">Dependency upgrades<span class="rc">6 open · 1 done</span></div>
+<div class="row">Mobile companion<span class="rc">Parked · 2 open · 0 done</span></div>
+</section>
+<div class="dim" aria-hidden="true"></div>
+<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dg-h" aria-describedby="dg-p">
+<h2 class="h" id="dg-h">Delete the “Dependency upgrades” goal?</h2>
+<p class="p" id="dg-p">Its 7 tasks (subtasks included) will move to Unsorted. They stay in this project and keep their status.</p>
+<p class="p" style="color: var(--muted); font-size: 13px">To keep a record of the goal instead, use Drop.</p>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px">
+<button class="btn" type="button">Cancel</button>
+<button class="btn btn-d" type="button">Delete goal</button>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3160,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+themes: [
+{ label: 'Default · light', cls: 't-light' },
+{ label: 'Default · dark', cls: 't-dark' },
+{ label: 'Tokyo Night · dark', cls: 't-tokyo' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

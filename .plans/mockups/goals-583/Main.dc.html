@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Goals section on the project page</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.t-light{--bg:#f6f7f9;--paper:#ffffff;--paper-2:#fdfdfb;--ink:#0f172a;--ink-2:#334155;--muted:#64748b;--muted-2:#94a3b8;--line:#e2e8f0;--line-2:#cbd5e1;--accent:#2563eb;--accent-ink:#1d4ed8;--accent-soft:color-mix(in oklab,#2563eb 10%,white);--hover-soft:#eef2f7;--danger-bg:#fee2e2;--danger-ink:#b91c1c;--danger-solid:#b91c1c;--ok-ink:#15803d;--warn-ink:#a16207;--shadow-md:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06)}
+.t-dark{--bg:#0b1220;--paper:#131b2c;--paper-2:#161f33;--ink:#e8edf6;--ink-2:#c2cbdc;--muted:#8b97ad;--muted-2:#5b6781;--line:#1f2a40;--line-2:#2b3853;--accent:#2563eb;--accent-ink:#93b4fb;--accent-soft:color-mix(in oklab,#2563eb 22%,#131b2c);--hover-soft:#1a2438;--danger-bg:#3a1316;--danger-ink:#fca5a5;--danger-solid:#b91c1c;--ok-ink:#86efac;--warn-ink:#fcd34d;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.t-tokyo{--bg:#1a1b26;--paper:#24283b;--paper-2:#292e42;--ink:#c0caf5;--ink-2:#a9b1d6;--muted:#9aa5ce;--muted-2:#565f89;--line:#2f3549;--line-2:#3b4261;--accent:#7aa2f7;--accent-ink:#7aa2f7;--accent-soft:color-mix(in oklab,#7aa2f7 30%,#24283b);--hover-soft:#2e3558;--danger-bg:color-mix(in oklab,#f7768e 28%,#24283b);--danger-ink:#f7768e;--danger-solid:#c0485f;--ok-ink:#9ece6a;--warn-ink:#e0af68;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.cap{margin:0 0 12px;font:600 18px/1.3 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#475569}
+.pg{position:relative;width:1000px;height:1240px;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-radius:10px;box-shadow:0 0 0 1px rgba(15,23,42,.12);padding:24px 40px;box-sizing:border-box}
+.back{font-size:13px;color:var(--accent-ink);text-decoration:none}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin-top:12px;box-shadow:var(--shadow-md)}
+.ptitle{margin:0;font-size:22px;font-weight:700}
+.counts{font-size:13px;color:var(--muted);margin-top:2px}
+.sub{margin:0;font-size:16px;font-weight:700}
+.btn{padding:6px 12px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper);font:inherit;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;padding:0}
+.icon.on{border-color:var(--line-2);background:var(--hover-soft);color:var(--ink)}
+.grp{margin:16px 0 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.g{position:relative;border:1px solid var(--line);border-radius:10px;background:var(--paper-2)}
+.g.now{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.g.lift{box-shadow:var(--shadow-md),0 10px 28px rgba(0,0,0,.35);transform:translate(6px,-4px);opacity:.95}
+.gh{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.grip{width:22px;height:30px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted-2);background:transparent;border:0;border-radius:6px;cursor:grab;padding:0}
+.disc{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;border-radius:6px}
+.gm{flex:1;min-width:0}
+.gt{font-weight:600;font-size:14.5px}
+.pill{display:inline-block;margin-left:8px;padding:0 8px;border-radius:999px;font-size:11px;font-weight:700;vertical-align:1px;border:1px solid var(--line-2);color:var(--muted)}
+.pill.now{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill.done{color:var(--ok-ink);border-color:currentColor}
+.pill.parked{color:var(--warn-ink);border-color:currentColor}
+.gc{font-size:12.5px;color:var(--muted)}
+.gd{font-size:12.5px;color:var(--ink-2)}
+.ga{display:flex;align-items:center;gap:6px}
+.tasks{list-style:none;margin:0;padding:0 12px 10px 66px;display:flex;flex-direction:column}
+.tr{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13.5px}
+.tr a{color:var(--ink);text-decoration:none;flex:1}
+.badge{padding:0 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--line-2);color:var(--muted)}
+.badge.ip{color:var(--accent-ink);border-color:currentColor}
+.badge.ok{color:var(--ok-ink);border-color:currentColor}
+.drop{height:3px;border-radius:2px;background:var(--accent);margin:-2px 0}
+.menu{position:absolute;right:12px;top:44px;z-index:5;width:200px;background:var(--paper);border:1px solid var(--line-2);border-radius:10px;box-shadow:var(--shadow-md),0 16px 40px rgba(0,0,0,.18);padding:6px;margin:0;list-style:none}
+.mi{display:block;width:100%;text-align:left;padding:7px 10px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer}
+.mi.hl{background:var(--hover-soft)}
+.mi.d{color:var(--danger-ink)}
+.msep{height:1px;background:var(--line);margin:4px 0}
+.hint{font-size:12px;color:var(--muted);margin:8px 0 0}
+.form{border:1px solid var(--accent);border-radius:10px;padding:14px;background:var(--paper-2);display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.lbl{font-size:12.5px;font-weight:600;color:var(--ink-2);display:flex;justify-content:space-between}
+.lbl span{font-weight:400;color:var(--muted)}
+.inp{width:100%;box-sizing:border-box;padding:8px 10px;background:var(--bg);border:1px solid var(--line-2);border-radius:8px;font:inherit;font-size:14px;color:var(--ink)}
+.inp.f{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+</style>
+</helmet>
+<div style="display: flex; gap: 40px; padding: 40px; background: #e9ecf1">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div>
+<p class="cap">{{t.label}}</p>
+<div class="pg {{t.cls}}">
+<a class="back" href="#">← Back to projects</a>
+<section class="panel" style="display: flex; justify-content: space-between; align-items: flex-start">
+<div>
+<h1 class="ptitle">TaskFlow</h1>
+<div class="counts">4 goals open · 14 open tasks · 23 done</div>
+<p style="margin: 6px 0 0; font-size: 14px; color: var(--ink-2)">Personal task and journal app.</p>
+</div>
+<button class="btn" type="button">Edit</button>
+</section>
+
+<section class="panel" aria-labelledby="goals-h">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<h2 class="sub" id="goals-h">Goals</h2>
+<button class="btn btn-p" type="button">+ New goal</button>
+</div>
+
+<sc-if value="{{t.create}}" hint-placeholder-val="{{ false }}">
+<form class="form" aria-label="New goal">
+<label class="lbl" for="ng-t">Title <span>17 / 100</span></label>
+<input class="inp f" id="ng-t" value="Faster page loads">
+<label class="lbl" for="ng-w">Done when (optional)</label>
+<input class="inp" id="ng-w" value="Tasks page loads in under a second">
+<label class="lbl" for="ng-d">Description (optional)</label>
+<textarea class="inp" id="ng-d" rows="2"></textarea>
+<div style="display: flex; justify-content: space-between; align-items: center">
+<span class="hint" style="margin: 0">New goals start in Next, at the end.</span>
+<div style="display: flex; gap: 8px"><button class="btn" type="button">Cancel</button><button class="btn btn-p" type="submit">Create goal</button></div>
+</div>
+</form>
+</sc-if>
+
+<h3 class="grp">Now</h3>
+<ul class="gl">
+<li class="g now">
+<div class="gh">
+<span style="width: 22px"></span>
+<button class="disc" type="button" aria-expanded="true" aria-label="Hide tasks for Goals in the app"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+<div class="gm">
+<span class="gt">Goals in the app</span><span class="pill now">Now</span>
+<div class="gd">Done when: the pinned roadmap is retired</div>
+<div class="gc">3 open · 5 done</div>
+</div>
+<div class="ga"><button class="icon" type="button" aria-label="Actions for Goals in the app"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+<ul class="tasks">
+<li class="tr"><a href="#">Goals API and assistant tools</a><span class="badge ip">In Progress</span></li>
+<li class="tr"><a href="#">Goals section on the project page</a><span class="badge">Todo</span></li>
+<li class="tr"><a href="#">Goal picker on tasks</a><span class="badge">Todo</span></li>
+<li class="tr"><a href="#" style="color: var(--muted)">Areas API</a><span class="badge ok">Completed</span></li>
+</ul>
+</li>
+</ul>
+
+<h3 class="grp">Next</h3>
+<ul class="gl">
+<li class="g">
+<div class="gh">
+<button class="grip" type="button" aria-label="Reorder Faster CI. Alt+Up or Alt+Down to move."><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></button>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for Faster CI"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt">Faster CI</span><div class="gc">2 open · 0 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon {{t.menuOn}}" type="button" aria-haspopup="menu" aria-expanded="{{t.menu}}" aria-label="Actions for Faster CI"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+<sc-if value="{{t.menu}}" hint-placeholder-val="{{ false }}">
+<div class="menu" role="menu" aria-label="Actions for Faster CI">
+<button class="mi hl" role="menuitem" type="button">Edit</button>
+<button class="mi" role="menuitem" type="button">Park…</button>
+<button class="mi" role="menuitem" type="button">Mark done</button>
+<button class="mi" role="menuitem" type="button">Drop</button>
+<div class="msep" role="separator"></div>
+<button class="mi d" role="menuitem" type="button">Delete…</button>
+</div>
+</sc-if>
+</li>
+<sc-if value="{{t.drag}}" hint-placeholder-val="{{ false }}"><div class="drop" aria-hidden="true"></div></sc-if>
+<li class="g">
+<div class="gh">
+<button class="grip" type="button" aria-label="Reorder Dependency upgrades. Alt+Up or Alt+Down to move."><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></button>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for Dependency upgrades"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt">Dependency upgrades</span><div class="gc">6 open · 1 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon" type="button" aria-label="Actions for Dependency upgrades"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+<li class="g {{t.liftCls}}">
+<div class="gh">
+<button class="grip" type="button" aria-label="Reorder Theme polish. Alt+Up or Alt+Down to move."><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg></button>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for Theme polish"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt">Theme polish</span><div class="gc">1 open · 0 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon" type="button" aria-label="Actions for Theme polish"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+</ul>
+<p class="hint">Drag a handle, or focus it and press Alt+↑ / Alt+↓, to reorder Next goals.</p>
+
+<h3 class="grp">Parked</h3>
+<ul class="gl">
+<li class="g">
+<div class="gh">
+<span style="width: 22px"></span>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for Mobile companion"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt">Mobile companion</span><span class="pill parked">Parked</span><div class="gd">Reason: waiting on the hosting decision</div><div class="gc">2 open · 0 done</div></div>
+<div class="ga"><button class="btn" type="button">Make Now</button><button class="icon" type="button" aria-label="Actions for Mobile companion"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+</ul>
+
+<h3 class="grp">Done and dropped</h3>
+<ul class="gl">
+<li class="g">
+<div class="gh">
+<span style="width: 22px"></span>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for Areas"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt" style="color: var(--ink-2)">Areas</span><span class="pill done">Done 25 Nov 2026</span><div class="gc">0 open · 9 done</div></div>
+<div class="ga"><button class="btn" type="button">Reopen</button><button class="icon" type="button" aria-label="Actions for Areas"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+<li class="g">
+<div class="gh">
+<span style="width: 22px"></span>
+<button class="disc" type="button" aria-expanded="false" aria-label="Show tasks for CSV importer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+<div class="gm"><span class="gt" style="color: var(--ink-2)">CSV importer</span><span class="pill">Dropped 2 Nov 2026</span><div class="gc">0 open · 1 done</div></div>
+<div class="ga"><button class="btn" type="button">Reopen</button><button class="icon" type="button" aria-label="Actions for CSV importer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button></div>
+</div>
+</li>
+</ul>
+
+<h3 class="grp">Unsorted · 2 tasks with no goal</h3>
+<ul class="tasks" style="padding: 0 0 0 4px">
+<li class="tr"><a href="#">Flaky journal test on Mondays</a><span class="badge">Todo</span></li>
+<li class="tr"><a href="#">Look at Seq retention</a><span class="badge">Draft</span></li>
+</ul>
+</section>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3160,"height":1340}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+themes: [
+{ label: 'Default · light — actions menu open on a Next goal', cls: 't-light', menu: true, menuOn: 'on', drag: false, liftCls: '', create: false },
+{ label: 'Default · dark — dragging “Theme polish” up, drop line shown', cls: 't-dark', menu: false, menuOn: '', drag: true, liftCls: 'lift', create: false },
+{ label: 'Tokyo Night · dark — creating a goal', cls: 't-tokyo', menu: false, menuOn: '', drag: false, liftCls: '', create: true }
+]
+};
+}
+}
+</script>
+</body>
+</html>

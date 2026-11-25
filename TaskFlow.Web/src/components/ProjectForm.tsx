@@ -53,7 +53,9 @@ export function ProjectForm({
   const nameRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription ?? '')
-  const [areaId, setAreaId] = useState(initialAreaId)
+  // Until the user picks one, follow the project's area: it can move while the form is open.
+  const [pickedAreaId, setPickedAreaId] = useState<number | null | undefined>(undefined)
+  const areaId = pickedAreaId === undefined ? initialAreaId : pickedAreaId
   const areaRef = useRef<ProjectAreaSelectHandle>(null)
   const [errors, setErrors] = useState<ProjectFormErrors>({})
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -83,7 +85,7 @@ export function ProjectForm({
       if (resetOnSuccess) {
         setName('')
         setDescription('')
-        setAreaId(null)
+        setPickedAreaId(undefined)
         areaRef.current?.closeEmptyField()
       }
     } catch (err) {
@@ -134,7 +136,7 @@ export function ProjectForm({
       <ProjectAreaSelect
         ref={areaRef}
         value={areaId}
-        onChange={setAreaId}
+        onChange={setPickedAreaId}
         currentAreaId={initialAreaId}
         currentAreaName={initialAreaName}
       />

@@ -126,7 +126,8 @@ export function ProjectAreaSelect({
     if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return
     e.preventDefault()
     e.stopPropagation()
-    cancel()
+    // A request already sent cannot be cancelled; stay open to show its result.
+    if (!pendingRef.current) cancel()
   }
 
   return (
@@ -181,7 +182,7 @@ export function ProjectAreaSelect({
           <button type="button" className="p-btn tap-target" disabled={pending} onClick={() => void add()}>
             Add
           </button>
-          <button type="button" className="p-btn tap-target" onClick={cancel}>
+          <button type="button" className="p-btn tap-target" disabled={pending} onClick={cancel}>
             Cancel
           </button>
         </div>

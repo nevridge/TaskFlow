@@ -273,6 +273,21 @@ describe('rename and add', () => {
     expect(areasApi.createArea).toHaveBeenCalledOnce()
   })
 
+  it('cannot be cancelled while a save is pending, and shows a late failure', async () => {
+    const save = deferred()
+    vi.mocked(areasApi.createArea).mockReturnValue(save.promise)
+    const user = await loaded()
+    await user.click(screen.getByRole('button', { name: '+ Add area' }))
+    await user.keyboard('Garden{Enter}')
+    expect(screen.getByRole('button', { name: 'Cancel add' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('textbox', { name: 'New area name' })).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+    await act(async () => save.reject({ message: 'An area with that name already exists.' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('An area with that name already exists.')
+    expect(screen.getByRole('button', { name: 'Cancel add' })).toBeEnabled()
+  })
+
   it.each(['Area name', 'Save name', 'Cancel rename'])(
     'Escape on "%s" cancels the editor only; a second Escape closes the drawer',
     async name => {

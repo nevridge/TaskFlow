@@ -442,7 +442,8 @@ function AreaNameEditor({
       e.stopPropagation()
       if (composing) return
       e.preventDefault()
-      onClose()
+      // A request already sent cannot be cancelled; stay open to show its result.
+      if (!pendingRef.current) onClose()
     } else if (e.key === 'Enter' && e.target === inputRef.current) {
       e.preventDefault()
       if (!composing) void save()
@@ -470,7 +471,13 @@ function AreaNameEditor({
       >
         <CheckIcon />
       </button>
-      <button type="button" className="area-icon-btn tap-target" aria-label={cancelLabel} onClick={onClose}>
+      <button
+        type="button"
+        className="area-icon-btn tap-target"
+        aria-label={cancelLabel}
+        disabled={pending}
+        onClick={onClose}
+      >
         <CrossIcon />
       </button>
       {error && <p id={errorId} className="area-editor-error" role="alert">{error}</p>}

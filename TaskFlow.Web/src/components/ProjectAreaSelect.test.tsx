@@ -75,6 +75,32 @@ describe('project form Area select', () => {
     expect(submitted()).toBeNull()
   })
 
+  // Deleting an area can move the project while its edit form is open; saving must not undo that.
+  it.each([
+    ['follows the project when it moves, if the select was not changed', null, 1],
+    ['keeps the choice made in the select when the project moves', 'No area', null],
+  ])('%s', async (_name, choice, expected) => {
+    const user = userEvent.setup()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const form = (initialAreaId: number) => (
+      <QueryClientProvider client={client}>
+        <ProjectForm
+          initialName="P"
+          initialAreaId={initialAreaId}
+          submitLabel="Save"
+          errorFallback="Could not save project."
+          onSubmit={onSubmit}
+        />
+      </QueryClientProvider>
+    )
+    const { rerender } = render(form(2))
+    await screen.findByRole('option', { name: 'Work' })
+    if (choice) await user.selectOptions(select(), choice)
+    rerender(form(1))
+    await user.click(save())
+    expect(submitted()).toBe(expected)
+  })
+
   // A failed load must not silently clear the project's area on save.
   it('keeps the current area while areas cannot be loaded, with Retry', async () => {
     vi.mocked(areasApi.getAreas).mockRejectedValueOnce({})
@@ -154,7 +180,7 @@ describe('"+ New area…"', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('does not select an area whose Add resolves after Cancel', async () => {
+  it('cannot be cancelled while Add is pending, then selects the new area', async () => {
     let finish!: () => void
     vi.mocked(areasApi.createArea).mockImplementation(
       () =>
@@ -164,9 +190,13 @@ describe('"+ New area…"', () => {
     )
     const user = await openField()
     await user.type(field(), 'Garden{Enter}')
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    await user.keyboard('{Escape}')
+    expect(field()).toBeInTheDocument()
+    server = [...server, area(3, 'Garden')]
     await act(async () => finish())
-    expect(select()).toHaveDisplayValue('No area')
+    await waitFor(() => expect(select()).toHaveDisplayValue('Garden'))
+    expect(queryField()).not.toBeInTheDocument()
   })
 
   it.each(['New area name', 'Add', 'Cancel', 'Area'])('Escape on "%s" closes the group', async label => {

@@ -58,6 +58,12 @@ public sealed class AreasControllerV1Tests : IDisposable
         return await context.Areas.AsNoTracking().OrderBy(a => a.DisplayOrder).Select(a => a.Name).ToListAsync();
     }
 
+    private async Task<int?> ProjectAreaIdAsync()
+    {
+        await using var context = NewContext();
+        return (await context.Projects.AsNoTracking().SingleAsync()).AreaId;
+    }
+
     private static string? Message(object? value) =>
         value?.GetType().GetProperty("message")?.GetValue(value) as string;
 
@@ -205,22 +211,26 @@ public sealed class AreasControllerV1Tests : IDisposable
     {
         var area = await CreateAsync("Work");
         var target = await CreateAsync("Home");
+        await AddProjectAsync(area.Id);
 
         var result = await RequestAsync(c => c.Delete(area.Id, move ? target.Id : null, newAreaName, noArea));
 
         Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal(["Work", "Home"], await NamesAsync());
+        Assert.Equal(area.Id, await ProjectAreaIdAsync());
     }
 
     [Fact]
     public async Task Delete_ShouldReturnBadRequest_WhenTheTargetIsTheAreaItself()
     {
         var area = await CreateAsync("Work");
+        await AddProjectAsync(area.Id);
 
         var result = await RequestAsync(c => c.Delete(area.Id, moveToAreaId: area.Id));
 
         Assert.IsType<BadRequestObjectResult>(result);
         Assert.Equal(["Work"], await NamesAsync());
+        Assert.Equal(area.Id, await ProjectAreaIdAsync());
     }
 
     [Fact]

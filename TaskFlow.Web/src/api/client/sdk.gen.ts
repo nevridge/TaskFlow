@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdErrors, PatchApiV1TaskItemsByIdResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdErrors, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
+import type { DeleteApiV1AreasByIdData, DeleteApiV1AreasByIdResponses, DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1AreasData, GetApiV1AreasResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetAreaV1Data, GetAreaV1Responses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdErrors, PatchApiV1TaskItemsByIdResponses, PostApiV1AreasData, PostApiV1AreasResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1AreasByIdData, PutApiV1AreasByIdResponses, PutApiV1AreasOrderData, PutApiV1AreasOrderResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdErrors, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -17,6 +17,39 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
      */
     meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
+
+export const getApiV1Areas = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1AreasData, ThrowOnError>): RequestResult<GetApiV1AreasResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1AreasResponses, unknown, ThrowOnError>({ url: '/api/v1/Areas', ...options });
+
+export const postApiV1Areas = <ThrowOnError extends boolean = false>(options: Options<PostApiV1AreasData, ThrowOnError>): RequestResult<PostApiV1AreasResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1AreasResponses, unknown, ThrowOnError>({
+    url: '/api/v1/Areas',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1AreasById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1AreasByIdData, ThrowOnError>): RequestResult<DeleteApiV1AreasByIdResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1AreasByIdResponses, unknown, ThrowOnError>({ url: '/api/v1/Areas/{id}', ...options });
+
+export const getAreaV1 = <ThrowOnError extends boolean = false>(options: Options<GetAreaV1Data, ThrowOnError>): RequestResult<GetAreaV1Responses, unknown, ThrowOnError> => (options.client ?? client).get<GetAreaV1Responses, unknown, ThrowOnError>({ url: '/api/v1/Areas/{id}', ...options });
+
+export const putApiV1AreasById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AreasByIdData, ThrowOnError>): RequestResult<PutApiV1AreasByIdResponses, unknown, ThrowOnError> => (options.client ?? client).put<PutApiV1AreasByIdResponses, unknown, ThrowOnError>({
+    url: '/api/v1/Areas/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const putApiV1AreasOrder = <ThrowOnError extends boolean = false>(options: Options<PutApiV1AreasOrderData, ThrowOnError>): RequestResult<PutApiV1AreasOrderResponses, unknown, ThrowOnError> => (options.client ?? client).put<PutApiV1AreasOrderResponses, unknown, ThrowOnError>({
+    url: '/api/v1/Areas/order',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 export const getApiV1JournalEntries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1JournalEntriesData, ThrowOnError>): RequestResult<GetApiV1JournalEntriesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1JournalEntriesResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries', ...options });
 

@@ -31,6 +31,7 @@ public static class PersistenceServiceExtensions
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<INoteRepository, NoteRepository>();
         services.AddScoped<IProjectRepository, ProjectRepository>();
+        services.AddScoped<IAreaRepository, AreaRepository>();
         services.AddScoped<IJournalEntryRepository, JournalEntryRepository>();
         services.AddScoped<IJournalLogEntryRepository, JournalLogEntryRepository>();
         services.AddScoped<IJournalNoteRepository, JournalNoteRepository>();

@@ -14,11 +14,13 @@ namespace TaskFlow.Api.Controllers.V1;
 [Route("api/v{version:apiVersion}/[controller]")]
 public class ProjectsController(
     IProjectRepository repo,
+    IAreaRepository areaRepo,
     IValidator<Project> validator,
     IValidator<AssignProjectTaskDto> assignValidator) : ControllerBase
 {
     private const string GetProjectRouteName = "GetProjectV1";
     private readonly IProjectRepository _repo = repo;
+    private readonly IAreaRepository _areaRepo = areaRepo;
     private readonly IValidator<Project> _validator = validator;
     private readonly IValidator<AssignProjectTaskDto> _assignValidator = assignValidator;
 
@@ -27,7 +29,7 @@ public class ProjectsController(
     public async Task<ActionResult<IEnumerable<ProjectResponseDto>>> GetAll()
     {
         var projects = await _repo.GetAllAsync();
-        return Ok(projects.Select(ToDto));
+        return Ok(projects.Select(p => ToDto(p, p.Area?.Name)));
     }
 
     // GET: api/v1/Projects/5
@@ -40,7 +42,7 @@ public class ProjectsController(
             return NotFound();
         }
 
-        return Ok(ToDto(project));
+        return Ok(ToDto(project, project.Area?.Name));
     }
 
     // GET: api/v1/Projects/5/tasks
@@ -84,6 +86,7 @@ public class ProjectsController(
         {
             Name = createDto.Name?.Trim() ?? string.Empty,
             Description = createDto.Description,
+            AreaId = createDto.AreaId,
         };
 
         var validationResult = await _validator.ValidateAsync(project);
@@ -97,8 +100,19 @@ public class ProjectsController(
             return Conflict(new { message = "A project with this name already exists." });
         }
 
+        // Only AreaId is set on the project: assigning the untracked Area would make EF insert or update it.
+        Area? area = null;
+        if (project.AreaId is int areaId)
+        {
+            area = await _areaRepo.GetByIdNoTrackingAsync(areaId);
+            if (area is null)
+            {
+                return AreaNotFound();
+            }
+        }
+
         var created = await _repo.AddAsync(project);
-        return CreatedAtRoute(GetProjectRouteName, new { version = ApiVersions.V1, id = created.Id }, ToDto(created));
+        return CreatedAtRoute(GetProjectRouteName, new { version = ApiVersions.V1, id = created.Id }, ToDto(created, area?.Name));
     }
 
     // PUT: api/v1/Projects/5
@@ -114,6 +128,7 @@ public class ProjectsController(
         existing.Name = updateDto.Name?.Trim() ?? string.Empty;
         existing.Description = updateDto.Description;
         existing.IsArchived = updateDto.IsArchived;
+        existing.AreaId = updateDto.AreaId;
 
         var validationResult = await _validator.ValidateAsync(existing);
         if (!validationResult.IsValid)
@@ -126,8 +141,18 @@ public class ProjectsController(
             return Conflict(new { message = "A project with this name already exists." });
         }
 
+        Area? area = null;
+        if (existing.AreaId is int areaId)
+        {
+            area = await _areaRepo.GetByIdNoTrackingAsync(areaId);
+            if (area is null)
+            {
+                return AreaNotFound();
+            }
+        }
+
         await _repo.UpdateAsync(existing);
-        return Ok(ToDto(existing));
+        return Ok(ToDto(existing, area?.Name));
     }
 
     // DELETE: api/v1/Projects/5  (tasks are kept; their project is cleared)
@@ -171,8 +196,12 @@ public class ProjectsController(
         return await _repo.UnassignTaskAsync(id, taskItemId) ? NoContent() : NotFound();
     }
 
-    private static ProjectResponseDto ToDto(Project project) => new()
+    private BadRequestObjectResult AreaNotFound() => BadRequest(new { message = "Area not found." });
+
+    private static ProjectResponseDto ToDto(Project project, string? areaName) => new()
     {
+        AreaId = project.AreaId,
+        AreaName = areaName,
         Id = project.Id,
         Name = project.Name,
         Description = project.Description,

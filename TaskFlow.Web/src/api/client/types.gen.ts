@@ -9,6 +9,18 @@ export type AddJournalTodoDto = {
     timezoneOffsetMinutes?: null | number | string;
 };
 
+export type AreaResponseDto = {
+    id?: number | string;
+    name: string;
+    displayOrder?: number | string;
+    createdAt?: string;
+    updatedAt?: null | string;
+    /**
+     * Projects in the area, archived ones included.
+     */
+    projectCount?: number | string;
+};
+
 export type AssignProjectTaskDto = {
     taskItemId?: number | string;
 };
@@ -23,6 +35,10 @@ export type CarryForwardRequestDto = {
 export type CarryForwardResponseDto = {
     movedCount?: number | string;
     movedTaskItemIds?: Array<number | string>;
+};
+
+export type CreateAreaDto = {
+    name?: string;
 };
 
 export type CreateJournalEntryDto = {
@@ -51,6 +67,7 @@ export type CreateNoteDto = {
 export type CreateProjectDto = {
     name?: string;
     description?: null | string;
+    areaId?: null | number | string;
 };
 
 export type CreateTaskItemDto = {
@@ -169,6 +186,15 @@ export type ProjectResponseDto = {
     openTaskCount?: number | string;
     completedTaskCount?: number | string;
     blockedCount?: number | string;
+    areaId?: null | number | string;
+    areaName?: null | string;
+};
+
+export type ReorderAreasDto = {
+    /**
+     * Every area id exactly once, in the wanted display order.
+     */
+    areaIds?: Array<number | string>;
 };
 
 export type Status = 'draft' | 'todo' | 'completed' | 'blocked' | 'inProgress';
@@ -243,6 +269,10 @@ export type TaskRuleErrorResponseDto = {
     };
 };
 
+export type UpdateAreaDto = {
+    name?: string;
+};
+
 export type UpdateJournalEntryDto = {
     title: string;
     summary?: null | string;
@@ -265,6 +295,10 @@ export type UpdateProjectDto = {
     name?: string;
     description?: null | string;
     isArchived?: boolean;
+    /**
+     * Full replace: null or omitted removes the project from its area.
+     */
+    areaId?: null | number | string;
 };
 
 /**
@@ -311,6 +345,110 @@ export type UpdateTaskItemDto = {
      */
     journalDate?: null | string;
 };
+
+export type GetApiV1AreasData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/Areas';
+};
+
+export type GetApiV1AreasResponses = {
+    /**
+     * OK
+     */
+    200: Array<AreaResponseDto>;
+};
+
+export type GetApiV1AreasResponse = GetApiV1AreasResponses[keyof GetApiV1AreasResponses];
+
+export type PostApiV1AreasData = {
+    body: CreateAreaDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/Areas';
+};
+
+export type PostApiV1AreasResponses = {
+    /**
+     * OK
+     */
+    200: AreaResponseDto;
+};
+
+export type PostApiV1AreasResponse = PostApiV1AreasResponses[keyof PostApiV1AreasResponses];
+
+export type DeleteApiV1AreasByIdData = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: {
+        moveToAreaId?: number | string;
+        newAreaName?: string;
+        noArea?: boolean;
+    };
+    url: '/api/v1/Areas/{id}';
+};
+
+export type DeleteApiV1AreasByIdResponses = {
+    /**
+     * OK
+     */
+    200: unknown;
+};
+
+export type GetAreaV1Data = {
+    body?: never;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Areas/{id}';
+};
+
+export type GetAreaV1Responses = {
+    /**
+     * OK
+     */
+    200: AreaResponseDto;
+};
+
+export type GetAreaV1Response = GetAreaV1Responses[keyof GetAreaV1Responses];
+
+export type PutApiV1AreasByIdData = {
+    body: UpdateAreaDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/Areas/{id}';
+};
+
+export type PutApiV1AreasByIdResponses = {
+    /**
+     * OK
+     */
+    200: AreaResponseDto;
+};
+
+export type PutApiV1AreasByIdResponse = PutApiV1AreasByIdResponses[keyof PutApiV1AreasByIdResponses];
+
+export type PutApiV1AreasOrderData = {
+    body: ReorderAreasDto;
+    path?: never;
+    query?: never;
+    url: '/api/v1/Areas/order';
+};
+
+export type PutApiV1AreasOrderResponses = {
+    /**
+     * OK
+     */
+    200: Array<AreaResponseDto>;
+};
+
+export type PutApiV1AreasOrderResponse = PutApiV1AreasOrderResponses[keyof PutApiV1AreasOrderResponses];
 
 export type GetApiV1JournalEntriesData = {
     body?: never;

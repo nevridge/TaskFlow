@@ -10,6 +10,7 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
     public DbSet<TaskItemEvent> TaskItemEvents => Set<TaskItemEvent>();
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Area> Areas => Set<Area>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLogEntry> JournalLogEntries => Set<JournalLogEntry>();
     public DbSet<JournalNote> JournalNotes => Set<JournalNote>();
@@ -59,6 +60,21 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                 .UseCollation("NOCASE");
 
             entity.HasIndex(p => p.Name).IsUnique();
+
+            // Restrict, not the usual SetNull: the database must never clear a project's area silently.
+            entity.HasOne(p => p.Area)
+                .WithMany(a => a.Projects)
+                .HasForeignKey(p => p.AreaId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Area>(entity =>
+        {
+            entity.Property(a => a.Name)
+                .HasMaxLength(100)
+                .UseCollation("NOCASE");
+
+            entity.HasIndex(a => a.Name).IsUnique();
         });
 
         modelBuilder.Entity<TaskItemEvent>(entity =>

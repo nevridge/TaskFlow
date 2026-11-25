@@ -13,6 +13,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         await _context.Projects
             .AsNoTracking()
             .Include(p => p.Tasks)
+            .Include(p => p.Area)
             .OrderBy(p => p.Name)
             .ToListAsync();
 
@@ -26,6 +27,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         await _context.Projects
             .AsNoTracking()
             .Include(p => p.Tasks)
+            .Include(p => p.Area)
             .FirstOrDefaultAsync(p => p.Id == id);
 
     public async Task<bool> NameExistsAsync(string name, int? excludeProjectId = null) =>

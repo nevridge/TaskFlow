@@ -21,7 +21,8 @@ public class ProjectsControllerV1Tests
     {
         _mockValidator.Setup(v => v.ValidateAsync(It.IsAny<Project>(), default)).ReturnsAsync(new ValidationResult());
         _mockAssignValidator.Setup(v => v.ValidateAsync(It.IsAny<AssignProjectTaskDto>(), default)).ReturnsAsync(new ValidationResult());
-        _controller = new ProjectsController(_mockRepo.Object, _mockValidator.Object, _mockAssignValidator.Object);
+        _controller = new ProjectsController(
+            _mockRepo.Object, new Mock<IAreaRepository>().Object, _mockValidator.Object, _mockAssignValidator.Object);
     }
 
     private static ValidationResult Invalid() =>

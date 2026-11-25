@@ -19,6 +19,19 @@ Each artboard shows the same screen three times, side by side: Default light, De
 | `canvas.json` | Where each artboard sits on the design canvas. | - |
 | `_runtime/` | The renderer that displays the pages in a browser. It is not part of the design. | - |
 
+## Screenshots
+
+Each PNG is a rendered copy of the artboard with the same name. These are the quickest way to see the design.
+
+- `Main.png`: the settings drawer's Areas section.
+  - The drawer covers the left side of the Projects page, as it does in the app, so the page's headings and project names are hidden behind it.
+- `DeleteDialog.png`: the delete dialog shown above the drawer.
+- `Pickers.png`: the Area select with "+ New area…", and the grouped project picker.
+
+![Settings drawer Areas section](Main.png)
+![Delete area dialog](DeleteDialog.png)
+![Area select and grouped project picker](Pickers.png)
+
 ## Reading them
 
 - **As source:** each `.dc.html` is plain HTML. Its colours are CSS variables copied from `TaskFlow.Web/src/index.css`.

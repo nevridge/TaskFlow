@@ -452,4 +452,31 @@ describe('areas styles', () => {
     const literals = section.match(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/gi)
     expect(literals).toEqual(['rgba(0, 0, 0, .35)'])
   })
+
+  const projectsCss = read('./projects.css')
+  const projectsSection = projectsCss.slice(
+    projectsCss.indexOf('/* ─── Area select'),
+    projectsCss.indexOf('/* ==== MOBILE'),
+  )
+
+  it('uses no literal colours in the Area select and group heading styles', () => {
+    expect(projectsSection).toContain('.p-group-title')
+    expect(projectsSection).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|:\s*(white|black)\b/i)
+  })
+
+  // A misspelled token fails silently; the portalled dialog only sees tokens defined on the root.
+  it('references only tokens that index.css defines', () => {
+    const used = [...(section + projectsSection).matchAll(/var\((--[a-z0-9-]+)/g)].map(m => m[1])
+    expect(used.length).toBeGreaterThan(0)
+    expect(used.filter(token => !new RegExp(`\\s${token}:`).test(css))).toEqual([])
+  })
+
+  // The generic hover rule has the same specificity, so the danger rule must come after it.
+  it('turns the trash button the danger colour on hover', () => {
+    const generic = section.indexOf('.area-icon-btn:hover:not(:disabled)')
+    const danger = section.indexOf('.area-icon-btn--danger:hover:not(:disabled)')
+    expect(generic).toBeGreaterThan(-1)
+    expect(danger).toBeGreaterThan(generic)
+    expect(section.slice(danger, section.indexOf('}', danger))).toMatch(/color:\s*var\(--danger-ink\)/)
+  })
 })

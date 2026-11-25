@@ -325,6 +325,11 @@ describe('ProjectsPage', () => {
       expect(listText()).toEqual(['Home', 'No projects in this area yet.', 'Work', 'Alpha', 'No area', 'Loose', 'Orphan'])
     })
 
+    it('has no area-management controls', () => {
+      renderPage()
+      expect(screen.queryByRole('button', { name: /^(Rename|Delete|Reorder) |add area/i })).not.toBeInTheDocument()
+    })
+
     it('shows only "No area" when there are no areas', () => {
       mockAreas({ data: { data: [] } })
       renderPage()

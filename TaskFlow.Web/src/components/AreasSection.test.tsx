@@ -152,6 +152,13 @@ describe('Areas section', () => {
     expect(await screen.findByRole('button', { name: 'Reorder Garden' })).toBeInTheDocument()
   })
 
+  it('shows a loading status until the areas arrive, without blocking the other settings', () => {
+    vi.mocked(areasApi.getAreas).mockReturnValue(deferred().promise)
+    renderDrawer()
+    expect(within(section()).getByText('Loading areas…')).toHaveAttribute('role', 'status')
+    expect(screen.getByRole('switch', { name: 'Toggle dark mode' })).toBeEnabled()
+  })
+
   it('hides the reorder hint with a single area', async () => {
     server = [area(1, 'Work')]
     await loaded()
@@ -195,6 +202,36 @@ describe('rename and add', () => {
     await user.click(screen.getByRole('button', { name: 'Save area' }))
     await waitFor(() => expect(rowNames()).toEqual(['Work', 'Personal', 'Health', 'Garden']))
     expect(screen.getByRole('button', { name: '+ Add area' })).toHaveFocus()
+  })
+
+  it('adds on Enter', async () => {
+    vi.mocked(areasApi.createArea).mockImplementation(async name => {
+      server = [...server, area(4, name)]
+      return { data: area(4, name) } as never
+    })
+    const user = await loaded()
+    await user.click(screen.getByRole('button', { name: '+ Add area' }))
+    await user.keyboard('Garden{Enter}')
+    expect(areasApi.createArea).toHaveBeenCalledExactlyOnceWith('Garden')
+    await waitFor(() => expect(rowNames()).toEqual(['Work', 'Personal', 'Health', 'Garden']))
+  })
+
+  it.each([
+    ['Escape on add', '+ Add area', 'New area name', null, '+ Add area'],
+    ['the add cancel button', '+ Add area', 'New area name', 'Cancel add', '+ Add area'],
+    ['the rename cancel button', 'Rename Work', 'Area name', 'Cancel rename', 'Rename Work'],
+  ])('%s discards the typed name without a request', async (_how, opener, field, cancel, returnTo) => {
+    const user = await loaded()
+    await user.click(screen.getByRole('button', { name: opener }))
+    await user.type(screen.getByRole('textbox', { name: field }), 'draft')
+    if (cancel) await user.click(screen.getByRole('button', { name: cancel }))
+    else await user.keyboard('{Escape}')
+    expect(screen.queryByRole('textbox', { name: field })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: returnTo })).toHaveFocus()
+    expect(areasApi.createArea).not.toHaveBeenCalled()
+    expect(areasApi.renameArea).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(rowNames()).toEqual(['Work', 'Personal', 'Health'])
   })
 
   const failures = [
@@ -316,6 +353,19 @@ describe('keyboard reorder', () => {
     expect(handle('Work')).toHaveFocus()
   })
 
+  // The pending guard must be released after a failure, not only after a success.
+  it('accepts another reorder after a failed one and clears its error', async () => {
+    vi.mocked(areasApi.reorderAreas).mockRejectedValueOnce({}).mockResolvedValue({} as never)
+    const user = await loaded()
+    handle('Work').focus()
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save the new order.')
+    await waitFor(() => expect(rowNames()).toEqual(['Work', 'Personal', 'Health']))
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    expect(areasApi.reorderAreas).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
   it.each([
     ['Work', 'ArrowUp'],
     ['Health', 'ArrowDown'],
@@ -358,6 +408,20 @@ describe('mouse reorder', () => {
     expect(dropLine()).not.toBeInTheDocument()
     await waitFor(() => expect(areasApi.reorderAreas).toHaveBeenCalledWith([2, 1, 3]))
     expect(handle('Work')).toHaveFocus()
+  })
+
+  it('lifts the dragged row, then shows and announces the new order after the drop', async () => {
+    vi.mocked(areasApi.reorderAreas).mockImplementation(async () => {
+      server = [server[1], server[0], server[2]]
+      return {} as never
+    })
+    const grip = await startDrag()
+    const row = grip.closest('li')
+    expect(row).toHaveClass('is-dragging')
+    fireEvent.pointerUp(grip, { ...pointer, clientY: 70 })
+    expect(row).not.toHaveClass('is-dragging')
+    await waitFor(() => expect(rowNames()).toEqual(['Personal', 'Work', 'Health']))
+    expect(announcement()).toHaveTextContent('Work moved to position 2 of 3')
   })
 
   it('sends nothing when dropped where it started', async () => {
@@ -426,6 +490,16 @@ describe('delete', () => {
     expect(areasApi.deleteArea).toHaveBeenCalledWith(3, undefined)
     await waitFor(() => expect(rowNames()).toEqual(['Work', 'Personal']))
     expect(list()).toHaveFocus()
+  })
+
+  // A second DELETE would 404 and report an error for a delete that worked.
+  it('sends one request when the trash of an empty area is pressed twice', async () => {
+    const pending = deferred()
+    vi.mocked(areasApi.deleteArea).mockReturnValue(pending.promise)
+    const user = await loaded()
+    await user.dblClick(trash('Health'))
+    expect(areasApi.deleteArea).toHaveBeenCalledOnce()
+    await act(async () => pending.resolve({}))
   })
 
   it('opens the dialog if a direct delete fails because the area now has projects', async () => {

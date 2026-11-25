@@ -295,6 +295,26 @@ describe('TasksPage', () => {
       areaState.list = []
     })
 
+    // The page has to hand both the areas and each project's areaId to the form.
+    it('groups the create form project picker by area', async () => {
+      areaState.list = [{ id: 7, name: 'Work' }]
+      mockProjects([
+        { id: 1, name: 'Alpha', isArchived: false },
+        { id: 2, name: 'Beta', isArchived: false, areaId: 7 },
+        { id: 3, name: 'Old', isArchived: true, areaId: 7 },
+      ] as typeof projectList)
+      renderPage()
+      await userEvent.click(screen.getByRole('button', { name: 'New Task' }))
+      const select = document.getElementById('projectId') as HTMLSelectElement
+      const shape = Array.from(select.children, child =>
+        child instanceof HTMLOptGroupElement
+          ? [child.label, ...Array.from(child.children, o => o.textContent)]
+          : child.textContent,
+      )
+      expect(shape).toEqual(['No project', ['Work', 'Beta'], ['No area', 'Alpha']])
+      areaState.list = []
+    })
+
     it('lists All projects, No project, active projects, then archived projects with a suffix', () => {
       renderPage()
       const labels = within(filterSelect()).getAllByRole('option').map(o => o.textContent)

@@ -114,6 +114,20 @@ describe('DeleteAreaDialog', () => {
     expect(leave()).toHaveAccessibleDescription('They’ll show under “No area”. Their tasks aren’t changed.')
   })
 
+  it('groups the three radios under their question', async () => {
+    await loadedDialog()
+    const group = screen.getByRole('group', { name: 'What should happen to them?' })
+    expect(within(group).getAllByRole('radio')).toHaveLength(3)
+  })
+
+  it('accepts a new area name of exactly 100 characters', async () => {
+    const user = await loadedDialog()
+    await user.click(nameField())
+    await user.paste('a'.repeat(100))
+    await user.click(confirm())
+    expect(areasApi.deleteArea).toHaveBeenCalledWith(2, { newAreaName: 'a'.repeat(100) })
+  })
+
   it('uses the singular wording for one project', async () => {
     server = [server[0]]
     const user = await loadedDialog()

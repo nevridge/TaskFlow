@@ -402,6 +402,16 @@ A parent with at least one open subtask (stored status not Completed) displays a
 - The journal is unchanged and keeps using the stored status.
 - The derived status only drives display. The STORED status gates "Add subtask" (row and context header: `aria-disabled`, focusable, no-op, reason in `title` and a hidden description) and the Parent Task picker (`src/lib/parent-options.ts`: Completed parents are disabled and labelled "(completed)" in all three pickers; the currently selected parent stays enabled, and a selected id missing from the list shows a disabled "Current parent" option). So a Completed parent with an open child is still gated, and an open-stored parent whose derived status is Completed is not.
 
+### Areas (#585)
+
+Areas are managed only in the settings drawer's Areas section (`components/AreasSection.tsx`, between Tasks and Appearance): add, rename, reorder and delete. Data goes through the hand-written `src/api/areas.ts` and `src/hooks/useAreas.ts`.
+
+- **Reorder:** drag a handle with the mouse, or focus it and press `Alt+↑` / `Alt+↓`. Each move is announced to screen readers.
+- **Touch-primary devices** (`(hover: none), (pointer: coarse)`): there is no drag reorder, and the handle is visually hidden until focused, so an attached keyboard can still Tab to it and use `Alt+↑` / `Alt+↓`.
+- **Delete:** an area with no projects is deleted at once. Otherwise `DeleteAreaDialog` asks whether to move its projects to another area or a new one, or leave them without an area.
+- **Project forms:** the Area select includes "+ New area…". Save is blocked while a typed new-area name has not been added or cancelled.
+- **Grouping:** the Projects page, the task form and task detail project pickers and the Tasks project filter group projects by area in display order, with "No area" last. The Projects page lists every area, including empty ones, and shows "No area" only when it has visible projects. The pickers omit empty groups (`groupProjectOptions` in `lib/project-options.ts`) and stay flat when there are no areas or they have not loaded.
+
 ### TaskCard
 
 Displays a task summary: title (linked to detail page), status and priority badges, due date. Badge classes are keyed on lowercase values; `task.status` and `task.priority` are normalised via `.toLowerCase()` before indexing the class map.

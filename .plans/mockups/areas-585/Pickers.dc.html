@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Project form and grouped pickers</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.t-light{--bg:#f6f7f9;--paper:#ffffff;--ink:#0f172a;--ink-2:#334155;--muted:#64748b;--line:#e2e8f0;--line-2:#cbd5e1;--line-soft:#eef2f7;--accent:#2563eb;--accent-soft:color-mix(in oklab,#2563eb 10%,white);--hover-soft:#eef2f7;--shadow-md:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06)}
+.t-dark{--bg:#0b1220;--paper:#131b2c;--ink:#e8edf6;--ink-2:#c2cbdc;--muted:#8b97ad;--line:#1f2a40;--line-2:#2b3853;--line-soft:#19233a;--accent:#2563eb;--accent-soft:color-mix(in oklab,#2563eb 22%,#131b2c);--hover-soft:#1a2438;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.t-tokyo{--bg:#1a1b26;--paper:#24283b;--ink:#c0caf5;--ink-2:#a9b1d6;--muted:#9aa5ce;--line:#2f3549;--line-2:#3b4261;--line-soft:#1d2033;--accent:#7aa2f7;--accent-soft:color-mix(in oklab,#7aa2f7 30%,#24283b);--hover-soft:#2e3558;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.cap{margin:0 0 12px;font:600 18px/1.3 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#475569}
+.pg{width:1000px;height:740px;box-sizing:border-box;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-radius:10px;box-shadow:0 0 0 1px rgba(15,23,42,.12);padding:28px 32px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:28px;align-items:start}
+.sub{margin:0 0 10px;font-size:15px;font-weight:600}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md);padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.lbl{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600}
+.inp{padding:8px 10px;background:var(--bg);border:1px solid var(--line-2);border-radius:8px;font:inherit;font-size:14px;font-weight:400;color:var(--ink)}
+.open{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:1px;display:flex;justify-content:space-between;align-items:center}
+.pop{background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow-md),0 8px 24px rgba(0,0,0,.15);padding:4px 0;font-size:14px}
+.grp{padding:6px 12px 2px;font-size:12px;font-weight:700;color:var(--muted)}
+.o{padding:4px 12px 4px 24px}
+.o.top{padding-left:12px}
+.o.sel{background:var(--accent);color:#fff}
+.o.new{color:var(--accent);font-weight:600}
+.sep{border-top:1px solid var(--line-soft);margin:4px 0}
+.newbox{display:flex;gap:8px;align-items:center;padding:10px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px}
+.btn{padding:7px 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper);font:inherit;font-size:13px;font-weight:600;color:var(--ink)}
+.btn-p{background:var(--accent);border-color:var(--accent);color:#fff}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+</style>
+</helmet>
+<div style="display: flex; gap: 40px; padding: 40px; background: #e9ecf1">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div>
+<p class="cap">{{t.label}}</p>
+<div class="pg {{t.cls}}">
+<section>
+<h2 class="sub">Edit project · Area picker</h2>
+<form class="panel">
+<label class="lbl">Name<input class="inp" value="Garden"></label>
+<label class="lbl">Area<span class="inp open"><span>Personal</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span></label>
+<div class="pop" style="margin-top: -6px">
+<div class="o top">No area</div>
+<div class="o top">Business</div>
+<div class="o top sel">Personal</div>
+<div class="o top">Health</div>
+<div class="sep"></div>
+<div class="o top new">+ New area…</div>
+</div>
+<div class="newbox"><input class="inp" aria-label="New area name" value="Hobbies" style="flex: 1; min-width: 0"><button class="btn btn-p" type="button">Add</button><button class="btn" type="button">Cancel</button></div>
+<div style="display: flex; gap: 8px"><button class="btn btn-p" type="button">Save</button><button class="btn" type="button">Cancel</button></div>
+</form>
+<p class="note">“+ New area…” shows the name field; Add creates the area and selects it.</p>
+</section>
+<section>
+<h2 class="sub">Task form · Project picker</h2>
+<div class="panel" style="gap: 6px">
+<label class="lbl">Project<span class="inp open"><span>TaskFlow</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span></label>
+<div class="pop">
+<div class="o top">No project</div>
+<div class="grp">Business</div>
+<div class="o sel">TaskFlow</div>
+<div class="o">Client work</div>
+<div class="grp">Personal</div>
+<div class="o">House Cleaning</div>
+<div class="o">Garden</div>
+<div class="grp">No area</div>
+<div class="o">Reading list</div>
+</div>
+</div>
+<p class="note">One group per area in display order, projects by name inside, “No area” last. The Tasks page filter is grouped the same way, after “All projects” and “No project”.</p>
+</section>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3160,"height":852}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+themes: [
+{ label: 'Default · light', cls: 't-light' },
+{ label: 'Default · dark', cls: 't-dark' },
+{ label: 'Tokyo Night · dark', cls: 't-tokyo' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

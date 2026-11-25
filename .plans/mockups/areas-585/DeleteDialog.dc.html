@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Delete area dialog</title>
+<script src="./_runtime/react.js"></script>
+<script src="./_runtime/react-dom.js"></script>
+<script src="./_runtime/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+.t-light{--bg:#f6f7f9;--paper:#ffffff;--paper-2:#fdfdfb;--ink:#0f172a;--ink-2:#334155;--muted:#64748b;--muted-2:#94a3b8;--line:#e2e8f0;--line-2:#cbd5e1;--accent:#2563eb;--accent-soft:color-mix(in oklab,#2563eb 10%,white);--hover-soft:#eef2f7;--danger-bg:#fee2e2;--danger-ink:#b91c1c;--danger-solid:#b91c1c;--shadow-md:0 1px 2px rgba(15,23,42,.04),0 8px 24px rgba(15,23,42,.06)}
+.t-dark{--bg:#0b1220;--paper:#131b2c;--paper-2:#161f33;--ink:#e8edf6;--ink-2:#c2cbdc;--muted:#8b97ad;--muted-2:#5b6781;--line:#1f2a40;--line-2:#2b3853;--accent:#2563eb;--accent-soft:color-mix(in oklab,#2563eb 22%,#131b2c);--hover-soft:#1a2438;--danger-bg:#3a1316;--danger-ink:#fca5a5;--danger-solid:#b91c1c;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.t-tokyo{--bg:#1a1b26;--paper:#24283b;--paper-2:#292e42;--ink:#c0caf5;--ink-2:#a9b1d6;--muted:#9aa5ce;--muted-2:#565f89;--line:#2f3549;--line-2:#3b4261;--accent:#7aa2f7;--accent-soft:color-mix(in oklab,#7aa2f7 30%,#24283b);--hover-soft:#2e3558;--danger-bg:color-mix(in oklab,#f7768e 28%,#24283b);--danger-ink:#f7768e;--danger-solid:#c0485f;--shadow-md:0 1px 2px rgba(0,0,0,.45),0 12px 32px rgba(0,0,0,.45)}
+.cap{margin:0 0 12px;font:600 18px/1.3 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#475569}
+.pg{position:relative;width:1000px;height:780px;overflow:hidden;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-radius:10px;box-shadow:0 0 0 1px rgba(15,23,42,.12)}
+.drawer{position:absolute;top:0;left:0;bottom:0;width:280px;background:var(--paper);box-shadow:var(--shadow-md)}
+.dh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 14px;border-bottom:1px solid var(--line);font-size:15px;font-weight:600}
+.st{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);padding:20px 20px 8px;margin:0}
+.ar{display:flex;align-items:center;padding:8px 20px;font-size:13px;font-weight:500;color:var(--ink-2)}
+.ac{font-size:11.5px;color:var(--muted);margin-left:6px;font-weight:400}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.dlg{position:absolute;left:330px;top:70px;width:560px;box-sizing:border-box;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-md),0 24px 64px rgba(0,0,0,.3);padding:22px 24px}
+.h{margin:0 0 6px;font-size:18px;font-weight:700}
+.p{margin:0 0 10px;font-size:14px;color:var(--ink-2)}
+.affected{margin:0 0 16px;padding:10px 14px 10px 30px;background:var(--bg);border:1px solid var(--line);border-radius:8px;font-size:14px}
+.badge{display:inline-block;margin-left:8px;padding:0 8px;border:1px solid var(--line-2);border-radius:999px;font-size:11px;font-weight:600;color:var(--muted)}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:10px}
+.opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.ol{font-weight:600;font-size:14px}
+.oh{font-size:13px;color:var(--muted)}
+.inp{padding:8px 10px;background:var(--bg);border:1px solid var(--line-2);border-radius:8px;font:inherit;font-size:14px;color:var(--ink);width:220px}
+.btn{padding:7px 14px;border:1px solid var(--line-2);border-radius:8px;background:var(--paper);font:inherit;font-size:13px;font-weight:600;color:var(--ink)}
+.btn-d{background:var(--danger-solid);border-color:var(--danger-solid);color:#fff}
+</style>
+</helmet>
+<div style="display: flex; gap: 40px; padding: 40px; background: #e9ecf1">
+<sc-for list="{{themes}}" as="t" hint-placeholder-count="3">
+<div>
+<p class="cap">{{t.label}}</p>
+<div class="pg {{t.cls}}">
+<div class="drawer" aria-hidden="true">
+<div class="dh">Settings<span style="color: var(--muted); font-size: 13px">✕</span></div>
+<h3 class="st">Areas</h3>
+<div class="ar">Business<span class="ac">2 projects</span></div>
+<div class="ar">Personal<span class="ac">3 projects</span></div>
+<div class="ar">Health<span class="ac">No projects</span></div>
+</div>
+<div class="dim" aria-hidden="true"></div>
+<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="del-h">
+<h2 class="h" id="del-h">Delete the “Personal” area?</h2>
+<p class="p">3 projects will be left without an area:</p>
+<ul class="affected">
+<li>House Cleaning</li>
+<li>Garden</li>
+<li>Finances<span class="badge">Archived</span></li>
+</ul>
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<legend style="font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0">What should happen to them?</legend>
+<label class="opt"><input type="radio" name="d" style="margin-top: 3px"><span style="display: flex; flex-direction: column; gap: 6px"><span class="ol">Move them to another area</span><select class="inp" disabled="" aria-label="Target area"><option>Business</option></select></span></label>
+<label class="opt on"><input type="radio" name="d" checked="" style="margin-top: 3px"><span style="display: flex; flex-direction: column; gap: 6px"><span class="ol">Move them to a new area</span><input class="inp" aria-label="New area name" value="Home"><span class="oh">“Home” will be created and the 3 projects moved into it.</span></span></label>
+<label class="opt"><input type="radio" name="d" style="margin-top: 3px"><span style="display: flex; flex-direction: column; gap: 2px"><span class="ol">Leave them without an area</span><span class="oh">They’ll show under “No area”. Their tasks aren’t changed.</span></span></label>
+</fieldset>
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px">
+<button class="btn" type="button">Cancel</button>
+<button class="btn btn-d" type="button">Delete area and move projects</button>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":3160,"height":892}}'>
+class Component extends DCLogic {
+renderVals() {
+return {
+themes: [
+{ label: 'Default · light', cls: 't-light' },
+{ label: 'Default · dark', cls: 't-dark' },
+{ label: 'Tokyo Night · dark', cls: 't-tokyo' }
+]
+};
+}
+}
+</script>
+</body>
+</html>

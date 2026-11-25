@@ -1,0 +1,42 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 3160,
+      "h": 1032,
+      "title": "Areas section in the settings drawer (⋯ menu open, one area being renamed)"
+    },
+    {
+      "file": "DeleteDialog.dc.html",
+      "x": 0,
+      "y": 1152,
+      "w": 3160,
+      "h": 892,
+      "title": "Delete an area that has projects (opens above the drawer)"
+    },
+    {
+      "file": "Pickers.dc.html",
+      "x": 0,
+      "y": 2164,
+      "w": 3160,
+      "h": 852,
+      "title": "Project form (+ New area…) and grouped project pickers"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "t1",
+      "x": 0,
+      "y": -300,
+      "w": 240,
+      "maxW": 3160,
+      "text": "#490 Areas: settings drawer section, three themes",
+      "kind": "title1"
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

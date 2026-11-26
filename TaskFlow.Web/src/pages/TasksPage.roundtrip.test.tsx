@@ -13,6 +13,7 @@ vi.mock('@/hooks/useTasks', () => ({
   useTaskHistoryQuery: vi.fn(),
   useCreateTaskMutation: vi.fn(),
   useUpdateTaskMutation: vi.fn(),
+  usePatchTaskMutation: vi.fn(),
   useBlockTaskMutation: vi.fn(),
   useUnblockTaskMutation: vi.fn(),
   useEditBlockedReasonMutation: vi.fn(),
@@ -42,6 +43,7 @@ import {
   useTaskHistoryQuery,
   useCreateTaskMutation,
   useUpdateTaskMutation,
+  usePatchTaskMutation,
   useBlockTaskMutation,
   useUnblockTaskMutation,
   useEditBlockedReasonMutation,
@@ -152,6 +154,7 @@ describe('Tasks list to detail and back, end to end (#469 AC1, AC2, AC3, AC5, AC
     const mutation = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
     vi.mocked(useCreateTaskMutation).mockReturnValue(mutation as never)
     vi.mocked(useUpdateTaskMutation).mockReturnValue(mutation as never)
+    vi.mocked(usePatchTaskMutation).mockReturnValue(mutation as never)
     vi.mocked(useBlockTaskMutation).mockReturnValue(mutation as never)
     vi.mocked(useUnblockTaskMutation).mockReturnValue(mutation as never)
     vi.mocked(useEditBlockedReasonMutation).mockReturnValue(mutation as never)

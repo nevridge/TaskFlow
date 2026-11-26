@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement } from 'react'
-import { useTasksQuery, useTaskQuery, useCreateTaskMutation, useUpdateTaskMutation, useDeleteTaskMutation } from './useTasks'
+import { useTasksQuery, useTaskQuery, useCreateTaskMutation, useUpdateTaskMutation, usePatchTaskMutation, useDeleteTaskMutation } from './useTasks'
 import { projectKeys } from './projectKeys'
 
 vi.mock('@/api/client/sdk.gen', () => ({
@@ -10,6 +10,7 @@ vi.mock('@/api/client/sdk.gen', () => ({
   getTaskV1: vi.fn(),
   postApiV1TaskItems: vi.fn(),
   putApiV1TaskItemsById: vi.fn(),
+  patchApiV1TaskItemsById: vi.fn(),
   deleteApiV1TaskItemsById: vi.fn(),
 }))
 
@@ -66,6 +67,39 @@ describe('useUpdateTaskMutation', () => {
       path: { id: 2 },
       body: expect.objectContaining({ title: 'U' }),
     }))
+  })
+})
+
+describe('usePatchTaskMutation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockResolvedValue({ data: {}, response: new Response() } as never)
+  })
+
+  const body = () => vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls[0][0]!.body as Record<string, unknown>
+
+  it('sends a set blockedReason, omits absent description/dueDate/projectId and never sends goalId', async () => {
+    const { result } = renderHook(() => usePatchTaskMutation(), { wrapper: makeWrapper() })
+    await act(async () => { await result.current.mutateAsync({ id: 4, data: { title: 'T', blockedReason: 'waiting' } }) })
+
+    expect(body().blockedReason).toBe('waiting')
+    expect(body()).not.toHaveProperty('description')
+    expect(body()).not.toHaveProperty('dueDate')
+    expect(body()).not.toHaveProperty('projectId')
+    expect(body()).not.toHaveProperty('goalId')
+    expect(vi.mocked(sdk.patchApiV1TaskItemsById).mock.calls[0][0]).toMatchObject({ path: { id: 4 }, throwOnError: true })
+  })
+
+  it('invalidates task, detail and project keys on success', async () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchTaskMutation(), { wrapper: makeWrapper(qc) })
+    await act(async () => { await result.current.mutateAsync({ id: 4, data: { projectId: 2 } }) })
+
+    const keys = invalidate.mock.calls.map(c => c[0]?.queryKey)
+    expect(keys).toContainEqual(['tasks'])
+    expect(keys).toContainEqual(['tasks', 4])
+    expect(keys).toContainEqual(projectKeys.all)
   })
 })
 

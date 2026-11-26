@@ -8,7 +8,7 @@ import {
   putApiV1TaskItemsById,
   deleteApiV1TaskItemsById,
 } from '@/api/client/sdk.gen'
-import type { CreateTaskItemDto, TaskItemResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
+import type { CreateTaskItemDto, PatchTaskItemDto, TaskItemResponseDto, UpdateTaskItemDto } from '@/api/client/types.gen'
 import { getTaskHistory } from '@/api/tasks'
 import { projectKeys } from '@/hooks/projectKeys'
 import { journalKeys } from '@/hooks/journalKeys'
@@ -174,8 +174,9 @@ export function useUpdateTaskMutation() {
       putApiV1TaskItemsById({
         path: { id },
         // Intentionally no projectId: UpdateTaskItemDto has none, and PUT is a full
-        // replace that must never clear the project. Project changes go through the
-        // assign/unassign endpoints (see useChangeTaskProject).
+        // replace that must never clear the project. The edit form changes the project in the
+        // same request through the PATCH (usePatchTaskMutation); the standalone project
+        // control still uses the assign/unassign endpoints (see useChangeTaskProject).
         body: {
           title: data.title,
           description: data.description,
@@ -219,6 +220,83 @@ export function useUpdateTaskMutation() {
       // Status changes alter the open/completed counts shown on project views.
       qc.invalidateQueries({ queryKey: projectKeys.all })
       // Planning a task on a day changes that day's journal todos.
+      if (data.journalDate != null) qc.invalidateQueries({ queryKey: journalKeys.all })
+    },
+  })
+}
+
+/**
+ * What the edit form hands to the PATCH. Unlike PUT, an absent field keeps the stored value and an explicit
+ * `null` clears it, so the body is built field by field in `buildPatchBody`.
+ */
+export type PatchTaskPayload = {
+  title?: string
+  /** null clears the description (PUT cleared by omission; PATCH keeps what is omitted). */
+  description?: string | null
+  status?: UpdateTaskItemDto['status']
+  priority?: UpdateTaskItemDto['priority']
+  /** null clears the due date. */
+  dueDate?: string | null
+  parentTaskItemId?: number | null
+  autoCompleteParentWhenChildrenDone?: boolean
+  /** PATCH semantics: omitted keeps the reason, a present value (including "") replaces or clears it. */
+  blockedReason?: string | null
+  /** Only when the form sets or changes the planned day. */
+  journalDate?: string | null
+  /** Only when the project changes: a number moves the task, null removes it. Omitted keeps the project. */
+  projectId?: number | null
+}
+
+function buildPatchBody(data: PatchTaskPayload): PatchTaskItemDto {
+  return {
+    title: data.title,
+    // Explicit null so an emptied field clears: PATCH keeps what is omitted. undefined stays absent.
+    ...(data.description !== undefined && { description: data.description }),
+    ...(data.dueDate !== undefined && { dueDate: data.dueDate }),
+    status: data.status,
+    priority: data.priority,
+    parentTaskItemId: data.parentTaskItemId ?? null,
+    autoCompleteParentWhenChildrenDone: data.autoCompleteParentWhenChildrenDone ?? false,
+    timezoneOffsetMinutes: getTimezoneOffsetMinutes(),
+    // A present blockedReason (null or "") would clear the stored one, so send it only when set.
+    ...(data.blockedReason != null && { blockedReason: data.blockedReason }),
+    ...(data.journalDate != null && { journalDate: data.journalDate }),
+    ...(data.projectId !== undefined && { projectId: data.projectId }),
+    // goalId is never sent: a project change resets the goal on the server.
+  }
+}
+
+/**
+ * One PATCH for the edit form: the fields, the planned day and the project commit together or not at all.
+ * A refusal (unknown project, goal rule, ...) changes nothing and rolls the optimistic status back.
+ */
+export function usePatchTaskMutation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: PatchTaskPayload }) =>
+      patchApiV1TaskItemsById({ path: { id }, body: buildPatchBody(data), throwOnError: true }),
+    onMutate: ({ id, data }) => {
+      const next = normalizeStatus(data.status)
+      if (!next || next === 'Blocked') return undefined
+      return applyOptimisticTaskUpdate(qc, [taskKeys.all, taskKeys.detail(id)], id, task => ({ ...task, status: next }))
+    },
+    onError: (err, { id }, snapshot) => {
+      rollbackTaskCache(qc, snapshot)
+      const code = (err as { code?: unknown } | null)?.code
+      if (
+        code === 'TASK_PARENT_STATUS_DERIVED' ||
+        code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED' ||
+        code === 'TASK_JOURNAL_ASSIGNMENT_CONFLICT'
+      ) {
+        qc.invalidateQueries({ queryKey: taskKeys.all })
+        qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
+      }
+    },
+    onSuccess: (_result, { id, data }) => {
+      // A project change moves the task's grouping, so the task keys refresh even for a project-only save.
+      qc.invalidateQueries({ queryKey: taskKeys.all })
+      qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
+      qc.invalidateQueries({ queryKey: projectKeys.all })
       if (data.journalDate != null) qc.invalidateQueries({ queryKey: journalKeys.all })
     },
   })

@@ -11,7 +11,7 @@ import type { PrefsContextValue } from '@/context/PrefsContextDef'
 vi.mock('@/hooks/useTasks', () => ({
   useTaskQuery: vi.fn(),
   useTasksQuery: vi.fn(),
-  useUpdateTaskMutation: vi.fn(),
+  usePatchTaskMutation: vi.fn(),
   useTaskHistoryQuery: vi.fn(),
   taskKeys: {
     all: ['tasks'],
@@ -51,7 +51,7 @@ vi.mock('@/components/TaskHistoryPanel', () => ({
 }))
 
 import { removeJournalTodo } from '@/api/journal'
-import { useTaskQuery, useTasksQuery, useUpdateTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
+import { useTaskQuery, useTasksQuery, usePatchTaskMutation, useTaskHistoryQuery } from '@/hooks/useTasks'
 import { useDeleteTaskUndoable, useDeleteNoteUndoable } from '@/hooks/useDeleteTaskUndoable'
 import { useProjectsQuery, useChangeTaskProject } from '@/hooks/useProjects'
 import { useNotesQuery, useCreateNoteMutation, useUpdateNoteMutation } from '@/hooks/useNotes'
@@ -173,7 +173,7 @@ describe('TaskDetailPage', () => {
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
 
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
+    vi.mocked(usePatchTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
     vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
@@ -665,9 +665,9 @@ describe('TaskDetailPage', () => {
       expect(titleBox()).not.toHaveFocus()
     })
 
-    it('a partial failure (update OK, project change fails) keeps the form open without focusing Edit', async () => {
+    it('a refused project change keeps the form open without focusing Edit', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
-      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_GOAL_NOT_NOW' })
       renderPage()
       await userEvent.click(editBtn())
       await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
@@ -1314,9 +1314,9 @@ describe('TaskDetailPage', () => {
       expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
     })
 
-    it('a partial failure after a project change keeps the form and ?edit=1', async () => {
+    it('a refused project change keeps the form and ?edit=1', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
-      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_GOAL_NOT_NOW' })
       renderAt('/tasks/1?edit=1')
       await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
@@ -1512,7 +1512,7 @@ describe('TaskDetailPage', () => {
       expect(document.getElementById('projectId')).not.toBeNull()
     })
 
-    it('edit form: unchanged project makes no project call and the PUT has no projectId', async () => {
+    it('edit form: unchanged project makes no project call and the PATCH has no projectId', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: /edit/i }))
@@ -1524,72 +1524,58 @@ describe('TaskDetailPage', () => {
       expect(changeAsync).not.toHaveBeenCalled()
     })
 
-    it('edit form: moving to another project assigns it (never unassigns first)', async () => {
+    it('edit form: moving to another project goes in the one PATCH', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: /edit/i }))
       await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      await waitFor(() =>
-        expect(changeAsync).toHaveBeenCalledWith({ taskId: 1, fromProjectId: 1, toProjectId: 2 }),
-      )
-      expect(updateAsync.mock.calls[0][0].data).not.toHaveProperty('projectId')
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      expect(updateAsync.mock.calls[0][0].data.projectId).toBe(2)
+      expect(changeAsync).not.toHaveBeenCalled()
     })
 
-    it('edit form: "No project" unassigns from the old project', async () => {
+    it('edit form: "No project" sends projectId null in the PATCH', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: /edit/i }))
       await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'No project')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      await waitFor(() =>
-        expect(changeAsync).toHaveBeenCalledWith({ taskId: 1, fromProjectId: 1, toProjectId: null }),
-      )
+      await waitFor(() => expect(updateAsync).toHaveBeenCalledTimes(1))
+      expect(updateAsync.mock.calls[0][0].data).toHaveProperty('projectId', null)
+      expect(changeAsync).not.toHaveBeenCalled()
     })
 
-    it('partial failure keeps the form open and focus on Save; a retry re-sends PUT then the project call', async () => {
+    it('a refused project change keeps the form open with one error and focus on Save; a retry re-sends the PATCH', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
-      changeAsync.mockRejectedValueOnce({ message: 'boom' })
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_GOAL_NOT_NOW' })
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: /edit/i }))
       await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      expect(await screen.findByRole('alert')).toHaveTextContent(
-        'Task saved, but the project change failed: Unable to change the project. Please try again.',
-      )
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/Pause it first/)
+      expect(alert).not.toHaveTextContent(/saved|project change failed/i)
+      expect(screen.getByRole('combobox', { name: 'Project' })).not.toHaveAttribute('aria-invalid')
       expect(screen.getByLabelText(/title/i)).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /save/i })).toHaveFocus()
 
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
       await waitFor(() => expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument())
       expect(updateAsync).toHaveBeenCalledTimes(2)
-      expect(changeAsync).toHaveBeenCalledTimes(2)
+      expect(changeAsync).not.toHaveBeenCalled()
       expect(screen.getByRole('button', { name: /edit/i })).toHaveFocus()
     })
 
-    it('partial failure invalidates the task list and detail queries', async () => {
+    it('an unknown project marks the Project select invalid and focuses it until changed', async () => {
       mockTask({ projectId: 1, projectName: 'Alpha' })
-      changeAsync.mockRejectedValueOnce({ message: 'boom' })
-      const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-      renderPage()
-      await userEvent.click(screen.getByRole('button', { name: /edit/i }))
-      await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Project' }), 'Beta')
-      await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      await screen.findByRole('alert')
-      const keys = invalidate.mock.calls.map(c => c[0]?.queryKey)
-      expect(keys).toContainEqual(['tasks'])
-      expect(keys).toContainEqual(['tasks', 1])
-    })
-
-    it('a 404 on the project call marks the Project select invalid and focuses it until changed', async () => {
-      mockTask({ projectId: 1, projectName: 'Alpha' })
-      changeAsync.mockRejectedValueOnce({ status: 404 })
+      updateAsync.mockRejectedValueOnce({ code: 'TASK_PROJECT_NOT_FOUND' })
       renderPage()
       await userEvent.click(screen.getByRole('button', { name: /edit/i }))
       const select = screen.getByRole('combobox', { name: 'Project' })
       await userEvent.selectOptions(select, 'Beta')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('The task or project could not be found. It may have been changed or removed.')
+      expect(await screen.findByRole('alert')).toHaveTextContent('The selected project was not found.')
       expect(select).toHaveAttribute('aria-invalid', 'true')
       expect(select).toHaveFocus()
       await userEvent.selectOptions(select, 'Alpha')
@@ -1625,7 +1611,7 @@ describe('TaskDetailPage on mobile (#320)', () => {
     vi.mocked(useTasksQuery).mockReturnValue({ data: { data: [task] }, isLoading: false } as never)
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
+    vi.mocked(usePatchTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
     vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
@@ -1783,7 +1769,7 @@ describe('TaskDetailPage derived status (#385)', () => {
     mockChange()
     vi.mocked(useNotesQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
     vi.mocked(useTaskHistoryQuery).mockReturnValue({ data: { data: [] }, isLoading: false } as never)
-    vi.mocked(useUpdateTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
+    vi.mocked(usePatchTaskMutation).mockReturnValue({ mutate: vi.fn(), mutateAsync: updateAsync, isPending: false } as never)
     vi.mocked(useDeleteTaskUndoable).mockReturnValue(deleteTask)
     vi.mocked(useCreateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)
     vi.mocked(useUpdateNoteMutation).mockReturnValue({ mutate: vi.fn(), isPending: false } as never)

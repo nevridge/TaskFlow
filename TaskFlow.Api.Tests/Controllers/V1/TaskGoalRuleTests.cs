@@ -331,4 +331,33 @@ public sealed class TaskGoalRuleTests : GoalsApiTestBase
         Assert.Null(GoalIdOf(await GetTaskAsync(parent)));
         Assert.Null(GoalIdOf(await GetTaskAsync(child)));
     }
+
+    [Theory]
+    [InlineData("inProgress", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("todo", HttpStatusCode.NoContent)]
+    public async Task ProjectMove_IntoAParentsNonCurrentGoal_IsRefused_OnlyForASubtaskInProgress(
+        string status, HttpStatusCode expected)
+    {
+        var (projectId, now, next) = await SetupAsync();
+        var parent = await CreateInGoalAsync(projectId, next);
+        var child = await CreateTaskAsync(projectId, parentTaskItemId: parent);
+        var beta = await CreateProjectAsync("Beta");
+        await SendAsync(HttpMethod.Post, $"/api/v1/Projects/{beta}/tasks", new { taskItemId = child });
+        await UpdateAsync("PATCH", child, new { status });
+
+        var (moved, body) = await SendAsync(HttpMethod.Post, $"/api/v1/Projects/{projectId}/tasks", new { taskItemId = child });
+
+        Assert.Equal(expected, moved);
+        var task = await GetTaskAsync(child);
+        if (expected == HttpStatusCode.NoContent)
+        {
+            Assert.Equal(next, GoalIdOf(task));
+            return;
+        }
+
+        Assert.Equal("TASK_GOAL_NOT_NOW", body.GetProperty("code").GetString());
+        Assert.Equal(now, body.GetProperty("details").GetProperty("nowGoalId").GetInt32());
+        Assert.Equal(beta, task.GetProperty("projectId").GetInt32());
+        Assert.Null(GoalIdOf(task));
+    }
 }

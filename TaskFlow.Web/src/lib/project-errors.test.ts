@@ -21,6 +21,12 @@ describe('getProjectErrorKind', () => {
 })
 
 describe('getProjectMutationErrorMessage', () => {
+  it('says why a move was refused by the goal rule', () => {
+    expect(getProjectMutationErrorMessage({ code: 'TASK_GOAL_NOT_NOW', message: 'raw server text' })).toBe(
+      'This task is in progress and would join a goal that is not the current goal. Pause it first, or swap that goal to Now with the assistant.',
+    )
+  })
+
   it('maps each kind to a friendly message', () => {
     expect(getProjectMutationErrorMessage({ status: 404 })).toBe('The task or project could not be found. It may have been changed or removed.')
     expect(getProjectMutationErrorMessage({ status: 409 })).toBe('This task is already in that project.')

@@ -33,9 +33,12 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
         await _context.TaskItems.AsNoTracking().Include(t => t.Project).Include(t => t.Goal).FirstOrDefaultAsync(t => t.Id == id);
 
-    public async Task<Goal?> GetBlockingNowGoalAsync(int goalId)
+    public async Task<Goal?> GetBlockingNowGoalAsync(int goalId) =>
+        await BlockingNowGoalAsync(_context, goalId);
+
+    internal static async Task<Goal?> BlockingNowGoalAsync(TaskDbContext context, int goalId)
     {
-        var projectId = await _context.Goals
+        var projectId = await context.Goals
             .Where(g => g.Id == goalId && (g.Status == GoalStatus.Next || g.Status == GoalStatus.Parked))
             .Select(g => (int?)g.ProjectId)
             .FirstOrDefaultAsync();
@@ -43,7 +46,7 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         // FirstOrDefault, not Single: concurrent requests can leave two Now goals.
         return projectId is null
             ? null
-            : await _context.Goals.AsNoTracking()
+            : await context.Goals.AsNoTracking()
                 .FirstOrDefaultAsync(g => g.ProjectId == projectId && g.Status == GoalStatus.Now);
     }
 

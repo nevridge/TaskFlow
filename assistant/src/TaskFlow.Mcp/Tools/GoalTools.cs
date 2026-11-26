@@ -215,7 +215,7 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
             };
             throw new McpException(
                 $"Goal {Formatting.GoalLabel(saved)} was saved, but moving it to position {position} failed: {reason}. "
-                + $"Do not create it again; retry only the position with save_goal, goal={saved.Id} and position={position}.",
+                + $"Do not create it again; retry only the position with save_goal, project={projectId}, goal={saved.Id} and position={position}.",
                 ex);
         }
     }

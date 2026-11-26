@@ -181,6 +181,12 @@ public class ProjectsController(
             return BadRequest(validationResult.Errors);
         }
 
+        // 422 TASK_GOAL_NOT_NOW: an InProgress subtask would join its parent's goal, which is not the Now goal.
+        if (await _repo.GetBlockedGoalMoveAsync(id, dto.TaskItemId) is { } blocked)
+        {
+            return UnprocessableEntity(GoalRuleErrors.TaskGoalNotNow(dto.TaskItemId, blocked.GoalId, blocked.NowGoal));
+        }
+
         var result = await _repo.AssignTaskAsync(id, dto.TaskItemId);
         return result switch
         {

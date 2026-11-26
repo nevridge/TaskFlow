@@ -150,7 +150,7 @@ public class GoalToolsTests
 
         var message = await Error(() => tools.SaveGoal("Alpha", title: "Launch", position: 1, ct: Ct));
 
-        message.Should().Contain("#10 Launch was saved").And.Contain("Do not create it again").And.Contain("goal=10 and position=1");
+        message.Should().Contain("#10 Launch was saved").And.Contain("Do not create it again").And.Contain("project=7, goal=10 and position=1");
     }
 
     [Theory]

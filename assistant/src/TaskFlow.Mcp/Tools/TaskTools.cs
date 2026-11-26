@@ -53,7 +53,7 @@ internal static class UpdateFieldText
     public const string DueDate = "The deadline: yyyy-MM-dd, today/tomorrow, or 'none' to clear the due date. Separate from journalDate; it does not plan the task.";
     public const string Project = "Project name or id to assign, or 'none' to remove the task from its project. An unknown or ambiguous project rejects the whole update before anything is saved.";
     public const string Goal = "Goal title or id within the task's project (the new one when 'project' is passed), or 'none' to remove it. "
-        + "Omit to leave it alone, but moving projects clears it and gaining a parent takes the parent's goal. A subtask's goal cannot be set directly. "
+        + "Omit to leave it alone, but moving projects clears it and gaining a parent takes the parent's goal. A subtask's goal cannot be set directly. Moving an InProgress subtask into its parent's project is refused when the parent's goal is not Now. "
         + "An unknown or ambiguous goal rejects the whole update before anything is saved.";
     public const string ParentTaskId = "Parent task id to make this a subtask; 0 removes the parent. Only one subtask level is supported.";
     public const string Complete = "true to mark complete, false to reopen.";
@@ -773,6 +773,12 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         var goalRequested = removeGoal || targetGoal is not null;
+        if (goalRequested)
+        {
+            var resultingProject = removeProject ? null : target?.Id ?? existing.ProjectId;
+            await RejectUnassignableGoalAsync(existing, newParent, resultingProject, targetGoal, ct);
+        }
+
         var goalLabel = targetGoal is null ? "none" : $"'{Formatting.CleanReason(targetGoal.Title)}'";
         var goalArgument = targetGoal is null ? "none" : targetGoal.Id.ToString(CultureInfo.InvariantCulture);
         var savedChanges = changes.ToList();
@@ -948,6 +954,49 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         return new UpdateOutcome(updated, changes, note);
+    }
+
+    /// <summary>
+    /// Rejects, before anything is written, a goal change the API would always refuse: a subtask whose goal would differ
+    /// from the one its parent gives it, or a move into a Done or Dropped goal. Without this the call saves its other
+    /// changes and then suggests a retry that cannot succeed.
+    /// </summary>
+    private async Task RejectUnassignableGoalAsync(
+        TaskItemDto existing, int? newParent, int? resultingProject, GoalDto? goal, CancellationToken ct)
+    {
+        if (newParent is { } parentId)
+        {
+            var inherited = existing.GoalId;
+            if (existing.ParentTaskItemId != newParent || existing.ProjectId != resultingProject)
+            {
+                TaskItemDto parent;
+                try
+                {
+                    parent = await api.GetTaskAsync(parentId, ct);
+                }
+                catch (TaskFlowApiException)
+                {
+                    return; // The PUT reports a bad parent in its own words.
+                }
+
+                inherited = parent.ProjectId == resultingProject ? parent.GoalId : null;
+            }
+
+            if (goal?.Id != inherited)
+            {
+                throw ToolGuard.Invalid(
+                    $"Task #{existing.Id} would be a subtask of #{parentId}, so its goal follows that parent and can't be set directly. "
+                    + "Change the parent's goal, or omit goal. Nothing was changed.");
+            }
+        }
+        else if (goal is not null && goal.Id != existing.GoalId
+            && (string.Equals(goal.Status, "Done", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(goal.Status, "Dropped", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw ToolGuard.Invalid(
+                $"Goal {Formatting.GoalLabel(goal)} is {goal.Status}, so a task can't be assigned to it. "
+                + "Pick an open goal, or omit goal. Nothing was changed.");
+        }
     }
 
     /// <summary>Brings the task's goal to the requested one (null removes it). Returns false when no call was needed.</summary>

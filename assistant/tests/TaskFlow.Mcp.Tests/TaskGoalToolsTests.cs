@@ -299,6 +299,48 @@ public class TaskGoalToolsTests
         Writes(handler).Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("Done")]
+    [InlineData("Dropped")]
+    public async Task Update_ToAClosedGoal_WritesNothing(string goalStatus)
+    {
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Task5())
+            .Get("Goals", new[] { Fixtures.Goal(2, "Docs", status: goalStatus) });
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var message = await Error(() => tools.UpdateTask(5, title: "New", goal: "Docs", ct: Ct));
+
+        message.Should().Contain($"is {goalStatus}").And.Contain("Nothing was changed");
+        Writes(handler).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("Docs")]
+    [InlineData("none")]
+    public async Task Update_ADifferentGoalForASubtask_WritesNothing(string goal)
+    {
+        var (tools, handler) = Setup(h => h.Get("TaskItems/5", Task5(goalId: 1, parentId: 4)));
+
+        var message = await Error(() => tools.UpdateTask(5, title: "New", goal: goal, ct: Ct));
+
+        message.Should().Contain("subtask of #4").And.Contain("Nothing was changed");
+        Writes(handler).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Update_ANewSubtaskWithAGoalItsParentDoesNotGiveIt_WritesNothing()
+    {
+        var (tools, handler) = Setup(h => h
+            .Get("TaskItems/5", Task5())
+            .Get("TaskItems/4", Fixtures.Task(4, "Four", projectId: 7, goalId: 1, goalTitle: "Ship v1")));
+
+        var message = await Error(() => tools.UpdateTask(5, parentTaskId: 4, goal: "Docs", ct: Ct));
+
+        message.Should().Contain("subtask of #4").And.Contain("Nothing was changed");
+        Writes(handler).Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Update_GoalRefusedAfterThePut_SaysWhatWasSaved_AndWhatRemains()
     {

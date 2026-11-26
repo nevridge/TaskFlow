@@ -36,7 +36,7 @@ If a server is still running, the build stops and lists each blocking process id
 claude mcp add taskflow --scope user --env TASKFLOW_API_URL=http://localhost:8081 -- dotnet C:\code\TaskFlow\assistant\mcp\bin\TaskFlow.Mcp.dll
 ```
 
-The path is for a clone at `C:\code\TaskFlow`, and the URL is the default; adjust either if yours differs. A blank or malformed URL falls back to the default.
+Use the path of the clone you run the server from, and keep that clone on `main`. Don't register a dev clone that builders check branches out in. The example path is for a clone at `C:\code\TaskFlow`, and the URL is the default; adjust either if yours differs. A blank or malformed URL falls back to the default.
 
 Check it: `claude mcp list` should show `taskflow` as connected, and `claude mcp get taskflow` shows the stored command, args and env.
 

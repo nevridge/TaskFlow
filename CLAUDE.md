@@ -12,7 +12,7 @@ TaskFlow is a personal task and daily journal app: a .NET 11 REST API (`TaskFlow
 
 ## Assistant (`assistant/`)
 
-The Claude work-assistant MCP server lives in `assistant/`, with their own solution, `Directory.Build.props` and `.editorconfig`. The root solution references the assistant only through `TaskFlow.Mcp.Integration.Tests`; both solutions reference `TaskFlow.Contracts` (error codes, status and priority). See `assistant/CLAUDE.md`.
+The Claude work-assistant MCP server lives in `assistant/`, with its own solution, `Directory.Build.props` and `.editorconfig`. The root solution references the assistant only through `TaskFlow.Mcp.Integration.Tests`; both solutions reference `TaskFlow.Contracts` (error codes, status and priority). See `assistant/CLAUDE.md`.
 
 ## Safe Change Rules
 

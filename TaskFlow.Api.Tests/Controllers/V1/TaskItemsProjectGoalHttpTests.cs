@@ -438,4 +438,120 @@ public sealed class TaskItemsProjectGoalHttpTests : GoalsApiTestBase
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(["Assigned to project 'Alpha'."], await EventSummariesAsync(task, "ProjectChanged"));
     }
+
+    private static int? IdOrNull(JsonElement task, string name) =>
+        task.GetProperty(name) is { ValueKind: JsonValueKind.Number } id ? id.GetInt32() : null;
+
+    [Fact]
+    public async Task Put_WithProjectIdAndGoalId_NeverChangesProjectOrGoal()
+    {
+        var alpha = await CreateProjectAsync();
+        var beta = await CreateProjectAsync("Beta");
+        var alphaGoal = await CreateGoalAsync(alpha, "ag");
+        var betaGoal = await CreateGoalAsync(beta, "bg");
+        var task = await CreateTaskAsync(alpha);
+        await AssignAsync(alphaGoal, task);
+
+        var (status, _) = await SendAsync(
+            HttpMethod.Put, $"/api/v1/TaskItems/{task}",
+            new { title = "t", status = "todo", projectId = beta, goalId = betaGoal });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        var stored = await GetTaskAsync(task);
+        Assert.Equal(alpha, IdOrNull(stored, "projectId"));
+        Assert.Equal(alphaGoal, IdOrNull(stored, "goalId"));
+    }
+
+    [Fact]
+    public async Task Patch_ParentMovedToOtherProject_ClearsSubtaskGoalsInTheSameSave()
+    {
+        var alpha = await CreateProjectAsync();
+        var beta = await CreateProjectAsync("Beta");
+        var alphaGoal = await CreateGoalAsync(alpha, "ag");
+        var parent = await CreateTaskAsync(alpha);
+        await AssignAsync(alphaGoal, parent);
+        var child = await CreateTaskAsync(alpha, parentTaskItemId: parent);
+        Assert.Equal(alphaGoal, IdOrNull(await GetTaskAsync(child), "goalId"));
+
+        var (status, body) = await SendAsync(HttpMethod.Patch, $"/api/v1/TaskItems/{parent}", new { projectId = beta });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Null(IdOrNull(body, "goalId"));
+        Assert.Null(IdOrNull(await GetTaskAsync(child), "goalId"));
+    }
+
+    [Fact]
+    public async Task Patch_DetachingASubtaskAndSettingAGoal_IsAccepted()
+    {
+        var project = await CreateProjectAsync();
+        var inherited = await CreateGoalAsync(project, "inherited");
+        var other = await CreateGoalAsync(project, "other");
+        var parent = await CreateTaskAsync(project);
+        await AssignAsync(inherited, parent);
+        var child = await CreateTaskAsync(project, parentTaskItemId: parent);
+
+        var (status, body) = await PatchAsync(child, new { parentTaskItemId = (int?)null, goalId = other });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(other, GoalIdOf(body));
+        Assert.Equal(other, GoalIdOf(await GetTaskAsync(child)));
+    }
+
+    [Fact]
+    public async Task Patch_ReparentingATaskAndSettingAGoal_IsRefusedAndSavesNothing()
+    {
+        var project = await CreateProjectAsync();
+        var goal = await CreateGoalAsync(project, "g");
+        var parent = await CreateTaskAsync(project);
+        var task = await CreateTaskAsync(project);
+
+        var (status, body) = await PatchAsync(task, new { title = "Renamed", parentTaskItemId = parent, goalId = goal });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal("A subtask's goal follows its parent and cannot be set directly.", body.GetProperty("message").GetString());
+        var stored = await GetTaskAsync(task);
+        Assert.Equal("Task", stored.GetProperty("title").GetString());
+        Assert.Null(GoalIdOf(stored));
+        Assert.Equal(JsonValueKind.Null, stored.GetProperty("parentTaskItemId").ValueKind);
+    }
+
+    [Fact]
+    public async Task Patch_StatusOnlyToInProgress_OnATaskWhoseGoalIsNext_IsGoalNotNow()
+    {
+        var project = await CreateProjectAsync();
+        await CreateGoalAsync(project, "now", "now");
+        var next = await CreateGoalAsync(project, "next");
+        var task = await CreateTaskAsync(project);
+        await AssignAsync(next, task);
+
+        var (status, body) = await PatchAsync(task, new { status = "inProgress" });
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, status);
+        Assert.Equal("TASK_GOAL_NOT_NOW", body.GetProperty("code").GetString());
+        Assert.Equal("Todo", (await GetTaskAsync(task)).GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Patch_EmptyBlockedReasonOnABlockedTask_BehavesAsPutDoes()
+    {
+        var viaPatch = await CreateLooseTaskAsync("patch");
+        var viaPut = await CreateLooseTaskAsync("put");
+        foreach (var id in new[] { viaPatch, viaPut })
+        {
+            var (blocked, _) = await PatchAsync(id, new { status = "blocked", blockedReason = "waiting" });
+            Assert.Equal(HttpStatusCode.OK, blocked);
+        }
+
+        var patch = await PatchAsync(viaPatch, new { blockedReason = "" });
+        var put = await SendAsync(HttpMethod.Put, $"/api/v1/TaskItems/{viaPut}", new { title = "put", status = "blocked", blockedReason = "" });
+
+        Assert.Equal(HttpStatusCode.OK, patch.Status);
+        Assert.Equal(HttpStatusCode.OK, put.Status);
+        var patched = await GetTaskAsync(viaPatch);
+        var putted = await GetTaskAsync(viaPut);
+        Assert.Equal("Blocked", patched.GetProperty("status").GetString());
+        Assert.Equal(putted.GetProperty("status").GetString(), patched.GetProperty("status").GetString());
+        Assert.Equal(putted.GetProperty("blockedReason").ValueKind, patched.GetProperty("blockedReason").ValueKind);
+        Assert.Equal(putted.GetProperty("blockedReason").GetRawText(), patched.GetProperty("blockedReason").GetRawText());
+    }
 }

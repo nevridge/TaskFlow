@@ -178,7 +178,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
             var storedSummary = current.Summary;
             var existing = string.IsNullOrWhiteSpace(storedSummary) ? string.Empty : storedSummary.TrimEnd();
             var combined = existing.Length == 0 ? text : existing + "\n\n" + text;
-            if (combined.Length > JournalEntryValidator.MaxSummaryLength)
+            if (combined.Length > AppendJournalSummaryDtoValidator.MaxSummaryLength)
             {
                 return new AppendSummaryResult(AppendSummaryStatus.TooLong, existing.Length, text.Length, combined.Length);
             }

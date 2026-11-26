@@ -211,7 +211,7 @@ public class JournalEntriesController(
             case AppendSummaryStatus.TooLong:
                 return BadRequest(new
                 {
-                    message = $"The summary would be {result.CombinedLength} characters, over the {JournalEntryValidator.MaxSummaryLength} limit: "
+                    message = $"The summary would be {result.CombinedLength} characters, over the {AppendJournalSummaryDtoValidator.MaxSummaryLength} limit: "
                         + $"the existing summary is {result.ExistingLength} and the new text {result.TextLength} (plus a blank line between)."
                 });
         }

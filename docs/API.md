@@ -82,7 +82,7 @@ Refusals, checked in this order. Any refusal saves nothing: no fields, no projec
 | The goal is Done or Dropped | `400` `{ "message": "Tasks cannot be added to a Done or Dropped goal." }` |
 | The resulting status and goal break the goal rule | `422` `TASK_GOAL_NOT_NOW` (see below) |
 
-In `PATCH`, "subtask" is judged on the resulting parent, so a request that detaches the task and sets `goalId` is accepted. A `goalId: null` on a subtask that has no goal is a no-op.
+In `PATCH`, "subtask" is judged on the resulting parent, so a request that detaches the task (`parentTaskItemId: null`) and sets `goalId` is accepted, and one that puts the task under a parent and sets `goalId` is refused. A `goalId: null` on a subtask that has no goal is a no-op.
 
 #### Goal rule (`TASK_GOAL_NOT_NOW`)
 

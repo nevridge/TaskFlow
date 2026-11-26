@@ -29,6 +29,9 @@ public static partial class FieldCoverage
         ["POST JournalEntries/{id}/notes"] = typeof(NoteDto),
         ["GET TaskItems/{id}/notes"] = typeof(NoteDto),
         ["POST TaskItems/{id}/notes"] = typeof(NoteDto),
+        ["GET Goals"] = typeof(GoalDto),
+        ["POST Goals"] = typeof(GoalDto),
+        ["POST Goals/{id}/swap-now"] = typeof(GoalDto),
     };
 
     private const string ApiPrefix = "/api/v1/";

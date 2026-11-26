@@ -96,6 +96,22 @@ public class GoalToolsTests
         handler.BodyOf(HttpMethod.Put, "Goals/4").GetProperty("parkedReason").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
+    [Theory]
+    [InlineData("Parked", " waiting on legal ", "parked", "waiting on legal")]
+    [InlineData("DONE", null, "done", null)]
+    [InlineData("dropped", null, "dropped", null)]
+    [InlineData("now", null, "now", null)]
+    public async Task SaveGoal_StatusChange_SendsTheNewStatusAndReason(string status, string? reason, string sentStatus, string? sentReason)
+    {
+        var (tools, handler) = Setup(h => h.Put("Goals/2", Fixtures.Goal(2, "Docs")));
+
+        await tools.SaveGoal("Alpha", goal: "Docs", status: status, parkedReason: reason, ct: Ct);
+
+        var body = handler.BodyOf(HttpMethod.Put, "Goals/2");
+        body.GetProperty("status").GetString().Should().Be(sentStatus);
+        body.GetProperty("parkedReason").GetString().Should().Be(sentReason);
+    }
+
     [Fact]
     public async Task SaveGoal_Position_SendsEveryNextGoalInTheNewOrder_AfterTheSave()
     {

@@ -394,6 +394,19 @@ public class TaskGoalToolsTests
     }
 
     [Fact]
+    public async Task GetTask_ShowsTheGoal()
+    {
+        var (tools, _) = Setup(h => h
+            .Get("TaskItems/5", Task5(goalId: 2))
+            .Get("TaskItems/5/notes", Array.Empty<object>())
+            .Get("TaskItems/5/history", Array.Empty<object>()));
+
+        var text = await tools.GetTask(5, Ct);
+
+        text.Should().Contain("project: Alpha | goal: Docs");
+    }
+
+    [Fact]
     public async Task List_GoalWithoutProject_IsRejected()
     {
         var (tools, handler) = Setup(_ => { });

@@ -336,6 +336,33 @@ public sealed class GoalRepositoryTests : IDisposable
         Assert.Equal(AssignGoalTaskStatus.Success, (await RunAsync(r => r.AssignTaskAsync(next, task))).Status);
     }
 
+    /// <summary>Races are accepted, so two Now goals can exist; no read of the Now goal may assume there is one.</summary>
+    [Fact]
+    public async Task TwoNowGoals_LeftByARace_DoNotBreakReadsOrWrites()
+    {
+        var first = await CreateAsync("first", GoalStatus.Now);
+        var second = await CreateAsync("second");
+        var next = await CreateAsync("next");
+        await using (var ctx = NewContext())
+        {
+            (await ctx.Goals.SingleAsync(g => g.Id == second, TestContext.Current.CancellationToken)).Status = GoalStatus.Now;
+            await ctx.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using (var ctx = NewContext())
+        {
+            Assert.NotNull(await new TaskRepository(ctx).GetBlockingNowGoalAsync(next));
+        }
+
+        var third = await RunAsync(r => r.CreateAsync(new Goal { ProjectId = _projectId, Title = "x", Status = GoalStatus.Now }));
+        var swap = await RunAsync(r => r.SwapNowAsync(next));
+
+        Assert.Equal(GoalWriteStatus.NowExists, third.Status);
+        Assert.Equal(GoalWriteStatus.Success, swap.Status);
+        Assert.Equal(GoalStatus.Now, (await GetAsync(next)).Status);
+        Assert.Contains(first, (await RunAsync(r => r.GetAllAsync(_projectId))).Select(g => g.Id));
+    }
+
     [Fact]
     public async Task Assign_And_Remove_RejectTargetsThatCannotTakeAGoal()
     {

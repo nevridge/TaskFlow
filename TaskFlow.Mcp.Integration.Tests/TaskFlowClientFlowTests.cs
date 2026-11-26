@@ -174,6 +174,43 @@ public sealed class TaskFlowClientFlowTests : IntegrationTestBase
         Assert.False(string.IsNullOrWhiteSpace(ex.Message));
     }
 
+    [Fact]
+    public async Task Goals_EveryClientRoute_AndRuleDetails_MatchTheRealApi()
+    {
+        // The unit tests stub both routes and the 422 details shapes; only the real API proves they match.
+        var project = await Client.CreateProjectAsync("Goal project", null, null, Ct);
+        var now = await Client.CreateGoalAsync(new CreateGoalRequest(project.Id, "Current", null, null, "now"), Ct);
+        var a = await Client.CreateGoalAsync(new CreateGoalRequest(project.Id, "A", null, null, "next"), Ct);
+        var b = await Client.CreateGoalAsync(new CreateGoalRequest(project.Id, "B", null, null, "next"), Ct);
+        var task = await Client.CreateTaskAsync(
+            new CreateTaskRequest("Running", null, "inprogress", "low", null, null, null, project.Id, TestClock.OffsetMinutes), Ct);
+        await Client.AssignTaskToGoalAsync(now.Id, task.Id, Ct);
+
+        var swap = await Assert.ThrowsAsync<TaskFlowApiException>(() => Client.SwapNowGoalAsync(a.Id, Ct));
+        var close = await Assert.ThrowsAsync<TaskFlowApiException>(
+            () => Client.UpdateGoalAsync(now.Id, new UpdateGoalRequest("Current", null, null, "done", null), Ct));
+        var notNow = await Assert.ThrowsAsync<TaskFlowApiException>(() => Client.AssignTaskToGoalAsync(a.Id, task.Id, Ct));
+
+        Assert.Equal("GOAL_NOW_HAS_INPROGRESS_TASKS", swap.Code);
+        var inProgress = swap.Details!.Value.GetProperty("tasks")[0];
+        Assert.Equal(task.Id, inProgress.GetProperty("id").GetInt32());
+        Assert.Equal("Running", inProgress.GetProperty("title").GetString());
+        Assert.Equal("GOAL_HAS_OPEN_TASKS", close.Code);
+        Assert.Equal(task.Id, close.Details!.Value.GetProperty("tasks")[0].GetProperty("id").GetInt32());
+        Assert.Equal("TASK_GOAL_NOT_NOW", notNow.Code);
+        Assert.Equal(now.Id, notNow.Details!.Value.GetProperty("nowGoalId").GetInt32());
+        Assert.Equal("Current", notNow.Details!.Value.GetProperty("nowGoalTitle").GetString());
+
+        await Client.ReorderGoalsAsync(project.Id, [b.Id, a.Id], Ct);
+        Assert.Equal([now.Id, b.Id, a.Id], (await Client.GetGoalsAsync(project.Id, Ct)).Select(g => g.Id));
+
+        await Client.RemoveTaskFromGoalAsync(now.Id, task.Id, Ct);
+        Assert.Null((await Client.GetTaskAsync(task.Id, Ct)).GoalId);
+
+        await Client.DeleteGoalAsync(a.Id, Ct);
+        Assert.Equal([now.Id, b.Id], (await Client.GetGoalsAsync(project.Id, Ct)).Select(g => g.Id));
+    }
+
     [Theory]
     [InlineData("draft")]
     [InlineData("completed")]

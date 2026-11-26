@@ -65,6 +65,22 @@ public class TaskGoalToolsTests
         text.Should().Contain("goal: Docs").And.NotContain("!");
     }
 
+    [Theory]
+    [InlineData("none", "Alpha")]
+    [InlineData("None", null)]
+    public async Task Create_WithGoalNone_CreatesTheTask_WithNoGoalCall(string goal, string? project)
+    {
+        var (tools, handler) = Setup(h => h
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Task5(), HttpStatusCode.Created));
+
+        var report = await tools.CreateTasks([new NewTask { Title = "Five", Project = project, Goal = goal }], ct: Ct);
+
+        report.Should().Contain("+ ").And.NotContain("!");
+        Writes(handler).Should().Equal("POST TaskItems");
+        handler.Requests.Should().NotContain(r => r.Path == "Goals");
+    }
+
     [Fact]
     public async Task Create_SubtaskThatInheritedTheGoal_SkipsTheAssignCall()
     {

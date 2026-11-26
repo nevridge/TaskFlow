@@ -144,6 +144,8 @@ public sealed class GoalRepositoryTests : IDisposable
         Assert.NotNull(done.ClosedAt);
         Assert.Equal(done.ClosedAt, resaved.ClosedAt);
         Assert.True(dropped.ClosedAt > done.ClosedAt);
+        Assert.True(done.StatusChangedAt > parked.StatusChangedAt);
+        Assert.True(dropped.StatusChangedAt > done.StatusChangedAt);
 
         await SetStatusAsync(a, GoalStatus.Next);
         var reopened = await GetAsync(a);

@@ -29,7 +29,7 @@ public sealed class NewTask
     [Description("Project name or id. The project must already exist (see list_projects).")]
     public string? Project { get; set; }
 
-    [Description("Goal title or id within 'project' (project is required with goal). The goal must already exist (see list_goals). Omit for no goal; a subtask takes its parent's goal.")]
+    [Description("Goal title or id within 'project' (project is required with goal). The goal must already exist (see list_goals). Omit or 'none' for no goal; a subtask takes its parent's goal.")]
     public string? Goal { get; set; }
 
     [Description("Id of a parent task, to make this a subtask. Only one subtask level is supported.")]
@@ -401,7 +401,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                     }
 
                     GoalDto? goal = null;
-                    if (!string.IsNullOrWhiteSpace(item.Goal))
+                    if (!string.IsNullOrWhiteSpace(item.Goal) && !IsNone(item.Goal))
                     {
                         if (project is null)
                         {

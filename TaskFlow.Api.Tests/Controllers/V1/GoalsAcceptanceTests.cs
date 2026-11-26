@@ -201,6 +201,56 @@ public sealed class GoalsAcceptanceTests : GoalsApiTestBase
     }
 
     [Fact]
+    public async Task ASecondNowGoal_Returns409_PointingToSwap()
+    {
+        var projectId = await CreateProjectAsync();
+        await CreateGoalAsync(projectId, "current", "now");
+        var other = await CreateGoalAsync(projectId, "other");
+
+        var create = await SendAsync(HttpMethod.Post, "/api/v1/Goals", new { projectId, title = "g", status = "now" });
+        var edit = await SendAsync(HttpMethod.Put, $"/api/v1/Goals/{other}", new { title = "other", status = "now" });
+
+        foreach (var (status, body) in new[] { create, edit })
+        {
+            Assert.Equal(HttpStatusCode.Conflict, status);
+            Assert.Contains("swap", body.GetProperty("message").GetString()!, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task SimpleRefusals_Return400_WithAMessage()
+    {
+        var projectId = await CreateProjectAsync();
+        var open = await CreateGoalAsync(projectId, "open");
+        var done = await CreateGoalAsync(projectId, "done");
+        var dropped = await CreateGoalAsync(projectId, "dropped");
+        await SendAsync(HttpMethod.Put, $"/api/v1/Goals/{done}", new { title = "done", status = "done" });
+        await SendAsync(HttpMethod.Put, $"/api/v1/Goals/{dropped}", new { title = "dropped", status = "dropped" });
+        var parent = await CreateTaskAsync(projectId);
+        var child = await CreateTaskAsync(projectId, parentTaskItemId: parent);
+
+        (HttpMethod Method, string Url, object? Body)[] requests =
+        [
+            (HttpMethod.Put, "/api/v1/Goals/order", new { projectId, goalIds = new[] { open, open } }),
+            (HttpMethod.Post, $"/api/v1/Goals/{done}/swap-now", null),
+            (HttpMethod.Post, $"/api/v1/Goals/{done}/tasks", new { taskItemId = parent }),
+            (HttpMethod.Post, $"/api/v1/Goals/{dropped}/tasks", new { taskItemId = parent }),
+            (HttpMethod.Post, $"/api/v1/Goals/{open}/tasks", new { taskItemId = child }),
+            (HttpMethod.Delete, $"/api/v1/Goals/{open}/tasks/{child}", null),
+        ];
+
+        foreach (var (method, url, body) in requests)
+        {
+            var (status, json) = await SendAsync(method, url, body);
+
+            Assert.True(status == HttpStatusCode.BadRequest, $"{method} {url} returned {status}");
+            Assert.False(string.IsNullOrWhiteSpace(json.GetProperty("message").GetString()));
+        }
+
+        Assert.Null(GoalIdOf(await GetTaskAsync(parent)));
+    }
+
+    [Fact]
     public async Task AnArchivedProjectsGoals_AreStillListed()
     {
         var projectId = await CreateProjectAsync();

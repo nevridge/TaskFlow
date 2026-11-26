@@ -8,15 +8,12 @@ TestResults/
 coverage*/
 *.log
 
-## Published MCP server build consumed by the plugin (produced by build.ps1)
-plugin/bin/
+## Published MCP server build (produced by build.ps1)
+mcp/bin/
 
 ## Staging and backup directories used by build.ps1
 .build-staging/
 .build-backup/
-
-## Packaged Claude Desktop skill (produced by scripts/package-chat-skill.ps1)
-dist/
 
 ## Local Claude Code state
 .claude/settings.local.json

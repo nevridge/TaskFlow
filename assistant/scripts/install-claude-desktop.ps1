@@ -4,13 +4,13 @@
   Adds (or removes) the TaskFlow MCP server in Claude Desktop's claude_desktop_config.json.
 
 .DESCRIPTION
-  Claude Desktop's Chat loads local MCP servers from %APPDATA%\Claude\claude_desktop_config.json
-  (a Claude Code plugin cannot provide one). This merges a "taskflow" entry into the existing
-  file without touching the app's other settings, after saving a timestamped backup.
+  Claude Desktop's Chat loads local MCP servers from %APPDATA%\Claude\claude_desktop_config.json.
+  This merges a "taskflow" entry into the existing file without touching the app's other settings,
+  after saving a timestamped backup.
 
   Claude Desktop rewrites that file while it runs, so the script refuses to change it while the
   app is open. Quit Claude Desktop completely (tray icon > Quit), run this, then start it again.
-  Run ./build.ps1 first so plugin/bin contains the published server.
+  Run ./build.ps1 first so mcp/bin contains the published server.
 
 .PARAMETER ApiUrl
   TaskFlow API base URL. Default: http://localhost:8081 (local Docker).
@@ -30,7 +30,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot
-$dll = Join-Path $repo 'plugin/bin/TaskFlow.Mcp.dll'
+$dll = Join-Path $repo 'mcp/bin/TaskFlow.Mcp.dll'
 $config = Join-Path $env:APPDATA 'Claude/claude_desktop_config.json'
 
 if (-not $Uninstall -and -not (Test-Path $dll)) { throw "Server not published at $dll. Run ./build.ps1 first." }

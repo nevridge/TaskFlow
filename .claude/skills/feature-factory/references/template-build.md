@@ -16,7 +16,7 @@ The line above is the union for all four writers. Use only the values listed for
 | `SPEC_BLOCKER` | all | The file has a `## Spec blockers` section. |
 | `GATES_RED` | the three builders | A check you ran still fails. Name each failing check in `## Verification results` and in `Summary`. |
 | `CLIENT_REGEN_FAILED` | `backend-builder` | The client could not be regenerated. Give the reason in `## Client regeneration` and in `Summary`. |
-| `ENVIRONMENT_FAILURE` | `assistant-builder` | The SDK or the `claude` CLI is missing. Give the reason in `## Verification results` and in `Summary`. |
+| `ENVIRONMENT_FAILURE` | `assistant-builder` | The SDK is missing. Give the reason in `## Verification results` and in `Summary`. |
 | `CHECK_NOT_RUN` | the `docs` agent | The js-yaml check could not run. |
 | `BLOCKED` | all | An input is missing (the brief). Write no file, reply `Output: none` and put what is missing in `Summary`. |
 | `WRITE_FAILED` | all | The write to the output path failed. Reply `Output: none` and put the reason in `Summary`. |
@@ -48,7 +48,7 @@ The line above is the union for all four writers. Use only the values listed for
 
 ## User-visible change
 
-## Plugin and chat sync
+## README tool sync
 
 ## Advisory deviations
 
@@ -67,7 +67,7 @@ The line above is the union for all four writers. Use only the values listed for
 | `## API contract` | `backend-builder` | New or changed endpoints (method, path, request, response, status codes), for the later builders. |
 | `## Client status` | `frontend-builder` | Generated types and operations you relied on, and hand-written modules you changed. |
 | `## User-visible change` | `frontend-builder` | What the user sees and how they interact with it. |
-| `## Plugin and chat sync` | `assistant-builder` | The files updated for a tool change, or `not needed`. Always present. |
+| `## README tool sync` | `assistant-builder` | The README changes made for a tool change, or `not needed`. Always present. |
 | `## Advisory deviations` | `frontend-builder`, `assistant-builder` | One entry per deviation from an advisor file: the guidance, the technical reason and what you did instead. |
 | `## js-yaml check` | the `docs` agent | Exactly one of `passed`, `parse error fixed`, `not needed`, `check could not run`. Always present. |
 

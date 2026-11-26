@@ -1167,6 +1167,30 @@ public class ProjectToolsTests
 
 public class WeeklyReviewTests
 {
+    /// <summary>The brief wants the goal in these three reports too, each of which reads tasks its own way.</summary>
+    [Fact]
+    public async Task JournalProjectStatusAndReview_ShowTheTaskGoal()
+    {
+        var task = Fixtures.Task(1, "Late", due: "2026-10-01", projectId: 7, projectName: "Alpha", goalId: 2, goalTitle: "Ship v1");
+        var handler = new StubHandler()
+            .Get("TaskItems", new[] { task })
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha", open: 1) })
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09") })
+            .Get("JournalEntries/3/todos", new[] { task })
+            .Get("JournalEntries/3/notes", Array.Empty<object>())
+            .Get("TaskItems/1/history", Array.Empty<object>());
+        var client = Fixtures.Client(handler);
+
+        string[] reports =
+        [
+            await new JournalTools(client, Fixtures.Time()).GetJournal(),
+            await new ProjectTools(client, Fixtures.Time()).ProjectStatus("Alpha"),
+            await new ReviewTools(client, Fixtures.Time()).WeeklyReview(),
+        ];
+
+        reports.Should().AllSatisfy(r => r.Should().Contain("project: Alpha | goal: Ship v1"));
+    }
+
     [Fact]
     public async Task CountsCompletedAndAdded_ByLocalDateWithinTheRange()
     {

@@ -68,6 +68,11 @@ internal static class Formatting
             sb.Append(" | project: ").Append(t.ProjectName);
         }
 
+        if (!string.IsNullOrEmpty(t.GoalTitle))
+        {
+            sb.Append(" | goal: ").Append(CleanReason(t.GoalTitle));
+        }
+
         if (t.ParentTaskItemId is { } parent)
         {
             sb.Append(" | subtask of #").Append(parent);
@@ -118,6 +123,35 @@ internal static class Formatting
         $"#{p.Id} {p.Name}{(p.IsArchived ? " (archived)" : string.Empty)} - {p.OpenTaskCount} open{BlockedCountText(p.BlockedCount)} / {p.CompletedTaskCount} done"
         + (string.IsNullOrWhiteSpace(p.AreaName) ? string.Empty : $" | area: {p.AreaName}")
         + (string.IsNullOrWhiteSpace(p.Description) ? string.Empty : $" | {Preview(p.Description)}");
+
+    /// <summary>"#id title", with the title kept on one line.</summary>
+    public static string GoalLabel(GoalDto g) => $"#{g.Id} {CleanReason(g.Title)}";
+
+    /// <summary>One goal on one line. Dates are shown in the given (local) time zone.</summary>
+    public static string Goal(GoalDto g, TimeZoneInfo zone)
+    {
+        string LocalDate(DateTime utc) => TimeZoneInfo
+            .ConvertTimeFromUtc(AsUtc(utc)!.Value.UtcDateTime, zone)
+            .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        var sb = new StringBuilder();
+        sb.Append('#').Append(g.Id).Append(" [").Append(g.Status).Append("] ").Append(CleanReason(g.Title));
+
+        var reason = CleanReason(g.ParkedReason);
+        if (reason.Length > 0)
+        {
+            sb.Append(" | parked: ").Append(reason);
+        }
+
+        sb.Append(" | since ").Append(LocalDate(g.StatusChangedAt));
+        if (g.ClosedAt is { } closed)
+        {
+            sb.Append(" | closed ").Append(LocalDate(closed));
+        }
+
+        sb.Append(" | ").Append(g.OpenTaskCount).Append(" open / ").Append(g.DoneTaskCount).Append(" done");
+        return sb.ToString();
+    }
 
     /// <summary>" (N blocked)" when N is above 0, otherwise empty.</summary>
     public static string BlockedCountText(int count) => count > 0 ? $" ({count} blocked)" : string.Empty;

@@ -91,6 +91,34 @@ public sealed class TaskFlowApiClient(HttpClient http)
         return SendAsync(HttpMethod.Delete, path, null, ct);
     }
 
+    // --- Goals ---
+
+    /// <summary>A project's goals, in the API's order: Now, Next, Parked, then Done and Dropped.</summary>
+    public Task<List<GoalDto>> GetGoalsAsync(int projectId, CancellationToken ct) =>
+        SendAsync<List<GoalDto>>(HttpMethod.Get, $"Goals?projectId={projectId}", null, ct);
+
+    public Task<GoalDto> CreateGoalAsync(CreateGoalRequest request, CancellationToken ct) =>
+        SendAsync<GoalDto>(HttpMethod.Post, "Goals", request, ct);
+
+    public Task<GoalDto> UpdateGoalAsync(int id, UpdateGoalRequest request, CancellationToken ct) =>
+        SendAsync<GoalDto>(HttpMethod.Put, $"Goals/{id}", request, ct);
+
+    /// <summary><paramref name="goalIds"/> must hold every Next goal of the project exactly once.</summary>
+    public Task ReorderGoalsAsync(int projectId, IReadOnlyList<int> goalIds, CancellationToken ct) =>
+        SendAsync(HttpMethod.Put, "Goals/order", new { projectId, goalIds }, ct);
+
+    public Task<GoalDto> SwapNowGoalAsync(int id, CancellationToken ct) =>
+        SendAsync<GoalDto>(HttpMethod.Post, $"Goals/{id}/swap-now", null, ct);
+
+    public Task DeleteGoalAsync(int id, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, $"Goals/{id}", null, ct);
+
+    public Task AssignTaskToGoalAsync(int goalId, int taskItemId, CancellationToken ct) =>
+        SendAsync(HttpMethod.Post, $"Goals/{goalId}/tasks", new { taskItemId }, ct);
+
+    public Task RemoveTaskFromGoalAsync(int goalId, int taskItemId, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, $"Goals/{goalId}/tasks/{taskItemId}", null, ct);
+
     // --- Journal ---
 
     public Task<List<JournalEntryDto>> GetJournalEntriesAsync(CancellationToken ct) =>
@@ -171,7 +199,7 @@ public sealed class TaskFlowApiClient(HttpClient http)
                 $"The TaskFlow API failed with {(int)response.StatusCode} on {method} {path}. This is a server-side error; check the API logs (Seq, http://localhost:5380).");
         }
 
-        var (code, message) = ParseError(raw);
+        var (code, message, details) = ParseError(raw);
 
         if (response.StatusCode == HttpStatusCode.NotFound && code is null)
         {
@@ -185,18 +213,18 @@ public sealed class TaskFlowApiClient(HttpClient http)
                 + (raw.Length > 0 ? $" {Truncate(raw)}" : string.Empty),
         };
 
-        return new TaskFlowApiException(response.StatusCode, code, code is null ? message : $"{message} [{code}]");
+        return new TaskFlowApiException(response.StatusCode, code, code is null ? message : $"{message} [{code}]", details);
     }
 
     /// <summary>
     /// Understands the API's error shapes: { code, message }, { message }, a FluentValidation array,
     /// and ASP.NET ProblemDetails with an errors map.
     /// </summary>
-    private static (string? Code, string? Message) ParseError(string raw)
+    private static (string? Code, string? Message, JsonElement? Details) ParseError(string raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return (null, null);
+            return (null, null, null);
         }
 
         try
@@ -211,19 +239,21 @@ public sealed class TaskFlowApiClient(HttpClient http)
                     .Where(f => f.Msg is not null)
                     .Select(f => string.IsNullOrEmpty(f.Prop) ? f.Msg! : $"{f.Prop}: {f.Msg}")
                     .ToList();
-                return (null, failures.Count > 0 ? "Validation failed - " + string.Join("; ", failures) : null);
+                return (null, failures.Count > 0 ? "Validation failed - " + string.Join("; ", failures) : null, null);
             }
 
             if (root.ValueKind != JsonValueKind.Object)
             {
-                return (null, null);
+                return (null, null, null);
             }
 
             var code = GetString(root, "code");
             var message = GetString(root, "message");
+            // Cloned: the element must outlive the document.
+            JsonElement? details = root.TryGetProperty("details", out var found) ? found.Clone() : null;
             if (message is not null)
             {
-                return (code, message);
+                return (code, message, details);
             }
 
             if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
@@ -233,14 +263,14 @@ public sealed class TaskFlowApiClient(HttpClient http)
                         ? p.Value.EnumerateArray().Select(v => $"{p.Name}: {v.GetString()}")
                         : [$"{p.Name}: {p.Value}"]);
                 // ASP.NET ProblemDetails extensions serialize at the root, so a root "code" is the API error code.
-                return (code, "Validation failed - " + string.Join("; ", items));
+                return (code, "Validation failed - " + string.Join("; ", items), details);
             }
 
-            return (code, GetString(root, "title"));
+            return (code, GetString(root, "title"), details);
         }
         catch (JsonException)
         {
-            return (null, null);
+            return (null, null, null);
         }
     }
 

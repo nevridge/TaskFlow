@@ -24,7 +24,9 @@ public sealed record TaskItemDto(
     string? PreviousStatus = null,
     DateTime? StartedAt = null,
     string? ParentTitle = null,
-    int OpenChildCount = 0)
+    int OpenChildCount = 0,
+    int? GoalId = null,
+    string? GoalTitle = null)
 {
     public bool IsBlocked => string.Equals(Status, "Blocked", StringComparison.OrdinalIgnoreCase);
 
@@ -52,6 +54,23 @@ public sealed record AreaDto(
     DateTime CreatedAt,
     DateTime? UpdatedAt,
     int ProjectCount);
+
+/// <summary>A goal inside a project. The task counts include subtasks; open means any status except Completed.</summary>
+public sealed record GoalDto(
+    int Id,
+    int ProjectId,
+    string Title,
+    string? Description,
+    string? DoneWhen,
+    string Status,
+    string? ParkedReason,
+    int DisplayOrder,
+    DateTime StatusChangedAt,
+    DateTime? ClosedAt,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    int OpenTaskCount,
+    int DoneTaskCount);
 
 public sealed record NoteDto(
     int Id,
@@ -86,6 +105,21 @@ public sealed record JournalEntryDto(
     IReadOnlyList<LogEntryDto> LogEntries);
 
 // Request shapes.
+
+public sealed record CreateGoalRequest(
+    int ProjectId,
+    string Title,
+    string? Description,
+    string? DoneWhen,
+    string Status);
+
+/// <summary>The goal PUT is full-replace, so every field is always sent.</summary>
+public sealed record UpdateGoalRequest(
+    string Title,
+    string? Description,
+    string? DoneWhen,
+    string Status,
+    string? ParkedReason);
 
 public sealed record CreateTaskRequest(
     string Title,

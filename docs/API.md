@@ -46,12 +46,43 @@ The snippets below describe the currently implemented contract additions used by
 - `blockedAt: string | null` (UTC instant)
 - `startedAt: string | null` (UTC instant; set the first time the task enters `InProgress`, never cleared)
 - `completedAt: string | null` (UTC instant, `Z` suffix; server-owned, see below)
-- `goalId: number | null` (read-only, see below)
+- `projectId: number | null` (a request field on create and `PATCH`, see "Project and goal in a task request")
+- `goalId: number | null` (a request field on create and `PATCH`, see below)
 - `goalTitle: string | null` (read-only)
 
 `completedAt` is set to the current UTC time when a task moves to `Completed` by any path (`PUT`, `PATCH`, Blocked to Completed, create with `status: Completed`, or parent auto-complete) and is cleared to `null` when the task is reopened. Completing again sets a new value. It is returned on every task read (task list/detail, project tasks, journal todos including child todos). A `completedAt` sent in a create, `PUT` or `PATCH` body is ignored. It is `null` for tasks that were completed before this field existed unless a genuine `Completed` history event could be found by the migration `AddTaskItemCompletedAt` (the latest `Completed` event after the latest `Reopened` event; synthetic events from the `IsComplete` merge are ignored). No date is invented for the rest.
 
-`goalId` and `goalTitle` are returned on every task read and on create, `PUT` and `PATCH` responses. They are not request fields: a goal sent in a create, `PUT` or `PATCH` body is ignored, and an update keeps the task's goal unless it gives the task a new parent, whose goal it then takes. A goal is set through `POST api/v1/Goals/{id}/tasks`. A subtask's goal follows its parent. Moving a task to another project or removing its project clears the goal; a subtask moved back into its parent goal's project takes it again.
+`goalId` and `goalTitle` are returned on every task read and on create, `PUT` and `PATCH` responses. `goalTitle` is never a request field. `goalId` is a request field on create and `PATCH` (see "Project and goal in a task request"); a `goalId` sent in a `PUT` body is ignored. An update that sends no `goalId` keeps the task's goal unless it gives the task a new parent, whose goal it then takes, or changes its project. A goal can also be set through `POST api/v1/Goals/{id}/tasks`. A subtask's goal follows its parent. Moving a task to another project or removing its project clears the goal; a subtask moved back into its parent goal's project takes it again.
+
+#### Project and goal in a task request
+
+`POST /api/v1/TaskItems` and `PATCH /api/v1/TaskItems/{id}` accept optional `projectId` and `goalId` (integers), saved in the same request as the other fields. `PUT /api/v1/TaskItems/{id}` accepts neither and never changes a task's project or goal. The assign and unassign endpoints (`api/v1/Projects/{id}/tasks`, `api/v1/Goals/{id}/tasks`) are unchanged.
+
+```json
+{ "title": "Draft the release notes", "projectId": 4, "goalId": 9 }
+```
+
+In `PATCH`, an omitted field keeps the stored value and an explicit `null` clears it. Sending the project or goal the task already has is a no-op: no error (no `409`), no history event, and the rest of the request is applied.
+
+The project is applied first, and the goal is judged against the resulting project:
+
+- **Project changed, no `goalId`:** the goal resets as it does on project assignment. The task takes its parent's goal when that goal is in the new project, otherwise it has none, and its subtasks' goals are cleared. `projectId: null` clears the project, the task's goal and its subtasks' goals.
+- **`goalId` set:** the goal must be open and in the resulting project. A parent's subtasks in that project move to the goal with it.
+- **`goalId: null`:** clears the task's goal and its subtasks' goals in that goal.
+- A project change writes one history event: "Assigned to project '<name>'.", "Project changed from '<a>' to '<b>'." or "Removed from project '<name>'."
+
+Refusals, checked in this order. Any refusal saves nothing: no fields, no project, no goal, no planning and no history event (on create, no task).
+
+| Case | Response |
+|---|---|
+| Unknown `projectId` | `422` `{ "code": "TASK_PROJECT_NOT_FOUND", "message": "The selected project was not found.", "details": ... }` |
+| Unknown `goalId` | `404` `{ "message": "Goal not found." }` |
+| `goalId` for a subtask (on create, `parentTaskItemId` is set). In `PATCH` this includes the goal the subtask already inherits, and `goalId: null` while the subtask has a goal. | `400` `{ "message": "A subtask's goal follows its parent and cannot be set directly." }` |
+| The goal belongs to another project, or the resulting project is none (`projectId: null` with a `goalId`, or a create with a `goalId` and no `projectId`) | `400` `{ "message": "The task must be in the goal's project." }` |
+| The goal is Done or Dropped | `400` `{ "message": "Tasks cannot be added to a Done or Dropped goal." }` |
+| The resulting status and goal break the goal rule | `422` `TASK_GOAL_NOT_NOW` (see below) |
+
+In `PATCH`, "subtask" is judged on the resulting parent, so a request that detaches the task and sets `goalId` is accepted. A `goalId: null` on a subtask that has no goal is a no-op.
 
 #### Goal rule (`TASK_GOAL_NOT_NOW`)
 
@@ -67,8 +98,8 @@ A project has at most one Now goal. While it has one, a task in one of its Next 
 
 It applies when:
 
-- **Create:** a subtask that takes such a goal from its parent is created as `InProgress` or `Completed`. `details.taskItemId` is `null`.
-- **`PUT` and `PATCH`:** the status changes to `InProgress` or `Completed`, or the goal changes (through a new parent) while the resulting status is `InProgress`. Re-sending the stored status is accepted.
+- **Create:** a task created as `InProgress` or `Completed` with such a goal, either sent as `goalId` or taken from its parent. `details.taskItemId` is `null`.
+- **`PUT` and `PATCH`:** the status changes to `InProgress` or `Completed`, or the goal changes while the resulting status is `InProgress`. The goal can change through a new parent, or in `PATCH` through `goalId` or a `projectId` change (for example an `InProgress` subtask moved into its parent's project, where it takes the parent's goal). In `PATCH` the rule is judged on the resulting status and goal, so starting a task and moving it into the Now goal in one request is accepted. A `PATCH` that moves a parent into such a goal is also refused when a subtask that would move with it is `InProgress`. Re-sending the stored status is accepted.
 - **Project assignment** (`POST api/v1/Projects/{id}/tasks`): an `InProgress` subtask would be moved into its parent's project and join the parent's goal.
 - **Goal assignment** (`POST api/v1/Goals/{id}/tasks`): an `InProgress` task, or a subtask that would move with it, would join such a goal.
 
@@ -92,6 +123,7 @@ Behavior:
 - If `journalDate` is today/future, the task is automatically assigned to that journal day.
 - If `parentTaskItemId` refers to a parent whose stored status is Completed and the new task is not itself Completed, returns `422` with `TASK_PARENT_COMPLETED_NOT_ALLOWED`; nothing is created.
 - A subtask takes its parent's goal. Creating it as `InProgress` or `Completed` against the goal rule returns `422` with `TASK_GOAL_NOT_NOW`; nothing is created.
+- Optional `projectId` and `goalId` put the task in a project and a goal in the same save; see "Project and goal in a task request" for the rules and refusals.
 
 #### Task history endpoint
 
@@ -242,6 +274,8 @@ Creates a new task item with status assignment.
 - `title` (string, required, max 100 chars) - Task title
 - `description` (string, optional) - Task description
 - `statusId` (integer, optional, defaults to 1) - Status ID to assign
+- `projectId` (integer, optional) - Project to put the task in. An unknown id returns `422` `TASK_PROJECT_NOT_FOUND` and nothing is created
+- `goalId` (integer, optional) - Open goal in that project. Needs `projectId`, and is refused for a subtask; see "Project and goal in a task request"
 
 **Response:** `201 Created`
 
@@ -412,10 +446,11 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 
 **Endpoint:** `PATCH /api/v1/TaskItems/{id}`
 
-**Request Body:** any subset of `title`, `description`, `status`, `priority`, `dueDate`, `parentTaskItemId`, `autoCompleteParentWhenChildrenDone`, `timezoneOffsetMinutes`, `journalDate`.
+**Request Body:** any subset of `title`, `description`, `status`, `priority`, `dueDate`, `parentTaskItemId`, `autoCompleteParentWhenChildrenDone`, `timezoneOffsetMinutes`, `journalDate`, `projectId`, `goalId`.
 
 - An omitted field is left unchanged and writes no history event.
-- An explicit `null` clears `description`, `dueDate` or `parentTaskItemId`.
+- An explicit `null` clears `description`, `dueDate`, `parentTaskItemId`, `projectId` or `goalId`.
+- `projectId` and `goalId` are saved together with the other fields, or not at all. Re-sending the stored value is a no-op. A project change without a `goalId` resets the goal. The rules and the `400`, `404` and `422` refusals are in "Project and goal in a task request". Parent auto-complete after a status change is still a separate save.
 - `journalDate` plans the task on a journal day exactly as on `PUT` (see Update Task); an explicit `null` or omitting it leaves the planned day unchanged.
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
@@ -501,6 +536,41 @@ The local day is the UTC `completedAt` shifted by `timezoneOffsetMinutes`. Viewi
 - `TASK_PLAN_HAS_OPEN_SUBTASKS` - the task has at least one subtask that is not `Completed` (`Blocked` counts as open); plan its subtasks instead. Body is `{ code, message, details: { taskItemId, journalDate } }`; `journalDate` is `null` on this endpoint (the request names the entry, not a date). Nothing is linked. Checked after the other rules, so an already-linked parent still gets `409`. `PUT`/`PATCH /api/v1/TaskItems/{id}` with a `journalDate` different from the task's current link return the same 422 with `journalDate` set (after the completed-task and past-day rules; re-sending the current link is not rejected, and nothing is saved). Adding a subtask to an already-planned parent is allowed, and existing links are not migrated.
 
 Removing a todo (`DELETE /api/v1/JournalEntries/{entryId}/todos/{taskItemId}`) unlinks only that task; its subtasks keep their own links.
+
+### Append to a Summary
+
+**Endpoint:** `POST /api/v1/JournalEntries/{id}/summary/append` with body `{ "text": "Shipped the release notes." }`
+
+Adds text to the end of an entry's summary in one atomic step, so two appends sent at the same time both survive. `PUT /api/v1/JournalEntries/{id}` is unchanged and still replaces the whole summary.
+
+- `text` is trimmed.
+- When the summary is null or blank, the text becomes the summary. Otherwise the new summary is the existing one with trailing whitespace removed, a blank line (`\n\n`), then the text.
+
+**Responses:**
+- `200 OK` - the updated entry, in the same shape as the `PUT` response.
+- `400 Bad Request` - `text` is missing, blank or whitespace-only (validation errors). Nothing is saved.
+- `400 Bad Request` - the combined summary would be longer than 10000 characters. Nothing is saved. The body is `{ "message": "The summary would be 10050 characters, over the 10000 limit: the existing summary is 9900 and the new text 148 (plus a blank line between)." }`.
+- `404 Not Found` - the entry does not exist.
+
+---
+
+## Goals API
+
+Only the `position` field is described here; the OpenAPI document has the full Goals contract.
+
+### Goal position on create and update
+
+`POST /api/v1/Goals` and `PUT /api/v1/Goals/{id}` accept an optional `position` (integer, 1-based): the goal's place among its project's Next goals. The goal is saved and placed in one transaction, and the project's Next goals are renumbered without gaps.
+
+```json
+{ "projectId": 4, "title": "Ship v2", "status": "next", "position": 1 }
+```
+
+- `position` is a request field only. `GoalResponseDto.displayOrder` stays 0-based.
+- Omitted: as before. A new goal goes to the end, an updated goal keeps its place, and a goal that becomes Next goes to the end.
+- The allowed range is 1 to N+1, where N is the number of the project's other Next goals (the goal being saved is not counted, so N+1 moves a Next goal to the last place). Outside it: `400` `{ "message": "position 7 is out of range: use 1 to 3." }`, and nothing is written.
+- When the resulting status is not Next: `400` `{ "message": "position only applies to a Next goal, and this one would be parked." }` (the status is in lowercase), and nothing is written.
+- `PUT /api/v1/Goals/order` is unchanged.
 
 ---
 

@@ -46,6 +46,20 @@ public sealed class GoalsAcceptanceTests : GoalsApiTestBase
         Assert.Equal(JsonValueKind.Null, cleared.GetProperty("doneWhen").ValueKind);
     }
 
+    [Fact]
+    public async Task ParkedWithoutAReason_Returns400WithAMessage()
+    {
+        var projectId = await CreateProjectAsync();
+        var id = await CreateGoalAsync(projectId, "g");
+
+        var (status, body) = await SendAsync(HttpMethod.Put, $"/api/v1/Goals/{id}", new { title = "g", status = "parked" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.True(
+            body.ValueKind == JsonValueKind.Object && body.TryGetProperty("message", out _),
+            "Expected { message }, got: " + body.GetRawText());
+    }
+
     [Theory]
     [InlineData("next")]
     [InlineData("parked")]

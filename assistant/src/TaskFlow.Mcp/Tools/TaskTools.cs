@@ -853,14 +853,14 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 projectChanged = true;
             }
         }
-        catch (Exception ex) when (ex is TaskFlowApiException or McpException)
+        catch (Exception ex) when (IsStepFailure(ex, ct))
         {
             if (!putCarriesChanges)
             {
                 throw;
             }
 
-            var reason = ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message;
+            var reason = FailureReason(ex);
             var action = removeProject ? "removing it from its project" : $"assigning it to project '{target?.Name}'";
             var retryProject = removeProject ? "none" : target?.Name;
             // A goal still pending belongs to the same retry.
@@ -880,7 +880,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 message = $"Task #{id}{(savedChanges.Count > 0 ? "'s " : " ")}{saved}, but {action} failed: {reason}. Retry only {remaining}: {retry}";
             }
 
-            throw new McpException(message, ex);
+            throw new PartialUpdateException(message, ex);
         }
 
         var refreshed = false;

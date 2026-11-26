@@ -1,6 +1,5 @@
 using FluentValidation;
 using TaskFlow.Api.Models;
-using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Validators;
 
@@ -18,9 +17,5 @@ public class GoalValidator : AbstractValidator<Goal>
 
         RuleFor(g => g.ParkedReason)
             .MaximumLength(200).WithMessage("Parked reason must not exceed 200 characters.");
-
-        RuleFor(g => g.ParkedReason)
-            .NotEmpty().WithMessage("A parked goal needs a reason.")
-            .When(g => g.Status == GoalStatus.Parked);
     }
 }

@@ -124,6 +124,12 @@ public class GoalsController(
             return BadRequest(validationResult.Errors);
         }
 
+        // Not in GoalValidator: this refusal is a { message }, not the validation array.
+        if (changes.Status == GoalStatus.Parked && changes.ParkedReason is null)
+        {
+            return BadRequest(new { message = "A parked goal needs a reason." });
+        }
+
         var result = await _repo.UpdateAsync(id, changes);
         return await ToWriteResponseAsync(result);
     }

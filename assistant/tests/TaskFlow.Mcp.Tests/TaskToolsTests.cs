@@ -2365,7 +2365,7 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task JournalDate_UnreachableApiDuringTheProjectStep_IsNotReportedAsPartialSuccess()
+    public async Task JournalDate_UnreachableApiDuringTheProjectStep_SaysTheTaskWasSavedAndPlanned()
     {
         var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
@@ -2374,7 +2374,9 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
         var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Cannot reach the TaskFlow API").And.NotContain("was updated and planned");
+        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
+            .And.Contain("assigning it to project 'Alpha' failed: cannot reach the TaskFlow API")
+            .And.Contain("Retry only the project change.");
         ex.InnerException.Should().BeOfType<HttpRequestException>();
     }
 

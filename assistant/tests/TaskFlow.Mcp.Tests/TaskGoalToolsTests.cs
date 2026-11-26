@@ -343,6 +343,37 @@ public class TaskGoalToolsTests
     }
 
     [Fact]
+    public async Task ProjectStepUnreachableWithAGoalPending_SaysWhatWasSaved_AndRetriesBoth()
+    {
+        var (tools, _) = Setup(h => h
+            .Get("TaskItems/5", Task5(projectId: null))
+            .Put("TaskItems/5", Task5(projectId: null))
+            .Fail(HttpMethod.Post, "Projects/7/tasks", new HttpRequestException("refused")));
+
+        var message = await Error(() => tools.UpdateTask(5, priority: "high", project: "Alpha", goal: "Docs", ct: Ct));
+
+        message.Should().Contain("priority").And.Contain("project and goal");
+    }
+
+    [Fact]
+    public async Task UpdateTasks_TimedOutProjectStep_SaysWhatWasSaved_AndStopsTheBatch()
+    {
+        var (tools, handler) = Setup(h => h
+            .Get("TaskItems/5", Task5(projectId: null))
+            .Put("TaskItems/5", Task5(projectId: null))
+            .Fail(HttpMethod.Post, "Projects/7/tasks", new TaskCanceledException()));
+
+        var message = await Error(() => tools.UpdateTasks(
+            [new TaskUpdate { Id = 5, Priority = "high", Project = "Alpha", Goal = "Docs" }, new TaskUpdate { Id = 6, Priority = "high" }], Ct));
+
+        message.Should().Contain("x #5: Task #5's fields were saved (priority)")
+            .And.Contain("request timed out")
+            .And.Contain("resend only that item with just id, project and goal.")
+            .And.Contain("x #6: not attempted");
+        handler.Sent(HttpMethod.Get, "TaskItems/6").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task UpdateTasks_UnreachableGoalStep_SaysWhatWasSaved_AndStopsTheBatch()
     {
         var (tools, handler) = Setup(h => h

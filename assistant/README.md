@@ -1,76 +1,58 @@
-# taskflow-assistant
+# TaskFlow MCP server
 
 Lives in the `assistant/` folder of the [TaskFlow](https://github.com/nevridge/TaskFlow) repo. Run the commands below from that folder.
 
-Helps you manage your **own work tasks and projects** in a local [TaskFlow](https://github.com/nevridge/TaskFlow) instance, from any folder. One MCP server, two ways to use it:
-
-| Where | How | Section |
-|---|---|---|
-| **Claude Desktop, Chat** | MCP server registered in `claude_desktop_config.json` + one uploaded skill | [Claude Desktop (Chat)](#claude-desktop-chat) |
-| **Claude Code** (terminal, IDE extensions, the desktop app's Code tab where available) | A Claude Code plugin: MCP server + agent + five slash-command skills | [Claude Code plugin](#claude-code-plugin) |
-
-A Claude Code plugin does **not** load in Chat: Chat ignores a plugin's local MCP servers, agents and `bin/` executables (see the [plugin support table](https://claude.com/docs/plugins/platform-support)), so Chat needs the separate setup below.
-
-## Claude Desktop (Chat)
-
-Needs the .NET 11 runtime on `PATH`, Claude Desktop, and TaskFlow running with the Projects API.
-
-1. Stop any running TaskFlow server (disable `taskflow` in `/mcp` in Claude Code, and quit Claude Desktop completely), then publish the server: `./build.ps1`. The build stops and lists the blocking processes (PID and parent) if a server is still running, and a failed build leaves the old `plugin/bin` in place.
-2. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open. Quitting also stops the server process Claude Desktop started, which would otherwise block the build.
-3. Register the server: `./scripts/install-claude-desktop.ps1` (add `-ApiUrl http://host:port` if TaskFlow is not on `localhost:8081`; `-DryRun` previews, `-Uninstall` removes). It merges a `taskflow` entry into `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other settings and saves a timestamped backup next to it.
-4. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 22 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
-5. Package and upload the skill: `./scripts/package-chat-skill.ps1`, then in Claude Desktop go to **Customize > Skills > + > Upload a skill** and choose `dist/taskflow-assistant-skill.zip`.
-
-Chat applies the skill automatically when your request fits ("plan my day", "turn these notes into tasks", "draft my weekly update", "stand-up"); there are no slash commands in Chat. Skills need code execution enabled for your account; if your organization disables it, paste `chat/taskflow-assistant/SKILL.md` into a Project's instructions instead. The skill lives in `chat/taskflow-assistant/` and mirrors the plugin's five skills, restricted to the frontmatter keys Chat accepts.
-
-## Claude Code plugin
-
-A [Claude Code](https://code.claude.com) plugin for the terminal and IDEs.
-
-It bundles:
-
-- **An MCP server** (`src/TaskFlow.Mcp`, C# / .NET 11, stdio) wrapping the TaskFlow REST API.
-- **An agent**, `work-task-assistant`, for delegated task work.
-- **Five skills** for interactive workflows (all user-invoked, nothing runs on its own):
-
-| Command | What it does |
-|---|---|
-| `/taskflow-assistant:plan-my-day [date or project]` | Reviews the journal (parents with open subtasks shown as uncounted context), overdue/due-soon/stale tasks, proposes a focus list, plans what you confirm |
-| `/taskflow-assistant:capture-tasks [notes]` | Turns notes into tasks (project, priority, due date), creates them after you confirm |
-| `/taskflow-assistant:weekly-review [from] [to]` | Summarizes the week and drafts a status update |
-| `/taskflow-assistant:journal-log [what happened]` | Logs progress to the journal, linked to the right task |
-| `/taskflow-assistant:standup` | Builds the weekday stand-up: last working day's completed work (Friday on Mondays and weekends), today's plan, overdue; grouped by project, read-only |
+A local stdio MCP server (`src/TaskFlow.Mcp`, C# / .NET 11, `ModelContextProtocol` 2.4.0) over the TaskFlow REST API, used from Claude Desktop and Claude Code. It helps you manage your own work tasks and projects, from any folder.
 
 Local use only: it talks to your Docker TaskFlow stack (`http://localhost:8081` by default) and has no auth, hosting or deployment story.
 
 ## Requirements
 
-- Claude Code (checked with 2.1.292) and the .NET 11 runtime on `PATH` (`dotnet`).
+- The .NET 11 runtime on `PATH` (`dotnet`).
+- Claude Desktop and/or Claude Code.
 - A running TaskFlow with the **Projects API** (TaskFlow PR [#221](https://github.com/nevridge/TaskFlow/pull/221)) and the journal update fix ([#224](https://github.com/nevridge/TaskFlow/pull/224); without it, `update_journal` with `summary` returns a 500 on days that have planned tasks). Both are merged to `main`. Start it with `docker compose up -d --build` in the TaskFlow repo.
 
-## Install
+## Install: build
 
 ```powershell
-./build.ps1                                   # publishes the server into plugin/bin (gitignored)
-claude plugin marketplace add C:\code\TaskFlow\assistant
-claude plugin install taskflow-assistant@taskflow-assistant   # user scope: every project in Claude Code
+./build.ps1   # publishes the server into mcp/bin (gitignored)
 ```
 
-Stop running TaskFlow servers before `./build.ps1`: disable `taskflow` in `/mcp`, or quit Claude Desktop. If one is still running, the build stops and lists each blocking process id and its parent; no files change. A failed build also leaves the old `plugin/bin` in place.
+Rebuild after server changes.
 
-This is for Claude Code only. The Chat part of Claude Desktop does not read it; use the [Chat setup](#claude-desktop-chat).
+Stop running servers first: disable `taskflow` in `/mcp` and quit Claude Desktop. The `/mcp` toggle is recorded per project, so also disable it in, or close, Claude Code sessions open in other projects. Enable it again after the build.
 
-Add the marketplace from the **local path** (as above). Claude Code then loads the plugin in place, so the published `plugin/bin` is found and your edits apply on the next session or `/reload-plugins`. A copy installed from GitHub would not contain `plugin/bin`.
+If a server is still running, the build stops and lists each blocking process id and its parent. A blocked or failed build leaves the old `mcp/bin` in place.
 
-The API URL comes from the plugin's `api_url` setting (default `http://localhost:8081`), which is passed to the server as `TASKFLOW_API_URL`. A blank or malformed value falls back to the default. Change it with `/plugin configure taskflow-assistant`, or from a shell: `'{"api_url": "https://host"}' | claude plugin configure taskflow-assistant@taskflow-assistant --values-stdin`, then restart Claude Code.
+## Install: Claude Desktop
 
-Uninstalling and reinstalling the plugin (for example when you move to a new clone) resets `api_url` to the default, so set it again. Claude Desktop keeps its own URL: re-run `./scripts/install-claude-desktop.ps1 -ApiUrl https://host` after a move, because the script writes both the DLL path and the URL.
+1. **Quit Claude Desktop completely** (tray icon > Quit). It rewrites its config while running, so the script refuses to edit it while the app is open. Quitting also stops the server process Claude Desktop started, which would otherwise block the build.
+2. Register the server: `./scripts/install-claude-desktop.ps1` (add `-ApiUrl http://host:port` if TaskFlow is not on `localhost:8081`; `-DryRun` previews, `-Uninstall` removes). It merges a `taskflow` entry into `%APPDATA%\Claude\claude_desktop_config.json`, keeps your other settings and saves a timestamped backup next to it.
+3. Start Claude Desktop. In a chat, the **+** menu's connectors list should show `taskflow` with 22 tools. If not, open **Settings > Developer** in Claude Desktop (log locations differ between the Microsoft Store and installer versions; on the Store version no MCP log files appeared under `%APPDATA%\Claude\logs`). You can also confirm the app started the server with `Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" | Where-Object CommandLine -match 'TaskFlow.Mcp.dll'`.
 
-Check it: `claude mcp list` should show `plugin:taskflow-assistant:taskflow ... Connected`.
+## Install: Claude Code
+
+```powershell
+claude mcp add taskflow --scope user --env TASKFLOW_API_URL=http://localhost:8081 -- dotnet C:\code\TaskFlow\assistant\mcp\bin\TaskFlow.Mcp.dll
+```
+
+The path is for a clone at `C:\code\TaskFlow`, and the URL is the default; adjust either if yours differs. A blank or malformed URL falls back to the default.
+
+Check it: `claude mcp list` should show `taskflow` as connected, and `claude mcp get taskflow` shows the stored command, args and env.
+
+To change the URL or path, run `claude mcp remove taskflow --scope user`, then add it again. Adding a name that already exists in the same scope fails, and a `taskflow` entry in local or project scope takes precedence over the user-scope one.
+
+## Both registrations
+
+- The standalone CLI does not read `claude_desktop_config.json`, so Claude Code needs its own `claude mcp add`.
+- The desktop app also loads its `claude_desktop_config.json` servers into local Code tab sessions, so such a session sees two definitions named `taskflow`. **Both must hold the same API URL**, or a session could read and write a different TaskFlow instance from the one you expect.
+- Claude Desktop keeps its own URL: re-run `./scripts/install-claude-desktop.ps1` with `-ApiUrl` to change it.
 
 ## Tools
 
 Twenty-two tools, deliberately consolidated around workflows rather than one per endpoint. Tasks, projects, areas and goals are referred to by name; ids are returned for follow-up calls.
+
+Claude Code names the tools `mcp__taskflow__<tool>`.
 
 | Area | Tools |
 |---|---|
@@ -84,23 +66,17 @@ Twenty-two tools, deliberately consolidated around workflows rather than one per
 Behaviors worth knowing:
 
 - Areas group projects, and `list_projects` and `project_status` show each project's area. `delete_area` takes an area's id or exact name (not a partial name). It deletes an area with no projects immediately, even with `confirmed=false`. For an area with projects (archived ones count) it deletes nothing until a call has both `confirmed=true` and one of `moveToArea`, `newAreaName` or `leaveProjectsWithoutArea=true`; otherwise it returns the project list. `confirmed` is asserted by the model, so the permission prompt is the only check the model does not control.
-- Area support needs the TaskFlow API change [#490](https://github.com/nevridge/TaskFlow/issues/490) deployed, so do not publish or tag a release until it is live on your API. The project `PUT` is full-replace, so a plugin build from before this change clears a project's area whenever it updates that project.
-- After #490 is deployed: stop running TaskFlow servers, run `./build.ps1`, then re-run `./scripts/package-chat-skill.ps1` and upload the skill again (the Chat copy is an uploaded zip and does not follow the checkout). The plugin loads in place from a local path, so its Markdown changes apply on the next session while the server changes only after a rebuild; do both together.
 - Goals live inside a project, and a project has at most one Now goal. While it has one, a task in a Next or Parked goal cannot be started or completed, and an InProgress subtask cannot be moved into the project of a parent whose goal is Next or Parked (`TASK_GOAL_NOT_NOW`). `swap_now` makes another goal Now and moves the old one to the top of Next; it is refused while the Now goal has tasks in progress (`GOAL_NOW_HAS_INPROGRESS_TASKS`). A goal with open tasks cannot be set to done or dropped (`GOAL_HAS_OPEN_TASKS`). For these codes the error also names the tasks (up to 20) or the Now goal.
 - `save_goal` creates when `goal` is omitted (status next or now only; titles may repeat, so repeating the call makes a second goal) and otherwise edits, keeping omitted fields. `position` is 1-based among Next goals and is applied after the save; if that step fails, the error says the goal was saved. `delete_goal` takes an id or exact title. It deletes a goal with no tasks immediately, even with `confirmed=false`; otherwise it needs `confirmed=true`, and the tasks stay in the project with no goal.
 - `goal` on `create_tasks`, `update_task` and `update_tasks` is a title or id within the task's project (`none` removes it on update and means no goal on create). Omitting it keeps the goal, but moving a task to another project clears it and giving it a parent takes the parent's goal; a subtask's goal cannot be set directly. `update_task` rejects a Done or Dropped goal, or a goal a subtask cannot take, before writing anything. If `create_tasks` creates a task but cannot assign the goal, the task stays on its `+` line with a warning. `update_task` writes fields, then project, then goal, except that joining the Now goal or leaving a goal goes first when neither project nor parent changes, so "move to Now and start" works in one call. A failure after an earlier write says what was saved and what to retry. `list_tasks` takes `goal` with `project`, or `goal=none` for Unsorted tasks.
-- Goal support needs the TaskFlow API change [#491](https://github.com/nevridge/TaskFlow/issues/491) deployed, so do not publish the plugin until it is live on your API. Then stop running TaskFlow servers, run `./build.ps1`, re-run `./scripts/package-chat-skill.ps1` and upload the chat zip again.
 - The TaskFlow task `PUT` is full-replace; `update_task` reads the task, merges your changes and sends the full body. With a `project`, it resolves the project before saving, so an unknown or ambiguous project changes nothing; if assigning fails after the save, the error says the task fields were saved and to retry only the project change.
 - `create_tasks` flags a new task whose title equals an existing open or done task (ignoring case and extra spaces), or an earlier task in the same call, with `! Possible duplicate of #id "Title" (open|done)`. The task is still created. The check is best-effort: if existing tasks cannot be read, tasks are created anyway and the report ends with "Duplicate check skipped". Matching is exact after normalizing, not fuzzy.
 - `update_journal` with `append=true` reads the day's summary and saves it plus a blank line plus the new text; it fails without saving when the total would exceed 10000 characters. It reads then writes, so an edit made in between (for example in the web app) is overwritten, and a retried append adds the text twice.
 - `update_tasks` runs each item like `update_task`. Items are independent; if the API cannot be reached, the remaining items are reported as not attempted. If an item's project or goal change fails after something was saved, its `x` line says so and names what remains; retry only that.
 - Statuses are Draft, Todo, InProgress, Blocked and Completed. Only a Todo task can be started, only a Todo or InProgress task can be blocked, and tasks cannot be created as Blocked. Detailed output shows `Started: <date> UTC` when the API reports a start time. Blocked tasks still count as open and are shown as `blocked: <reason> (Nd)`; `project_status` and `weekly_review` list them in their own group.
 - `update_task` re-sends the task's status on every PUT, so a Blocked task stays Blocked. An omitted `blockedReason` keeps the stored reason; an empty string clears it (the task stays Blocked); `status=todo` on a Blocked task unblocks it (InProgress is restored only if the goal rule allows it, otherwise the task becomes Todo), and on an InProgress task moves it back to Todo.
-- Blocked support needs the TaskFlow API change [#311](https://github.com/nevridge/TaskFlow/issues/311) deployed. This plugin ships prompts that rely on it, so do not publish or tag a release until #311 is live on your API. The server is published with `build.ps1` into `plugin/bin`, so the plugin version and the server ship together.
-- InProgress support needs the TaskFlow API change [#351](https://github.com/nevridge/TaskFlow/issues/351) deployed. This release must not be published or tagged until #351 is live on your API.
 - `update_task` / `update_tasks` accept `journalDate` (`today`, `tomorrow` or `yyyy-MM-dd`, today or later) to plan a task on a day in the same call; it is separate from `dueDate`. Omitting it leaves the planned day unchanged, and update cannot un-plan a task (use `set_journal_todos` with `remove`). `yesterday` is rejected locally and earlier dates by the API, and a task with open subtasks cannot be planned (Blocked counts as open), so plan its subtasks instead; a completed task cannot be planned onto a different day. The reported planned day is read back from the API; if it cannot be confirmed, the result says so.
-- `journalDate` on update needs the TaskFlow API change [#352](https://github.com/nevridge/TaskFlow/issues/352) (PR [#377](https://github.com/nevridge/TaskFlow/pull/377)) deployed. This release must not be published or tagged until it is live on your API.
-- TaskFlow refuses some changes with a rule code: planning a task with open subtasks (`TASK_PLAN_HAS_OPEN_SUBTASKS`), an open child under a Completed parent (`TASK_PARENT_COMPLETED_NOT_ALLOWED`), changing the status of a parent with open subtasks (`TASK_PARENT_STATUS_DERIVED`), and planning a completed task onto a different day (`TASK_PLAN_COMPLETED_NOT_ALLOWED`). The error shows the API message and code plus one line of next-step guidance; in `update_tasks`, `create_tasks` and `set_journal_todos` the other items still go through. The planning rule needs the TaskFlow API change [#387](https://github.com/nevridge/TaskFlow/issues/387) deployed, so do not publish or tag a release until it is live on your API.
+- TaskFlow refuses some changes with a rule code: planning a task with open subtasks (`TASK_PLAN_HAS_OPEN_SUBTASKS`), an open child under a Completed parent (`TASK_PARENT_COMPLETED_NOT_ALLOWED`), changing the status of a parent with open subtasks (`TASK_PARENT_STATUS_DERIVED`), and planning a completed task onto a different day (`TASK_PLAN_COMPLETED_NOT_ALLOWED`). The error shows the API message and code plus one line of next-step guidance; in `update_tasks`, `create_tasks` and `set_journal_todos` the other items still go through.
 - Your local UTC offset is sent with writes, because the API's "past day" rules depend on it.
 - API errors (`code` + `message`, validation lists) are returned to Claude as tool errors so it can recover. Server 5xx errors are summarized without leaking stack traces.
 - The API has no filtering or paging, so views, paging and aggregation happen in the server. Results are compact by default to stay under Claude Code's MCP output limits (warning at 10k tokens, cap 25k).
@@ -110,39 +86,10 @@ Behaviors worth knowing:
 ```powershell
 dotnet test --solution TaskFlow.Assistant.sln
 dotnet format TaskFlow.Assistant.sln --verify-no-changes
-claude plugin validate ./plugin
-claude plugin validate .                      # the marketplace
-claude --plugin-dir ./plugin                  # try it for one session without installing
 ```
 
 Tests stub the HTTP layer; a reflection test also guards the tool surface (exact tool set, every tool and parameter described, read-only/destructive flags).
 
-### Building features with feature-factory
+## Building features with feature-factory
 
-Open Claude Code in this repo (on `main` it creates a branch for you; any other branch is used as is) and run `/feature-factory <issue-number>`; with no number the skill asks for the issue or a feature description. It walks the issue through research, story, brief (with advisor input: `ux-advisor` for UI changes, `claude-integration-advisor` for assistant changes), build (one builder per area: api, web, assistant and docs), verification and a PR, with three approval stops (story, brief, final review). Each agent writes its own run file from a pipeline-owned template and replies with a short status block; the skill checks that reply and routes on its Status. A story groomed with `/groom-issue` skips the story stop, and also the brief stop when the brief and every advisor report no open questions; a groomed story that the research contradicts goes through both stops. The final stop is never skipped. A run has a shared correction budget of 2 and a respec budget of 1; the run Halts when a pass is needed and its budget is spent. An open blocker on the issue (GitHub's blocked-by links) stops the run until you say "proceed anyway".
-
-A run folder can also be "groomed, not started": `/groom-issue` leaves `research.md` with `Branch: none` on line 1 (and the recorded commit on line 2), plus an optional `grooming.md` holding your grooming questions and answers. The skill offers no Resume or Start over for it. It creates the branch, replaces line 1 with the real branch, and re-checks the research only against files changed since the recorded commit (it skips the researcher when none changed). `grooming.md` is optional context for the spec-writer and the validator and is never used for stops or budgets. The orphan sweep deletes a groomed folder only when its issue is closed (and leaves it alone if `gh` fails). There is no way to force a fresh research run on a groomed folder except deleting it by hand.
-
-It needs the user-level agents `story-writer`, `codebase-researcher` and `spec-writer` in `~/.claude/agents/`. The skill is `.claude/skills/feature-factory/SKILL.md` and its agents are in `.claude/agents/`.
-
-If a run stops on a failure (a Halt), the skill commits the pending work on the branch as `chore: feature-factory halt commit` and keeps the run folder; re-run `/feature-factory <issue-number>` to resume, which undoes that commit so its work goes into the stage's normal commit, or at Stage 8 into an owner-changes commit that is re-verified. **Start over** deletes the run folder and keeps the branch, and asks whether to keep the branch's commits or reset it to `main`, never offering the reset once anything has been pushed.
-
-## Known issues
-
-- Subagents cannot ask questions mid-run, so the agent proposes and reports rather than confirming; the interactive confirm-then-write flows live in the skills.
-
-## Sources
-
-Built from the official docs, checked 2026-10-09 against Claude Code 2.1.292:
-
-- Plugins: <https://code.claude.com/docs/en/plugins>, [manifest reference](https://code.claude.com/docs/en/plugins-reference), [create](https://code.claude.com/docs/en/plugins/create), [loading](https://code.claude.com/docs/en/plugins/loading), [create a marketplace](https://code.claude.com/docs/en/plugin-marketplaces)
-- [Subagents](https://code.claude.com/docs/en/sub-agents), [Skills](https://code.claude.com/docs/en/skills), [MCP](https://code.claude.com/docs/en/mcp)
-- Claude Desktop Chat: [Connect to local MCP servers](https://modelcontextprotocol.io/docs/develop/connect-local-servers), [MCPB](https://github.com/modelcontextprotocol/mcpb) (not used: a config-file entry was chosen over a one-click extension), [plugin support by surface](https://claude.com/docs/plugins/platform-support), [Using Skills in Claude](https://support.claude.com/en/articles/12512180-using-skills-in-claude)
-- MCP C# SDK: <https://github.com/modelcontextprotocol/csharp-sdk> (`ModelContextProtocol` 2.2.0; docs/concepts)
-- Tool design: Anthropic, [Writing tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents)
-
-Deliberate choices and deviations:
-
-- Skills use `disable-model-invocation: true`: they write data, and keeping them out of Claude's context until invoked keeps the plugin's always-on cost small (~360 tokens, per `claude plugin details`).
-- Plugin-bundled MCP tools are named `mcp__plugin_taskflow-assistant_taskflow__<tool>` (verified); the agent and skills use that form. The agent's `tools` uses the server-level name.
-- Only `McpException` messages reach the model (the SDK replaces other exceptions with a generic message), so every API failure is translated to one.
+Run `/feature-factory <issue-number>` from the repo; see [`.claude/skills/feature-factory/SKILL.md`](../.claude/skills/feature-factory/SKILL.md).

@@ -11,7 +11,7 @@ public static class TaskFlowApiServiceExtensions
 
     /// <summary>
     /// Registers the typed API client. A blank, missing or malformed URL (for example an unsubstituted
-    /// plugin placeholder) falls back to the local Docker default.
+    /// configuration placeholder) falls back to the local Docker default.
     /// </summary>
     public static IServiceCollection AddTaskFlowApi(this IServiceCollection services, string? baseUrl)
     {

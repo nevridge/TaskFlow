@@ -355,6 +355,20 @@ public class TaskGoalToolsTests
         message.Should().Contain("priority").And.Contain("project and goal");
     }
 
+    /// <summary>A project-only change sends no PUT, so a failed project step must not claim anything was saved.</summary>
+    [Fact]
+    public async Task ProjectStepUnreachableWithNothingSaved_DoesNotClaimASave()
+    {
+        var (tools, handler) = Setup(h => h
+            .Get("TaskItems/5", Task5(projectId: null))
+            .Fail(HttpMethod.Post, "Projects/7/tasks", new HttpRequestException("refused")));
+
+        var message = await Error(() => tools.UpdateTask(5, project: "Alpha", goal: "Docs", ct: Ct));
+
+        message.Should().Contain("Cannot reach the TaskFlow API").And.NotContain("saved");
+        Writes(handler).Should().Equal("POST Projects/7/tasks");
+    }
+
     [Fact]
     public async Task UpdateTasks_TimedOutProjectStep_SaysWhatWasSaved_AndStopsTheBatch()
     {

@@ -60,6 +60,24 @@ public sealed class GoalsAcceptanceTests : GoalsApiTestBase
             "Expected { message }, got: " + body.GetRawText());
     }
 
+    /// <summary>The reason check comes before the in-progress rule, so this is a 400 and not a 422.</summary>
+    [Fact]
+    public async Task ParkingTheBusyNowGoal_WithABlankReason_Returns400WithAMessage_AndSavesNothing()
+    {
+        var projectId = await CreateProjectAsync();
+        var now = await CreateGoalAsync(projectId, "Current", "now");
+        await AssignAsync(now, await CreateTaskAsync(projectId, "inProgress"));
+
+        var (status, body) = await SendAsync(
+            HttpMethod.Put, $"/api/v1/Goals/{now}", new { title = "renamed", status = "parked", parkedReason = "  " });
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.NotEmpty(body.GetProperty("message").GetString()!);
+        var stored = await GetJsonAsync($"/api/v1/Goals/{now}");
+        Assert.Equal("Now", stored.GetProperty("status").GetString());
+        Assert.Equal("Current", stored.GetProperty("title").GetString());
+    }
+
     [Theory]
     [InlineData("next")]
     [InlineData("parked")]

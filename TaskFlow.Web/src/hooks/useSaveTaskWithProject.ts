@@ -18,10 +18,16 @@ interface SaveTarget {
   currentJournalEntryId?: number | string | null
 }
 
-/** Refusals a project change can cause, which the generic task messages would hide. */
-function isProjectRefusal(err: unknown): boolean {
+/**
+ * Whether a refused PATCH takes the project copy. The choice depends on what was sent, not on the code
+ * alone: `TASK_PROJECT_NOT_FOUND` is always about the project, but `TASK_GOAL_NOT_NOW` also fires on a
+ * status-only edit, where "would join a goal" would describe a move the user never made. So it takes the
+ * project copy only when `projectId` was in the PATCH body; otherwise the task messages
+ * (`getGoalErrorMessage` via `getTaskErrorMessage`) apply.
+ */
+function isProjectRefusal(err: unknown, projectIdSent: boolean): boolean {
   const code = (err as { code?: unknown } | null)?.code
-  return code === 'TASK_PROJECT_NOT_FOUND' || code === 'TASK_GOAL_NOT_NOW'
+  return code === 'TASK_PROJECT_NOT_FOUND' || (code === 'TASK_GOAL_NOT_NOW' && projectIdSent)
 }
 
 /**
@@ -37,10 +43,11 @@ function isProjectRefusal(err: unknown): boolean {
  * failed" is truthful. The form then reverts to the stored day, so a retry does not re-run the clear:
  * the user must clear again. `plannedDayRevertToken` increments after a failed clear so the form snaps
  * back to the stored day.
- * Error text for a refused PATCH: a project-related refusal (422 `TASK_PROJECT_NOT_FOUND` or
- * `TASK_GOAL_NOT_NOW`, chosen by the error code) uses the project messages, everything else
- * `getTaskErrorMessage`. Only project-not-found marks the project field invalid, because for
- * `TASK_GOAL_NOT_NOW` the project exists. The goal is never sent, so a project change resets it on the server.
+ * Error text for a refused PATCH: 422 `TASK_PROJECT_NOT_FOUND`, or `TASK_GOAL_NOT_NOW` when `projectId`
+ * was in the body, use the project messages; everything else, including `TASK_GOAL_NOT_NOW` on a save
+ * that sent no `projectId`, uses `getTaskErrorMessage`. Only project-not-found marks the project field
+ * invalid, because for `TASK_GOAL_NOT_NOW` the project exists. The goal is never sent, so a project
+ * change resets it on the server.
  */
 export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => string) {
   const qc = useQueryClient()
@@ -71,6 +78,7 @@ export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => 
       const { projectId: selected, plannedDay, ...fields } = formData
       const from = normalizeProjectId(task.projectId)
       const to = selected === undefined ? from : normalizeProjectId(selected)
+      const projectIdSent = from !== to
       try {
         await patchTask.mutateAsync({
           id: taskId,
@@ -84,12 +92,12 @@ export function useSaveTaskWithProject(getTaskErrorMessage: (error: unknown) => 
             parentTaskItemId: fields.parentTaskItemId ?? null,
             ...(fields.blockedReason !== undefined && { blockedReason: fields.blockedReason }),
             ...(typeof plannedDay === 'string' && plannedDay !== '' && { journalDate: plannedDay }),
-            ...(from !== to && { projectId: to }),
+            ...(projectIdSent && { projectId: to }),
             autoCompleteParentWhenChildrenDone,
           },
         })
       } catch (err) {
-        if (isProjectRefusal(err)) {
+        if (isProjectRefusal(err, projectIdSent)) {
           setError(getProjectMutationErrorMessage(err))
           if (getProjectErrorKind(err) === 'notFound') setProjectInvalid(true)
         } else {

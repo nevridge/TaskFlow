@@ -119,6 +119,36 @@ describe('useSaveTaskWithProject', () => {
     expect(result.current.projectInvalid).toBe(false)
   })
 
+  it('a TASK_GOAL_NOT_NOW refusal from a save that sent no projectId uses the task message, not the project copy', async () => {
+    patchAsync.mockRejectedValue({ code: 'TASK_GOAL_NOT_NOW' })
+    const result = setup()
+    await act(async () => { await result.current.save({ id: 5, projectId: 1 }, { title: 'T', projectId: 1 }, false) })
+
+    expect(sentData()).not.toHaveProperty('projectId')
+    expect(result.current.error).toBe('task error')
+    expect(result.current.error).not.toMatch(/would join a goal/)
+    expect(result.current.projectInvalid).toBe(false)
+  })
+
+  it('a project-not-found refusal on a save that sent no projectId still takes the project path', async () => {
+    patchAsync.mockRejectedValue({ code: 'TASK_PROJECT_NOT_FOUND' })
+    const result = setup()
+    await act(async () => { await result.current.save({ id: 5, projectId: 1 }, { title: 'T', projectId: 1 }, false) })
+
+    expect(result.current.error).toBe('The selected project was not found.')
+    expect(result.current.projectInvalid).toBe(true)
+  })
+
+  it('a Blocked save with an emptied reason sends blockedReason "" (the API clears it, as PUT did), and one with none omits it', async () => {
+    const result = setup()
+    await act(async () => { await result.current.save({ id: 5 }, { title: 'T', blockedReason: '' }, false) })
+    expect(sentData()).toHaveProperty('blockedReason', '')
+
+    patchAsync.mockClear()
+    await act(async () => { await result.current.save({ id: 5 }, { title: 'T' }, false) })
+    expect(sentData()).not.toHaveProperty('blockedReason')
+  })
+
   it('runs the planned-day clear after the PATCH and resolves true', async () => {
     const result = setup()
     let saved = false

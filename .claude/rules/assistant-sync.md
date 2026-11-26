@@ -5,6 +5,6 @@ paths:
   - TaskFlow.Contracts/**
 ---
 
-# Keep the assistant in sync with the API
+# Keep the README tool list in sync
 
-Every workflow under `assistant/plugin/skills/` (`*/SKILL.md`) has a matching file in `assistant/chat/taskflow-assistant/references/`, so each workflow exists twice. When an MCP tool name, parameter or behavior changes, or an API change alters what the tools send or receive, update both sets, `assistant/plugin/agents/work-task-assistant.md`, `assistant/chat/taskflow-assistant/SKILL.md` and the README tool list in the same change. `TaskFlowApiClient` and `ApiModels` are hand-written against `TaskFlow.Api/`, so an API change ships with its client change in one PR. A reflection test guards the tool surface; update it deliberately. A `TaskFlow.Contracts/` change (error codes, status, priority) also needs the assistant solution to build, because `TaskFlow.Assistant.sln` builds Contracts. `ErrorCodeCoverageTests` asserts that every `ErrorCodes` value has a ToolGuard guidance string or a justified `NoMessageNeeded` entry; update both in the same change.
+When an MCP tool is added, removed or renamed, or its parameters or behavior change (including through an API or `TaskFlow.Contracts` change), update the tool list in `assistant/README.md` in the same change.

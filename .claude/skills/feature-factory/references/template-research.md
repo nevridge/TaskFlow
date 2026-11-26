@@ -18,7 +18,7 @@ Precedence: a Halt status wins over a loop Stage 3 status, then loop Stage 5, th
 
 - Do not ask questions. Record any ambiguity under `### Risks and Missing Information`.
 - Report facts about the code. Make no recommendation about pipeline mechanics (routing, stops, which agent builds what); `SKILL.md` and the area definitions in `template-brief.md` settle those.
-- Cover: entities, endpoints, DTOs, repositories, validators, test patterns, frontend hooks and components, the assistant tools and the plugin or chat text that describes them, and fragile areas.
+- Cover: entities, endpoints, DTOs, repositories, validators, test patterns, frontend hooks and components, the assistant tools and the README text that describes them, and fragile areas.
 - For each path the prompt names as moved, renamed, deleted or reassigned to another area (do not predict others), search the repo for the path and for its file or project name. List every file that names it, solution and project files included, under `### Relevant Files`, each next to the path it references. A named path with no referencing file gets the line "No references found for `<path>`".
 - Delete an empty section. Never write None as a section body.
 

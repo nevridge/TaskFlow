@@ -176,8 +176,12 @@ internal static class Fixtures
         int childTaskCount = 0,
         string? startedAt = null,
         string? parentTitle = null,
-        int openChildCount = 0) => new
+        int openChildCount = 0,
+        int? goalId = null,
+        string? goalTitle = null) => new
         {
+            goalId,
+            goalTitle,
             id,
             title,
             description,
@@ -223,6 +227,34 @@ internal static class Fixtures
         updatedAt = (string?)null,
         projectCount,
     };
+
+    public static object Goal(
+        int id,
+        string title,
+        string status = "Next",
+        int projectId = 7,
+        string? description = null,
+        string? doneWhen = null,
+        string? parkedReason = null,
+        string? closedAt = null,
+        int open = 0,
+        int done = 0) => new
+        {
+            id,
+            projectId,
+            title,
+            description,
+            doneWhen,
+            status,
+            parkedReason,
+            displayOrder = 0,
+            statusChangedAt = "2026-10-02T03:00:00Z",
+            closedAt,
+            createdAt = "2026-10-01T00:00:00Z",
+            updatedAt = (string?)null,
+            openTaskCount = open,
+            doneTaskCount = done,
+        };
 
     public static object Journal(int id, string date, string? summary = null, object[]? logs = null) => new
     {

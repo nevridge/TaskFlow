@@ -26,7 +26,12 @@ export function getProjectErrorKind(error: unknown): ProjectErrorKind {
   return 'generic'
 }
 
+/** The move was refused by the goal rule (#491): retrying alone cannot succeed. */
+export const PROJECT_GOAL_NOT_NOW_MESSAGE =
+  "This task is in progress and would join a goal that is not the current goal. Pause it first, or swap that goal to Now with the assistant."
+
 export function getProjectMutationErrorMessage(error: unknown): string {
+  if (readField(error, 'code') === 'TASK_GOAL_NOT_NOW') return PROJECT_GOAL_NOT_NOW_MESSAGE
   switch (getProjectErrorKind(error)) {
     case 'notFound':
       return PROJECT_NOT_FOUND_MESSAGE

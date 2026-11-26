@@ -82,7 +82,7 @@ public class ErrorCodeCoverageTests
     [Fact]
     public void EveryGuidance_NamesAToolOrParameter_AndHasNoTaskId()
     {
-        var names = new[] { "list_projects", "list_tasks", "get_task", "create_tasks", "update_task", "update_tasks", "delete_task", "set_journal_todos", "project", "parentTaskId", "journalDate", "blockedReason", "status=", "complete=", "date" };
+        var names = new[] { "list_projects", "list_tasks", "get_task", "create_tasks", "update_task", "update_tasks", "delete_task", "set_journal_todos", "swap_now", "project", "parentTaskId", "journalDate", "blockedReason", "status=", "complete=", "date" };
 
         foreach (var code in AllCodes().Where(IsMapped))
         {

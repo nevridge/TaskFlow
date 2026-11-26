@@ -11,4 +11,5 @@ public class Project
     public int? AreaId { get; set; }
     public Area? Area { get; set; }
     public ICollection<TaskItem> Tasks { get; set; } = [];
+    public ICollection<Goal> Goals { get; set; } = [];
 }

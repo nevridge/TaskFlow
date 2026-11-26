@@ -534,6 +534,7 @@ public class ToolSurfaceTests
         "get_journal", "set_journal_todos", "add_log_entry", "update_journal",
         "weekly_review",
         "list_areas", "save_area", "delete_area",
+        "list_goals", "save_goal", "swap_now", "delete_goal",
     ];
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute Attribute)> Tools() =>
@@ -642,6 +643,12 @@ public class ToolSurfaceTests
             .Should().Contain("rejects the whole update before anything is saved");
     }
 
+    /// <summary>Older Claude Code versions cut a longer description, dropping the rules at its end.</summary>
+    [Fact]
+    public void EveryToolDescription_FitsClaudeCodesLimit() =>
+        Tools().Where(t => t.Method.GetCustomAttribute<DescriptionAttribute>()!.Description.Length >= 2048)
+            .Select(t => t.Attribute.Name).Should().BeEmpty();
+
     private static List<string> RequiredNames(System.Text.Json.JsonElement schema) =>
         schema.TryGetProperty("required", out var required)
             ? required.EnumerateArray().Select(e => e.GetString()!).ToList()
@@ -689,10 +696,15 @@ public class ToolSurfaceTests
     {
         var byName = Tools().ToDictionary(t => t.Attribute.Name!, t => t.Attribute);
 
-        foreach (var name in new[] { "list_projects", "project_status", "list_tasks", "get_task", "weekly_review", "list_areas" })
+        foreach (var name in new[] { "list_projects", "project_status", "list_tasks", "get_task", "weekly_review", "list_areas", "list_goals" })
         {
             byName[name].ReadOnly.Should().BeTrue(name);
         }
+
+        byName["delete_goal"].Destructive.Should().BeTrue();
+        byName["delete_goal"].Idempotent.Should().BeFalse();
+        byName["swap_now"].Idempotent.Should().BeTrue();
+        byName["save_goal"].Idempotent.Should().BeFalse("a repeated create makes a second goal");
 
         byName["delete_task"].Destructive.Should().BeTrue();
         byName["delete_area"].Destructive.Should().BeTrue();

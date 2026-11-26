@@ -115,6 +115,39 @@ public sealed class RepositoryUpdateWritesOnlyRootTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_AfterAGoalChange_PersistsIt_WithoutRewritingEitherGoal()
+    {
+        int taskId, newGoalId;
+        await using (var seed = NewContext())
+        {
+            var project = new Project { Name = "Proj" };
+            var oldGoal = new Goal { Title = "Old", Project = project };
+            var newGoal = new Goal { Title = "New", Project = project };
+            var task = new TaskItem { Title = "Task", Project = project, Goal = oldGoal };
+            seed.AddRange(project, oldGoal, newGoal, task);
+            await seed.SaveChangesAsync();
+            (taskId, newGoalId) = (task.Id, newGoal.Id);
+        }
+
+        await using (var ctx = NewContext())
+        {
+            var repo = new TaskRepository(ctx);
+            var task = await repo.GetByIdAsync(taskId);
+            Assert.NotNull(task);
+
+            await repo.SetGoalAsync(task, newGoalId);
+            _interceptor.Saved.Clear();
+            await repo.UpdateAsync(task);
+        }
+
+        Assert.DoesNotContain(_interceptor.Saved, s => s.EntityType == nameof(Goal));
+
+        await using var verify = NewContext();
+        var persisted = await verify.TaskItems.AsNoTracking().SingleAsync(t => t.Id == taskId);
+        Assert.Equal(newGoalId, persisted.GoalId);
+    }
+
+    [Fact]
     public async Task Update_TrackedTaskEdit_DoesNotModifyProject()
     {
         int taskId, projectId;

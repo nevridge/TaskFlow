@@ -24,14 +24,47 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
 
     public async Task<IEnumerable<TaskItem>> GetAllAsync() =>
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
-        await _context.TaskItems.AsNoTracking().Include(t => t.Project).ToListAsync();
+        await _context.TaskItems.AsNoTracking().Include(t => t.Project).Include(t => t.Goal).ToListAsync();
 
     public async Task<TaskItem?> GetByIdAsync(int id) =>
-        await _context.TaskItems.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
+        await _context.TaskItems.Include(t => t.Project).Include(t => t.Goal).FirstOrDefaultAsync(t => t.Id == id);
 
     public async Task<TaskItem?> GetByIdNoTrackingAsync(int id) =>
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
-        await _context.TaskItems.AsNoTracking().Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
+        await _context.TaskItems.AsNoTracking().Include(t => t.Project).Include(t => t.Goal).FirstOrDefaultAsync(t => t.Id == id);
+
+    public async Task<Goal?> GetBlockingNowGoalAsync(int goalId) =>
+        await BlockingNowGoalAsync(_context, goalId);
+
+    internal static async Task<Goal?> BlockingNowGoalAsync(TaskDbContext context, int goalId)
+    {
+        var projectId = await context.Goals
+            .Where(g => g.Id == goalId && (g.Status == GoalStatus.Next || g.Status == GoalStatus.Parked))
+            .Select(g => (int?)g.ProjectId)
+            .FirstOrDefaultAsync();
+
+        // FirstOrDefault, not Single: concurrent requests can leave two Now goals.
+        return projectId is null
+            ? null
+            : await context.Goals.AsNoTracking()
+                .FirstOrDefaultAsync(g => g.ProjectId == projectId && g.Status == GoalStatus.Now);
+    }
+
+    public async Task<int?> GetInheritedGoalIdAsync(int parentId, int projectId) =>
+        await InheritedGoalIdAsync(_context, parentId, projectId);
+
+    internal static async Task<int?> InheritedGoalIdAsync(TaskDbContext context, int parentId, int projectId) =>
+        await context.TaskItems
+            .Where(t => t.Id == parentId && t.Goal != null && t.Goal.ProjectId == projectId)
+            .Select(t => t.GoalId)
+            .FirstOrDefaultAsync();
+
+    public async Task SetGoalAsync(TaskItem task, int? goalId)
+    {
+        // The navigation is the tracked row (or null), so UpdateAsync neither undoes the change nor rewrites the goal.
+        task.Goal = goalId is int id ? await _context.Goals.FindAsync(id) : null;
+        task.GoalId = goalId;
+    }
 
     public async Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId) =>
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.

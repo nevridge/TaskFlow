@@ -41,7 +41,7 @@ export type UpdateJournalEntryDto = {
 import type { TaskItemResponseDto as ClientTaskItemResponseDto } from './client/types.gen'
 export type TaskItemResponseDto = Omit<
   ClientTaskItemResponseDto,
-  'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children' | 'openChildCount'
+  'currentJournalDate' | 'moveCount' | 'daysTagged' | 'parentTaskItemId' | 'children' | 'openChildCount' | 'goalId'
 > & {
   // completedAt comes from the generated type (nullable); no override needed.
   // The journal todos endpoint returns a flat list: `children` is never populated there.
@@ -53,6 +53,9 @@ export type TaskItemResponseDto = Omit<
   moveCount?: number
   daysTagged?: number
   parentTaskItemId?: number | null
+  /** The task's goal; both null when it has none. The generator types goalId number | string. */
+  goalId?: number | null
+  goalTitle?: string | null
 }
 
 const J = { 'Content-Type': 'application/json' }

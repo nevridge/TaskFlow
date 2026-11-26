@@ -6,8 +6,8 @@ namespace TaskFlow.Api.Tests;
 
 public partial class ErrorCodeLiteralTests
 {
-    [GeneratedRegex("\"TASK_[A-Z0-9_]+")]
-    private static partial Regex TaskCodeLiteral();
+    [GeneratedRegex("\"(TASK|GOAL)_[A-Z0-9_]+")]
+    private static partial Regex CodeLiteral();
 
     private static IEnumerable<string> CodeValues() =>
         typeof(ErrorCodes)
@@ -46,7 +46,7 @@ public partial class ErrorCodeLiteralTests
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
-                foreach (Match m in TaskCodeLiteral().Matches(lines[i]))
+                foreach (Match m in CodeLiteral().Matches(lines[i]))
                 {
                     offenders.Add(relative.Replace('\\', '/') + ":" + (i + 1) + " " + m.Value + "\"");
                 }
@@ -54,11 +54,11 @@ public partial class ErrorCodeLiteralTests
         }
 
         Assert.True(offenders.Count == 0,
-            "Use ErrorCodes.X from TaskFlow.Contracts instead of TASK_ literals:\n" + string.Join("\n", offenders));
+            "Use ErrorCodes.X from TaskFlow.Contracts instead of TASK_ or GOAL_ literals:\n" + string.Join("\n", offenders));
     }
 
     [Fact]
-    public void ErrorCodes_AreDistinctTaskPrefixedUpperSnake()
+    public void ErrorCodes_AreDistinctPrefixedUpperSnake()
     {
         var values = CodeValues().ToList();
 
@@ -66,8 +66,7 @@ public partial class ErrorCodeLiteralTests
         Assert.Equal(values.Count, values.Distinct().Count());
         Assert.All(values, v =>
         {
-            Assert.StartsWith("TASK_", v);
-            Assert.Matches("^[A-Z_]+$", v);
+            Assert.Matches("^(TASK|GOAL)_[A-Z_]+$", v);
         });
     }
 
@@ -81,5 +80,8 @@ public partial class ErrorCodeLiteralTests
         Assert.Contains("TASK_PLAN_HAS_OPEN_SUBTASKS", values);
         Assert.Contains("TASK_JOURNAL_ASSIGNMENT_CONFLICT", values);
         Assert.Contains("TASK_ASSIGNMENT_PAST_DAY_NOT_ALLOWED", values);
+        Assert.Contains("TASK_GOAL_NOT_NOW", values);
+        Assert.Contains("GOAL_NOW_HAS_INPROGRESS_TASKS", values);
+        Assert.Contains("GOAL_HAS_OPEN_TASKS", values);
     }
 }

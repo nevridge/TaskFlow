@@ -14,7 +14,7 @@ public sealed record ScenarioResult(
 
 /// <summary>
 /// The journal flow an assistant session performs, run once against a real API: a parent with a planned subtask,
-/// a log entry, a note, a block and an unblock. Shared by the value assertions and the field-name check.
+/// a log entry, a note, a block and an unblock, then a project with two goals. Shared by the value assertions and the field-name check.
 /// </summary>
 public static class Scenario
 {
@@ -56,6 +56,18 @@ public static class Scenario
             ct);
         await client.GetTasksAsync(ct);
         await client.GetTaskAsync(standalone.Id, ct);
+
+        // Goals, in their own project: create, assign, swap and list.
+        var project = await client.CreateProjectAsync("Scenario project", null, null, ct);
+        var current = await client.CreateGoalAsync(
+            new CreateGoalRequest(project.Id, "Scenario now", "Goal description", "Done when", "now"), ct);
+        var later = await client.CreateGoalAsync(new CreateGoalRequest(project.Id, "Scenario next", null, null, "next"), ct);
+        var goalTask = await client.CreateTaskAsync(
+            new CreateTaskRequest("Scenario goal task", null, "todo", "low", null, null, null, project.Id, offset), ct);
+        await client.AssignTaskToGoalAsync(current.Id, goalTask.Id, ct);
+        await client.SwapNowGoalAsync(later.Id, ct);
+        await client.GetGoalsAsync(project.Id, ct);
+        await client.GetTaskAsync(goalTask.Id, ct);
 
         return new ScenarioResult(today, parent, child, entry, todos, log, note, notes);
     }

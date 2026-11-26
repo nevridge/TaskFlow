@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using ModelContextProtocol;
 using TaskFlow.Contracts;
 using TaskFlow.Mcp.Api;
@@ -31,7 +32,12 @@ internal static class ToolGuard
         [ErrorCodes.ParentCompleteBlockedByChildren] = "A parent with open subtasks cannot be completed; complete its subtasks first with update_task or update_tasks (complete=true), then complete the parent.",
         [ErrorCodes.ParentDeleteBlockedByChildren] = "A task with subtasks cannot be deleted; delete the subtasks with delete_task or detach them with update_task (parentTaskId=0), then delete the parent.",
         [ErrorCodes.AssignmentPastDayNotAllowed] = "set_journal_todos can only plan tasks on today or a later day; pass date as today, tomorrow or a future yyyy-MM-dd.",
+        [ErrorCodes.TaskGoalNotNow] = "Ask the user whether to swap that task's goal to Now with swap_now, or to take the task (for a subtask, its parent) off the goal with update_task (goal=none).",
+        [ErrorCodes.GoalNowHasInProgressTasks] = "Pause (status=todo) or block (status=blocked) the named tasks with update_task or update_tasks, then retry.",
+        [ErrorCodes.GoalHasOpenTasks] = "Complete the named tasks, or take them (for a subtask, its parent) off the goal with update_task (goal=none), then retry.",
     };
+
+    private const int MaxNamedTasks = 20;
 
     public static async Task<string> RunAsync(TaskFlowApiClient api, CancellationToken ct, Func<Task<string>> action)
     {
@@ -60,16 +66,63 @@ internal static class ToolGuard
         }
     }
 
-    /// <summary>Appends one line of next-step guidance for known 422 codes. Other errors pass through unchanged.</summary>
+    /// <summary>
+    /// Appends one line of next-step guidance for known 422 codes, and for the goal rules a further line naming the
+    /// tasks or the Now goal from <c>details</c>. Other errors pass through unchanged.
+    /// </summary>
     internal static string WithGuidance(TaskFlowApiException ex)
     {
-        if (ex.Status != HttpStatusCode.UnprocessableEntity || ex.Code is null)
+        if (ex.Status != HttpStatusCode.UnprocessableEntity || ex.Code is null
+            || !Guidance.TryGetValue(ex.Code, out var guidance))
         {
             return ex.Message;
         }
 
-        return Guidance.TryGetValue(ex.Code, out var guidance) ? ex.Message + "\n" + guidance : ex.Message;
+        var named = DetailsLine(ex);
+        return ex.Message + "\n" + guidance + (named is null ? string.Empty : "\n" + named);
     }
+
+    /// <summary>Null when there is nothing to name, including when <c>details</c> has an unexpected shape.</summary>
+    private static string? DetailsLine(TaskFlowApiException ex)
+    {
+        if (ex.Details is not { ValueKind: JsonValueKind.Object } details)
+        {
+            return null;
+        }
+
+        return ex.Code switch
+        {
+            ErrorCodes.TaskGoalNotNow => Named(details, "nowGoalId", "nowGoalTitle") is { } goal ? $"Now goal: {goal}" : null,
+            ErrorCodes.GoalNowHasInProgressTasks => TasksLine("Tasks in progress", details),
+            ErrorCodes.GoalHasOpenTasks => TasksLine("Open tasks", details),
+            _ => null,
+        };
+    }
+
+    private static string? TasksLine(string label, JsonElement details)
+    {
+        if (!details.TryGetProperty("tasks", out var tasks) || tasks.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var names = tasks.EnumerateArray().Select(t => Named(t, "id", "title")).ToList();
+        if (names.Count == 0 || names.Contains(null))
+        {
+            return null;
+        }
+
+        var more = names.Count > MaxNamedTasks ? $" and {names.Count - MaxNamedTasks} more" : string.Empty;
+        return $"{label}: {string.Join("; ", names.Take(MaxNamedTasks))}{more}";
+    }
+
+    /// <summary>"#id title" from two members of an object, or null when either is missing or of another type.</summary>
+    private static string? Named(JsonElement element, string idName, string titleName) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(idName, out var id) && id.ValueKind == JsonValueKind.Number
+        && element.TryGetProperty(titleName, out var title) && title.ValueKind == JsonValueKind.String
+            ? $"#{id.GetRawText()} {Formatting.CleanReason(title.GetString())}"
+            : null;
 
     public static McpException Invalid(string message) => new(message);
 }

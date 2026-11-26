@@ -67,6 +67,8 @@ public class ProjectsController(
             ParentTaskItemId = t.ParentTaskItemId,
             ProjectId = t.ProjectId,
             ProjectName = t.Project?.Name,
+            GoalId = t.GoalId,
+            GoalTitle = t.Goal?.Title,
             CurrentJournalEntryId = t.CurrentJournalEntryId,
             FirstTaggedDate = t.FirstTaggedDate,
             MoveCount = t.MoveCount,
@@ -177,6 +179,12 @@ public class ProjectsController(
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
+        }
+
+        // 422 TASK_GOAL_NOT_NOW: an InProgress subtask would join its parent's goal, which is not the Now goal.
+        if (await _repo.GetBlockedGoalMoveAsync(id, dto.TaskItemId) is { } blocked)
+        {
+            return UnprocessableEntity(GoalRuleErrors.TaskGoalNotNow(dto.TaskItemId, blocked.GoalId, blocked.NowGoal));
         }
 
         var result = await _repo.AssignTaskAsync(id, dto.TaskItemId);

@@ -89,6 +89,7 @@ public sealed class FieldCoverageTests
             new("GET", "/api/v1/JournalEntries", HttpStatusCode.OK, "1.0", "[" + Body(typeof(JournalEntryDto), "[" + log + "]") + "]"),
             new("POST", "/api/v1/JournalEntries/7/logs", HttpStatusCode.OK, "1.0", log),
             new("GET", "/api/v1/JournalEntries/7/notes", HttpStatusCode.OK, "1.0", "[" + Body(typeof(NoteDto)) + "]"),
+            new("GET", "/api/v1/Goals", HttpStatusCode.OK, "1.0", "[" + Body(typeof(GoalDto)) + "]"),
         ];
     }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Models;
+using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Repositories;
 
@@ -37,6 +38,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         await _context.TaskItems
             .AsNoTracking()
             .Include(t => t.Project)
+            .Include(t => t.Goal)
             .Where(t => t.ProjectId == projectId)
             .ToListAsync();
 
@@ -98,6 +100,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         var previousName = task.Project?.Name;
         task.ProjectId = projectId;
         task.Project = project;
+        await ResetGoalsAfterMoveAsync(task);
 
         _context.TaskItemEvents.Add(new TaskItemEvent
         {
@@ -113,6 +116,23 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         return AssignTaskResult.Success;
     }
 
+    public async Task<BlockedGoalMove?> GetBlockedGoalMoveAsync(int projectId, int taskItemId)
+    {
+        var task = await _context.TaskItems.AsNoTracking().FirstOrDefaultAsync(t => t.Id == taskItemId);
+        if (task is not { Status: Status.InProgress, ParentTaskItemId: int parentId } || task.ProjectId == projectId)
+        {
+            return null;
+        }
+
+        if (await TaskRepository.InheritedGoalIdAsync(_context, parentId, projectId) is not int goalId)
+        {
+            return null;
+        }
+
+        var nowGoal = await TaskRepository.BlockingNowGoalAsync(_context, goalId);
+        return nowGoal is null ? null : new BlockedGoalMove(goalId, nowGoal);
+    }
+
     public async Task<bool> UnassignTaskAsync(int projectId, int taskItemId)
     {
         var task = await _context.TaskItems
@@ -126,6 +146,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
         var previousName = task.Project?.Name;
         task.ProjectId = null;
         task.Project = null;
+        await ResetGoalsAfterMoveAsync(task);
 
         _context.TaskItemEvents.Add(new TaskItemEvent
         {
@@ -137,5 +158,25 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
 
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// A goal belongs to one project, so a move clears the task's goal and its subtasks' goals. A moved subtask that
+    /// lands in its parent goal's project takes that goal again; GetBlockedGoalMoveAsync refuses that first for an
+    /// InProgress subtask whose parent's goal is not Now while the project has one. The caller saves.
+    /// </summary>
+    private async Task ResetGoalsAfterMoveAsync(TaskItem task)
+    {
+        task.GoalId = task.ParentTaskItemId is int parentId && task.ProjectId is int projectId
+            ? await TaskRepository.InheritedGoalIdAsync(_context, parentId, projectId)
+            : null;
+
+        var subtasks = await _context.TaskItems
+            .Where(t => t.ParentTaskItemId == task.Id && t.GoalId != null)
+            .ToListAsync();
+        foreach (var subtask in subtasks)
+        {
+            subtask.GoalId = null;
+        }
     }
 }

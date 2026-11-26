@@ -7,6 +7,7 @@ internal static class InputParsing
 {
     private static readonly string[] Priorities = ["low", "medium", "high"];
     private static readonly string[] Statuses = ["draft", "todo", "inprogress", "blocked", "completed"];
+    private static readonly string[] GoalStatuses = ["next", "now", "parked", "done", "dropped"];
 
     /// <summary>The local calendar date.</summary>
     /// <remarks>Does its own clock read (one GetLocalNow). Use it only for read-only date resolution. Any call that also sends a UTC offset to the API must use <see cref="LocalNow"/> instead, so date and offset come from one snapshot.</remarks>
@@ -78,6 +79,8 @@ internal static class InputParsing
     public static string NormalizePriority(string value) => Normalize(value, Priorities, "priority");
 
     public static string NormalizeStatus(string value) => Normalize(value, Statuses, "status");
+
+    public static string NormalizeGoalStatus(string value) => Normalize(value, GoalStatuses, "status");
 
     public static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
 

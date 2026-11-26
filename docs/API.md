@@ -46,8 +46,33 @@ The snippets below describe the currently implemented contract additions used by
 - `blockedAt: string | null` (UTC instant)
 - `startedAt: string | null` (UTC instant; set the first time the task enters `InProgress`, never cleared)
 - `completedAt: string | null` (UTC instant, `Z` suffix; server-owned, see below)
+- `goalId: number | null` (read-only, see below)
+- `goalTitle: string | null` (read-only)
 
 `completedAt` is set to the current UTC time when a task moves to `Completed` by any path (`PUT`, `PATCH`, Blocked to Completed, create with `status: Completed`, or parent auto-complete) and is cleared to `null` when the task is reopened. Completing again sets a new value. It is returned on every task read (task list/detail, project tasks, journal todos including child todos). A `completedAt` sent in a create, `PUT` or `PATCH` body is ignored. It is `null` for tasks that were completed before this field existed unless a genuine `Completed` history event could be found by the migration `AddTaskItemCompletedAt` (the latest `Completed` event after the latest `Reopened` event; synthetic events from the `IsComplete` merge are ignored). No date is invented for the rest.
+
+`goalId` and `goalTitle` are returned on every task read and on create, `PUT` and `PATCH` responses. They are not request fields: a goal sent in a create, `PUT` or `PATCH` body is ignored, and an update keeps the task's goal unless it gives the task a new parent, whose goal it then takes. A goal is set through `POST api/v1/Goals/{id}/tasks`. A subtask's goal follows its parent. Moving a task to another project or removing its project clears the goal; a subtask moved back into its parent goal's project takes it again.
+
+#### Goal rule (`TASK_GOAL_NOT_NOW`)
+
+A project has at most one Now goal. While it has one, a task in one of its Next or Parked goals cannot be started or completed. The request returns `422` and nothing is saved:
+
+```json
+{
+  "code": "TASK_GOAL_NOT_NOW",
+  "message": "This task's goal is not the current goal ...",
+  "details": { "taskItemId": 12, "goalId": 3, "nowGoalId": 1, "nowGoalTitle": "Ship v1" }
+}
+```
+
+It applies when:
+
+- **Create:** a subtask that takes such a goal from its parent is created as `InProgress` or `Completed`. `details.taskItemId` is `null`.
+- **`PUT` and `PATCH`:** the status changes to `InProgress` or `Completed`, or the goal changes (through a new parent) while the resulting status is `InProgress`. Re-sending the stored status is accepted.
+- **Project assignment** (`POST api/v1/Projects/{id}/tasks`): an `InProgress` subtask would be moved into its parent's project and join the parent's goal.
+- **Goal assignment** (`POST api/v1/Goals/{id}/tasks`): an `InProgress` task, or a subtask that would move with it, would join such a goal.
+
+Unblocking is not refused: `status: "Todo"` on a Blocked task that would restore `InProgress` against the rule succeeds and leaves the task `Todo`. Parent auto-complete that would break the rule is skipped, and the child's own change is still saved. Tasks with no goal, tasks in the Now goal, and projects with no Now goal are unaffected.
 
 #### Create task with optional journal assignment
 
@@ -66,6 +91,7 @@ Behavior:
 - If `journalDate` is in the past, returns `422` with `TASK_CREATION_PAST_DAY_NOT_ALLOWED` (the same code is returned by `PUT`/`PATCH` when planning on a past day). "Today" comes from `timezoneOffsetMinutes`, falling back to the UTC date when omitted.
 - If `journalDate` is today/future, the task is automatically assigned to that journal day.
 - If `parentTaskItemId` refers to a parent whose stored status is Completed and the new task is not itself Completed, returns `422` with `TASK_PARENT_COMPLETED_NOT_ALLOWED`; nothing is created.
+- A subtask takes its parent's goal. Creating it as `InProgress` or `Completed` against the goal rule returns `422` with `TASK_GOAL_NOT_NOW`; nothing is created.
 
 #### Task history endpoint
 
@@ -356,7 +382,7 @@ Updates an existing task item, including status assignment and optional journal 
 }
 ```
 
-Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create, parent change, or reopening a Completed child whose resulting direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS` (planning a task with open subtasks onto a different day), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`.
+Other `422` business-rule codes: `TASK_PARENT_SELF_NOT_ALLOWED`, `TASK_PARENT_NOT_FOUND`, `TASK_PARENT_DEPTH_NOT_ALLOWED`, `TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN`, `TASK_PARENT_STATUS_DERIVED` (`PUT`/`PATCH`), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (create, parent change, or reopening a Completed child whose resulting direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS` (planning a task with open subtasks onto a different day), `TASK_BLOCK_DRAFT_NOT_ALLOWED`, `TASK_BLOCK_COMPLETED_NOT_ALLOWED`, `TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS`, `TASK_START_NOT_ALLOWED`, `TASK_GOAL_NOT_NOW` (see Goal rule; an unblock that would restore `InProgress` against it lands on `Todo` instead).
 
 `409 Conflict` - another request planned the task on that day at the same time; nothing is changed
 ```json
@@ -394,7 +420,7 @@ Updates only the fields present in the request body (JSON Merge Patch semantics)
 - `status` or `priority` set to `null` or omitted means unchanged.
 - An empty `title` returns `400 Bad Request`; an unknown id returns `404 Not Found`.
 - Completion is set only through `status` (`Completed`); `isComplete` and `completedAt` are not part of the request contract and are ignored if sent.
-- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (also when reopening a Completed child whose direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS`, plus the parent, block, start and past-day planning codes.
+- Returns the same `422` responses as `PUT`: `TASK_REOPEN_PAST_DAY_NOT_ALLOWED` and `TASK_PLAN_COMPLETED_NOT_ALLOWED` (see Update Task), `TASK_PARENT_COMPLETED_NOT_ALLOWED` (also when reopening a Completed child whose direct parent is Completed), `TASK_PLAN_HAS_OPEN_SUBTASKS`, `TASK_GOAL_NOT_NOW` (see Goal rule; an unblock that would restore `InProgress` against it lands on `Todo` instead), plus the parent, block, start and past-day planning codes.
 
 **Example:**
 ```bash

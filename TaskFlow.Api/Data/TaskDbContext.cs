@@ -11,6 +11,7 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Area> Areas => Set<Area>();
+    public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalLogEntry> JournalLogEntries => Set<JournalLogEntry>();
     public DbSet<JournalNote> JournalNotes => Set<JournalNote>();
@@ -51,6 +52,32 @@ public class TaskDbContext(DbContextOptions<TaskDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(t => t.ProjectId);
+
+            entity.HasOne(t => t.Goal)
+                .WithMany(g => g.Tasks)
+                .HasForeignKey(t => t.GoalId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(t => t.GoalId);
+        });
+
+        modelBuilder.Entity<Goal>(entity =>
+        {
+            entity.Property(g => g.Title)
+                .HasMaxLength(100);
+
+            entity.Property(g => g.ParkedReason)
+                .HasMaxLength(200);
+
+            entity.Property(g => g.Status)
+                .HasConversion<int>();
+
+            entity.HasOne(g => g.Project)
+                .WithMany(p => p.Goals)
+                .HasForeignKey(g => g.ProjectId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(g => g.ProjectId);
         });
 
         modelBuilder.Entity<Project>(entity =>

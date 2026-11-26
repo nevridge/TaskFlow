@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { DeleteApiV1AreasByIdData, DeleteApiV1AreasByIdResponses, DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1AreasData, GetApiV1AreasResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetAreaV1Data, GetAreaV1Responses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdErrors, PatchApiV1TaskItemsByIdResponses, PostApiV1AreasData, PostApiV1AreasResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1AreasByIdData, PutApiV1AreasByIdResponses, PutApiV1AreasOrderData, PutApiV1AreasOrderResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdErrors, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
+import type { DeleteApiV1AreasByIdData, DeleteApiV1AreasByIdResponses, DeleteApiV1GoalsByIdData, DeleteApiV1GoalsByIdResponses, DeleteApiV1GoalsByIdTasksByTaskItemIdData, DeleteApiV1GoalsByIdTasksByTaskItemIdResponses, DeleteApiV1JournalEntriesByEntryIdLogsByIdData, DeleteApiV1JournalEntriesByEntryIdLogsByIdResponses, DeleteApiV1JournalEntriesByEntryIdNotesByIdData, DeleteApiV1JournalEntriesByEntryIdNotesByIdResponses, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdData, DeleteApiV1JournalEntriesByEntryIdTodosByTaskItemIdResponses, DeleteApiV1JournalEntriesByIdData, DeleteApiV1JournalEntriesByIdResponses, DeleteApiV1ProjectsByIdData, DeleteApiV1ProjectsByIdResponses, DeleteApiV1ProjectsByIdTasksByTaskItemIdData, DeleteApiV1ProjectsByIdTasksByTaskItemIdResponses, DeleteApiV1TaskItemsByIdData, DeleteApiV1TaskItemsByIdResponses, DeleteApiV1TaskItemsByTaskIdNotesByIdData, DeleteApiV1TaskItemsByTaskIdNotesByIdResponses, GetApiV1AreasData, GetApiV1AreasResponses, GetApiV1GoalsData, GetApiV1GoalsResponses, GetApiV1JournalEntriesByEntryIdLogsData, GetApiV1JournalEntriesByEntryIdLogsResponses, GetApiV1JournalEntriesByEntryIdNotesData, GetApiV1JournalEntriesByEntryIdNotesResponses, GetApiV1JournalEntriesByEntryIdTodosData, GetApiV1JournalEntriesByEntryIdTodosResponses, GetApiV1JournalEntriesData, GetApiV1JournalEntriesResponses, GetApiV1ProjectsByIdTasksData, GetApiV1ProjectsByIdTasksResponses, GetApiV1ProjectsData, GetApiV1ProjectsResponses, GetApiV1TaskItemsByIdHistoryData, GetApiV1TaskItemsByIdHistoryResponses, GetApiV1TaskItemsByTaskIdNotesData, GetApiV1TaskItemsByTaskIdNotesResponses, GetApiV1TaskItemsData, GetApiV1TaskItemsResponses, GetAreaV1Data, GetAreaV1Responses, GetGoalV1Data, GetGoalV1Responses, GetJournalEntryV1Data, GetJournalEntryV1Responses, GetJournalLogEntryV1Data, GetJournalLogEntryV1Responses, GetJournalNoteV1Data, GetJournalNoteV1Responses, GetNoteV1Data, GetNoteV1Responses, GetProjectV1Data, GetProjectV1Responses, GetTaskV1Data, GetTaskV1Responses, PatchApiV1TaskItemsByIdData, PatchApiV1TaskItemsByIdErrors, PatchApiV1TaskItemsByIdResponses, PostApiV1AreasData, PostApiV1AreasResponses, PostApiV1GoalsByIdSwapNowData, PostApiV1GoalsByIdSwapNowErrors, PostApiV1GoalsByIdSwapNowResponses, PostApiV1GoalsByIdTasksData, PostApiV1GoalsByIdTasksErrors, PostApiV1GoalsByIdTasksResponses, PostApiV1GoalsData, PostApiV1GoalsResponses, PostApiV1JournalEntriesByEntryIdLogsData, PostApiV1JournalEntriesByEntryIdLogsResponses, PostApiV1JournalEntriesByEntryIdNotesData, PostApiV1JournalEntriesByEntryIdNotesResponses, PostApiV1JournalEntriesByEntryIdTodosData, PostApiV1JournalEntriesByEntryIdTodosResponses, PostApiV1JournalEntriesByIdCarryForwardData, PostApiV1JournalEntriesByIdCarryForwardResponses, PostApiV1JournalEntriesData, PostApiV1JournalEntriesResponses, PostApiV1ProjectsByIdTasksData, PostApiV1ProjectsByIdTasksResponses, PostApiV1ProjectsData, PostApiV1ProjectsResponses, PostApiV1TaskItemsByTaskIdNotesData, PostApiV1TaskItemsByTaskIdNotesResponses, PostApiV1TaskItemsData, PostApiV1TaskItemsResponses, PutApiV1AreasByIdData, PutApiV1AreasByIdResponses, PutApiV1AreasOrderData, PutApiV1AreasOrderResponses, PutApiV1GoalsByIdData, PutApiV1GoalsByIdErrors, PutApiV1GoalsByIdResponses, PutApiV1GoalsOrderData, PutApiV1GoalsOrderResponses, PutApiV1JournalEntriesByEntryIdLogsByIdData, PutApiV1JournalEntriesByEntryIdLogsByIdResponses, PutApiV1JournalEntriesByEntryIdNotesByIdData, PutApiV1JournalEntriesByEntryIdNotesByIdResponses, PutApiV1JournalEntriesByIdData, PutApiV1JournalEntriesByIdResponses, PutApiV1ProjectsByIdData, PutApiV1ProjectsByIdResponses, PutApiV1TaskItemsByIdData, PutApiV1TaskItemsByIdErrors, PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByTaskIdNotesByIdData, PutApiV1TaskItemsByTaskIdNotesByIdResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -50,6 +50,72 @@ export const putApiV1AreasOrder = <ThrowOnError extends boolean = false>(options
         ...options.headers
     }
 });
+
+export const getApiV1Goals = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1GoalsData, ThrowOnError>): RequestResult<GetApiV1GoalsResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1GoalsResponses, unknown, ThrowOnError>({ url: '/api/v1/Goals', ...options });
+
+export const postApiV1Goals = <ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsData, ThrowOnError>): RequestResult<PostApiV1GoalsResponses, unknown, ThrowOnError> => (options.client ?? client).post<PostApiV1GoalsResponses, unknown, ThrowOnError>({
+    url: '/api/v1/Goals',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1GoalsById = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1GoalsByIdData, ThrowOnError>): RequestResult<DeleteApiV1GoalsByIdResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1GoalsByIdResponses, unknown, ThrowOnError>({ url: '/api/v1/Goals/{id}', ...options });
+
+export const getGoalV1 = <ThrowOnError extends boolean = false>(options: Options<GetGoalV1Data, ThrowOnError>): RequestResult<GetGoalV1Responses, unknown, ThrowOnError> => (options.client ?? client).get<GetGoalV1Responses, unknown, ThrowOnError>({ url: '/api/v1/Goals/{id}', ...options });
+
+/**
+ * Updates a goal (full update), including its status.
+ *
+ * Returns 409 when the goal would become Now while the project has another Now goal (use swap-now), and 422 with
+ * `{ code, message, details }` for `GOAL_NOW_HAS_INPROGRESS_TASKS` (the Now goal cannot go back to Next or
+ * Parked while it has tasks in progress) and `GOAL_HAS_OPEN_TASKS` (Done or Dropped needs every task
+ * Completed). Nothing is saved.
+ */
+export const putApiV1GoalsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1GoalsByIdData, ThrowOnError>): RequestResult<PutApiV1GoalsByIdResponses, PutApiV1GoalsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1GoalsByIdResponses, PutApiV1GoalsByIdErrors, ThrowOnError>({
+    url: '/api/v1/Goals/{id}',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const putApiV1GoalsOrder = <ThrowOnError extends boolean = false>(options: Options<PutApiV1GoalsOrderData, ThrowOnError>): RequestResult<PutApiV1GoalsOrderResponses, unknown, ThrowOnError> => (options.client ?? client).put<PutApiV1GoalsOrderResponses, unknown, ThrowOnError>({
+    url: '/api/v1/Goals/order',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Makes a goal the project's Now goal; the previous Now goal goes to the top of Next.
+ *
+ * Returns 422 `GOAL_NOW_HAS_INPROGRESS_TASKS` while the current Now goal has tasks in progress, and 400 for a
+ * Done or Dropped goal. A goal that is already Now is returned unchanged.
+ */
+export const postApiV1GoalsByIdSwapNow = <ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdSwapNowData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdSwapNowResponses, PostApiV1GoalsByIdSwapNowErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1GoalsByIdSwapNowResponses, PostApiV1GoalsByIdSwapNowErrors, ThrowOnError>({ url: '/api/v1/Goals/{id}/swap-now', ...options });
+
+/**
+ * Puts a task, with its subtasks in the same project, into a goal.
+ *
+ * Returns 422 `TASK_GOAL_NOT_NOW` when the goal is Next or Parked, the project has a Now goal and the task or
+ * one of those subtasks is in progress. Nothing is changed.
+ */
+export const postApiV1GoalsByIdTasks = <ThrowOnError extends boolean = false>(options: Options<PostApiV1GoalsByIdTasksData, ThrowOnError>): RequestResult<PostApiV1GoalsByIdTasksResponses, PostApiV1GoalsByIdTasksErrors, ThrowOnError> => (options.client ?? client).post<PostApiV1GoalsByIdTasksResponses, PostApiV1GoalsByIdTasksErrors, ThrowOnError>({
+    url: '/api/v1/Goals/{id}/tasks',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+export const deleteApiV1GoalsByIdTasksByTaskItemId = <ThrowOnError extends boolean = false>(options: Options<DeleteApiV1GoalsByIdTasksByTaskItemIdData, ThrowOnError>): RequestResult<DeleteApiV1GoalsByIdTasksByTaskItemIdResponses, unknown, ThrowOnError> => (options.client ?? client).delete<DeleteApiV1GoalsByIdTasksByTaskItemIdResponses, unknown, ThrowOnError>({ url: '/api/v1/Goals/{id}/tasks/{taskItemId}', ...options });
 
 export const getApiV1JournalEntries = <ThrowOnError extends boolean = false>(options?: Options<GetApiV1JournalEntriesData, ThrowOnError>): RequestResult<GetApiV1JournalEntriesResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetApiV1JournalEntriesResponses, unknown, ThrowOnError>({ url: '/api/v1/JournalEntries', ...options });
 
@@ -245,7 +311,10 @@ export const getTaskV1 = <ThrowOnError extends boolean = false>(options: Options
  * have its status changed directly; re-sending the stored status is accepted), and
  * `TASK_PARENT_COMPLETED_NOT_ALLOWED` (a task whose resulting status is not Completed cannot be moved under a
  * Completed parent, and a Completed task cannot be reopened while its resulting direct parent is Completed;
- * completing it in the same request, or an open task re-sending its current parent, is accepted).
+ * completing it in the same request, or an open task re-sending its current parent, is accepted), and
+ * `TASK_GOAL_NOT_NOW` (a task in a Next or Parked goal cannot be started or completed while the project has a
+ * Now goal). `status=todo` on a Blocked task is not refused by that rule: it unblocks to Todo, not InProgress,
+ * when the rule forbids InProgress.
  */
 export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PatchApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).patch<PatchApiV1TaskItemsByIdResponses, PatchApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',
@@ -285,6 +354,12 @@ export const patchApiV1TaskItemsById = <ThrowOnError extends boolean = false>(op
  * TASK_BLOCK_DRAFT_NOT_ALLOWED, TASK_BLOCK_COMPLETED_NOT_ALLOWED,
  * TASK_BLOCKED_REASON_REQUIRES_BLOCKED_STATUS, TASK_START_NOT_ALLOWED,
  * TASK_CREATION_PAST_DAY_NOT_ALLOWED.
+ * * TASK_GOAL_NOT_NOW: while the project has a Now goal, a task whose resulting goal is Next or Parked
+ * cannot be changed to InProgress or Completed, and cannot take that goal from a new parent while InProgress.
+ * Re-sending the stored status is accepted. Checked after the other rules. details holds
+ * taskItemId, goalId, nowGoalId and nowGoalTitle. Nothing is saved. Exception:
+ * status=todo on a Blocked task is not refused; it unblocks to Todo, not InProgress, when this rule forbids
+ * InProgress.
  */
 export const putApiV1TaskItemsById = <ThrowOnError extends boolean = false>(options: Options<PutApiV1TaskItemsByIdData, ThrowOnError>): RequestResult<PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByIdErrors, ThrowOnError> => (options.client ?? client).put<PutApiV1TaskItemsByIdResponses, PutApiV1TaskItemsByIdErrors, ThrowOnError>({
     url: '/api/v1/TaskItems/{id}',

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Net;
 using System.Text;
 using ModelContextProtocol;
@@ -28,6 +29,9 @@ public sealed class NewTask
     [Description("Project name or id. The project must already exist (see list_projects).")]
     public string? Project { get; set; }
 
+    [Description("Goal title or id within 'project' (project is required with goal). The goal must already exist (see list_goals). Omit or 'none' for no goal; a subtask takes its parent's goal.")]
+    public string? Goal { get; set; }
+
     [Description("Id of a parent task, to make this a subtask. Only one subtask level is supported.")]
     public int? ParentTaskId { get; set; }
 
@@ -42,11 +46,15 @@ internal static class UpdateFieldText
     public const string Title = "New title (max 100 characters).";
     public const string Description = "New description. Pass an empty string to clear it.";
     public const string Status = "draft, todo, inprogress, blocked or completed (any casing). inprogress = work has started; only Todo tasks can be started. "
-        + "Only Todo or InProgress tasks can be blocked. status=todo on a Blocked task unblocks it and restores its previous status (Todo or InProgress); on an InProgress task it moves it back to Todo. "
+        + "While the project has a Now goal, a task in a Next or Parked goal cannot be started or completed. "
+        + "Only Todo or InProgress tasks can be blocked. status=todo on a Blocked task unblocks it: InProgress is restored only if the goal rule allows it, otherwise the task becomes Todo. On an InProgress task, status=todo moves it back to Todo. "
         + "Completing a Blocked task clears the block.";
     public const string Priority = "low, medium or high.";
     public const string DueDate = "The deadline: yyyy-MM-dd, today/tomorrow, or 'none' to clear the due date. Separate from journalDate; it does not plan the task.";
     public const string Project = "Project name or id to assign, or 'none' to remove the task from its project. An unknown or ambiguous project rejects the whole update before anything is saved.";
+    public const string Goal = "Goal title or id within the task's project (the new one when 'project' is passed), or 'none' to remove it. "
+        + "Omit to leave it alone, but moving projects clears it and gaining a parent takes the parent's goal. A subtask's goal cannot be set directly. Moving an InProgress subtask into its parent's project is refused when the parent's goal is not Now. "
+        + "An unknown or ambiguous goal rejects the whole update before anything is saved.";
     public const string ParentTaskId = "Parent task id to make this a subtask; 0 removes the parent. Only one subtask level is supported.";
     public const string Complete = "true to mark complete, false to reopen.";
     public const string JournalDate = "Plans the task on this day: today, tomorrow or yyyy-MM-dd, and the day must be today or later. "
@@ -78,6 +86,9 @@ public sealed class TaskUpdate
 
     [Description(UpdateFieldText.Project)]
     public string? Project { get; set; }
+
+    [Description(UpdateFieldText.Goal)]
+    public string? Goal { get; set; }
 
     [Description(UpdateFieldText.ParentTaskId)]
     public int? ParentTaskId { get; set; }
@@ -112,6 +123,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         + "stale (moved 3+ times or tagged 7+ days), unassigned (open tasks with no project), today (planned on today's journal), blocked (Blocked status only), completed, all. "
         + "Blocked tasks still appear in the other open views and are flagged 'blocked: <reason> (Nd)', where (Nd) = days blocked, <1d if under a day. "
         + "To find what was finished on or between days, use completedFrom/completedTo with view=completed or all. Use plannedDate for tasks on a given day's journal. "
+        + "Lines show 'goal: <title>' for a task in a goal; filter with goal (with project), or goal=none for Unsorted tasks. "
         + "Results are paged (default 25); follow the 'Next page' hint for more. Use responseFormat=detailed to include descriptions and journal info.")]
     public Task<string> ListTasks(
         [Description("open, all, completed, overdue, due_soon, stale, unassigned, today or blocked (Blocked status only). Blocked tasks still appear in the other open views and are flagged. Default open.")] string view = "open",
@@ -125,6 +137,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         [Description("Only tasks completed on or after this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Only done tasks are checked: a reopened task is not matched. Based on completion history of the 300 highest-id matching done tasks; see the incomplete-results note.")] string? completedFrom = null,
         [Description("Only tasks completed on or before this day (inclusive, local time). yyyy-MM-dd, today, tomorrow or yesterday. Must not be earlier than completedFrom.")] string? completedTo = null,
         [Description("Only tasks planned on the journal of this day. yyyy-MM-dd, today, tomorrow or yesterday. Done tasks need view=all.")] string? plannedDate = null,
+        [Description("Only tasks in this goal (title or id; needs 'project'), or 'none' for Unsorted tasks: in a project but in no goal.")] string? goal = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -143,6 +156,13 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid($"'completedFrom' ({f:yyyy-MM-dd}) is after 'completedTo' ({t2:yyyy-MM-dd}).");
             }
 
+            var goalKey = string.IsNullOrWhiteSpace(goal) ? null : goal.Trim();
+            var unsorted = IsNone(goalKey);
+            if (goalKey is not null && !unsorted && string.IsNullOrWhiteSpace(project))
+            {
+                throw ToolGuard.Invalid("Filtering by a goal needs 'project': goals belong to a project. Only goal=none works without it.");
+            }
+
             var tasks = await api.GetTasksAsync(ct);
 
             IEnumerable<TaskItemDto> query = tasks.Where(t => MatchesView(t, normalizedView, today, Math.Max(dueWithinDays, 0)));
@@ -153,6 +173,19 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 var resolved = await ProjectResolver.ResolveAsync(api, project, ct);
                 query = query.Where(t => t.ProjectId == resolved.Id);
                 filters.Add($"project={resolved.Name}");
+
+                if (goalKey is not null && !unsorted)
+                {
+                    var wanted = GoalResolver.Resolve(await api.GetGoalsAsync(resolved.Id, ct), goalKey, resolved.Name);
+                    query = query.Where(t => t.GoalId == wanted.Id);
+                    filters.Add($"goal={Formatting.CleanReason(wanted.Title)}");
+                }
+            }
+
+            if (unsorted)
+            {
+                query = query.Where(t => t.ProjectId is not null && t.GoalId is null);
+                filters.Add("goal=none");
             }
 
             if (!string.IsNullOrWhiteSpace(status))
@@ -250,7 +283,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         });
 
     [McpServerTool(Name = "get_task", ReadOnly = true)]
-    [Description("Gets everything about one task: fields, project, notes and recent history (created, moved between days, blocked, completed...). For a Blocked task it shows the reason, (Nd) days blocked (<1d if under a day) and when it was blocked. Use before updating a task or when the user asks what happened with it.")]
+    [Description("Gets everything about one task: fields, project, goal, notes and recent history (created, moved between days, blocked, completed...). For a Blocked task it shows the reason, (Nd) days blocked (<1d if under a day) and when it was blocked. Use before updating a task or when the user asks what happened with it.")]
     public Task<string> GetTask(
         [Description("Task id.")] int id,
         CancellationToken ct = default) =>
@@ -293,6 +326,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         "Creates one or more tasks (up to 25). Use for a single task or to turn notes into many tasks. Each task needs a title; priority defaults to low and status to todo. "
         + "Tasks that fail (for example an unknown project) are reported individually and do not stop the others. Do not guess due dates or projects: leave them out unless the user said so. "
         + "Tasks cannot be created as blocked: create the task, then call update_task with status=blocked. "
+        + "goal puts a task in a goal of its project (project required). If the task is created but the goal cannot be assigned, it stays on its '+' line with a warning naming the goal it actually has: it exists, so do not create it again. "
+        + "While the project has a Now goal, a task in a Next or Parked goal cannot be started or completed. "
         + "An open task cannot be created under a Completed parent (parentTaskId): reopen the parent first or leave the parent out. "
         + "Tasks are still created when a possible duplicate (an existing open or done task with the same title, ignoring case and extra spaces) is found; the line is flagged `!`. "
         + "The duplicate check is best-effort: if existing tasks cannot be read, tasks are still created and the report says the check was skipped. "
@@ -314,6 +349,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
 
             var (today, offset) = InputParsing.LocalNow(time);
             IReadOnlyList<ProjectDto>? projects = null;
+            var goalsByProject = new Dictionary<int, IReadOnlyList<GoalDto>>();
 
             var created = new List<string>();
             var failed = new List<string>();
@@ -357,11 +393,27 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         throw ToolGuard.Invalid("Cannot create a task as blocked. Create it first, then call update_task with status=blocked and a blockedReason.");
                     }
 
-                    int? projectId = null;
+                    ProjectDto? project = null;
                     if (!string.IsNullOrWhiteSpace(item.Project))
                     {
                         projects ??= await api.GetProjectsAsync(ct);
-                        projectId = ProjectResolver.Resolve(projects, item.Project).Id;
+                        project = ProjectResolver.Resolve(projects, item.Project);
+                    }
+
+                    GoalDto? goal = null;
+                    if (!string.IsNullOrWhiteSpace(item.Goal) && !IsNone(item.Goal))
+                    {
+                        if (project is null)
+                        {
+                            throw ToolGuard.Invalid("goal needs project: goals belong to a project.");
+                        }
+
+                        if (!goalsByProject.TryGetValue(project.Id, out var goals))
+                        {
+                            goalsByProject[project.Id] = goals = await api.GetGoalsAsync(project.Id, ct);
+                        }
+
+                        goal = GoalResolver.Resolve(goals, item.Goal, project.Name);
                     }
 
                     var request = new CreateTaskRequest(
@@ -372,10 +424,16 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         string.IsNullOrWhiteSpace(item.DueDate) ? null : InputParsing.ParseDate(item.DueDate, today, "dueDate"),
                         string.IsNullOrWhiteSpace(item.JournalDate) ? null : InputParsing.ParseDate(item.JournalDate, today, "journalDate"),
                         item.ParentTaskId,
-                        projectId,
+                        project?.Id,
                         offset);
 
                     var task = await api.CreateTaskAsync(request, ct);
+                    string? goalWarning = null;
+                    if (goal is not null && task.GoalId != goal.Id)
+                    {
+                        (task, goalWarning) = await AssignGoalAfterCreateAsync(task, goal, ct);
+                    }
+
                     var line = "+ " + Formatting.Task(task, today, nowUtc: time.GetUtcNow());
 
                     // An existing task wins over an earlier item in this batch; one warning per item.
@@ -384,6 +442,11 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                     {
                         line += $" ! Possible duplicate of #{match.Id} \"{Formatting.CleanReason(match.Title)}\" ({(match.IsDone ? "done" : "open")})";
                         duplicates++;
+                    }
+
+                    if (goalWarning is not null)
+                    {
+                        line += $" ! {goalWarning}";
                     }
 
                     batchByTitle.TryAdd(key, task);
@@ -405,18 +468,76 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             return created.Count == 0 ? throw new McpException(report) : report;
         });
 
+    /// <summary>
+    /// The task already exists, so a failed assignment is a warning on its line, never a failed item: that would
+    /// invite a retry and a duplicate task.
+    /// </summary>
+    private async Task<(TaskItemDto Task, string? Warning)> AssignGoalAfterCreateAsync(TaskItemDto task, GoalDto goal, CancellationToken ct)
+    {
+        try
+        {
+            await AssignGoalAsync(goal.Id, task.Id, ct);
+            return (task with { GoalId = goal.Id, GoalTitle = goal.Title }, null);
+        }
+        catch (Exception ex) when (IsStepFailure(ex, ct))
+        {
+            var has = task.GoalId is null ? "no goal" : $"goal '{Formatting.CleanReason(task.GoalTitle)}'";
+            var label = $"'{Formatting.CleanReason(goal.Title)}'";
+            var reason = Formatting.CleanReason(FailureReason(ex));
+            var warning = ex is TaskCanceledException
+                ? $"Goal {label} could not be confirmed ({reason}). The task was created with {has}; check with get_task."
+                : $"Goal {label} was not assigned; the task has {has}. Reason: {reason}";
+            return (task, warning);
+        }
+    }
+
+    private async Task AssignGoalAsync(int goalId, int taskId, CancellationToken ct)
+    {
+        try
+        {
+            await api.AssignTaskToGoalAsync(goalId, taskId, ct);
+        }
+        catch (TaskFlowApiException ex) when (ex.Status == HttpStatusCode.Conflict)
+        {
+            // Already in the goal: nothing to do.
+        }
+    }
+
+    /// <summary>The ways one API step can fail. A cancellation by the caller is not one of them.</summary>
+    private static bool IsStepFailure(Exception ex, CancellationToken ct) =>
+        ex is TaskFlowApiException or McpException or HttpRequestException
+        || (ex is TaskCanceledException && !ct.IsCancellationRequested);
+
+    private static string FailureReason(Exception ex) => ex switch
+    {
+        TaskFlowApiException apiEx => ToolGuard.WithGuidance(apiEx),
+        HttpRequestException => "cannot reach the TaskFlow API",
+        TaskCanceledException => "request timed out",
+        _ => ex.Message,
+    };
+
+    private static bool IsNone(string? value) => string.Equals(value?.Trim(), "none", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A failure after something was already saved. <see cref="Unreachable"/> stops the rest of a batch.</summary>
+    private sealed class PartialUpdateException(string message, Exception inner) : McpException(message, inner)
+    {
+        public bool Unreachable => InnerException is HttpRequestException or TaskCanceledException;
+    }
+
     private static bool IsBlockedStatus(string? status) =>
         string.Equals(status?.Trim(), "blocked", StringComparison.OrdinalIgnoreCase);
 
     [McpServerTool(Name = "update_task", Idempotent = true)]
     [Description(
         "Updates a task. Only the fields you pass change; everything else is kept. Use complete=true to finish a task and complete=false to reopen it. "
-        + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. If assigning the project fails after the fields were saved, the error says so; retry only the project change. "
+        + "While the project has a Now goal, a task in a Next or Parked goal cannot be started or completed. "
+        + "Set project to a project name/id to assign or move it, or 'none' to remove it from its project. If assigning the project fails after the fields were saved, the error says so; retry only the project change (plus goal if the error names it). "
+        + "goal puts the task in a goal of its project, or 'none' removes it. If a goal step fails after something was saved, the error says what was saved; retry only what it names. "
         + "dueDate is the deadline (yyyy-MM-dd, today/tomorrow, or 'none' to clear) and does not plan the task. "
         + "journalDate plans the task on a day (today or later); it is not the deadline. Planning is not removed via update (use set_journal_todos). Completed tasks planned on a past day cannot be reopened (the API says so). "
         + "A task with open subtasks (Blocked counts as open) cannot get a journalDate: plan its subtasks instead. A parent's status follows its subtasks, so change the subtasks, not the parent. A completed task cannot be planned onto a different day. "
         + "Start a Todo task with status=inprogress. Only Todo or InProgress tasks can be blocked (use status=blocked with an optional blockedReason). "
-        + "status=todo on a Blocked task unblocks it and restores its previous status (Todo or InProgress); on an InProgress task it moves it back to Todo. Completing a Blocked task clears the block.")]
+        + "status=todo on a Blocked task unblocks it: InProgress is restored only if the goal rule allows it, otherwise the task becomes Todo. On an InProgress task, status=todo moves it back to Todo. Completing a Blocked task clears the block.")]
     public Task<string> UpdateTask(
         [Description(UpdateFieldText.Id)] int id,
         [Description(UpdateFieldText.Title)] string? title = null,
@@ -425,6 +546,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         [Description(UpdateFieldText.Priority)] string? priority = null,
         [Description(UpdateFieldText.DueDate)] string? dueDate = null,
         [Description(UpdateFieldText.Project)] string? project = null,
+        [Description(UpdateFieldText.Goal)] string? goal = null,
         [Description(UpdateFieldText.ParentTaskId)] int? parentTaskId = null,
         [Description(UpdateFieldText.Complete)] bool? complete = null,
         [Description(UpdateFieldText.BlockedReason)] string? blockedReason = null,
@@ -434,7 +556,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         {
             var (today, offset) = InputParsing.LocalNow(time);
             var outcome = await UpdateTaskCoreAsync(
-                id, title, description, status, priority, dueDate, project, parentTaskId, complete, blockedReason, journalDate, today, offset, inBatch: false, ct);
+                id, title, description, status, priority, dueDate, project, goal, parentTaskId, complete, blockedReason, journalDate, today, offset, inBatch: false, ct);
             var summary = outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes);
             return $"Updated #{id}. {summary}.{(outcome.Note is null ? string.Empty : " " + outcome.Note)}\n{Formatting.Task(outcome.Task, today, detailed: true, nowUtc: time.GetUtcNow())}";
         });
@@ -442,8 +564,9 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
     [McpServerTool(Name = "update_tasks", Idempotent = true)]
     [Description(
         "Updates several tasks in one call (up to 25). Use for 2 or more tasks; use update_task for a single task. "
-        + "Each item needs the task id and only the fields to change, exactly as in update_task (status, priority, dueDate, journalDate, project, complete, blockedReason...); fields you leave out keep their value. "
-        + "Items are independent: a failure is reported on its own 'x #id' line and does not stop the others. Retry only the 'x' items. An 'x' line that says fields were saved means only the project change remains; retry that item with just id and project. "
+        + "Each item needs the task id and only the fields to change, exactly as in update_task (status, priority, dueDate, journalDate, project, goal, complete, blockedReason...); fields you leave out keep their value. "
+        + "While a project has a Now goal, a task in a Next or Parked goal cannot be started or completed; status=todo on a Blocked task then leaves it Todo, not InProgress. "
+        + "Items are independent: a failure is reported on its own 'x #id' line and does not stop the others. Retry only the 'x' items. An 'x' line that says something was saved names what remains: for a project change retry that item with just id and project (plus goal if named), for a goal step with just id and goal. "
         + "A retry of a past-day journalDate failure should change or drop that item's journalDate. "
         + "A task with open subtasks (Blocked counts as open) cannot get a journalDate: plan its subtasks instead. A parent's status follows its subtasks, so change the subtasks, not the parent. A completed task cannot be planned onto a different day. "
         + "If the API cannot be reached, the remaining items are marked 'not attempted'. A task id may appear only once per call.")]
@@ -487,7 +610,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 try
                 {
                     var outcome = await UpdateTaskCoreAsync(
-                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.ParentTaskId, item.Complete, item.BlockedReason, item.JournalDate, today, offset, inBatch: true, ct);
+                        item.Id, item.Title, item.Description, item.Status, item.Priority, item.DueDate, item.Project, item.Goal, item.ParentTaskId, item.Complete, item.BlockedReason, item.JournalDate, today, offset, inBatch: true, ct);
                     var summary = (outcome.Changes.Count == 0 ? "No changes needed" : "Changed " + string.Join(", ", outcome.Changes))
                         + (outcome.Note is null ? string.Empty : ". " + outcome.Note);
                     lines.Add($"+ #{item.Id} \"{Formatting.CleanReason(outcome.Task.Title)}\": {summary}");
@@ -497,6 +620,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 {
                     var reason = ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message;
                     lines.Add($"x #{item.Id}: {Formatting.CleanReason(reason)}");
+                    stopped = ex is PartialUpdateException { Unreachable: true };
                 }
                 catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
                 {
@@ -521,6 +645,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         string? priority,
         string? dueDate,
         string? project,
+        string? goal,
         int? parentTaskId,
         bool? complete,
         string? blockedReason,
@@ -629,6 +754,33 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         var projectRequested = removeProject || target is not null;
+        var projectChanging = removeProject ? existing.ProjectId is not null : target is not null && existing.ProjectId != target.Id;
+
+        // The goal is resolved before anything is written, within the project the task will end up in.
+        var goalKey = goal?.Trim();
+        var removeGoal = IsNone(goalKey);
+        GoalDto? targetGoal = null;
+        if (!string.IsNullOrEmpty(goalKey) && !removeGoal)
+        {
+            var goalProjectId = removeProject ? null : target?.Id ?? existing.ProjectId;
+            if (goalProjectId is not { } inProject)
+            {
+                throw ToolGuard.Invalid($"Task #{id} would have no project, and goals belong to a project. Pass project with goal, or omit goal. Nothing was changed.");
+            }
+
+            var projectName = target?.Name ?? existing.ProjectName ?? $"#{inProject}";
+            targetGoal = GoalResolver.Resolve(await api.GetGoalsAsync(inProject, ct), goalKey, projectName);
+        }
+
+        var goalRequested = removeGoal || targetGoal is not null;
+        if (goalRequested)
+        {
+            var resultingProject = removeProject ? null : target?.Id ?? existing.ProjectId;
+            await RejectUnassignableGoalAsync(existing, newParent, resultingProject, targetGoal, ct);
+        }
+
+        var goalLabel = targetGoal is null ? "none" : $"'{Formatting.CleanReason(targetGoal.Title)}'";
+        var goalArgument = targetGoal is null ? "none" : targetGoal.Id.ToString(CultureInfo.InvariantCulture);
         var savedChanges = changes.ToList();
 
         var request = new UpdateTaskRequest(
@@ -643,17 +795,47 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
             requestReason,
             JournalDate: planDay);
 
-        // A project-only call carries nothing to save, so it sends no PUT.
+        // A project-only or goal-only call carries nothing to save, so it sends no PUT.
         var putCarriesChanges = savedChanges.Count > 0 || planDay is not null || requestReason is not null;
+        var sendPut = !(projectRequested || goalRequested) || putCarriesChanges;
         var updated = existing;
-        if (!projectRequested || putCarriesChanges)
+
+        // Writes run PUT, project, goal. The exception: leaving a goal, or joining the Now goal, goes first, so that
+        // "move to Now and start" succeeds. Not when the project or parent changes: both replace the goal, and a task
+        // being detached is still a subtask until the PUT.
+        var goalFirst = goalRequested
+            && !projectChanging
+            && existing.ParentTaskItemId == newParent
+            && (removeGoal || string.Equals(targetGoal!.Status, "Now", StringComparison.OrdinalIgnoreCase));
+        var goalSavedFirst = false;
+        if (goalFirst)
         {
-            updated = await api.UpdateTaskAsync(id, request, ct);
+            goalSavedFirst = await ApplyGoalAsync(existing, targetGoal, ct);
+            if (goalSavedFirst && !sendPut)
+            {
+                updated = await RereadAfterGoalAsync(existing, targetGoal, ct);
+            }
+        }
+
+        if (sendPut)
+        {
+            try
+            {
+                updated = await api.UpdateTaskAsync(id, request, ct);
+            }
+            catch (Exception ex) when (goalSavedFirst && IsStepFailure(ex, ct))
+            {
+                throw new PartialUpdateException(
+                    $"Task #{id}'s goal was saved ({(targetGoal is null ? "removed" : goalLabel)}), but updating the other fields failed: {FailureReason(ex)}. "
+                    + "Retry only the other changes, without goal.",
+                    ex);
+            }
         }
 
         if (unblockedIndex >= 0)
         {
-            // The API restores the previous status (Todo or InProgress); report what the PUT response says, not a guess.
+            // The API restores InProgress only when the goal rule allows it, otherwise the task becomes Todo;
+            // report what the PUT response says, not a guess.
             changes[unblockedIndex] = $"unblocked (now {updated.Status})";
         }
 
@@ -677,38 +859,69 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                 projectChanged = true;
             }
         }
-        catch (Exception ex) when (ex is TaskFlowApiException or McpException)
+        catch (Exception ex) when (IsStepFailure(ex, ct))
         {
             if (!putCarriesChanges)
             {
                 throw;
             }
 
-            var reason = ex is TaskFlowApiException apiEx ? ToolGuard.WithGuidance(apiEx) : ex.Message;
+            var reason = FailureReason(ex);
             var action = removeProject ? "removing it from its project" : $"assigning it to project '{target?.Name}'";
             var retryProject = removeProject ? "none" : target?.Name;
+            // A goal still pending belongs to the same retry.
+            var remaining = goalRequested ? "the project and goal changes" : "the project change";
             string message;
             if (planDay is { } plannedDay)
             {
-                message = $"Task #{id} was updated and planned for {plannedDay:yyyy-MM-dd}, but {action} failed: {reason}. Retry only the project change.";
+                message = $"Task #{id} was updated and planned for {plannedDay:yyyy-MM-dd}, but {action} failed: {reason}. Retry only {remaining}"
+                    + (goalRequested ? $" (project='{retryProject}', goal='{goalArgument}')." : ".");
             }
             else
             {
                 var retry = inBatch
-                    ? "resend only that item with just id and project."
-                    : $"call update_task with id={id} and project='{retryProject}' only.";
+                    ? $"resend only that item with just id{(goalRequested ? ", project and goal" : " and project")}."
+                    : $"call update_task with id={id}{(goalRequested ? $", project='{retryProject}' and goal='{goalArgument}'" : $" and project='{retryProject}'")} only.";
                 var saved = savedChanges.Count > 0 ? $"fields were saved ({string.Join(", ", savedChanges)})" : "was re-saved unchanged";
-                message = $"Task #{id}{(savedChanges.Count > 0 ? "'s " : " ")}{saved}, but {action} failed: {reason}. Retry only the project change: {retry}";
+                message = $"Task #{id}{(savedChanges.Count > 0 ? "'s " : " ")}{saved}, but {action} failed: {reason}. Retry only {remaining}: {retry}";
             }
 
-            throw new McpException(message, ex);
+            throw new PartialUpdateException(message, ex);
         }
 
         var refreshed = false;
-        if (projectChanged)
+        try
         {
-            updated = await api.GetTaskAsync(id, ct);
-            refreshed = true;
+            if (projectChanged)
+            {
+                updated = await api.GetTaskAsync(id, ct);
+                refreshed = true;
+            }
+
+            // Judged against the task as it is now: a project move or re-parent may have changed its goal.
+            if (goalRequested && !goalFirst && await ApplyGoalAsync(updated, targetGoal, ct))
+            {
+                updated = await RereadAfterGoalAsync(updated, targetGoal, ct);
+                refreshed = true;
+            }
+        }
+        catch (Exception ex) when (goalRequested && !goalFirst && (putCarriesChanges || projectChanged) && IsStepFailure(ex, ct))
+        {
+            var saved = changes.Count > 0 ? $" ({string.Join(", ", changes)})" : string.Empty;
+            var planned = planDay is { } plannedDay ? $" and planned for {plannedDay:yyyy-MM-dd}" : string.Empty;
+            var action = targetGoal is null ? "removing it from its goal" : $"assigning it to goal {goalLabel}";
+            var retry = inBatch
+                ? "resend only that item with just id and goal."
+                : $"call update_task with id={id} and goal='{goalArgument}' only.";
+            throw new PartialUpdateException(
+                $"Task #{id} was saved{saved}{planned}, but {action} failed: {FailureReason(ex)}. Retry only the goal change: {retry}",
+                ex);
+        }
+
+        // Covers a goal this call set and one that a project move or re-parent changed.
+        if (existing.GoalId != updated.GoalId)
+        {
+            changes.Add(updated.GoalId is null ? "goal (removed)" : $"goal -> {Formatting.CleanReason(updated.GoalTitle)}");
         }
 
         string? note = null;
@@ -741,6 +954,82 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         }
 
         return new UpdateOutcome(updated, changes, note);
+    }
+
+    /// <summary>
+    /// Rejects, before anything is written, a goal change the API would always refuse: a subtask whose goal would differ
+    /// from the one its parent gives it, or a move into a Done or Dropped goal. Without this the call saves its other
+    /// changes and then suggests a retry that cannot succeed.
+    /// </summary>
+    private async Task RejectUnassignableGoalAsync(
+        TaskItemDto existing, int? newParent, int? resultingProject, GoalDto? goal, CancellationToken ct)
+    {
+        if (newParent is { } parentId)
+        {
+            var inherited = existing.GoalId;
+            if (existing.ParentTaskItemId != newParent || existing.ProjectId != resultingProject)
+            {
+                TaskItemDto parent;
+                try
+                {
+                    parent = await api.GetTaskAsync(parentId, ct);
+                }
+                catch (TaskFlowApiException)
+                {
+                    return; // The PUT reports a bad parent in its own words.
+                }
+
+                inherited = parent.ProjectId == resultingProject ? parent.GoalId : null;
+            }
+
+            if (goal?.Id != inherited)
+            {
+                throw ToolGuard.Invalid(
+                    $"Task #{existing.Id} would be a subtask of #{parentId}, so its goal follows that parent and can't be set directly. "
+                    + "Change the parent's goal, or omit goal. Nothing was changed.");
+            }
+        }
+        else if (goal is not null && goal.Id != existing.GoalId
+            && (string.Equals(goal.Status, "Done", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(goal.Status, "Dropped", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw ToolGuard.Invalid(
+                $"Goal {Formatting.GoalLabel(goal)} is {goal.Status}, so a task can't be assigned to it. "
+                + "Pick an open goal, or omit goal. Nothing was changed.");
+        }
+    }
+
+    /// <summary>Brings the task's goal to the requested one (null removes it). Returns false when no call was needed.</summary>
+    private async Task<bool> ApplyGoalAsync(TaskItemDto current, GoalDto? goal, CancellationToken ct)
+    {
+        if (current.GoalId == goal?.Id)
+        {
+            return false;
+        }
+
+        if (goal is not null)
+        {
+            await AssignGoalAsync(goal.Id, current.Id, ct);
+        }
+        else
+        {
+            await api.RemoveTaskFromGoalAsync(current.GoalId!.Value, current.Id, ct);
+        }
+
+        return true;
+    }
+
+    private async Task<TaskItemDto> RereadAfterGoalAsync(TaskItemDto before, GoalDto? goal, CancellationToken ct)
+    {
+        try
+        {
+            return await api.GetTaskAsync(before.Id, ct);
+        }
+        catch (Exception ex) when (IsStepFailure(ex, ct))
+        {
+            // The goal write succeeded; do not turn a failed confirmation into a failed update.
+            return before with { GoalId = goal?.Id, GoalTitle = goal?.Title };
+        }
     }
 
     /// <summary>

@@ -15,7 +15,7 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261125020053_AddAreas";
+    public override string LastMigrationId => "20261125233644_AddGoals";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -64,6 +64,55 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                     .IsUnique();
 
                 b.ToTable("Areas");
+            });
+
+        modelBuilder.Entity("TaskFlow.Api.Models.Goal", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<DateTime?>("ClosedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<DateTime>("CreatedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Description")
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("DisplayOrder")
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("DoneWhen")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("ParkedReason")
+                    .HasMaxLength(200)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("ProjectId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("Status")
+                    .HasColumnType("INTEGER");
+
+                b.Property<DateTime>("StatusChangedAt")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("Title")
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasColumnType("TEXT");
+
+                b.Property<DateTime?>("UpdatedAt")
+                    .HasColumnType("TEXT");
+
+                b.HasKey("Id");
+
+                b.HasIndex("ProjectId");
+
+                b.ToTable("Goals");
             });
 
         modelBuilder.Entity("TaskFlow.Api.Models.JournalEntry", b =>
@@ -247,6 +296,9 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                 b.Property<DateOnly?>("FirstTaggedDate")
                     .HasColumnType("TEXT");
 
+                b.Property<int?>("GoalId")
+                    .HasColumnType("INTEGER");
+
                 b.Property<int>("MoveCount")
                     .HasColumnType("INTEGER");
 
@@ -275,6 +327,8 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                 b.HasKey("Id");
 
                 b.HasIndex("CurrentJournalEntryId");
+
+                b.HasIndex("GoalId");
 
                 b.HasIndex("ParentTaskItemId");
 
@@ -337,6 +391,17 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                     .IsRequired();
             });
 
+        modelBuilder.Entity("TaskFlow.Api.Models.Goal", b =>
+            {
+                b.HasOne("TaskFlow.Api.Models.Project", "Project")
+                    .WithMany("Goals")
+                    .HasForeignKey("ProjectId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Project");
+            });
+
         modelBuilder.Entity("TaskFlow.Api.Models.JournalLogEntry", b =>
             {
                 b.HasOne("TaskFlow.Api.Models.JournalEntry", "JournalEntry")
@@ -394,6 +459,11 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                     .HasForeignKey("CurrentJournalEntryId")
                     .OnDelete(DeleteBehavior.SetNull);
 
+                b.HasOne("TaskFlow.Api.Models.Goal", "Goal")
+                    .WithMany("Tasks")
+                    .HasForeignKey("GoalId")
+                    .OnDelete(DeleteBehavior.SetNull);
+
                 b.HasOne("TaskFlow.Api.Models.TaskItem", "ParentTaskItem")
                     .WithMany("ChildTaskItems")
                     .HasForeignKey("ParentTaskItemId")
@@ -405,6 +475,8 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                     .OnDelete(DeleteBehavior.SetNull);
 
                 b.Navigation("CurrentJournalEntry");
+
+                b.Navigation("Goal");
 
                 b.Navigation("ParentTaskItem");
 
@@ -427,6 +499,11 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Projects");
             });
 
+        modelBuilder.Entity("TaskFlow.Api.Models.Goal", b =>
+            {
+                b.Navigation("Tasks");
+            });
+
         modelBuilder.Entity("TaskFlow.Api.Models.JournalEntry", b =>
             {
                 b.Navigation("LogEntries");
@@ -436,6 +513,8 @@ partial class TaskDbContextModelSnapshot : ModelSnapshot
 
         modelBuilder.Entity("TaskFlow.Api.Models.Project", b =>
             {
+                b.Navigation("Goals");
+
                 b.Navigation("Tasks");
             });
 

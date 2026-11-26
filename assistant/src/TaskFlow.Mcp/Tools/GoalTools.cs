@@ -44,7 +44,7 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
         [Description("What has to be true for the goal to be done. Omit to keep it; an empty string clears it.")] string? doneWhen = null,
         [Description("next, now, parked, done or dropped. A new goal takes only next (default) or now. Omit to keep the status when editing.")] string? status = null,
         [Description("Why the goal is parked (max 200 characters). Required when it becomes parked; only valid when the resulting status is parked.")] string? parkedReason = null,
-        [Description("Place among the project's Next goals, 1 = first. Only valid when the resulting status is next.")] int? position = null,
+        [Description("Place among the project's Next goals, 1 = first. Only valid when the resulting status is next; the API refuses an out-of-range position or a non-Next result, and a refusal changes nothing.")] int? position = null,
         CancellationToken ct = default) =>
         ToolGuard.RunAsync(api, ct, async () =>
         {
@@ -67,9 +67,8 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
             }
 
             var resolved = await ResolveProjectAsync(project, ct);
-            // A create without a position needs no look at the other goals.
-            var goals = creating && position is null ? [] : await api.GetGoalsAsync(resolved.Id, ct);
-            var existing = creating ? null : GoalResolver.Resolve(goals, goal!, resolved.Name);
+            // Only an edit reads the goals, to resolve the goal by title. The API owns the position rules.
+            var existing = creating ? null : GoalResolver.Resolve(await api.GetGoalsAsync(resolved.Id, ct), goal!, resolved.Name);
             var resulting = requested ?? existing?.Status.ToLowerInvariant() ?? "next";
 
             if (reason is not null && resulting != "parked")
@@ -77,47 +76,28 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
                 throw ToolGuard.Invalid($"parkedReason is only valid for a parked goal, and this one would be {resulting}. Pass status=parked, or omit parkedReason. Nothing was changed.");
             }
 
-            var otherNext = goals.Where(g => IsStatus(g, "Next") && g.Id != existing?.Id).Select(g => g.Id).ToList();
-            if (position is { } wanted)
-            {
-                if (resulting != "next")
-                {
-                    throw ToolGuard.Invalid($"position only applies to a Next goal, and this one would be {resulting}. Omit position, or pass status=next. Nothing was changed.");
-                }
-
-                if (wanted < 1 || wanted > otherNext.Count + 1)
-                {
-                    throw ToolGuard.Invalid($"position {wanted} is out of range: use 1 to {otherNext.Count + 1}. Nothing was changed.");
-                }
-            }
-
             GoalDto saved;
             try
             {
-                saved = existing is null
-                    ? await api.CreateGoalAsync(new CreateGoalRequest(resolved.Id, newTitle!, Optional(description, null), Optional(doneWhen, null), resulting), ct)
-                    : await api.UpdateGoalAsync(
+                saved = await ToolGuard.WriteAsync(api, ct, () => existing is null
+                    ? api.CreateGoalAsync(new CreateGoalRequest(resolved.Id, newTitle!, Optional(description, null), Optional(doneWhen, null), resulting, position), ct)
+                    : api.UpdateGoalAsync(
                         existing.Id,
                         new UpdateGoalRequest(
                             newTitle ?? existing.Title,
                             Optional(description, existing.Description),
                             Optional(doneWhen, existing.DoneWhen),
                             resulting,
-                            resulting == "parked" ? reason ?? existing.ParkedReason : null),
-                        ct);
+                            resulting == "parked" ? reason ?? existing.ParkedReason : null,
+                            position),
+                        ct));
             }
-            catch (TaskFlowApiException ex) when (ex.Status == HttpStatusCode.Conflict)
+            catch (McpException ex) when (ex.InnerException is TaskFlowApiException { Status: HttpStatusCode.Conflict })
             {
                 var next = existing is null
                     ? "Create it with status=next, then call swap_now if the user agrees to make it the Now goal."
                     : "To make this goal Now, call swap_now if the user agrees; send any other changes with save_goal without status.";
-                throw ToolGuard.Invalid($"Nothing was changed. {ex.Message}\n{next}");
-            }
-
-            if (position is { } place)
-            {
-                otherNext.Insert(place - 1, saved.Id);
-                await ReorderAsync(resolved.Id, otherNext, saved, place, ct);
+                throw ToolGuard.Invalid($"{ex.Message}\n{next}");
             }
 
             var placed = position is { } at ? $" | position {at} in Next" : string.Empty;
@@ -195,29 +175,6 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
         return isId || exact.Count == 1
             ? target
             : throw ToolGuard.Invalid($"No goal is titled '{key}'. Did you mean {Formatting.GoalLabel(target)}? delete_goal needs the exact title or id. Nothing was deleted.");
-    }
-
-    /// <summary>The goal is already saved when this runs, so a failure must say so: repeating a create would duplicate it.</summary>
-    private async Task ReorderAsync(int projectId, List<int> goalIds, GoalDto saved, int position, CancellationToken ct)
-    {
-        try
-        {
-            await api.ReorderGoalsAsync(projectId, goalIds, ct);
-        }
-        catch (Exception ex) when (ex is TaskFlowApiException or HttpRequestException
-            || (ex is TaskCanceledException && !ct.IsCancellationRequested))
-        {
-            var reason = ex switch
-            {
-                TaskFlowApiException apiEx => apiEx.Message,
-                HttpRequestException => "cannot reach the TaskFlow API",
-                _ => "request timed out",
-            };
-            throw new McpException(
-                $"Goal {Formatting.GoalLabel(saved)} was saved, but moving it to position {position} failed: {reason}. "
-                + $"Do not create it again; retry only the position with save_goal, project={projectId}, goal={saved.Id} and position={position}.",
-                ex);
-        }
     }
 
     private async Task<ProjectDto> ResolveProjectAsync(string project, CancellationToken ct) =>

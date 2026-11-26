@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json.Nodes;
+
 namespace TaskFlow.Mcp.Api;
 
 // Response shapes of the TaskFlow API (camelCase JSON). Enum-like values arrive as PascalCase strings.
@@ -111,16 +114,19 @@ public sealed record CreateGoalRequest(
     string Title,
     string? Description,
     string? DoneWhen,
-    string Status);
+    string Status,
+    int? Position = null);
 
-/// <summary>The goal PUT is full-replace, so every field is always sent.</summary>
+/// <summary>The goal PUT is full-replace, so every field is always sent. A null Position means "keep"; the API owns the range check.</summary>
 public sealed record UpdateGoalRequest(
     string Title,
     string? Description,
     string? DoneWhen,
     string Status,
-    string? ParkedReason);
+    string? ParkedReason,
+    int? Position = null);
 
+/// <summary>A null GoalId means no goal. A subtask inherits its parent's goal, so a goal is sent only for a non-subtask.</summary>
 public sealed record CreateTaskRequest(
     string Title,
     string? Description,
@@ -130,9 +136,10 @@ public sealed record CreateTaskRequest(
     DateOnly? JournalDate,
     int? ParentTaskItemId,
     int? ProjectId,
-    int TimezoneOffsetMinutes);
+    int TimezoneOffsetMinutes,
+    int? GoalId = null);
 
-/// <summary>The task PUT is full-replace, so every field is always sent.</summary>
+/// <summary>The task PUT is full-replace, so every field is always sent. update_task uses <see cref="TaskPatch"/> instead.</summary>
 public sealed record UpdateTaskRequest(
     string Title,
     string? Description,
@@ -144,3 +151,34 @@ public sealed record UpdateTaskRequest(
     int TimezoneOffsetMinutes,
     string? BlockedReason = null,
     DateOnly? JournalDate = null);
+
+/// <summary>
+/// Builds the body of a task PATCH. The API reads an absent property as "keep" and an explicit null as "clear", and
+/// <see cref="TaskFlowApiClient.Json"/> writes every null property of a record, so a nullable-property record would
+/// clear every unchanged field. Only the properties set here are written.
+/// </summary>
+public sealed class TaskPatch
+{
+    private readonly JsonObject _body = [];
+
+    public bool HasChanges => _body.Count > 0;
+
+    /// <summary>Writes the property with this value, or an explicit JSON null when the value is null (clear).</summary>
+    public TaskPatch Set(string name, string? value) => Put(name, value is null ? null : JsonValue.Create(value));
+
+    public TaskPatch Set(string name, int? value) => Put(name, value is null ? null : JsonValue.Create(value.Value));
+
+    public TaskPatch Set(string name, DateOnly? value) =>
+        Put(name, value is null ? null : JsonValue.Create(value.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+
+    /// <summary>Writes an explicit JSON null: the API clears the property.</summary>
+    public TaskPatch Clear(string name) => Put(name, null);
+
+    internal JsonObject ToJson() => _body;
+
+    private TaskPatch Put(string name, JsonNode? node)
+    {
+        _body[name] = node;
+        return this;
+    }
+}

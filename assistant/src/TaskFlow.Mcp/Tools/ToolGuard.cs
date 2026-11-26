@@ -67,6 +67,35 @@ internal static class ToolGuard
     }
 
     /// <summary>
+    /// Runs one write request (task PATCH or create, goal create or update, summary append). The API checks every rule
+    /// before it writes, so a 4xx refusal saved nothing and says so here, in the one place that wording lives. A 5xx or
+    /// an unreachable API is not a refusal and gets no such sentence. A timeout may have been saved, so it says to check
+    /// before retrying (a blind retry of create_tasks makes a duplicate) and, as an <see cref="ApiUnreachableException"/>,
+    /// stops a batch.
+    /// </summary>
+    public static async Task<T> WriteAsync<T>(TaskFlowApiClient api, CancellationToken ct, Func<Task<T>> write)
+    {
+        try
+        {
+            return await write();
+        }
+        catch (TaskFlowApiException ex) when ((int)ex.Status is >= 400 and < 500)
+        {
+            var refusal = WithGuidance(ex);
+            // Guidance adds lines of its own, and the sentence reads best on a line of its own after them.
+            throw new McpException(refusal + (refusal.Contains('\n') ? "\n" : " ") + NothingSaved, ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ApiUnreachableException(
+                $"The TaskFlow API at {api.BaseUrl} did not respond in time. The change may or may not have been saved: check with get_task before retrying.",
+                ex);
+        }
+    }
+
+    public const string NothingSaved = "Nothing was saved.";
+
+    /// <summary>
     /// Appends one line of next-step guidance for known 422 codes, and for the goal rules a further line naming the
     /// tasks or the Now goal from <c>details</c>. Other errors pass through unchanged.
     /// </summary>
@@ -126,3 +155,6 @@ internal static class ToolGuard
 
     public static McpException Invalid(string message) => new(message);
 }
+
+/// <summary>The API did not answer a write in time. It carries only "stop the batch"; nothing is known to be saved.</summary>
+internal sealed class ApiUnreachableException(string message, Exception inner) : McpException(message, inner);

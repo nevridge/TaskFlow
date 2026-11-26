@@ -69,11 +69,11 @@ internal static class ToolGuard
     /// <summary>
     /// Runs one write request (task PATCH or create, goal create or update, summary append). The API checks every rule
     /// before it writes, so a 4xx refusal saved nothing and says so here, in the one place that wording lives. A 5xx or
-    /// an unreachable API is not a refusal and gets no such sentence. A timeout may have been saved, so it says to check
-    /// before retrying (a blind retry of create_tasks makes a duplicate) and, as an <see cref="ApiUnreachableException"/>,
-    /// stops a batch.
+    /// an unreachable API is not a refusal and gets no such sentence. A timeout carries <paramref name="timeoutHint"/>,
+    /// which the call site picks (retry is safe for a PATCH, check first for a create, goal save or append), and, as an
+    /// <see cref="ApiUnreachableException"/>, stops a batch.
     /// </summary>
-    public static async Task<T> WriteAsync<T>(TaskFlowApiClient api, CancellationToken ct, Func<Task<T>> write)
+    public static async Task<T> WriteAsync<T>(TaskFlowApiClient api, CancellationToken ct, Func<Task<T>> write, string timeoutHint)
     {
         try
         {
@@ -88,10 +88,22 @@ internal static class ToolGuard
         catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
         {
             throw new ApiUnreachableException(
-                $"The TaskFlow API at {api.BaseUrl} did not respond in time. The change may or may not have been saved: check with get_task before retrying.",
+                $"The TaskFlow API at {api.BaseUrl} did not respond in time. {timeoutHint}",
                 ex);
         }
     }
+
+    // The timeout hint is chosen by the call site, because only some reads can show whether that write landed.
+
+    /// <summary>A task PATCH is one atomic request and a same-value PATCH is a no-op, so a retry is safe.</summary>
+    public const string PatchTimeoutHint = "A task update is one atomic request, so it is safe to retry.";
+
+    /// <summary>A blind retry of a create makes a duplicate.</summary>
+    public const string CreateTaskTimeoutHint = "The task may or may not have been saved: check with list_tasks or get_task before retrying.";
+
+    public const string SaveGoalTimeoutHint = "The goal may or may not have been saved: check with list_goals before retrying.";
+
+    public const string JournalAppendTimeoutHint = "The text may or may not have been appended (an append is not idempotent): check with get_journal before retrying.";
 
     public const string NothingSaved = "Nothing was saved.";
 

@@ -432,7 +432,7 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         goalId);
 
                     // The goal travels in the same request, so a refusal creates nothing.
-                    var task = await ToolGuard.WriteAsync(api, ct, () => api.CreateTaskAsync(request, ct));
+                    var task = await ToolGuard.WriteAsync(api, ct, () => api.CreateTaskAsync(request, ct), ToolGuard.CreateTaskTimeoutHint);
 
                     var line = "+ " + Formatting.Task(task, today, nowUtc: time.GetUtcNow());
 
@@ -456,6 +456,13 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
                         failed.AddRange(tasks.Skip(failed.Count + created.Count).Select(t => $"x \"{t.Title}\": not attempted"));
                         break;
                     }
+                }
+                catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !ct.IsCancellationRequested))
+                {
+                    // The API went away mid-batch: report what was created and what was not attempted, so a retry does not duplicate.
+                    failed.Add($"x \"{item.Title}\": {(ex is HttpRequestException ? "cannot reach the TaskFlow API" : "request timed out")}");
+                    failed.AddRange(tasks.Skip(failed.Count + created.Count).Select(t => $"x \"{t.Title}\": not attempted"));
+                    break;
                 }
             }
 
@@ -759,64 +766,64 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         var patch = new TaskPatch();
         if (newTitle != existing.Title)
         {
-            patch.Set("title", newTitle);
+            patch.Set(TaskPatchFields.Title, newTitle);
         }
 
         if (!string.Equals(existing.Status, newStatus, StringComparison.OrdinalIgnoreCase))
         {
-            patch.Set("status", newStatus);
+            patch.Set(TaskPatchFields.Status, newStatus);
         }
 
         if (!string.Equals(existing.Priority, newPriority, StringComparison.OrdinalIgnoreCase))
         {
-            patch.Set("priority", newPriority);
+            patch.Set(TaskPatchFields.Priority, newPriority);
         }
 
         if (existing.Description != newDescription)
         {
-            patch.Set("description", newDescription);
+            patch.Set(TaskPatchFields.Description, newDescription);
         }
 
         if (existing.DueDate != newDue)
         {
-            patch.Set("dueDate", newDue);
+            patch.Set(TaskPatchFields.DueDate, newDue);
         }
 
         if (existing.ParentTaskItemId != newParent)
         {
-            patch.Set("parentTaskItemId", newParent);
+            patch.Set(TaskPatchFields.ParentTaskItemId, newParent);
         }
 
         // Omitted keeps the stored reason; "" clears it and the task stays Blocked.
         if (finalBlocked && trimmedReason is not null && trimmedReason != (existing.BlockedReason ?? string.Empty).Trim())
         {
-            patch.Set("blockedReason", trimmedReason);
+            patch.Set(TaskPatchFields.BlockedReason, trimmedReason);
         }
 
         // Absent leaves the planned day unchanged. Update never un-plans.
         if (planDay is not null)
         {
-            patch.Set("journalDate", planDay);
+            patch.Set(TaskPatchFields.JournalDate, planDay);
         }
 
         if (removeProject && existing.ProjectId is not null)
         {
-            patch.Clear("projectId");
+            patch.Clear(TaskPatchFields.ProjectId);
         }
         else if (target is not null && existing.ProjectId != target.Id)
         {
-            patch.Set("projectId", target.Id);
+            patch.Set(TaskPatchFields.ProjectId, target.Id);
         }
 
         if (sendGoal)
         {
             if (targetGoal is null)
             {
-                patch.Clear("goalId");
+                patch.Clear(TaskPatchFields.GoalId);
             }
             else
             {
-                patch.Set("goalId", targetGoal.Id);
+                patch.Set(TaskPatchFields.GoalId, targetGoal.Id);
             }
         }
 
@@ -825,8 +832,8 @@ public sealed class TaskTools(TaskFlowApiClient api, TimeProvider time)
         var updated = existing;
         if (patch.HasChanges)
         {
-            patch.Set("timezoneOffsetMinutes", offset);
-            updated = await ToolGuard.WriteAsync(api, ct, () => api.PatchTaskAsync(id, patch, ct));
+            patch.Set(TaskPatchFields.TimezoneOffsetMinutes, offset);
+            updated = await ToolGuard.WriteAsync(api, ct, () => api.PatchTaskAsync(id, patch, ct), ToolGuard.PatchTimeoutHint);
         }
 
         if (unblockedIndex >= 0)

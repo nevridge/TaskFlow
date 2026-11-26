@@ -443,7 +443,7 @@ public class ToolGuardWriteTests
     [InlineData(HttpStatusCode.UnprocessableEntity)]
     public async Task A4xxRefusal_SaysNothingWasSaved(HttpStatusCode status)
     {
-        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(status, null, "Refused."));
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(status, null, "Refused."), "hint");
 
         var ex = (await act.Should().ThrowAsync<McpException>()).Which;
         ex.Message.Should().Be("Refused. Nothing was saved.");
@@ -455,7 +455,7 @@ public class ToolGuardWriteTests
     {
         var details = System.Text.Json.JsonDocument.Parse("""{"nowGoalId":1,"nowGoalTitle":"Ship"}""").RootElement.Clone();
         var act = () => ToolGuard.WriteAsync<int>(
-            Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, ErrorCodes.TaskGoalNotNow, "Not now.", details));
+            Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, ErrorCodes.TaskGoalNotNow, "Not now.", details), "hint");
 
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Split('\n').Last().Should().Be("Nothing was saved.");
@@ -465,18 +465,18 @@ public class ToolGuardWriteTests
     [Fact]
     public async Task A5xx_IsNotARefusal_AndPassesThroughUnchanged()
     {
-        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.InternalServerError, null, "Server error."));
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.InternalServerError, null, "Server error."), "hint");
 
         (await act.Should().ThrowAsync<TaskFlowApiException>()).Which.Message.Should().Be("Server error.");
     }
 
     [Fact]
-    public async Task ATimeout_IsAnUnreachableSignal_ThatSaysToCheckBeforeRetrying()
+    public async Task ATimeout_IsAnUnreachableSignal_ThatCarriesTheCallSitesHint()
     {
-        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskCanceledException());
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskCanceledException(), "Call-site hint.");
 
         var ex = (await act.Should().ThrowAsync<ApiUnreachableException>()).Which;
-        ex.Message.Should().Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
+        ex.Message.Should().Contain("did not respond in time").And.EndWith("Call-site hint.").And.NotContain("get_task").And.NotContain("Nothing was saved");
     }
 
     [Fact]
@@ -485,7 +485,7 @@ public class ToolGuardWriteTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        var act = () => ToolGuard.WriteAsync<int>(Api(), cts.Token, () => throw new TaskCanceledException());
+        var act = () => ToolGuard.WriteAsync<int>(Api(), cts.Token, () => throw new TaskCanceledException(), "hint");
 
         await act.Should().ThrowAsync<TaskCanceledException>();
     }
@@ -493,7 +493,7 @@ public class ToolGuardWriteTests
     [Fact]
     public async Task AnUnreachableApi_IsNotARefusal()
     {
-        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new HttpRequestException("refused"));
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new HttpRequestException("refused"), "hint");
 
         await act.Should().ThrowAsync<HttpRequestException>();
     }

@@ -278,7 +278,7 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 JournalEntryDto updated;
                 try
                 {
-                    updated = await ToolGuard.WriteAsync(api, ct, () => api.AppendJournalSummaryAsync(entry.Id, summary!.Trim(), ct));
+                    updated = await ToolGuard.WriteAsync(api, ct, () => api.AppendJournalSummaryAsync(entry.Id, summary!.Trim(), ct), ToolGuard.JournalAppendTimeoutHint);
                 }
                 catch (McpException ex) when (ex.InnerException is TaskFlowApiException { Status: HttpStatusCode.BadRequest })
                 {

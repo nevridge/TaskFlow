@@ -133,9 +133,28 @@ public class TaskGoalToolsTests
         var message = await Error(() => tools.CreateTasks(
             [new NewTask { Title = "One", Project = "Alpha" }, new NewTask { Title = "Two", Project = "Alpha" }], Ct));
 
-        message.Should().Contain("x \"One\": ").And.Contain("did not respond in time").And.Contain("check with get_task before retrying")
+        message.Should().Contain("x \"One\": ").And.Contain("did not respond in time").And.Contain("check with list_tasks or get_task before retrying")
             .And.NotContain("Nothing was saved").And.Contain("x \"Two\": not attempted");
         Writes(handler).Should().Equal("POST TaskItems");
+    }
+
+    [Fact]
+    public async Task Create_ApiGoingAwayMidBatch_ReportsCreatedFailedAndNotAttemptedLines()
+    {
+        var (tools, handler) = Setup(h => h
+            .Get("TaskItems", Array.Empty<object>())
+            .Post("TaskItems", Task5(), HttpStatusCode.Created)
+            .Fail(HttpMethod.Post, "TaskItems", new HttpRequestException("refused")));
+
+        var message = await tools.CreateTasks(
+            [new NewTask { Title = "One" }, new NewTask { Title = "Two" }, new NewTask { Title = "Three" }], Ct);
+
+        var lines = message.Split('\n');
+        lines[0].Should().StartWith("Created 1 of 3");
+        lines[1].Should().StartWith("+ ");
+        lines[2].Should().StartWith("x \"Two\": ").And.Contain("cannot reach the TaskFlow API");
+        lines[3].Should().Be("x \"Three\": not attempted");
+        Writes(handler).Should().HaveCount(2);
     }
 
     [Theory]

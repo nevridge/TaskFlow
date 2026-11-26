@@ -90,7 +90,7 @@ public sealed class GoalTools(TaskFlowApiClient api, TimeProvider time)
                             resulting,
                             resulting == "parked" ? reason ?? existing.ParkedReason : null,
                             position),
-                        ct));
+                        ct), ToolGuard.SaveGoalTimeoutHint);
             }
             catch (McpException ex) when (ex.InnerException is TaskFlowApiException { Status: HttpStatusCode.Conflict })
             {

@@ -164,13 +164,13 @@ public class GoalToolsTests
     }
 
     [Fact]
-    public async Task SaveGoal_Timeout_SaysToCheckBeforeRetrying_NotThatNothingWasSaved()
+    public async Task SaveGoal_Timeout_SaysToCheckWithListGoals_NotThatNothingWasSaved()
     {
         var (tools, _) = Setup(h => h.Fail(HttpMethod.Post, "Goals", new TaskCanceledException()));
 
         var message = await Error(() => tools.SaveGoal("Alpha", title: "Launch", ct: Ct));
 
-        message.Should().Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
+        message.Should().Contain("did not respond in time").And.Contain("check with list_goals before retrying").And.NotContain("Nothing was saved");
     }
 
     [Theory]

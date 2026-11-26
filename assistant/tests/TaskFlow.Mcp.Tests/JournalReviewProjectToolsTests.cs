@@ -918,6 +918,19 @@ public class JournalToolsTests
     }
 
     [Fact]
+    public async Task UpdateJournal_Append_Timeout_SaysToCheckWithGetJournal()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", "Old") })
+            .Fail(HttpMethod.Post, AppendPath, new TaskCanceledException("timeout"));
+
+        var act = () => Tools(handler).UpdateJournal(summary: "New", append: true);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("did not respond in time").And.Contain("check with get_journal before retrying").And.NotContain("Nothing was saved");
+    }
+
+    [Fact]
     public async Task UpdateJournal_Append_ServerError_IsNotCalledARefusal_AndSkipsNothingItClaims()
     {
         var handler = new StubHandler()

@@ -153,6 +153,25 @@ public sealed record UpdateTaskRequest(
     DateOnly? JournalDate = null);
 
 /// <summary>
+/// The property names of the task PATCH body. The API silently drops a name it does not know, so a typo would look
+/// like a no-op; keeping them here means each is spelled once.
+/// </summary>
+public static class TaskPatchFields
+{
+    public const string Title = "title";
+    public const string Status = "status";
+    public const string Priority = "priority";
+    public const string Description = "description";
+    public const string DueDate = "dueDate";
+    public const string ParentTaskItemId = "parentTaskItemId";
+    public const string BlockedReason = "blockedReason";
+    public const string JournalDate = "journalDate";
+    public const string ProjectId = "projectId";
+    public const string GoalId = "goalId";
+    public const string TimezoneOffsetMinutes = "timezoneOffsetMinutes";
+}
+
+/// <summary>
 /// Builds the body of a task PATCH. The API reads an absent property as "keep" and an explicit null as "clear", and
 /// <see cref="TaskFlowApiClient.Json"/> writes every null property of a record, so a nullable-property record would
 /// clear every unchanged field. Only the properties set here are written.

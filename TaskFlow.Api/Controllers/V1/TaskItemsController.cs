@@ -176,10 +176,26 @@ public class TaskItemsController(
             });
         }
 
-        // A new task's goal comes only from its parent.
-        var goalId = createDto.ParentTaskItemId is int goalParentId && createDto.ProjectId is int goalProjectId
-            ? await _repo.GetInheritedGoalIdAsync(goalParentId, goalProjectId)
-            : null;
+        // An explicit goal replaces the inherited one. All its refusals run here, before AddAsync.
+        int? goalId;
+        if (createDto.GoalId is int requestedGoalId)
+        {
+            var check = await _repo.CheckGoalAssignmentAsync(
+                requestedGoalId, createDto.ParentTaskItemId.HasValue, createDto.ProjectId);
+            if (GoalCheckError(check.Status) is { } goalError)
+            {
+                return goalError;
+            }
+
+            goalId = requestedGoalId;
+        }
+        else
+        {
+            // Without one, a subtask takes its parent's goal.
+            goalId = createDto.ParentTaskItemId is int goalParentId && createDto.ProjectId is int goalProjectId
+                ? await _repo.GetInheritedGoalIdAsync(goalParentId, goalProjectId)
+                : null;
+        }
 
         var item = new TaskItem
         {
@@ -316,8 +332,20 @@ public class TaskItemsController(
     /// <c>TASK_GOAL_NOT_NOW</c> (a task in a Next or Parked goal cannot be started or completed while the project has a
     /// Now goal). <c>status=todo</c> on a Blocked task is not refused by that rule: it unblocks to Todo, not InProgress,
     /// when the rule forbids InProgress.
+    /// <para>
+    /// <c>projectId</c> and <c>goalId</c> change the task's project and goal in the same request, all or nothing: a
+    /// refusal at any step saves nothing (fields, project, goal, subtasks' goals, planning and events alike), and
+    /// the same-value project or goal is a no-op. Refusals run in this order: 422 <c>TASK_PROJECT_NOT_FOUND</c>;
+    /// then, for a <c>goalId</c>, 404 (goal not found), 400 (the task is a subtask: its goal follows its parent,
+    /// even for the value it would inherit), 400 (the goal is not in the task's resulting project) and 400 (the goal
+    /// is Done or Dropped); and last 422 <c>TASK_GOAL_NOT_NOW</c>, judged on the resulting goal and status. A project
+    /// change without a <c>goalId</c> resets the goal (inherited from the parent when the parent's goal is in the new
+    /// project, otherwise none) and clears the subtasks' goals.
+    /// </para>
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
     // PATCH: api/v1/TaskItems/5
     [HttpPatch("{id}")]
@@ -344,6 +372,11 @@ public class TaskItemsController(
             DueDate = patchDto.DueDate,
             HasParent = patchDto.IsPresent(nameof(PatchTaskItemDto.ParentTaskItemId)),
             ParentTaskItemId = patchDto.ParentTaskItemId,
+            // PATCH: absent keeps the project and the goal; present null clears.
+            HasProjectId = patchDto.IsPresent(nameof(PatchTaskItemDto.ProjectId)),
+            ProjectId = patchDto.ProjectId,
+            HasGoalId = patchDto.IsPresent(nameof(PatchTaskItemDto.GoalId)),
+            GoalId = patchDto.GoalId,
             // PATCH: absent keeps the stored reason; present null or "" clears it.
             HasBlockedReason = patchDto.IsPresent(nameof(PatchTaskItemDto.BlockedReason)),
             BlockedReason = patchDto.BlockedReason,
@@ -355,8 +388,20 @@ public class TaskItemsController(
         });
     }
 
+    // The plain { message } refusal of a failed explicit-goal check, shared with the Goals controller; null when it passed.
+    private ActionResult? GoalCheckError(AssignGoalTaskStatus status) =>
+        GoalRuleErrors.CheckMessage(status) is not { } message
+            ? null
+            : status == AssignGoalTaskStatus.GoalNotFound
+                ? NotFound(new { message })
+                : BadRequest(new { message });
+
     private sealed record TaskChanges
     {
+        public bool HasProjectId { get; init; }
+        public int? ProjectId { get; init; }
+        public bool HasGoalId { get; init; }
+        public int? GoalId { get; init; }
         public bool HasTitle { get; init; }
         public string Title { get; init; } = string.Empty;
         public bool HasDescription { get; init; }
@@ -528,15 +573,78 @@ public class TaskItemsController(
             }
         }
 
-        // A new parent hands its goal down; detaching or re-sending the stored parent keeps the task's goal.
-        var resultingGoalId = existing.GoalId;
-        if (changes.HasParent &&
+        // Project, then goal against the resulting project. Every refusal below returns before the first mutation.
+        var goalParentTaskId = changes.HasParent ? changes.ParentTaskItemId : existing.ParentTaskItemId;
+        var projectChanged = changes.HasProjectId && changes.ProjectId != existing.ProjectId;
+        var resultingProjectId = projectChanged ? changes.ProjectId : existing.ProjectId;
+        if (projectChanged &&
+            changes.ProjectId is int newProjectId &&
+            await _projectRepo.GetByIdNoTrackingAsync(newProjectId) is null)
+        {
+            return UnprocessableEntity(new
+            {
+                code = ErrorCodes.ProjectNotFound,
+                message = "The selected project was not found.",
+                details = new { projectId = changes.ProjectId }
+            });
+        }
+
+        // An explicit goal move (task plus its subtasks in the goal's project) or an explicit removal.
+        Goal? movedToGoal = null;
+        IReadOnlyList<TaskItem> movingSubtasks = [];
+        var removesGoal = false;
+        var isSubtask = goalParentTaskId.HasValue;
+        int? resultingGoalId;
+        if (changes.HasGoalId && changes.GoalId is int explicitGoalId)
+        {
+            var check = await _repo.CheckGoalAssignmentAsync(explicitGoalId, isSubtask, resultingProjectId);
+            if (GoalCheckError(check.Status) is { } goalError)
+            {
+                return goalError;
+            }
+
+            if (explicitGoalId == existing.GoalId && !projectChanged)
+            {
+                // The same goal again is a no-op here (the assign endpoint answers 409).
+                resultingGoalId = existing.GoalId;
+            }
+            else
+            {
+                movedToGoal = check.Goal;
+                resultingGoalId = explicitGoalId;
+                movingSubtasks = await _repo.GetSubtasksInProjectAsync(id, movedToGoal!.ProjectId);
+            }
+        }
+        else if (changes.HasGoalId && isSubtask && existing.GoalId is not null)
+        {
+            // A subtask's goal follows its parent; removing it is refused like setting it (as the goal-remove endpoint does).
+            return BadRequest(new { message = GoalRuleErrors.SubtaskGoalMessage });
+        }
+        else if (changes.HasGoalId && !isSubtask)
+        {
+            // Explicit null on a task that is not a subtask removes its goal.
+            resultingGoalId = null;
+            removesGoal = existing.GoalId is not null;
+        }
+        else if (projectChanged)
+        {
+            // A move resets the goal: the parent's goal when it is in the new project, otherwise none.
+            resultingGoalId = goalParentTaskId is int resetParentId && resultingProjectId is int resetProjectId
+                ? await _repo.GetInheritedGoalIdAsync(resetParentId, resetProjectId)
+                : null;
+        }
+        else if (changes.HasParent &&
             changes.ParentTaskItemId is int goalParentId &&
             goalParentId != existing.ParentTaskItemId)
         {
+            // A new parent hands its goal down; detaching or re-sending the stored parent keeps the task's goal.
             resultingGoalId = existing.ProjectId is int goalProjectId
                 ? await _repo.GetInheritedGoalIdAsync(goalParentId, goalProjectId)
                 : null;
+        }
+        else
+        {
+            resultingGoalId = existing.GoalId;
         }
 
         var goalChanged = resultingGoalId != existing.GoalId;
@@ -544,6 +652,14 @@ public class TaskItemsController(
         // Single-Now rule, checked after the other rules so their codes keep precedence. Only a change is judged, so
         // field edits that re-send a stored InProgress or Completed status pass.
         var startsOrCompletes = nextStatus != existing.Status && nextStatus is Status.InProgress or Status.Completed;
+        if (movedToGoal is not null &&
+            movingSubtasks.Any(s => s.Status == Status.InProgress) &&
+            await _repo.GetBlockingNowGoalAsync(movedToGoal.Id) is { } subtaskBlockingGoal)
+        {
+            // A subtask that moves with its parent into a Next or Parked goal must not be in progress either.
+            return UnprocessableEntity(GoalRuleErrors.TaskGoalNotNow(id, movedToGoal.Id, subtaskBlockingGoal));
+        }
+
         if (resultingGoalId is int ruleGoalId &&
             (startsOrCompletes || (goalChanged && nextStatus == Status.InProgress)) &&
             await _repo.GetBlockingNowGoalAsync(ruleGoalId) is { } blockingGoal)
@@ -560,10 +676,27 @@ public class TaskItemsController(
             nextStatus = Status.Todo;
         }
 
-        // Apply incoming changes
-        if (goalChanged)
+        // Apply incoming changes. Nothing is saved until the write below, so the project, goal, subtasks' goals and the
+        // ProjectChanged event land in the same SaveChanges (or the same planning transaction) as the fields.
+        var oldGoalId = existing.GoalId;
+        if (projectChanged)
+        {
+            // Resets the goal and clears the subtasks' goals as the assign and unassign endpoints do.
+            await _projectRepo.StageProjectChangeAsync(existing, resultingProjectId);
+        }
+
+        if (existing.GoalId != resultingGoalId)
         {
             await _repo.SetGoalAsync(existing, resultingGoalId);
+        }
+
+        if (movedToGoal is not null)
+        {
+            await _repo.MoveSubtasksToGoalAsync(id, movedToGoal.Id, movedToGoal.ProjectId);
+        }
+        else if (removesGoal && oldGoalId is int removedGoalId)
+        {
+            await _repo.ClearSubtaskGoalsAsync(id, removedGoalId);
         }
 
         if (changes.HasTitle)

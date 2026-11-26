@@ -18,7 +18,6 @@ public class GoalsController(
     IValidator<AssignGoalTaskDto> assignValidator) : ControllerBase
 {
     private const string GetGoalRouteName = "GetGoalV1";
-    private const string GoalNotFoundMessage = "Goal not found.";
     private readonly IGoalRepository _repo = repo;
     private readonly IValidator<Goal> _validator = validator;
     private readonly IValidator<AssignGoalTaskDto> _assignValidator = assignValidator;
@@ -51,6 +50,11 @@ public class GoalsController(
             return BadRequest(new { message = "A new goal can only be Next or Now." });
         }
 
+        if (PositionNotNextError(createDto.Position, status) is { } positionError)
+        {
+            return positionError;
+        }
+
         var goal = new Goal
         {
             ProjectId = createDto.ProjectId,
@@ -66,10 +70,15 @@ public class GoalsController(
             return BadRequest(validationResult.Errors);
         }
 
-        var result = await _repo.CreateAsync(goal);
+        var result = await _repo.CreateAsync(goal, createDto.Position);
         if (result.Status == GoalWriteStatus.ProjectNotFound)
         {
             return BadRequest(new { message = "Project not found." });
+        }
+
+        if (result.Status == GoalWriteStatus.PositionOutOfRange)
+        {
+            return BadRequest(new { message = GoalRuleErrors.PositionOutOfRangeMessage(createDto.Position!.Value, result.MaxPosition) });
         }
 
         if (result.Status == GoalWriteStatus.NowExists)
@@ -130,8 +139,13 @@ public class GoalsController(
             return BadRequest(new { message = "A parked goal needs a reason." });
         }
 
-        var result = await _repo.UpdateAsync(id, changes);
-        return await ToWriteResponseAsync(result);
+        if (PositionNotNextError(updateDto.Position, status) is { } positionError)
+        {
+            return positionError;
+        }
+
+        var result = await _repo.UpdateAsync(id, changes, updateDto.Position);
+        return await ToWriteResponseAsync(result, updateDto.Position);
     }
 
     // PUT: api/v1/Goals/order  (the literal segment takes precedence over {id})
@@ -192,8 +206,8 @@ public class GoalsController(
             AssignGoalTaskStatus.GoalNotFound => GoalNotFound(),
             AssignGoalTaskStatus.TaskNotFound => NotFound(new { message = "Task not found." }),
             AssignGoalTaskStatus.IsSubtask => SubtaskGoal(),
-            AssignGoalTaskStatus.WrongProject => BadRequest(new { message = "The task must be in the goal's project." }),
-            AssignGoalTaskStatus.GoalClosed => BadRequest(new { message = "Tasks cannot be added to a Done or Dropped goal." }),
+            AssignGoalTaskStatus.WrongProject => BadRequest(new { message = GoalRuleErrors.WrongProjectMessage }),
+            AssignGoalTaskStatus.GoalClosed => BadRequest(new { message = GoalRuleErrors.GoalClosedMessage }),
             AssignGoalTaskStatus.AlreadyAssigned => Conflict(new { message = "This task is already assigned to the goal." }),
             AssignGoalTaskStatus.GoalNotNow => UnprocessableEntity(
                 GoalRuleErrors.TaskGoalNotNow(dto.TaskItemId, id, result.NowGoal!)),
@@ -213,10 +227,18 @@ public class GoalsController(
         };
     }
 
-    private async Task<ActionResult<GoalResponseDto>> ToWriteResponseAsync(GoalWriteResult result)
+    // Before any write, so a refusal changes nothing. The status text is lowercase, as the MCP tool worded it.
+    private BadRequestObjectResult? PositionNotNextError(int? position, GoalStatus status) =>
+        position is not null && status != GoalStatus.Next
+            ? BadRequest(new { message = GoalRuleErrors.PositionNotNextMessage(status.ToString().ToLowerInvariant()) })
+            : null;
+
+    private async Task<ActionResult<GoalResponseDto>> ToWriteResponseAsync(GoalWriteResult result, int? position = null)
     {
         switch (result.Status)
         {
+            case GoalWriteStatus.PositionOutOfRange:
+                return BadRequest(new { message = GoalRuleErrors.PositionOutOfRangeMessage(position!.Value, result.MaxPosition) });
             case GoalWriteStatus.NotFound:
                 return GoalNotFound();
             case GoalWriteStatus.Closed:
@@ -233,10 +255,10 @@ public class GoalsController(
         }
     }
 
-    private NotFoundObjectResult GoalNotFound() => NotFound(new { message = GoalNotFoundMessage });
+    private NotFoundObjectResult GoalNotFound() => NotFound(new { message = GoalRuleErrors.GoalNotFoundMessage });
 
     private BadRequestObjectResult SubtaskGoal() =>
-        BadRequest(new { message = "A subtask's goal follows its parent and cannot be set directly." });
+        BadRequest(new { message = GoalRuleErrors.SubtaskGoalMessage });
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

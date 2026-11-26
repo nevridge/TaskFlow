@@ -9,6 +9,15 @@ public interface IJournalEntryRepository
     Task<JournalEntry?> GetByDateAsync(DateOnly date);
     Task<JournalEntry> AddAsync(JournalEntry entry);
     Task UpdateAsync(JournalEntry entry);
+
+    /// <summary>
+    /// Appends already-trimmed <paramref name="text"/> to the entry's summary: it becomes the summary when that is null
+    /// or blank, otherwise <c>existing.TrimEnd() + "\n\n" + text</c>. The read-combine-write is one compare-and-swap
+    /// UPDATE, retried when another writer changed the summary in between, so concurrent appends all survive. Nothing
+    /// is written when the result would pass the summary maximum.
+    /// </summary>
+    Task<AppendSummaryResult> AppendSummaryAsync(int id, string text);
+
     Task DeleteAsync(int id);
     Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId);
     /// <summary>

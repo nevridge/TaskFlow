@@ -151,7 +151,7 @@ public class JsonSerializerOptionsProviderTests
         using var document = JsonDocument.Parse(json);
         var names = document.RootElement.EnumerateObject().Select(p => p.Name).Order().ToList();
         Assert.Equal(
-            ["autoCompleteParentWhenChildrenDone", "blockedReason", "description", "dueDate", "journalDate", "parentTaskItemId", "priority", "status", "timezoneOffsetMinutes", "title"],
+            ["autoCompleteParentWhenChildrenDone", "blockedReason", "description", "dueDate", "goalId", "journalDate", "parentTaskItemId", "priority", "projectId", "status", "timezoneOffsetMinutes", "title"],
             names);
     }
 

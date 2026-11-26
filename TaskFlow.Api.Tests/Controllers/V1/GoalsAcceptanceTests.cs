@@ -182,10 +182,9 @@ public sealed class GoalsAcceptanceTests : GoalsApiTestBase
         Assert.Null(GoalIdOf(body));
     }
 
-    [Theory]
-    [InlineData("PUT")]
-    [InlineData("PATCH")]
-    public async Task AGoalIdInATaskUpdateBody_IsNotApplied(string method)
+    // PUT never touches the goal. PATCH does since #611 (see TaskItemsProjectGoalHttpTests).
+    [Fact]
+    public async Task AGoalIdInAPutBody_IsNotApplied()
     {
         var projectId = await CreateProjectAsync();
         var first = await CreateGoalAsync(projectId, "First");
@@ -194,7 +193,7 @@ public sealed class GoalsAcceptanceTests : GoalsApiTestBase
         await AssignAsync(first, task);
 
         var (status, _) = await SendAsync(
-            new HttpMethod(method), $"/api/v1/TaskItems/{task}", new { title = "t", status = "todo", goalId = second });
+            HttpMethod.Put, $"/api/v1/TaskItems/{task}", new { title = "t", status = "todo", goalId = second });
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(first, GoalIdOf(await GetTaskAsync(task)));

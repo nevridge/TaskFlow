@@ -40,7 +40,7 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
             .Include(g => g.Tasks)
             .FirstOrDefaultAsync(g => g.Id == id);
 
-    public async Task<GoalWriteResult> CreateAsync(Goal goal)
+    public async Task<GoalWriteResult> CreateAsync(Goal goal, int? position = null)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -57,7 +57,17 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
         var now = DateTime.UtcNow;
         goal.CreatedAt = now;
         goal.StatusChangedAt = now;
-        goal.DisplayOrder = goal.Status == GoalStatus.Next ? await NextOrderAsync(goal.ProjectId) : 0;
+        if (goal.Status == GoalStatus.Next && position is int place)
+        {
+            if (await PlaceAsync(goal, place) is int max)
+            {
+                return new GoalWriteResult(GoalWriteStatus.PositionOutOfRange, MaxPosition: max);
+            }
+        }
+        else
+        {
+            goal.DisplayOrder = goal.Status == GoalStatus.Next ? await NextOrderAsync(goal.ProjectId) : 0;
+        }
 
         _context.Goals.Add(goal);
         await _context.SaveChangesAsync();
@@ -65,7 +75,7 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
         return new GoalWriteResult(GoalWriteStatus.Success, goal.Id);
     }
 
-    public async Task<GoalWriteResult> UpdateAsync(int id, Goal changes)
+    public async Task<GoalWriteResult> UpdateAsync(int id, Goal changes, int? position = null)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -102,12 +112,22 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
                 }
             }
 
-            if (status == GoalStatus.Next)
+            // Placed before any status write, so an out-of-range position leaves the goal untouched.
+            if (status == GoalStatus.Next && position is null)
             {
                 goal.DisplayOrder = await NextOrderAsync(goal.ProjectId);
             }
+            else if (status == GoalStatus.Next && position is int movedTo
+                && await PlaceAsync(goal, movedTo) is int movedMax)
+            {
+                return new GoalWriteResult(GoalWriteStatus.PositionOutOfRange, MaxPosition: movedMax);
+            }
 
             SetStatus(goal, status, now);
+        }
+        else if (status == GoalStatus.Next && position is int place && await PlaceAsync(goal, place) is int max)
+        {
+            return new GoalWriteResult(GoalWriteStatus.PositionOutOfRange, MaxPosition: max);
         }
 
         goal.Title = changes.Title;
@@ -238,19 +258,10 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
             return new AssignGoalTaskResult(AssignGoalTaskStatus.TaskNotFound);
         }
 
-        if (task.ParentTaskItemId is not null)
+        var check = CheckAssignment(goal, task.ParentTaskItemId is not null, task.ProjectId);
+        if (check.Status != AssignGoalTaskStatus.Success)
         {
-            return new AssignGoalTaskResult(AssignGoalTaskStatus.IsSubtask);
-        }
-
-        if (task.ProjectId != goal.ProjectId)
-        {
-            return new AssignGoalTaskResult(AssignGoalTaskStatus.WrongProject);
-        }
-
-        if (IsClosed(goal.Status))
-        {
-            return new AssignGoalTaskResult(AssignGoalTaskStatus.GoalClosed);
+            return new AssignGoalTaskResult(check.Status);
         }
 
         if (task.GoalId == goalId)
@@ -312,6 +323,59 @@ public class GoalRepository(TaskDbContext context) : IGoalRepository
         await _context.SaveChangesAsync();
         await transaction.CommitAsync();
         return RemoveGoalTaskResult.Success;
+    }
+
+    /// <summary>
+    /// The refusals for putting a task into a goal, in their fixed order: unknown goal, subtask, wrong project, closed
+    /// goal. Shared so goal assign and the task endpoints answer identically.
+    /// </summary>
+    internal static GoalAssignmentCheck CheckAssignment(Goal? goal, bool isSubtask, int? taskProjectId)
+    {
+        if (goal is null)
+        {
+            return new GoalAssignmentCheck(AssignGoalTaskStatus.GoalNotFound);
+        }
+
+        if (isSubtask)
+        {
+            return new GoalAssignmentCheck(AssignGoalTaskStatus.IsSubtask);
+        }
+
+        if (taskProjectId != goal.ProjectId)
+        {
+            return new GoalAssignmentCheck(AssignGoalTaskStatus.WrongProject);
+        }
+
+        return IsClosed(goal.Status)
+            ? new GoalAssignmentCheck(AssignGoalTaskStatus.GoalClosed)
+            : new GoalAssignmentCheck(AssignGoalTaskStatus.Success, goal);
+    }
+
+    /// <summary>
+    /// Places <paramref name="goal"/> at the 1-based <paramref name="position"/> among the project's other Next goals
+    /// and renumbers the whole list 0..N, which also repairs gaps. Returns the highest valid position when
+    /// <paramref name="position"/> is out of range (nothing is changed), otherwise null.
+    /// </summary>
+    private async Task<int?> PlaceAsync(Goal goal, int position)
+    {
+        var others = await _context.Goals
+            .Where(g => g.ProjectId == goal.ProjectId && g.Status == GoalStatus.Next && g.Id != goal.Id)
+            .OrderBy(g => g.DisplayOrder)
+            .ThenBy(g => g.Id)
+            .ToListAsync();
+        if (position < 1 || position > others.Count + 1)
+        {
+            return others.Count + 1;
+        }
+
+        List<Goal> ordered = [.. others];
+        ordered.Insert(position - 1, goal);
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            ordered[index].DisplayOrder = index;
+        }
+
+        return null;
     }
 
     private static bool IsClosed(GoalStatus status) => status is GoalStatus.Done or GoalStatus.Dropped;

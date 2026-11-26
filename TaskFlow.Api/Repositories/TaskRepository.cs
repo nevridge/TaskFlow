@@ -66,6 +66,37 @@ public class TaskRepository(TaskDbContext context) : ITaskRepository
         task.GoalId = goalId;
     }
 
+    public async Task<GoalAssignmentCheck> CheckGoalAssignmentAsync(int goalId, bool isSubtask, int? taskProjectId) =>
+        GoalRepository.CheckAssignment(await _context.Goals.FindAsync(goalId), isSubtask, taskProjectId);
+
+    public async Task<IReadOnlyList<TaskItem>> GetSubtasksInProjectAsync(int parentId, int projectId) =>
+        await _context.TaskItems.AsNoTracking()
+            .Where(t => t.ParentTaskItemId == parentId && t.ProjectId == projectId)
+            .ToListAsync();
+
+    public async Task MoveSubtasksToGoalAsync(int parentId, int goalId, int goalProjectId)
+    {
+        // Tracked, so the caller's save writes them. Only subtasks in the goal's project take the goal with their parent.
+        var subtasks = await _context.TaskItems
+            .Where(t => t.ParentTaskItemId == parentId && t.ProjectId == goalProjectId)
+            .ToListAsync();
+        foreach (var subtask in subtasks)
+        {
+            subtask.GoalId = goalId;
+        }
+    }
+
+    public async Task ClearSubtaskGoalsAsync(int parentId, int goalId)
+    {
+        var subtasks = await _context.TaskItems
+            .Where(t => t.ParentTaskItemId == parentId && t.GoalId == goalId)
+            .ToListAsync();
+        foreach (var subtask in subtasks)
+        {
+            subtask.GoalId = null;
+        }
+    }
+
     public async Task<IEnumerable<TaskItem>> GetChildrenAsync(int parentId) =>
         // Read-only query: AsNoTracking avoids change-tracking overhead; callers must not mutate or Update the result.
         await _context.TaskItems.AsNoTracking().Where(t => t.ParentTaskItemId == parentId).ToListAsync();

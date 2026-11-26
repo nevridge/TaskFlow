@@ -14,7 +14,8 @@ namespace TaskFlow.Api.DTOs;
 /// present with <c>null</c> clears the value.</description></item>
 /// <item><description><see cref="Status"/>, <see cref="Priority"/>: <c>null</c> is treated as absent.</description></item>
 /// </list>
-/// Completion is expressed only through <see cref="Status"/>. The project cannot be changed here.
+/// Completion is expressed only through <see cref="Status"/>. <see cref="ProjectId"/> and
+/// <see cref="GoalId"/> follow the same rule as <see cref="ParentTaskItemId"/>: absent keeps, <c>null</c> clears.
 /// </summary>
 public class PatchTaskItemDto
 {
@@ -27,6 +28,8 @@ public class PatchTaskItemDto
     private int? _parentTaskItemId;
     private string? _blockedReason;
     private DateOnly? _journalDate;
+    private int? _projectId;
+    private int? _goalId;
 
     public string? Title
     {
@@ -74,6 +77,31 @@ public class PatchTaskItemDto
     {
         get => _blockedReason;
         set { _blockedReason = value; _present.Add(nameof(BlockedReason)); }
+    }
+
+    /// <summary>
+    /// Project to move the task to. Absent keeps the project; <c>null</c> removes the task from its project; the
+    /// stored value is a no-op (no error, no event). Unknown project: 422 <c>TASK_PROJECT_NOT_FOUND</c>. A change
+    /// resets the goal (inherited from the parent when the parent's goal is in the new project, otherwise none) and
+    /// clears the subtasks' goals, and writes a ProjectChanged event, all in the same save as the other fields.
+    /// </summary>
+    public int? ProjectId
+    {
+        get => _projectId;
+        set { _projectId = value; _present.Add(nameof(ProjectId)); }
+    }
+
+    /// <summary>
+    /// Goal for the task, judged against the resulting project (so a project and a goal can change together).
+    /// Absent keeps the goal (a project change still resets it); <c>null</c> removes it, and a parent's subtasks in
+    /// that goal with it. The stored goal is a no-op, not the 409 of the goal-assign endpoint. A subtask's goal
+    /// follows its parent: any <c>goalId</c> on a subtask is refused with 400, even the value it would inherit, and
+    /// so is <c>null</c> while it has a goal.
+    /// </summary>
+    public int? GoalId
+    {
+        get => _goalId;
+        set { _goalId = value; _present.Add(nameof(GoalId)); }
     }
 
     public bool AutoCompleteParentWhenChildrenDone { get; set; }

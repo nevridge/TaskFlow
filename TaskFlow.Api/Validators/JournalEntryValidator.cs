@@ -5,6 +5,8 @@ namespace TaskFlow.Api.Validators;
 
 public class JournalEntryValidator : AbstractValidator<JournalEntry>
 {
+    public const int MaxSummaryLength = 10000;
+
     public JournalEntryValidator()
     {
         RuleFor(e => e.Title)
@@ -15,7 +17,7 @@ public class JournalEntryValidator : AbstractValidator<JournalEntry>
             .NotEqual(default(DateOnly)).WithMessage("Date is required.");
 
         RuleFor(e => e.Summary)
-            .MaximumLength(10000).WithMessage("Summary must not exceed 10000 characters.")
+            .MaximumLength(MaxSummaryLength).WithMessage($"Summary must not exceed {MaxSummaryLength} characters.")
             .When(e => e.Summary is not null);
     }
 }

@@ -97,8 +97,41 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
             return AssignTaskResult.AlreadyAssigned;
         }
 
+        await StageProjectMoveAsync(task, project);
+
+        await _context.SaveChangesAsync();
+        return AssignTaskResult.Success;
+    }
+
+    public async Task StageProjectChangeAsync(TaskItem task, int? projectId)
+    {
+        Project? project = null;
+        if (projectId is int id)
+        {
+            project = await _context.Projects.FindAsync(id)
+                ?? throw new KeyNotFoundException($"Project {id} was not found.");
+        }
+
+        await StageProjectMoveAsync(task, project);
+    }
+
+    /// <summary>
+    /// Moves a tracked task to <paramref name="project"/> (null removes it from its project) without saving: sets the
+    /// project, resets the goals and adds the ProjectChanged event. Shared by assign, unassign and the task PATCH, so
+    /// each persists it in its own single save.
+    /// </summary>
+    private async Task StageProjectMoveAsync(TaskItem task, Project? project)
+    {
         var previousName = task.Project?.Name;
-        task.ProjectId = projectId;
+        if (previousName is null && task.ProjectId is int previousId)
+        {
+            previousName = await _context.Projects
+                .Where(p => p.Id == previousId)
+                .Select(p => p.Name)
+                .FirstOrDefaultAsync();
+        }
+
+        task.ProjectId = project?.Id;
         task.Project = project;
         await ResetGoalsAfterMoveAsync(task);
 
@@ -107,13 +140,12 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
             TaskItemId = task.Id,
             EventType = ProjectChangedEventType,
             OccurredAtUtc = DateTime.UtcNow,
-            ChangeSummary = previousName is null
-                ? $"Assigned to project '{project.Name}'."
-                : $"Project changed from '{previousName}' to '{project.Name}'."
+            ChangeSummary = project is null
+                ? $"Removed from project '{previousName}'."
+                : previousName is null
+                    ? $"Assigned to project '{project.Name}'."
+                    : $"Project changed from '{previousName}' to '{project.Name}'."
         });
-
-        await _context.SaveChangesAsync();
-        return AssignTaskResult.Success;
     }
 
     public async Task<BlockedGoalMove?> GetBlockedGoalMoveAsync(int projectId, int taskItemId)
@@ -143,18 +175,7 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
             return false;
         }
 
-        var previousName = task.Project?.Name;
-        task.ProjectId = null;
-        task.Project = null;
-        await ResetGoalsAfterMoveAsync(task);
-
-        _context.TaskItemEvents.Add(new TaskItemEvent
-        {
-            TaskItemId = task.Id,
-            EventType = ProjectChangedEventType,
-            OccurredAtUtc = DateTime.UtcNow,
-            ChangeSummary = $"Removed from project '{previousName}'."
-        });
+        await StageProjectMoveAsync(task, null);
 
         await _context.SaveChangesAsync();
         return true;
@@ -167,9 +188,12 @@ public class ProjectRepository(TaskDbContext context) : IProjectRepository
     /// </summary>
     private async Task ResetGoalsAfterMoveAsync(TaskItem task)
     {
-        task.GoalId = task.ParentTaskItemId is int parentId && task.ProjectId is int projectId
+        var goalId = task.ParentTaskItemId is int parentId && task.ProjectId is int projectId
             ? await TaskRepository.InheritedGoalIdAsync(_context, parentId, projectId)
             : null;
+        // The tracked navigation moves with the id, so a later TaskRepository.UpdateAsync does not undo the reset.
+        task.Goal = goalId is int id ? await _context.Goals.FindAsync(id) : null;
+        task.GoalId = goalId;
 
         var subtasks = await _context.TaskItems
             .Where(t => t.ParentTaskItemId == task.Id && t.GoalId != null)

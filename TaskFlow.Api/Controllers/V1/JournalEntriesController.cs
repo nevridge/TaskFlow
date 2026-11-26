@@ -6,6 +6,7 @@ using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Mappers;
 using TaskFlow.Api.Models;
 using TaskFlow.Api.Repositories;
+using TaskFlow.Api.Validators;
 
 namespace TaskFlow.Api.Controllers.V1;
 
@@ -176,6 +177,53 @@ public class JournalEntriesController(
         // Known limitation (#406): the update request carries no offset, so todoTaskItemIds in this response are
         // attributed to UTC days and may differ from GET (which honours timezoneOffsetMinutes) near day boundaries.
         return Ok(await ToDtoAsync(existing, null));
+    }
+
+    /// <summary>Appends text to an entry's summary in one atomic step.</summary>
+    /// <remarks>
+    /// The text is trimmed. It becomes the summary when that is null or blank, otherwise the summary is
+    /// <c>existing.TrimEnd() + "\n\n" + text</c>. Concurrent appends all survive. Returns 400 when the text is blank
+    /// or the combined summary would pass the 10000-character maximum (the message gives the combined length, the
+    /// limit and what the existing summary and the new text each contribute; nothing is saved), and 404 for an unknown
+    /// entry. The response has the shape of the PUT response.
+    /// </remarks>
+    [ProducesResponseType<JournalEntryResponseDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    // POST: api/v1/JournalEntries/5/summary/append
+    [HttpPost("{id}/summary/append")]
+    public async Task<ActionResult<JournalEntryResponseDto>> AppendSummary(
+        int id,
+        [FromBody] AppendJournalSummaryDto dto,
+        [FromServices] IValidator<AppendJournalSummaryDto> appendValidator)
+    {
+        var validation = await appendValidator.ValidateAsync(dto);
+        if (!validation.IsValid)
+        {
+            return BadRequest(validation.Errors);
+        }
+
+        var result = await _journalRepo.AppendSummaryAsync(id, dto.Text!.Trim());
+        switch (result.Status)
+        {
+            case AppendSummaryStatus.NotFound:
+                return NotFound();
+            case AppendSummaryStatus.TooLong:
+                return BadRequest(new
+                {
+                    message = $"The summary would be {result.CombinedLength} characters, over the {JournalEntryValidator.MaxSummaryLength} limit: "
+                        + $"the existing summary is {result.ExistingLength} and the new text {result.TextLength} (plus a blank line between)."
+                });
+        }
+
+        var updated = await _journalRepo.GetByIdAsync(id);
+        if (updated is null)
+        {
+            return NotFound();
+        }
+
+        // Same offset caveat as PUT (#406): the request carries none, so todoTaskItemIds use UTC days.
+        return Ok(await ToDtoAsync(updated, null));
     }
 
     // DELETE: api/v1/JournalEntries/5

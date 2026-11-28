@@ -247,14 +247,6 @@ export type PatchTaskItemDto = {
 
 export type Priority = 'low' | 'medium' | 'high';
 
-export type ProblemDetails = {
-    type?: null | string;
-    title?: null | string;
-    status?: null | number | string;
-    detail?: null | string;
-    instance?: null | string;
-};
-
 export type ProjectResponseDto = {
     id?: number | string;
     name: string;
@@ -868,19 +860,6 @@ export type PostApiV1JournalEntriesByIdSummaryAppendData = {
     url: '/api/v1/JournalEntries/{id}/summary/append';
 };
 
-export type PostApiV1JournalEntriesByIdSummaryAppendErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetails;
-    /**
-     * Not Found
-     */
-    404: ProblemDetails;
-};
-
-export type PostApiV1JournalEntriesByIdSummaryAppendError = PostApiV1JournalEntriesByIdSummaryAppendErrors[keyof PostApiV1JournalEntriesByIdSummaryAppendErrors];
-
 export type PostApiV1JournalEntriesByIdSummaryAppendResponses = {
     /**
      * OK
@@ -1431,14 +1410,6 @@ export type PatchApiV1TaskItemsByIdData = {
 };
 
 export type PatchApiV1TaskItemsByIdErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetails;
-    /**
-     * Not Found
-     */
-    404: ProblemDetails;
     /**
      * Unprocessable Entity
      */

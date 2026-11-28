@@ -188,8 +188,6 @@ public class JournalEntriesController(
     /// entry. The response has the shape of the PUT response.
     /// </remarks>
     [ProducesResponseType<JournalEntryResponseDto>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     // POST: api/v1/JournalEntries/5/summary/append
     [HttpPost("{id}/summary/append")]
     public async Task<ActionResult<JournalEntryResponseDto>> AppendSummary(

@@ -344,8 +344,6 @@ public class TaskItemsController(
     /// </para>
     /// </remarks>
     [ProducesResponseType<TaskItemResponseDto>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType<TaskRuleErrorResponseDto>(StatusCodes.Status422UnprocessableEntity)]
     // PATCH: api/v1/TaskItems/5
     [HttpPatch("{id}")]

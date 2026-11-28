@@ -448,6 +448,19 @@ describe('TaskForm', () => {
       expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ projectId: null }))
     })
 
+    it('falls back to the task\'s own project when the selected project disappears from the list', async () => {
+      const onSubmit = vi.fn()
+      const task = { ...existing, projectId: 1, projectName: 'Alpha' }
+      const view = renderForm(task, onSubmit, vi.fn(), { projects })
+      await userEvent.selectOptions(projectSelect(), 'Beta')
+      view.rerender(
+        <TaskForm task={task} projects={projects.filter(p => p.id !== 2)} onSubmit={onSubmit} onCancel={vi.fn()} />,
+      )
+      expect(projectSelect()).toHaveDisplayValue('Alpha')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+      expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ projectId: 1 }))
+    })
+
     it('resyncing to a new server project keeps the other edited fields', async () => {
       const { rerender } = renderForm({ ...existing, projectId: 1, projectName: 'Alpha' }, vi.fn(), vi.fn(), { projects })
       await userEvent.type(screen.getByLabelText(/title/i), ' edited')

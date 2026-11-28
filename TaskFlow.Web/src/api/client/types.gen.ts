@@ -9,6 +9,16 @@ export type AddJournalTodoDto = {
     timezoneOffsetMinutes?: null | number | string;
 };
 
+/**
+ * Text to append to a journal entry's summary.
+ */
+export type AppendJournalSummaryDto = {
+    /**
+     * Trimmed, then required. Joined to a non-blank summary by a blank line.
+     */
+    text?: null | string;
+};
+
 export type AreaResponseDto = {
     id?: number | string;
     name: string;
@@ -51,6 +61,11 @@ export type CreateGoalDto = {
     description?: null | string;
     doneWhen?: null | string;
     status?: null | GoalStatus;
+    /**
+     * Optional 1-based place among the project's Next goals (1 = first). Absent appends. 400 when the goal would not
+     * be Next or the position is outside 1..N+1; nothing is saved.
+     */
+    position?: null | number | string;
 };
 
 export type CreateJournalEntryDto = {
@@ -91,10 +106,16 @@ export type CreateTaskItemDto = {
     journalDate?: null | string;
     parentTaskItemId?: null | number | string;
     /**
-     * Optional project to create the task in. Project changes after creation go through
-     * the Projects assign/unassign endpoints, not the task update endpoint.
+     * Optional project to create the task in. After creation, PATCH `projectId` (or the Projects
+     * assign/unassign endpoints) changes it; PUT never does.
      */
     projectId?: null | number | string;
+    /**
+     * Optional goal to create the task in. It must be an open goal of int? CreateTaskItemDto.ProjectId (400 otherwise, 404 when
+     * unknown) and cannot be set on a subtask (int? CreateTaskItemDto.ParentTaskItemId), whose goal follows its parent.
+     * Absent: a subtask inherits its parent's goal, any other task has none.
+     */
+    goalId?: null | number | string;
     /**
      * The user's timezone offset in minutes (e.g. -420 for PDT, 0 for UTC). Optional.
      */
@@ -172,7 +193,8 @@ export type NoteResponseDto = {
  * * string? PatchTaskItemDto.Description, DateOnly? PatchTaskItemDto.DueDate, int? PatchTaskItemDto.ParentTaskItemId:
  * present with null clears the value.
  * * Status? PatchTaskItemDto.Status, Priority? PatchTaskItemDto.Priority: null is treated as absent.
- * Completion is expressed only through Status? PatchTaskItemDto.Status. The project cannot be changed here.
+ * Completion is expressed only through Status? PatchTaskItemDto.Status. int? PatchTaskItemDto.ProjectId and
+ * int? PatchTaskItemDto.GoalId follow the same rule as int? PatchTaskItemDto.ParentTaskItemId: absent keeps, `null` clears.
  */
 export type PatchTaskItemDto = {
     title?: null | string;
@@ -188,6 +210,21 @@ export type PatchTaskItemDto = {
      * with PUT, where `null` keeps the reason.
      */
     blockedReason?: null | string;
+    /**
+     * Project to move the task to. Absent keeps the project; `null` removes the task from its project; the
+     * stored value is a no-op (no error, no event). Unknown project: 422 `TASK_PROJECT_NOT_FOUND`. A change
+     * resets the goal (inherited from the parent when the parent's goal is in the new project, otherwise none) and
+     * clears the subtasks' goals, and writes a ProjectChanged event, all in the same save as the other fields.
+     */
+    projectId?: null | number | string;
+    /**
+     * Goal for the task, judged against the resulting project (so a project and a goal can change together).
+     * Absent keeps the goal (a project change still resets it); `null` removes it, and a parent's subtasks in
+     * that goal with it. The stored goal is a no-op, not the 409 of the goal-assign endpoint. A subtask's goal
+     * follows its parent: any `goalId` on a subtask is refused with 400, even the value it would inherit, and
+     * so is `null` while it has a goal.
+     */
+    goalId?: null | number | string;
     autoCompleteParentWhenChildrenDone?: boolean;
     timezoneOffsetMinutes?: null | number | string;
     /**
@@ -332,6 +369,12 @@ export type UpdateGoalDto = {
      * Required when `status` is Parked, ignored otherwise.
      */
     parkedReason?: null | string;
+    /**
+     * Optional 1-based place among the project's other Next goals (1 = first; a goal already Next is not counted
+     * among them). Absent keeps the goal's place, or appends when it becomes Next. 400 when the goal would not be
+     * Next or the position is outside 1..N+1; nothing is saved.
+     */
+    position?: null | number | string;
 };
 
 export type UpdateJournalEntryDto = {
@@ -807,6 +850,24 @@ export type PostApiV1JournalEntriesByIdCarryForwardResponses = {
 };
 
 export type PostApiV1JournalEntriesByIdCarryForwardResponse = PostApiV1JournalEntriesByIdCarryForwardResponses[keyof PostApiV1JournalEntriesByIdCarryForwardResponses];
+
+export type PostApiV1JournalEntriesByIdSummaryAppendData = {
+    body: AppendJournalSummaryDto;
+    path: {
+        id: number | string;
+    };
+    query?: never;
+    url: '/api/v1/JournalEntries/{id}/summary/append';
+};
+
+export type PostApiV1JournalEntriesByIdSummaryAppendResponses = {
+    /**
+     * OK
+     */
+    200: JournalEntryResponseDto;
+};
+
+export type PostApiV1JournalEntriesByIdSummaryAppendResponse = PostApiV1JournalEntriesByIdSummaryAppendResponses[keyof PostApiV1JournalEntriesByIdSummaryAppendResponses];
 
 export type GetApiV1JournalEntriesByEntryIdLogsData = {
     body?: never;

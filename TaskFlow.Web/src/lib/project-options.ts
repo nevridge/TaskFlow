@@ -27,7 +27,8 @@ interface CurrentProjectSource {
  * it is archived (suffixed) or missing from the list (built from projectName), so the
  * current selection always stays valid and visible. The currently selected project
  * (form state) is kept the same way when it is archived; a selected id that is not in
- * the list at all (deleted) gets no option, so callers must treat it as "No project".
+ * the list at all (deleted) gets no option, so callers must fall back to the task's current
+ * project, or to "No project" when it has none.
  */
 export function buildProjectOptions(
   task: CurrentProjectSource | undefined,

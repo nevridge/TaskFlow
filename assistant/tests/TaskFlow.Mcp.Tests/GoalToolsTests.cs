@@ -55,7 +55,7 @@ public class GoalToolsTests
     }
 
     [Fact]
-    public async Task SaveGoal_Create_DefaultsToNext_AndSendsNoReorder()
+    public async Task SaveGoal_Create_DefaultsToNext_ReadsNoGoals_AndSendsNoReorder()
     {
         var (tools, handler) = Setup(h => h.Post("Goals", Fixtures.Goal(10, "Launch"), HttpStatusCode.Created));
 
@@ -67,6 +67,7 @@ public class GoalToolsTests
         body.GetProperty("status").GetString().Should().Be("next");
         body.GetProperty("doneWhen").GetString().Should().Be("Live");
         handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Sent(HttpMethod.Get, "Goals").Should().BeEmpty();
         text.Should().StartWith("Created goal in project 'Alpha': #10 [Next] Launch");
     }
 
@@ -113,56 +114,70 @@ public class GoalToolsTests
     }
 
     [Fact]
-    public async Task SaveGoal_Position_SendsEveryNextGoalInTheNewOrder_AfterTheSave()
+    public async Task SaveGoal_EditWithPosition_SendsItInThePut_AndNoReorderCall()
     {
-        var (tools, handler) = Setup(h => h
-            .Put("Goals/9", Fixtures.Goal(9, "Empty one"))
-            .Put("Goals/order", Array.Empty<object>()));
+        var (tools, handler) = Setup(h => h.Put("Goals/9", Fixtures.Goal(9, "Empty one")));
 
         var text = await tools.SaveGoal("Alpha", goal: "9", position: 2, ct: Ct);
 
-        handler.Requests.Where(IsWrite).Select(r => r.Path).Should().Equal("Goals/9", "Goals/order");
-        var body = handler.BodyOf(HttpMethod.Put, "Goals/order");
-        body.GetProperty("projectId").GetInt32().Should().Be(7);
-        body.GetProperty("goalIds").EnumerateArray().Select(e => e.GetInt32()).Should().Equal(2, 9, 3, 6, 8);
+        handler.Requests.Where(IsWrite).Select(r => r.Path).Should().Equal("Goals/9");
+        handler.BodyOf(HttpMethod.Put, "Goals/9").GetProperty("position").GetInt32().Should().Be(2);
         text.Should().Contain("position 2 in Next");
     }
 
     [Fact]
-    public async Task SaveGoal_CreateWithTheLastPosition_IncludesTheNewGoal()
+    public async Task SaveGoal_CreateWithPosition_SendsItInThePost_WithoutReadingGoals()
     {
-        var (tools, handler) = Setup(h => h
-            .Post("Goals", Fixtures.Goal(10, "Launch"), HttpStatusCode.Created)
-            .Put("Goals/order", Array.Empty<object>()));
+        var (tools, handler) = Setup(h => h.Post("Goals", Fixtures.Goal(10, "Launch"), HttpStatusCode.Created));
 
         await tools.SaveGoal("Alpha", title: "Launch", position: 6, ct: Ct);
 
-        handler.BodyOf(HttpMethod.Put, "Goals/order").GetProperty("goalIds").EnumerateArray().Select(e => e.GetInt32())
-            .Should().Equal(2, 3, 6, 8, 9, 10);
+        handler.Requests.Where(IsWrite).Select(r => $"{r.Method} {r.Path}").Should().Equal("POST Goals");
+        handler.BodyOf(HttpMethod.Post, "Goals").GetProperty("position").GetInt32().Should().Be(6);
+        handler.Sent(HttpMethod.Get, "Goals").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task SaveGoal_ReorderFailure_SaysTheGoalWasSaved()
+    public async Task SaveGoal_WithoutPosition_SendsNoPosition()
     {
-        var (tools, _) = Setup(h => h
-            .Post("Goals", Fixtures.Goal(10, "Launch"), HttpStatusCode.Created)
-            .Fail(HttpMethod.Put, "Goals/order", new HttpRequestException("refused")));
+        var (tools, handler) = Setup(h => h.Put("Goals/2", Fixtures.Goal(2, "Docs")));
 
-        var message = await Error(() => tools.SaveGoal("Alpha", title: "Launch", position: 1, ct: Ct));
+        await tools.SaveGoal("Alpha", goal: "Docs", title: "Documents", ct: Ct);
 
-        message.Should().Contain("#10 Launch was saved").And.Contain("Do not create it again").And.Contain("project=7, goal=10 and position=1");
+        handler.BodyOf(HttpMethod.Put, "Goals/2").GetProperty("position").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Theory]
+    [InlineData("create", "position 7 is out of range: use 1 to 6.")]
+    [InlineData("edit", "position only applies to a Next goal, and this one would be dropped.")]
+    public async Task SaveGoal_ApiPositionRefusal_IsPassedThrough_AndSaysNothingWasSaved(string mode, string apiText)
+    {
+        var (tools, _) = Setup(h => _ = mode == "create"
+            ? h.Post("Goals", new { message = apiText }, HttpStatusCode.BadRequest)
+            : h.Put("Goals/2", new { message = apiText }, HttpStatusCode.BadRequest));
+
+        var message = await Error(() => mode == "create"
+            ? tools.SaveGoal("Alpha", title: "Launch", position: 7, ct: Ct)
+            : tools.SaveGoal("Alpha", goal: "2", status: "dropped", position: 1, ct: Ct));
+
+        message.Should().Be(apiText + " Nothing was saved.");
+    }
+
+    [Fact]
+    public async Task SaveGoal_Timeout_SaysToCheckWithListGoals_NotThatNothingWasSaved()
+    {
+        var (tools, _) = Setup(h => h.Fail(HttpMethod.Post, "Goals", new TaskCanceledException()));
+
+        var message = await Error(() => tools.SaveGoal("Alpha", title: "Launch", ct: Ct));
+
+        message.Should().Contain("did not respond in time").And.Contain("check with list_goals before retrying").And.NotContain("Nothing was saved");
     }
 
     [Theory]
     [InlineData(null, "Launch", "done", null, null, "only be next or now")]
     [InlineData(null, "Launch", "parked", "later", null, "only be next or now")]
     [InlineData(null, "Launch", null, "later", null, "parkedReason is only valid")]
-    [InlineData(null, "Launch", "now", null, 1, "position only applies to a Next goal")]
-    [InlineData(null, "Launch", null, null, 7, "use 1 to 6")]
     [InlineData("2", null, null, "later", null, "parkedReason is only valid")]
-    [InlineData("2", null, "dropped", null, 1, "position only applies to a Next goal")]
-    [InlineData("2", null, null, null, 0, "use 1 to 5")]
-    [InlineData("2", null, null, null, 6, "use 1 to 5")]
     public async Task SaveGoal_RejectsBadInput_BeforeAnyWrite(string? goal, string? title, string? status, string? parkedReason, int? position, string expected)
     {
         var (tools, handler) = Setup();
@@ -180,7 +195,7 @@ public class GoalToolsTests
 
         var message = await Error(() => tools.SaveGoal("Alpha", title: "Launch", status: "now", ct: Ct));
 
-        message.Should().StartWith("Nothing was changed.").And.Contain("Create it with status=next, then call swap_now");
+        message.Should().StartWith("This project already has a Now goal. Nothing was saved.").And.Contain("Create it with status=next, then call swap_now");
     }
 
     [Fact]
@@ -190,7 +205,7 @@ public class GoalToolsTests
 
         var message = await Error(() => tools.SaveGoal("Alpha", goal: "Docs", status: "now", ct: Ct));
 
-        message.Should().StartWith("Nothing was changed.").And.Contain("call swap_now").And.NotContain("Create it");
+        message.Should().StartWith("This project already has a Now goal. Nothing was saved.").And.Contain("call swap_now").And.NotContain("Create it");
     }
 
     [Fact]

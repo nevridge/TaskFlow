@@ -41,6 +41,7 @@ public class TaskItemsControllerJournalDateRealStackTests
 
         public Task<JournalEntry> AddAsync(JournalEntry entry) => inner.AddAsync(entry);
         public Task UpdateAsync(JournalEntry entry) => inner.UpdateAsync(entry);
+        public Task<AppendSummaryResult> AppendSummaryAsync(int id, string text) => inner.AppendSummaryAsync(id, text);
         public Task DeleteAsync(int id) => inner.DeleteAsync(id);
         public Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId) => inner.GetTodosAsync(entryId);
         public Task<bool> TodoExistsAsync(int entryId, int taskItemId) => inner.TodoExistsAsync(entryId, taskItemId);

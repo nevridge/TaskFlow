@@ -133,8 +133,12 @@ export function TaskForm({
     if (projectInvalid) projectRef.current?.focus()
   }, [projectInvalid])
   const projectOptions = buildProjectOptions(task, projects, projectId ? Number(projectId) : null)
-  // A selected id with no option (project deleted) is shown as, and submitted as, "No project".
-  const effectiveProjectId = projectOptions.some(o => o.value === projectId) ? projectId : ''
+  // A selected id with no option (project deleted) falls back to the task's stored project, which always has an
+  // option, so a second Save cannot remove a project the user never cleared. With no stored project it is shown as,
+  // and submitted as, "No project".
+  const fallbackProjectId = serverProjectId !== null ? String(serverProjectId) : ''
+  const effectiveProjectId =
+    projectId === '' || projectOptions.some(o => o.value === projectId) ? projectId : fallbackProjectId
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault()

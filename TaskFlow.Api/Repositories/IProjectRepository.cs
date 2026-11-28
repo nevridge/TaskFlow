@@ -21,6 +21,13 @@ public interface IProjectRepository
     Task<AssignTaskResult> AssignTaskAsync(int projectId, int taskItemId);
 
     /// <summary>
+    /// Moves a tracked task to the project (null removes it) WITHOUT saving: sets the project, resets the goal and the
+    /// subtasks' goals, and adds the ProjectChanged event. The caller saves, so the move lands in the same write as its
+    /// other changes. Throws when the project does not exist; check first.
+    /// </summary>
+    Task StageProjectChangeAsync(TaskItem task, int? projectId);
+
+    /// <summary>
     /// Why the single-Now rule refuses this move, or null when it does not: an InProgress subtask moved into its
     /// parent's project takes the parent's goal, which must not be Next or Parked while the project has a Now goal.
     /// </summary>

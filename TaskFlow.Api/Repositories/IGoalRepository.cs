@@ -14,11 +14,17 @@ public interface IGoalRepository
     /// <summary>Untracked goal with its tasks.</summary>
     Task<Goal?> GetByIdAsync(int id);
 
-    /// <summary>Creates a Next (appended last) or Now goal.</summary>
-    Task<GoalWriteResult> CreateAsync(Goal goal);
+    /// <summary>
+    /// Creates a Next (appended last, or at the 1-based <paramref name="position"/>) or Now goal. A position outside
+    /// 1..N+1 writes nothing and returns <see cref="GoalWriteStatus.PositionOutOfRange"/>.
+    /// </summary>
+    Task<GoalWriteResult> CreateAsync(Goal goal, int? position = null);
 
-    /// <summary>Applies the editable fields and the status of <paramref name="changes"/> to the stored goal.</summary>
-    Task<GoalWriteResult> UpdateAsync(int id, Goal changes);
+    /// <summary>
+    /// Applies the editable fields and the status of <paramref name="changes"/> to the stored goal. A
+    /// <paramref name="position"/> places a Next goal among the project's other Next goals (N excludes the goal itself).
+    /// </summary>
+    Task<GoalWriteResult> UpdateAsync(int id, Goal changes, int? position = null);
 
     /// <summary>Writes the order of a project's Next goals; false when the ids are not exactly those goals.</summary>
     Task<bool> ReorderAsync(int projectId, IReadOnlyList<int> goalIds);

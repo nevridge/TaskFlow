@@ -273,19 +273,28 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 
             if (append)
             {
-                // Read-then-PUT is not atomic: an edit made between the read and the PUT is overwritten.
-                var addition = summary!.Trim();
-                var existing = entry.Summary;
-                var combined = string.IsNullOrWhiteSpace(existing) ? addition : existing.TrimEnd() + "\n\n" + addition;
-                if (combined.Length > MaxSummaryLength)
+                // The API combines atomically and checks the length, so there is no read here and no overwrite race.
+                // A refused append throws before the note is added, and the error says so.
+                JournalEntryDto updated;
+                try
                 {
-                    throw ToolGuard.Invalid(
-                        $"The combined summary would be {combined.Length} characters (existing {existing?.Length ?? 0} + new {addition.Length}); the limit is {MaxSummaryLength}. Nothing was saved, and any note passed was skipped too. "
-                        + "Shorten the new text, or pass append=false to rewrite the whole summary.");
+                    updated = await ToolGuard.WriteAsync(api, ct, () => api.AppendJournalSummaryAsync(entry.Id, summary!.Trim(), ct), ToolGuard.JournalAppendTimeoutHint);
+                }
+                catch (ApiUnreachableException ex) when (!string.IsNullOrWhiteSpace(note))
+                {
+                    // A timed-out append also stops before the note, so say that too.
+                    throw new ApiUnreachableException($"{ex.Message}{NoteSkipped(note)}", ex);
+                }
+                catch (McpException ex) when (ex.InnerException is TaskFlowApiException { Status: HttpStatusCode.BadRequest })
+                {
+                    throw ToolGuard.Invalid($"{ex.Message}{NoteSkipped(note)} To rewrite the whole summary instead, pass append=false.");
+                }
+                catch (McpException ex) when (ex.InnerException is TaskFlowApiException && !string.IsNullOrWhiteSpace(note))
+                {
+                    throw ToolGuard.Invalid($"{ex.Message}{NoteSkipped(note)}");
                 }
 
-                await api.UpdateJournalEntryAsync(entry.Id, entry.Title, combined, ct);
-                appended = $"Appended to the journal summary for {day:yyyy-MM-dd} (now {combined.Length} of {MaxSummaryLength} characters).";
+                appended = $"Appended to the journal summary for {day:yyyy-MM-dd} (now {updated.Summary?.Length ?? 0} of {MaxSummaryLength} characters).";
             }
             else if (summary is not null)
             {
@@ -306,6 +315,8 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
 
             return $"Journal {day:yyyy-MM-dd}: {string.Join(", ", done)}.";
         });
+
+    private static string NoteSkipped(string? note) => string.IsNullOrWhiteSpace(note) ? string.Empty : " The note was skipped too.";
 
     // Subtask enrichment is optional: API failures degrade the journal instead of failing it.
     // A timeout (TaskCanceledException without caller cancellation) and an unreadable body (JsonException) degrade too.

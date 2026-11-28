@@ -9,6 +9,15 @@ public interface IJournalEntryRepository
     Task<JournalEntry?> GetByDateAsync(DateOnly date);
     Task<JournalEntry> AddAsync(JournalEntry entry);
     Task UpdateAsync(JournalEntry entry);
+
+    /// <summary>
+    /// Appends already-trimmed <paramref name="text"/> to the entry's summary: it becomes the summary when that is null
+    /// or blank, otherwise <c>existing.TrimEnd() + "\n\n" + text</c>. The read-combine-write is one compare-and-swap
+    /// UPDATE, retried when another writer changed the summary in between, so concurrent appends all survive. Nothing
+    /// is written when the result would pass the summary maximum.
+    /// </summary>
+    Task<AppendSummaryResult> AppendSummaryAsync(int id, string text);
+
     Task DeleteAsync(int id);
     Task<IEnumerable<TaskItem>> GetTodosAsync(int entryId);
     /// <summary>
@@ -25,3 +34,21 @@ public interface IJournalEntryRepository
     Task<bool> RemoveTodoAsync(int entryId, int taskItemId);
     Task<IReadOnlyList<int>> CarryForwardIncompleteTasksAsync(int entryId, DateOnly userToday);
 }
+
+public enum AppendSummaryStatus
+{
+    Success,
+    NotFound,
+    TooLong,
+}
+
+/// <summary>
+/// Outcome of a summary append. The lengths are set for <see cref="AppendSummaryStatus.TooLong"/>:
+/// <see cref="ExistingLength"/> is the stored summary after its trailing whitespace is trimmed (0 when blank),
+/// <see cref="TextLength"/> the appended text and <see cref="CombinedLength"/> the result that was refused.
+/// </summary>
+public sealed record AppendSummaryResult(
+    AppendSummaryStatus Status,
+    int ExistingLength = 0,
+    int TextLength = 0,
+    int CombinedLength = 0);

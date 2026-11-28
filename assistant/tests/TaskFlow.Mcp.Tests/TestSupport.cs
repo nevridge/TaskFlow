@@ -53,6 +53,8 @@ internal sealed class StubHandler : HttpMessageHandler
 
     public StubHandler Put(string path, object? body = null, HttpStatusCode status = HttpStatusCode.OK) => On(HttpMethod.Put, path, body, status);
 
+    public StubHandler Patch(string path, object? body = null, HttpStatusCode status = HttpStatusCode.OK) => On(HttpMethod.Patch, path, body, status);
+
     public StubHandler Delete(string path, HttpStatusCode status = HttpStatusCode.NoContent, object? body = null) => On(HttpMethod.Delete, path, body, status);
 
     public IEnumerable<RecordedRequest> Sent(HttpMethod method, string path) =>
@@ -99,13 +101,24 @@ internal sealed class StubHandler : HttpMessageHandler
 
 internal static class RequestAssertions
 {
-    /// <summary>The retired isComplete key must never be sent on a PUT, in any casing.</summary>
+    /// <summary>The retired isComplete key must never be sent on a PATCH, in any casing.</summary>
     public static void AssertNoIsComplete(this StubHandler handler, string path)
     {
-        var body = handler.BodyOf(HttpMethod.Put, path);
+        var body = handler.BodyOf(HttpMethod.Patch, path);
         body.ValueKind.Should().Be(JsonValueKind.Object);
         body.TryGetProperty("isComplete", out _).Should().BeFalse();
-        handler.Sent(HttpMethod.Put, path).Last().Body.Should().NotContainEquivalentOf("isComplete");
+        handler.Sent(HttpMethod.Patch, path).Last().Body.Should().NotContainEquivalentOf("isComplete");
+    }
+
+    /// <summary>
+    /// A PATCH keeps what is absent and clears what is null, so the test that matters is which keys are on the wire:
+    /// exactly these (plus timezoneOffsetMinutes), and nothing else.
+    /// </summary>
+    public static void AssertPatchKeys(this StubHandler handler, string path, params string[] keys)
+    {
+        var body = handler.BodyOf(HttpMethod.Patch, path);
+        body.ValueKind.Should().Be(JsonValueKind.Object);
+        body.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo([.. keys, "timezoneOffsetMinutes"]);
     }
 }
 

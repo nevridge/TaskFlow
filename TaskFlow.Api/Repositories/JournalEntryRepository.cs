@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TaskFlow.Api.Data;
 using TaskFlow.Api.Helpers;
 using TaskFlow.Api.Models;
+using TaskFlow.Api.Validators;
 using TaskFlow.Contracts;
 
 namespace TaskFlow.Api.Repositories;
@@ -14,6 +15,7 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
     // SQLITE_CONSTRAINT_PRIMARYKEY: the JournalEntryTaskItem join table has a composite primary key, so a
     // concurrent duplicate link raises 1555 rather than 2067 (SQLITE_CONSTRAINT_UNIQUE, the JournalEntries.Date index).
     private const int SqlitePrimaryKeyConstraintErrorCode = 1555;
+    private const int MaxAppendAttempts = 50;
     private readonly TaskDbContext _context = context;
 
     // NOTE: Entry.Todos is still loaded below but is no longer the source of TodoTaskItemIds: which tasks are todos
@@ -154,6 +156,46 @@ public class JournalEntryRepository(TaskDbContext context) : IJournalEntryReposi
         entry.UpdatedAt = now;
 
         await _context.SaveChangesAsync();
+    }
+
+    public async Task<AppendSummaryResult> AppendSummaryAsync(int id, string text)
+    {
+        // Compare-and-swap: the UPDATE only lands while the summary is still what the combine was built from, so two
+        // appends can never both write over the same base. The loser re-reads and combines again.
+        for (var attempt = 0; attempt < MaxAppendAttempts; attempt++)
+        {
+            // A projection, so a stale tracked entity is never read.
+            var current = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(e => e.Id == id)
+                .Select(e => new { e.Summary })
+                .FirstOrDefaultAsync();
+            if (current is null)
+            {
+                return new AppendSummaryResult(AppendSummaryStatus.NotFound);
+            }
+
+            var storedSummary = current.Summary;
+            var existing = string.IsNullOrWhiteSpace(storedSummary) ? string.Empty : storedSummary.TrimEnd();
+            var combined = existing.Length == 0 ? text : existing + "\n\n" + text;
+            if (combined.Length > AppendJournalSummaryDtoValidator.MaxSummaryLength)
+            {
+                return new AppendSummaryResult(AppendSummaryStatus.TooLong, existing.Length, text.Length, combined.Length);
+            }
+
+            var now = DateTime.UtcNow;
+            var rows = await _context.JournalEntries
+                .Where(e => e.Id == id && e.Summary == storedSummary)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(e => e.Summary, combined)
+                    .SetProperty(e => e.UpdatedAt, now));
+            if (rows == 1)
+            {
+                return new AppendSummaryResult(AppendSummaryStatus.Success);
+            }
+        }
+
+        throw new InvalidOperationException($"Appending to journal entry {id} kept colliding with other writers.");
     }
 
     public async Task DeleteAsync(int id)

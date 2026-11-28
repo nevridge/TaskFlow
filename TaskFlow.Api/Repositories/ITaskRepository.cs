@@ -33,6 +33,21 @@ public interface ITaskRepository
     Task SetGoalAsync(TaskItem task, int? goalId);
 
     /// <summary>
+    /// The refusals for giving a task an explicit goal, in the goal-assign order: unknown goal, subtask, wrong project
+    /// (<paramref name="taskProjectId"/> is the task's resulting project), closed goal. Reads only.
+    /// </summary>
+    Task<GoalAssignmentCheck> CheckGoalAssignmentAsync(int goalId, bool isSubtask, int? taskProjectId);
+
+    /// <summary>Untracked subtasks of the task that are in <paramref name="projectId"/>.</summary>
+    Task<IReadOnlyList<TaskItem>> GetSubtasksInProjectAsync(int parentId, int projectId);
+
+    /// <summary>Sets the goal of the task's subtasks in the goal's project, without saving.</summary>
+    Task MoveSubtasksToGoalAsync(int parentId, int goalId, int goalProjectId);
+
+    /// <summary>Clears the goal of the task's subtasks that are in <paramref name="goalId"/>, without saving.</summary>
+    Task ClearSubtaskGoalsAsync(int parentId, int goalId);
+
+    /// <summary>
     /// Starts a database transaction on the shared scoped context. Every save made through any repository
     /// on that context until commit is rolled back if the returned transaction is disposed uncommitted.
     /// </summary>

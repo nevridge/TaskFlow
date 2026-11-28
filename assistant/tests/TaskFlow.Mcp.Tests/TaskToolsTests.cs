@@ -1151,57 +1151,43 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", existing)
-            .Put("TaskItems/5", updated ?? existing);
+            .Patch("TaskItems/5", updated ?? existing);
         configure?.Invoke(handler);
         return (new TaskTools(Fixtures.Client(handler), Fixtures.Time()), handler);
     }
 
     [Fact]
-    public async Task OnlyPassedFieldsChange_EverythingElseIsPreserved()
+    public async Task OnlyPassedFieldsChange_EverythingElseIsAbsentFromTheBody()
     {
         var (tools, handler) = Setup(Existing());
 
         var text = await tools.UpdateTask(5, priority: "low");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("title").GetString().Should().Be("Original");
-        body.GetProperty("description").GetString().Should().Be("Keep me");
+        // PATCH keeps what is absent and clears what is null: an unchanged field must not be on the wire at all.
+        handler.AssertPatchKeys("TaskItems/5", "priority");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Last().Body.Should().NotContain("null");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("priority").GetString().Should().Be("low");
-        body.GetProperty("status").GetString().Should().Be("todo");
-        handler.AssertNoIsComplete("TaskItems/5");
-        body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
-        body.GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.AssertNoIsComplete("TaskItems/5");
         text.Should().StartWith("Updated #5. Changed priority.");
     }
 
     [Fact]
-    public async Task UpdateTask_TitleOnly_ResendsExistingDueDateUnchanged()
+    public async Task UpdateTask_TitleOnly_SendsOnlyTheTitle()
     {
         var (tools, handler) = Setup(Existing());
 
         var text = await tools.UpdateTask(5, title: "Renamed");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
-        handler.AssertNoIsComplete("TaskItems/5");
+        handler.AssertPatchKeys("TaskItems/5", "title");
         text.Should().NotContain("dueDate");
-    }
-
-    [Fact]
-    public async Task UpdateTask_PriorityOnly_ResendsExistingDueDateUnchanged()
-    {
-        var (tools, handler) = Setup(Existing());
-
-        await tools.UpdateTask(5, priority: "low");
-
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-12");
-        handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
     public async Task UpdateTask_TakesOneClockSnapshot()
     {
-        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Patch("TaskItems/5", Existing());
         var clock = new CountingTimeProvider();
         var tools = new TaskTools(Fixtures.Client(handler), clock);
 
@@ -1209,7 +1195,7 @@ public class UpdateTaskTests
 
         // One LocalNow for the call plus the direct GetUtcNow for the response's current time.
         clock.UtcReads.Should().Be(2);
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -1219,25 +1205,25 @@ public class UpdateTaskTests
     [InlineData(-570)]
     public async Task UpdateTask_NonHourOffsets_AreSentUnchanged(int offset)
     {
-        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Patch("TaskItems/5", Existing());
         var tools = new TaskTools(Fixtures.Client(handler), new CountingTimeProvider(offset));
 
         await tools.UpdateTask(5, priority: "low");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offset);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(offset);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
     public async Task UpdateTask_DueDateToday_UsesTheSameSnapshotAsTheOffset()
     {
-        var handler = new StubHandler().Get("TaskItems/5", Existing()).Put("TaskItems/5", Existing());
+        var handler = new StubHandler().Get("TaskItems/5", Existing()).Patch("TaskItems/5", Existing());
         var clock = new CountingTimeProvider(offsetMinutes: 330, utc: new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero));
         var tools = new TaskTools(Fixtures.Client(handler), clock);
 
         await tools.UpdateTask(5, dueDate: "today");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("dueDate").GetString().Should().Be("2026-10-10");
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
         handler.AssertNoIsComplete("TaskItems/5");
@@ -1250,7 +1236,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, complete: true);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
@@ -1263,47 +1249,45 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, complete: false);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("todo");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
     }
 
     [Fact]
-    public async Task CompleteTrue_OnCompletedTask_ReportsNoChanges()
+    public async Task CompleteTrue_OnCompletedTask_ReportsNoChanges_AndSendsNothing()
     {
         var (tools, handler) = Setup(Existing(status: "Completed"));
 
         var text = await tools.UpdateTask(5, complete: true);
 
         text.Should().Contain("No changes needed");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
-        handler.AssertNoIsComplete("TaskItems/5");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task CompleteFalse_OnTodoTask_ReportsNoChanges()
+    public async Task CompleteFalse_OnTodoTask_ReportsNoChanges_AndSendsNothing()
     {
         var (tools, handler) = Setup(Existing());
 
         var text = await tools.UpdateTask(5, complete: false);
 
         text.Should().Contain("No changes needed");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
-        handler.AssertNoIsComplete("TaskItems/5");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Theory]
-    [InlineData("InProgress", "inprogress")]
-    [InlineData("Blocked", "blocked")]
-    public async Task CompleteFalse_OnNonCompletedStatus_LeavesStatusAlone(string existingStatus, string expected)
+    [InlineData("InProgress")]
+    [InlineData("Blocked")]
+    public async Task CompleteFalse_OnNonCompletedStatus_LeavesStatusAlone(string existingStatus)
     {
         var (tools, handler) = Setup(Existing(existingStatus));
 
-        await tools.UpdateTask(5, complete: false);
+        var text = await tools.UpdateTask(5, complete: false);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be(expected);
-        handler.AssertNoIsComplete("TaskItems/5");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
+        text.Should().Contain("No changes needed");
     }
 
     [Fact]
@@ -1313,18 +1297,18 @@ public class UpdateTaskTests
 
         await tools.UpdateTask(5, complete: true, status: "draft");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
     public async Task CompleteFalse_WithStatusCompleted_ReopensToTodo()
     {
-        var (tools, handler) = Setup(Existing());
+        var (tools, handler) = Setup(Existing("Completed"));
 
         await tools.UpdateTask(5, status: "completed", complete: false);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -1335,7 +1319,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, complete: true);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
     }
@@ -1345,12 +1329,12 @@ public class UpdateTaskTests
     {
         var (tools, handler) = Setup(Existing());
         await tools.UpdateTask(5, status: "completed");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
 
         var (tools2, handler2) = Setup(Existing(status: "Completed"));
         await tools2.UpdateTask(5, status: "draft");
-        var body = handler2.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler2.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("draft");
         handler2.AssertNoIsComplete("TaskItems/5");
     }
@@ -1360,54 +1344,60 @@ public class UpdateTaskTests
     {
         var (tools, handler) = Setup(Existing());
         await tools.UpdateTask(5, dueDate: "tomorrow");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-10");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-10-10");
         handler.AssertNoIsComplete("TaskItems/5");
 
         var (tools2, handler2) = Setup(Existing());
         await tools2.UpdateTask(5, dueDate: "none");
-        handler2.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler2.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
         handler2.AssertNoIsComplete("TaskItems/5");
 
         var (tools3, handler3) = Setup(Existing());
         await tools3.UpdateTask(5, dueDate: "2026-11-03");
-        handler3.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-11-03");
+        handler3.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be("2026-11-03");
         handler3.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
     public async Task EmptyDescription_ClearsIt_AndParentZeroRemovesTheParent()
     {
-        var (tools, handler) = Setup(Existing());
+        var subtask = Fixtures.Task(5, "Original", priority: "High", due: "2026-10-12", parentId: 3, description: "Keep me");
+        var (tools, handler) = Setup(subtask);
 
         await tools.UpdateTask(5, description: "", parentTaskId: 0);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        // Only what the user asked to clear is an explicit null.
+        handler.AssertPatchKeys("TaskItems/5", "description", "parentTaskItemId");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("description").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
         body.GetProperty("parentTaskItemId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
     [Fact]
-    public async Task ProjectName_AssignsThroughTheProjectsEndpoint()
+    public async Task ProjectName_IsSentInThePatch_WithNoAssignCall()
     {
-        var (tools, handler) = Setup(Existing(), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+        var moved = Fixtures.Task(5, "Original", priority: "High", due: "2026-10-12", projectId: 7, projectName: "Alpha", description: "Keep me");
+        var (tools, handler) = Setup(Existing(), moved, h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, project: "Alpha");
 
-        handler.BodyOf(HttpMethod.Post, "Projects/7/tasks").GetProperty("taskItemId").GetInt32().Should().Be(5);
+        handler.AssertPatchKeys("TaskItems/5", "projectId");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("projectId").GetInt32().Should().Be(7);
+        handler.Requests.Should().NotContain(r => r.Path == "Projects/7/tasks");
         text.Should().Contain("project -> Alpha");
     }
 
     [Fact]
-    public async Task ProjectNone_UnassignsFromTheCurrentProject()
+    public async Task ProjectNone_SendsAnExplicitNull_WithNoUnassignCall()
     {
-        var (tools, handler) = Setup(Existing(projectId: 7, projectName: "Alpha"), configure: h => h.Delete("Projects/7/tasks/5"));
+        var (tools, handler) = Setup(Existing(projectId: 7, projectName: "Alpha"), Existing());
 
         var text = await tools.UpdateTask(5, project: "none");
 
-        handler.Sent(HttpMethod.Delete, "Projects/7/tasks/5").Should().HaveCount(1);
+        handler.AssertPatchKeys("TaskItems/5", "projectId");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("projectId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete);
         text.Should().Contain("project (removed)");
     }
 
@@ -1418,17 +1408,17 @@ public class UpdateTaskTests
 
         await tools.UpdateTask(5, project: "none");
 
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete || r.Method == HttpMethod.Patch);
     }
 
     [Fact]
-    public async Task AssigningTheCurrentProject_IsANoOp()
+    public async Task AssigningTheCurrentProject_IsANoOp_AndSendsNoProjectId()
     {
         var (tools, handler) = Setup(Existing(projectId: 7, projectName: "Alpha"), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, project: "Alpha");
 
-        handler.Requests.Should().NotContain(r => r.Path == "Projects/7/tasks");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
         text.Should().Contain("No changes needed");
     }
 
@@ -1437,7 +1427,7 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing())
-            .Put("TaskItems/5", new { code = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN", message = "Parent tasks cannot be completed while child tasks are still open." }, HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", new { code = "TASK_PARENT_COMPLETE_BLOCKED_BY_CHILDREN", message = "Parent tasks cannot be completed while child tasks are still open." }, HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, complete: true);
@@ -1453,7 +1443,7 @@ public class UpdateTaskTests
         await FluentActions.Awaiting(() => tools.UpdateTask(5, priority: "urgent")).Should().ThrowAsync<McpException>();
         await FluentActions.Awaiting(() => tools.UpdateTask(5, dueDate: "someday")).Should().ThrowAsync<McpException>();
 
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     private static object BlockedTask(string? reason = "Waiting on vendor") =>
@@ -1466,7 +1456,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "  Waiting on vendor  ");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("blocked");
         body.GetProperty("blockedReason").GetString().Should().Be("Waiting on vendor");
         handler.AssertNoIsComplete("TaskItems/5");
@@ -1475,13 +1465,14 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task StatusBlocked_WithoutReason_SendsNullReason()
+    public async Task StatusBlocked_WithoutReason_SendsNoReasonKey()
     {
         var (tools, handler) = Setup(Existing(), BlockedTask(null));
 
         var text = await tools.UpdateTask(5, status: "blocked");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        // Omitting blockedReason keeps the stored one; PATCH null or "" would clear it.
+        handler.AssertPatchKeys("TaskItems/5", "status");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked.");
     }
@@ -1495,8 +1486,8 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, blockedReason: reason);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("status").GetString().Should().Be("blocked");
+        handler.AssertPatchKeys("TaskItems/5", "blockedReason");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.String);
         body.GetProperty("blockedReason").GetString().Should().BeEmpty();
         handler.AssertNoIsComplete("TaskItems/5");
@@ -1510,7 +1501,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, blockedReason: "Now waiting on legal");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Now waiting on legal");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Now waiting on legal");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked reason.");
     }
@@ -1518,15 +1509,13 @@ public class UpdateTaskTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task TitleOrPriorityOnly_OnBlockedTask_ResendsBlockedWithNullReason(bool byTitle)
+    public async Task TitleOrPriorityOnly_OnBlockedTask_LeavesStatusAndReasonOutOfTheBody(bool byTitle)
     {
         var (tools, handler) = Setup(BlockedTask());
 
         var text = byTitle ? await tools.UpdateTask(5, title: "New title") : await tools.UpdateTask(5, priority: "low");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("status").GetString().Should().Be("blocked");
-        body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertPatchKeys("TaskItems/5", byTitle ? "title" : "priority");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("[High/Blocked]").And.Contain("blocked: Waiting on vendor").And.NotContain("Changed status").And.NotContain("blocked reason");
     }
@@ -1538,9 +1527,9 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "todo");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("status").GetString().Should().Be("todo");
-        body.GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        // The API clears the reason when the block ends, so no blockedReason is sent.
+        handler.AssertPatchKeys("TaskItems/5", "status");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed unblocked (now Todo).").And.Contain("[High/Todo]").And.NotContain("blocked:");
     }
@@ -1552,25 +1541,24 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "todo");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed unblocked (now InProgress).").And.Contain("[High/InProgress]").And.NotContain("Todo").And.NotContain("Changed status");
     }
 
     [Fact]
-    public async Task Unblock_WithProjectChange_KeepsUnblockTextFromThePutResponse_AndOrder()
+    public async Task Unblock_WithProjectChange_KeepsUnblockTextFromThePatchResponse_AndOrder()
     {
-        var refetched = Fixtures.Task(5, "Original", status: "Todo", priority: "High", projectId: 7, projectName: "Alpha");
-        var (tools, _) = Setup(
+        var response = Fixtures.Task(5, "Original", status: "InProgress", priority: "High", projectId: 7, projectName: "Alpha");
+        var (tools, handler) = Setup(
             BlockedTask(),
-            Fixtures.Task(5, "Original", status: "InProgress", priority: "High"),
-            h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-                .Post("Projects/7/tasks", status: HttpStatusCode.NoContent)
-                .Get("TaskItems/5", refetched));
+            response,
+            h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, status: "todo", priority: "low", project: "Alpha");
 
         text.Should().Contain("Changed unblocked (now InProgress), priority, project -> Alpha.");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
     }
 
     [Fact]
@@ -1580,8 +1568,8 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "inprogress");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").EnumerateObject().Select(p => p.Name).Should().NotContain("startedAt");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").EnumerateObject().Select(p => p.Name).Should().NotContain("startedAt");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.").And.Contain("[High/InProgress]").And.Contain("Started: 2026-10-09 16:45 UTC");
     }
@@ -1593,7 +1581,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "todo");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("todo");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.");
     }
@@ -1605,7 +1593,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "inprogress", priority: "low");
 
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed priority.").And.NotContain("status");
     }
@@ -1617,7 +1605,7 @@ public class UpdateTaskTests
 
         await tools.UpdateTask(5, status: "inprogress");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("inprogress");
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -1629,7 +1617,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Waiting");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("blockedReason").GetString().Should().Be("Waiting");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed blocked (reason: \"Waiting\").");
     }
@@ -1646,7 +1634,7 @@ public class UpdateTaskTests
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().StartWith(expectedStart).And.Contain(expectedFix).And.Contain("status=inprogress").And.NotContain("422").And.NotContain("TASK_START_NOT_ALLOWED");
         handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -1657,7 +1645,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, status: "inprogress", complete: false);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("is Completed");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -1665,7 +1653,7 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing())
-            .Put("TaskItems/5", new { code = "TASK_START_NOT_ALLOWED", message = "Only Todo tasks can be moved to In Progress." }, HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", new { code = "TASK_START_NOT_ALLOWED", message = "Only Todo tasks can be moved to In Progress." }, HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, status: "inprogress");
@@ -1675,14 +1663,14 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task InvalidStatus_ListsAllStatuses_WithoutAnyPut()
+    public async Task InvalidStatus_ListsAllStatuses_WithoutAnyPatch()
     {
         var (tools, handler) = Setup(Existing());
 
         var act = () => tools.UpdateTask(5, status: "started");
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Allowed values: draft, todo, inprogress, blocked, completed.");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -1713,21 +1701,21 @@ public class UpdateTaskTests
 
         var text = useComplete ? await tools.UpdateTask(5, complete: true) : await tools.UpdateTask(5, status: "completed");
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().Contain("Changed status.").And.NotContain("blocked");
     }
 
     [Fact]
-    public async Task ReasonOver200Chars_IsRejected_WithoutAnyPut()
+    public async Task ReasonOver200Chars_IsRejected_WithoutAnyPatch()
     {
         var (tools, handler) = Setup(Existing());
 
         var act = () => tools.UpdateTask(5, status: "blocked", blockedReason: new string('x', 201));
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("blockedReason is 201 characters; the limit is 200.");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -1737,7 +1725,7 @@ public class UpdateTaskTests
 
         await tools.UpdateTask(5, status: "blocked", blockedReason: " " + new string('x', 200) + " ");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").GetString().Should().HaveLength(200);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("blockedReason").GetString().Should().HaveLength(200);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -1745,14 +1733,14 @@ public class UpdateTaskTests
     [InlineData("todo")]
     [InlineData("draft")]
     [InlineData("completed")]
-    public async Task ReasonWithNonBlockedStatus_IsRejected_WithoutAnyCallToPut(string status)
+    public async Task ReasonWithNonBlockedStatus_IsRejected_WithoutAnyCallToPatch(string status)
     {
         var (tools, handler) = Setup(Existing());
 
         var act = () => tools.UpdateTask(5, status: status, blockedReason: "Waiting");
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("blockedReason needs status=blocked").And.Contain(status);
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -1762,18 +1750,18 @@ public class UpdateTaskTests
 
         await FluentActions.Awaiting(() => tools.UpdateTask(5, blockedReason: "Waiting")).Should().ThrowAsync<McpException>().WithMessage("*status=blocked*");
 
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
-    public async Task EmptyReason_WhenFinalStatusIsNotBlocked_SendsNullWithoutError()
+    public async Task EmptyReason_WhenFinalStatusIsNotBlocked_SendsNothing()
     {
         var (tools, handler) = Setup(Existing());
 
-        await tools.UpdateTask(5, blockedReason: "");
+        var text = await tools.UpdateTask(5, blockedReason: "");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("blockedReason").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
-        handler.AssertNoIsComplete("TaskItems/5");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
+        text.Should().Contain("No changes needed");
     }
 
     [Theory]
@@ -1787,14 +1775,14 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing())
-            .Put("TaskItems/5", new { code, message = apiMessage }, HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", new { code, message = apiMessage }, HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, status: "blocked");
 
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().StartWith($"{apiMessage} [{code}]\n").And.Contain(guidance).And.NotContain("{").And.NotContain("   at ");
-        message.Split('\n').Should().HaveCount(2);
+        message.Split('\n').Should().HaveCount(3);
     }
 
     [Fact]
@@ -1802,7 +1790,7 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing())
-            .Put("TaskItems/5", """{"title":"Validation","errors":{"status":["Drafts cannot be blocked."]},"code":"TASK_BLOCK_DRAFT_NOT_ALLOWED"}""", HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", """{"title":"Validation","errors":{"status":["Drafts cannot be blocked."]},"code":"TASK_BLOCK_DRAFT_NOT_ALLOWED"}""", HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, status: "blocked");
@@ -1811,13 +1799,13 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task BlockedParent_AlwaysSendsAutoCompleteFalse_AndSummaryDoesNotMentionIt()
+    public async Task BlockingATask_SendsNoAutoCompleteFlag_AndSummaryDoesNotMentionIt()
     {
         var (tools, handler) = Setup(Existing(), BlockedTask());
 
         var text = await tools.UpdateTask(5, status: "blocked", blockedReason: "Waiting");
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("autoCompleteParentWhenChildrenDone").GetBoolean().Should().BeFalse();
+        handler.AssertPatchKeys("TaskItems/5", "status", "blockedReason");
         handler.AssertNoIsComplete("TaskItems/5");
         text.Should().NotContainEquivalentOf("autocomplete");
     }
@@ -1827,19 +1815,19 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", BlockedTask())
-            .Put("TaskItems/5", new { message = "The task is already completed." }, HttpStatusCode.BadRequest);
+            .Patch("TaskItems/5", new { message = "The task is already completed." }, HttpStatusCode.BadRequest);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, title: "x");
 
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("The task is already completed.");
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("The task is already completed. Nothing was saved.");
     }
 
     private static object Plan(string? plannedOn, string status = "Todo", int? projectId = null, int children = 0) =>
         Fixtures.Task(5, "Original", status: status, priority: "High", due: "2026-10-12", projectId: projectId, description: "Keep me", plannedOn: plannedOn, childTaskCount: children);
 
     private static StubHandler PutPastDay(StubHandler handler) =>
-        handler.On(HttpMethod.Put, "TaskItems/5", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity);
+        handler.On(HttpMethod.Patch, "TaskItems/5", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity);
 
     [Theory]
     [InlineData("today", "2026-10-09")]
@@ -1852,7 +1840,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, journalDate: input, ct: TestContext.Current.CancellationToken);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be(expected);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be(expected);
         text.Should().StartWith($"Updated #5. Changed planned {expected}.").And.Contain($"planned {expected}");
         handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
     }
@@ -1861,15 +1849,13 @@ public class UpdateTaskTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task JournalDate_Absent_SendsNull_AndReportsNoPlanning(string? input)
+    public async Task JournalDate_Absent_IsNotSent_AndReportsNoPlanning(string? input)
     {
         var (tools, handler) = Setup(Plan("2026-10-11"));
 
         var text = await tools.UpdateTask(5, priority: "low", journalDate: input, ct: TestContext.Current.CancellationToken);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.TryGetProperty("journalDate", out var property).Should().BeTrue();
-        property.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.AssertPatchKeys("TaskItems/5", "priority");
         text.Split('\n')[0].Should().Be("Updated #5. Changed priority.");
     }
 
@@ -1880,7 +1866,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, journalDate: "today", ct: TestContext.Current.CancellationToken);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be("2026-10-09");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("journalDate").GetString().Should().Be("2026-10-09");
         text.Split('\n')[0].Should().Be("Updated #5. No changes needed.");
     }
 
@@ -1900,7 +1886,7 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Plan(null, children: 2))
-            .Put("TaskItems/5", new { code = "TASK_PLAN_HAS_OPEN_SUBTASKS", message = "A task with open subtasks can't be planned on a day. Plan its subtasks instead." }, HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", new { code = "TASK_PLAN_HAS_OPEN_SUBTASKS", message = "A task with open subtasks can't be planned on a day. Plan its subtasks instead." }, HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, journalDate: "tomorrow", ct: TestContext.Current.CancellationToken);
@@ -1908,8 +1894,8 @@ public class UpdateTaskTests
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().StartWith("A task with open subtasks can't be planned on a day. Plan its subtasks instead. [TASK_PLAN_HAS_OPEN_SUBTASKS]\n")
             .And.Contain("Plan its subtasks instead, using update_task or update_tasks with journalDate");
-        message.Split('\n').Should().HaveCount(2);
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        message.Split('\n').Should().HaveCount(3);
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
         handler.Requests.Should().OnlyContain(r => r.Path == "TaskItems/5");
     }
 
@@ -1921,7 +1907,7 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Plan(null, status: status))
-            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity);
+            .Patch("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = scenario switch
@@ -1933,7 +1919,7 @@ public class UpdateTaskTests
 
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().StartWith($"Refused. [{code}]\n").And.Contain(guidance);
-        message.Split('\n').Should().HaveCount(2);
+        message.Split('\n').Should().HaveCount(3);
     }
 
     [Fact]
@@ -1943,7 +1929,7 @@ public class UpdateTaskTests
 
         var text = await tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
 
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
         text.Should().StartWith("Updated #5. Changed priority.");
     }
 
@@ -1982,16 +1968,15 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task JournalDate_WithAProjectStep_ReusesTheProjectReread_NeverThreeGets()
+    public async Task JournalDate_WithAProject_IsOnePatch_AndNoFollowUpGet()
     {
-        var (tools, handler) = Setup(Plan(null), Plan(null), h => h
-            .Get("TaskItems/5", Plan("2026-10-10", projectId: 7))
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+        var response = Fixtures.Task(5, "Original", priority: "High", due: "2026-10-12", projectId: 7, projectName: "Alpha", description: "Keep me", plannedOn: "2026-10-10");
+        var (tools, handler) = Setup(Plan(null), response, h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
-        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(2);
+        handler.AssertPatchKeys("TaskItems/5", "journalDate", "projectId");
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
         text.Should().Contain("planned 2026-10-10").And.Contain("project -> Alpha");
     }
 
@@ -2005,7 +1990,7 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message
             .Should().Contain("past day").And.Contain("today or later");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
     }
 
     [Theory]
@@ -2021,7 +2006,7 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message
             .Should().Contain("journalDate").And.Contain("today, tomorrow, or yyyy-MM-dd").And.Contain("e.g. 2026-10-10").And.Contain("set_journal_todos");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Theory]
@@ -2031,48 +2016,31 @@ public class UpdateTaskTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Plan(null, status: status))
-            .Put("TaskItems/5", new { message = "That task cannot be planned right now." }, HttpStatusCode.BadRequest);
+            .Patch("TaskItems/5", new { message = "That task cannot be planned right now." }, HttpStatusCode.BadRequest);
         var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, journalDate: "today", ct: TestContext.Current.CancellationToken);
 
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("That task cannot be planned right now.");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Be("That task cannot be planned right now. Nothing was saved.");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
     }
 
     [Fact]
-    public async Task JournalDate_ProjectAssignmentFails_ReportsPartialSuccess_WithTheOriginalReason()
+    public async Task JournalDate_WithAProject_RefusedPatch_ChangesNothing_AndIsReportedOnce()
     {
-        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null))
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.BadRequest));
+            .Patch("TaskItems/5", new { message = "Project is full." }, HttpStatusCode.BadRequest);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
         var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
         var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
-            .And.Contain("assigning it to project 'Alpha' failed")
-            .And.Contain("Project is full.")
-            .And.Contain("Retry only the project change.")
-            .And.NotContain("Nothing was changed");
+        ex.Message.Should().Be("Project is full. Nothing was saved.");
         ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
-        Occurrences(ex.Message, "was updated and planned").Should().Be(1);
-    }
-
-    [Fact]
-    public async Task JournalDate_ProjectAssignmentFailsWithCodedRule_ReportsTheProjectErrorExactlyOnce()
-    {
-        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { code = "X", message = "Project rule broken." }, HttpStatusCode.UnprocessableEntity));
-
-        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
-            .And.Contain("Retry only the project change.");
-        Occurrences(ex.Message, "Project rule broken.").Should().Be(1);
-        Occurrences(ex.Message, "was updated and planned").Should().Be(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Get, "TaskItems/5").Should().HaveCount(1);
     }
 
     [Fact]
@@ -2084,7 +2052,7 @@ public class UpdateTaskTests
 
         var ex = (await act.Should().ThrowAsync<McpException>()).Which;
         ex.Message.Should().StartWith("No project matches 'Nope'").And.NotContain("was updated");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
@@ -2095,7 +2063,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, priority: "high", project: "Typo", ct: TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Typo'");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put || r.Method == HttpMethod.Post);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch || r.Method == HttpMethod.Post);
     }
 
     [Fact]
@@ -2106,7 +2074,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("ambiguous");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
@@ -2117,7 +2085,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, status: "blocked", project: "Typo", ct: TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("No project matches 'Typo'").And.NotContain("was updated");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
@@ -2129,7 +2097,7 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("can't be started").And.NotContain("No project matches");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Theory]
@@ -2149,21 +2117,26 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().NotContain("No project matches");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ProjectFailure_AfterAnUnblock_NamesTheUnblockAsSaved()
+    public async Task ProjectNotFound_Refusal_GetsGuidance_AndSaysNothingWasSaved()
     {
-        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me");
-        var (tools, _) = Setup(blocked, Plan(null), h => h
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null))
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
+            .Patch("TaskItems/5", new { code = "TASK_PROJECT_NOT_FOUND", message = "The selected project was not found." }, HttpStatusCode.UnprocessableEntity);
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
-        var act = () => tools.UpdateTask(5, status: "todo", project: "Alpha", ct: TestContext.Current.CancellationToken);
+        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
-        (await act.Should().ThrowAsync<McpException>()).Which.Message
-            .Should().Contain("Task #5's fields were saved (unblocked").And.Contain("Retry only the project change");
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().StartWith("The selected project was not found. [TASK_PROJECT_NOT_FOUND]\n")
+            .And.Contain("list_projects").And.EndWith("\nNothing was saved.")
+            .And.NotContain("were saved").And.NotContain("Retry only");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
+        handler.Requests.Should().NotContain(r => r.Path == "Projects/7/tasks");
     }
 
     [Fact]
@@ -2175,170 +2148,72 @@ public class UpdateTaskTests
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("journalDate").And.NotContain("No project matches");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task ValidProject_RunsGetValidateResolvePutAssign_InThatOrder()
+    public async Task ValidProject_IsOneGet_OneLookup_OnePatch_InThatOrder()
     {
-        var (tools, handler) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+        var moved = Fixtures.Task(5, "Original", priority: "Low", due: "2026-10-12", projectId: 7, projectName: "Alpha", description: "Keep me");
+        var (tools, handler) = Setup(Plan(null), moved, h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
-        handler.Requests.Select(r => $"{r.Method} {r.Path}").Take(4).Should().Equal(
-            "GET TaskItems/5", "GET Projects", "PUT TaskItems/5", "POST Projects/7/tasks");
+        handler.Requests.Select(r => $"{r.Method} {r.Path}").Should().Equal("GET TaskItems/5", "GET Projects", "PATCH TaskItems/5");
+        handler.AssertPatchKeys("TaskItems/5", "priority", "projectId");
         text.Should().StartWith("Updated #5. Changed priority, project -> Alpha.");
     }
 
     [Fact]
-    public async Task ProjectFailure_AfterFieldsWereSaved_SaysSo_AndTellsToRetryOnlyTheProject()
+    public async Task ProjectOnly_IsOnePatchWithOnlyTheProject()
     {
-        var (tools, handler) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
-
-        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Task #5's fields were saved (priority)")
-            .And.Contain("assigning it to project 'Alpha' failed")
-            .And.Contain("Project is full.")
-            .And.Contain("Retry only the project change: call update_task with id=5 and project='Alpha' only.");
-        ex.InnerException.Should().BeOfType<TaskFlow.Mcp.Api.TaskFlowApiException>();
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
-    }
-
-    [Fact]
-    public async Task ProjectFailure_WhenThePutCarriedNoRealChange_DoesNotClaimFieldsWereSaved()
-    {
-        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me", blockedReason: "waiting");
-        var (tools, handler) = Setup(blocked, configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
-
-        var act = () => tools.UpdateTask(5, status: "blocked", blockedReason: "waiting", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
-        message.Should().Contain("Task #5 was re-saved unchanged, but assigning it to project 'Alpha' failed: Project is full.")
-            .And.NotContain("fields were saved");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
-    }
-
-    [Fact]
-    public async Task ProjectFailure_AfterAStatusTransition_NamesTheSavedChange()
-    {
-        var (tools, _) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
-
-        var act = () => tools.UpdateTask(5, status: "inprogress", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("fields were saved (status)");
-    }
-
-    [Fact]
-    public async Task FailedUnassign_AfterFieldsWereSaved_GetsTheSavedFieldsMessage()
-    {
-        var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h
-            .Delete("Projects/7/tasks/5", HttpStatusCode.BadRequest, new { message = "Cannot remove." }));
-
-        var act = () => tools.UpdateTask(5, priority: "low", project: "none", ct: TestContext.Current.CancellationToken);
-
-        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("fields were saved (priority)")
-            .And.Contain("removing it from its project failed")
-            .And.Contain("project='none' only");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
-    }
-
-    [Fact]
-    public async Task ProjectOnly_SendsNoPut_AndAssigns()
-    {
-        var (tools, handler) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
+        var moved = Fixtures.Task(5, "Original", priority: "High", due: "2026-10-12", projectId: 7, projectName: "Alpha", description: "Keep me");
+        var (tools, handler) = Setup(Plan(null), moved, h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
         var text = await tools.UpdateTask(5, project: "Alpha", ct: TestContext.Current.CancellationToken);
 
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
-        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(1);
+        handler.AssertPatchKeys("TaskItems/5", "projectId");
+        handler.Requests.Should().NotContain(r => r.Path == "Projects/7/tasks");
         text.Should().StartWith("Updated #5. Changed project -> Alpha.");
     }
 
     [Fact]
-    public async Task ProjectOnly_AssignFails_DoesNotClaimFieldsWereSaved()
-    {
-        var (tools, handler) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity));
-
-        var act = () => tools.UpdateTask(5, project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Project is full.").And.NotContain("saved").And.NotContain("was updated");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task ProjectWithUnblockOrBlockedReasonChange_StillSendsThePut()
-    {
-        var blocked = Fixtures.Task(5, "Original", status: "Blocked", priority: "High", due: "2026-10-12", description: "Keep me");
-        var (tools, handler) = Setup(blocked, configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent));
-
-        await tools.UpdateTask(5, status: "todo", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
-    }
-
-    [Fact]
-    public async Task SameProjectAsCurrent_SendsNoAssignRequest()
+    public async Task SameProjectAsCurrent_OmitsProjectId_AndIsNotReportedAsChanged()
     {
         var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h.Get("Projects", new[] { Fixtures.Project(7, "Alpha") }));
 
-        await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+        var text = await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
-        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().HaveCount(1);
+        handler.AssertPatchKeys("TaskItems/5", "priority");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().HaveCount(1);
+        text.Should().NotContain("project");
     }
 
     [Theory]
     [InlineData("none")]
     [InlineData("None")]
     [InlineData("  none ")]
-    public async Task ProjectNone_DoesNoLookup_AndUnassignsWhenTheTaskHasAProject(string value)
+    public async Task ProjectNone_DoesNoLookup_AndSendsNullWhenTheTaskHasAProject(string value)
     {
-        var (tools, handler) = Setup(Plan(null, projectId: 7), configure: h => h.Delete("Projects/7/tasks/5"));
+        var (tools, handler) = Setup(Plan(null, projectId: 7), Plan(null));
 
         await tools.UpdateTask(5, priority: "low", project: value, ct: TestContext.Current.CancellationToken);
 
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Delete, "Projects/7/tasks/5").Should().HaveCount(1);
+        handler.AssertPatchKeys("TaskItems/5", "priority", "projectId");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("projectId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete);
     }
 
     [Fact]
-    public async Task ProjectNone_WhenTheTaskHasNoProject_SendsNoDelete()
+    public async Task ProjectNone_WhenTheTaskHasNoProject_SendsNoProjectId()
     {
         var (tools, handler) = Setup(Plan(null));
 
         await tools.UpdateTask(5, priority: "low", project: "none", ct: TestContext.Current.CancellationToken);
 
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Delete);
+        handler.AssertPatchKeys("TaskItems/5", "priority");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task AssignConflict_IsSwallowed()
-    {
-        var (tools, _) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Already there." }, HttpStatusCode.Conflict));
-
-        var text = await tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
-
-        text.Should().StartWith("Updated #5.");
     }
 
     [Fact]
@@ -2349,41 +2224,73 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().Contain("Cannot reach the TaskFlow API");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task CancellationDuringTheProjectStep_PropagatesUnwrapped()
+    public async Task CancellationDuringThePatch_PropagatesUnwrapped()
     {
-        var (tools, _) = Setup(Plan(null), configure: h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Fail(HttpMethod.Post, "Projects/7/tasks", new OperationCanceledException()));
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null))
+            .Fail(HttpMethod.Patch, "TaskItems/5", new OperationCanceledException());
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
-        var act = () => tools.UpdateTask(5, priority: "low", project: "Alpha", ct: TestContext.Current.CancellationToken);
+        var act = () => tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
-    public async Task JournalDate_UnreachableApiDuringTheProjectStep_SaysTheTaskWasSavedAndPlanned()
+    public async Task PatchTimeout_SaysToCheckBeforeRetrying_NotThatNothingWasSaved()
     {
-        var (tools, _) = Setup(Plan(null), Plan("2026-10-10"), h => h
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Fail(HttpMethod.Post, "Projects/7/tasks", new HttpRequestException("refused")));
+        var handler = new StubHandler()
+            .Get("TaskItems/5", Plan(null))
+            .Fail(HttpMethod.Patch, "TaskItems/5", new TaskCanceledException("timeout"));
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
 
-        var act = () => tools.UpdateTask(5, journalDate: "tomorrow", project: "Alpha", ct: TestContext.Current.CancellationToken);
+        var act = () => tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
 
-        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
-        ex.Message.Should().Contain("Task #5 was updated and planned for 2026-10-10")
-            .And.Contain("assigning it to project 'Alpha' failed: cannot reach the TaskFlow API")
-            .And.Contain("Retry only the project change.");
-        ex.InnerException.Should().BeOfType<HttpRequestException>();
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
+    }
+
+    [Theory]
+    [InlineData("server")]
+    [InlineData("unreachable")]
+    public async Task ServerErrorOrUnreachableApi_IsNotCalledARefusal(string failure)
+    {
+        var handler = new StubHandler().Get("TaskItems/5", Plan(null));
+        if (failure == "server")
+        {
+            handler.Patch("TaskItems/5", new { message = "boom" }, HttpStatusCode.InternalServerError);
+        }
+        else
+        {
+            handler.Fail(HttpMethod.Patch, "TaskItems/5", new HttpRequestException("refused"));
+        }
+
+        var tools = new TaskTools(Fixtures.Client(handler), Fixtures.Time());
+
+        var act = () => tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
+
+        (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().NotContain("Nothing was saved");
+    }
+
+    [Fact]
+    public void UpdateTask_HasNoPartialSaveText_AnywhereInTheTool()
+    {
+        // update_task is one request, so nothing it says can mean "part of it was saved".
+        var source = typeof(TaskTools).Assembly.GetTypes().SelectMany(t => t.GetNestedTypes(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)).Select(t => t.Name);
+        source.Should().NotContain("PartialUpdateException");
+        var description = typeof(TaskTools).GetMethod(nameof(TaskTools.UpdateTask))!.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), false)
+            .Cast<System.ComponentModel.DescriptionAttribute>().Single().Description;
+        description.Should().NotContain("retry only").And.NotContain("was saved, but");
     }
 
     [Fact]
     public async Task JournalDate_TakesOneClockSnapshot()
     {
-        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Put("TaskItems/5", Plan("2026-10-09"));
+        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Patch("TaskItems/5", Plan("2026-10-09"));
         var clock = new CountingTimeProvider();
         var tools = new TaskTools(Fixtures.Client(handler), clock);
 
@@ -2399,13 +2306,13 @@ public class UpdateTaskTests
     public async Task JournalDate_NearLocalMidnight_UsesTheLocalDay_AndMatchingOffset(string input, string expected)
     {
         // 20:00Z at +05:30 is 01:30 on 2026-10-10 locally.
-        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Put("TaskItems/5", Plan(expected));
+        var handler = new StubHandler().Get("TaskItems/5", Plan(null)).Patch("TaskItems/5", Plan(expected));
         var clock = new CountingTimeProvider(offsetMinutes: 330, utc: new DateTimeOffset(2026, 10, 9, 20, 0, 0, TimeSpan.Zero));
         var tools = new TaskTools(Fixtures.Client(handler), clock);
 
         await tools.UpdateTask(5, journalDate: input, ct: TestContext.Current.CancellationToken);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
         body.GetProperty("journalDate").GetString().Should().Be(expected);
         body.GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(330);
     }
@@ -2460,7 +2367,7 @@ public class UpdateTasksTests
         var handler = new StubHandler();
         foreach (var id in ids)
         {
-            handler.Get($"TaskItems/{id}", Existing(id, $"Task {id}")).Put($"TaskItems/{id}", Existing(id, $"Task {id}"));
+            handler.Get($"TaskItems/{id}", Existing(id, $"Task {id}")).Patch($"TaskItems/{id}", Existing(id, $"Task {id}"));
         }
 
         return handler;
@@ -2469,19 +2376,18 @@ public class UpdateTasksTests
     private static TaskTools Tools(StubHandler handler) => new(Fixtures.Client(handler), Fixtures.Time());
 
     [Fact]
-    public async Task EightTasksEachWithAProject_AreAllUpdated()
+    public async Task EightTasksEachWithAProject_AreAllUpdated_WithNoAssignCall()
     {
         var handler = HandlerFor(1, 2, 3, 4, 5, 6, 7, 8)
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", status: HttpStatusCode.NoContent);
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
 
         var text = await Tools(handler).UpdateTasks(Enumerable.Range(1, 8).Select(i => new TaskUpdate { Id = i, Project = "Alpha", Priority = "low" }).ToList());
 
         text.Should().StartWith("Updated 8 of 8 task(s).");
-        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
-        handler.BodyOf(HttpMethod.Put, "TaskItems/8").GetProperty("priority").GetString().Should().Be("low");
-        handler.Sent(HttpMethod.Post, "Projects/7/tasks").Should().HaveCount(8);
-        handler.BodyOf(HttpMethod.Post, "Projects/7/tasks").GetProperty("taskItemId").GetInt32().Should().Be(8);
+        handler.Sent(HttpMethod.Patch, "TaskItems/3").Should().HaveCount(1);
+        handler.AssertPatchKeys("TaskItems/8", "priority", "projectId");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/8").GetProperty("projectId").GetInt32().Should().Be(7);
+        handler.Requests.Should().NotContain(r => r.Path == "Projects/7/tasks");
         handler.AssertNoIsComplete("TaskItems/8");
     }
 
@@ -2501,7 +2407,7 @@ public class UpdateTasksTests
         clock.UtcReads.Should().Be(1);
         foreach (var id in ids)
         {
-            handler.BodyOf(HttpMethod.Put, $"TaskItems/{id}").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
+            handler.BodyOf(HttpMethod.Patch, $"TaskItems/{id}").GetProperty("timezoneOffsetMinutes").GetInt32().Should().Be(-420);
             handler.AssertNoIsComplete($"TaskItems/{id}");
         }
     }
@@ -2520,10 +2426,10 @@ public class UpdateTasksTests
         ]);
 
         clock.UtcReads.Should().Be(1);
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
-        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().HaveCount(1);
-        handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/3").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/3").Should().HaveCount(1);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/1").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/3").GetProperty("dueDate").GetString().Should().Be("2026-10-09");
         handler.AssertNoIsComplete("TaskItems/1");
         handler.AssertNoIsComplete("TaskItems/3");
     }
@@ -2537,7 +2443,7 @@ public class UpdateTasksTests
 
         await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = dueDate }]);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be(expected);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("dueDate").GetString().Should().Be(expected);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -2548,7 +2454,7 @@ public class UpdateTasksTests
 
         await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, DueDate = "none" }]);
 
-        handler.BodyOf(HttpMethod.Put, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(JsonValueKind.Null);
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("dueDate").ValueKind.Should().Be(JsonValueKind.Null);
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -2561,23 +2467,19 @@ public class UpdateTasksTests
 
         var text = await Tools(batch).UpdateTasks([new TaskUpdate { Id = 5, Priority = "low", DueDate = "none" }]);
 
-        batch.Sent(HttpMethod.Put, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Put, "TaskItems/5").Last().Body);
+        batch.Sent(HttpMethod.Patch, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Patch, "TaskItems/5").Last().Body);
         text.Should().Be("Updated 1 of 1 task(s).\n+ #5 \"Task 5\": Changed priority, dueDate");
     }
 
     [Fact]
-    public async Task UnsuppliedFields_KeepTheirCurrentValues()
+    public async Task UnsuppliedFields_AreAbsentFromTheBody()
     {
         var handler = HandlerFor(5);
 
         await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Complete = true }]);
 
-        var body = handler.BodyOf(HttpMethod.Put, "TaskItems/5");
-        body.GetProperty("title").GetString().Should().Be("Task 5");
-        body.GetProperty("description").GetString().Should().Be("Keep me");
-        body.GetProperty("priority").GetString().Should().Be("high");
-        body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
-        body.GetProperty("status").GetString().Should().Be("completed");
+        handler.AssertPatchKeys("TaskItems/5", "status");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/5").GetProperty("status").GetString().Should().Be("completed");
         handler.AssertNoIsComplete("TaskItems/5");
     }
 
@@ -2599,7 +2501,7 @@ public class UpdateTasksTests
         lines[1].Should().StartWith("+ #1 \"Task 1\": Changed priority");
         lines[2].Should().StartWith("x #2: Not found");
         lines[3].Should().StartWith("x #3: No project matches 'nope'");
-        handler.Sent(HttpMethod.Put, "TaskItems/3").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/3").Should().BeEmpty();
     }
 
     [Fact]
@@ -2615,7 +2517,7 @@ public class UpdateTasksTests
 
         text.Should().Contain("x #1: journalDate").And.NotContain("No project matches");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
     }
 
     [Fact]
@@ -2635,8 +2537,8 @@ public class UpdateTasksTests
         lines[2].Should().StartWith("x #2: ").And.NotContain("No project matches");
         lines[3].Should().StartWith("+ #3 ");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/2").Should().BeEmpty();
     }
 
     [Fact]
@@ -2644,7 +2546,7 @@ public class UpdateTasksTests
     {
         var handler = HandlerFor(2)
             .Get("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
-            .Put("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
+            .Patch("TaskItems/4", Existing(4, "Task 4", status: "Draft"))
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
 
         var text = await Tools(handler).UpdateTasks(
@@ -2657,15 +2559,17 @@ public class UpdateTasksTests
         lines[1].Should().StartWith("x #4: ").And.Contain("can't be started").And.NotContain("No project matches");
         lines[2].Should().StartWith("+ #2 ");
         handler.Sent(HttpMethod.Get, "Projects").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/4").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/4").Should().BeEmpty();
     }
 
     [Fact]
-    public async Task UpdateTasks_ProjectFailureAfterFieldsWereSaved_ReportsTheSavedFields_AndOtherItemsStillRun()
+    public async Task UpdateTasks_ProjectRefusal_ChangesNothingForThatItem_AndOtherItemsStillRun()
     {
-        var handler = HandlerFor(1, 2)
-            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.UnprocessableEntity);
+        var handler = new StubHandler()
+            .Get("TaskItems/1", Existing(1, "Task 1"))
+            .Patch("TaskItems/1", new { code = "TASK_PROJECT_NOT_FOUND", message = "The selected project was not found." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/2", Existing(2, "Task 2")).Patch("TaskItems/2", Existing(2, "Task 2"))
+            .Get("Projects", new[] { Fixtures.Project(7, "Alpha") });
 
         var text = await Tools(handler).UpdateTasks(
         [
@@ -2675,11 +2579,10 @@ public class UpdateTasksTests
 
         var lines = text.Split('\n');
         lines[0].Should().Be("Updated 1 of 2 task(s).");
-        lines[1].Should().StartWith("x #1: Task #1's fields were saved (priority)")
-            .And.Contain("assigning it to project 'Alpha' failed: Project is full.")
-            .And.Contain("Retry only the project change: resend only that item with just id and project.");
+        lines[1].Should().StartWith("x #1: The selected project was not found. [TASK_PROJECT_NOT_FOUND]").And.EndWith("Nothing was saved.")
+            .And.NotContain("were saved").And.NotContain("Retry only");
         lines[2].Should().StartWith("+ #2 ");
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().HaveCount(1);
     }
 
     [Fact]
@@ -2691,8 +2594,8 @@ public class UpdateTasksTests
 
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
         message.Should().Contain("x #1: cannot reach the TaskFlow API").And.Contain("x #2: not attempted");
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/2").Should().BeEmpty();
     }
 
     [Fact]
@@ -2700,9 +2603,9 @@ public class UpdateTasksTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing(5, status: "Draft"))
-            .Put("TaskItems/5", new { code = "TASK_BLOCK_DRAFT_NOT_ALLOWED", message = "Draft tasks cannot be blocked." }, HttpStatusCode.UnprocessableEntity)
+            .Patch("TaskItems/5", new { code = "TASK_BLOCK_DRAFT_NOT_ALLOWED", message = "Draft tasks cannot be blocked." }, HttpStatusCode.UnprocessableEntity)
             .Get("TaskItems/6", Existing(6))
-            .Put("TaskItems/6", Existing(6));
+            .Patch("TaskItems/6", Existing(6));
 
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked" }, new TaskUpdate { Id = 6, Priority = "low" }]);
 
@@ -2716,14 +2619,14 @@ public class UpdateTasksTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing(5))
-            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
+            .Patch("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
             .Get("TaskItems/6", Existing(6))
-            .Put("TaskItems/6", Existing(6));
+            .Patch("TaskItems/6", Existing(6));
 
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, JournalDate = "tomorrow" }, new TaskUpdate { Id = 6, JournalDate = "tomorrow" }]);
 
         text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain($"x #5: Refused. [{code}]").And.Contain(guidance).And.Contain("+ #6 ");
-        handler.Sent(HttpMethod.Put, "TaskItems/6").Should().HaveCount(1);
+        handler.Sent(HttpMethod.Patch, "TaskItems/6").Should().HaveCount(1);
     }
 
     [Theory]
@@ -2733,9 +2636,9 @@ public class UpdateTasksTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing(5, status: "Completed"))
-            .Put("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
+            .Patch("TaskItems/5", new { code, message = "Refused." }, HttpStatusCode.UnprocessableEntity)
             .Get("TaskItems/6", Existing(6))
-            .Put("TaskItems/6", Existing(6));
+            .Patch("TaskItems/6", Existing(6));
 
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Complete = false }, new TaskUpdate { Id = 6, Priority = "low" }]);
 
@@ -2748,25 +2651,25 @@ public class UpdateTasksTests
         var handler = new StubHandler()
             .Get("TaskItems/5", Existing(5, status: "Draft"))
             .Get("TaskItems/6", Existing(6))
-            .Put("TaskItems/6", Fixtures.Task(6, "Original", status: "InProgress"));
+            .Patch("TaskItems/6", Fixtures.Task(6, "Original", status: "InProgress"));
 
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "inprogress" }, new TaskUpdate { Id = 6, Status = "INPROGRESS" }]);
 
         text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #5: Task #5 is Draft, so it can't be started.").And.Contain("+ #6 ");
-        handler.Sent(HttpMethod.Put, "TaskItems/5").Should().BeEmpty();
-        handler.BodyOf(HttpMethod.Put, "TaskItems/6").GetProperty("status").GetString().Should().Be("inprogress");
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Should().BeEmpty();
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/6").GetProperty("status").GetString().Should().Be("inprogress");
         handler.AssertNoIsComplete("TaskItems/6");
     }
 
     [Fact]
-    public async Task AllStartsRejected_Throws_WithoutAnyPut()
+    public async Task AllStartsRejected_Throws_WithoutAnyPatch()
     {
         var handler = new StubHandler().Get("TaskItems/5", Existing(5, status: "Draft"));
 
         var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 5, Status = "inprogress" }]);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message.Should().StartWith("Updated 0 of 1 task(s).").And.Contain("x #5: ");
-        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Put);
+        handler.Requests.Should().NotContain(r => r.Method == HttpMethod.Patch);
     }
 
     [Fact]
@@ -2807,11 +2710,11 @@ public class UpdateTasksTests
     }
 
     [Fact]
-    public async Task Timeout_OnOneItem_ReportsItShortly_AndStopsTheRest()
+    public async Task Timeout_OnOneItem_SaysToCheckBeforeRetrying_AndStopsTheRest()
     {
         var handler = HandlerFor(4)
             .Get("TaskItems/5", Existing(5))
-            .Fail(HttpMethod.Put, "TaskItems/5", new TaskCanceledException("timeout"));
+            .Fail(HttpMethod.Patch, "TaskItems/5", new TaskCanceledException("timeout"));
 
         var text = await Tools(handler).UpdateTasks(
         [
@@ -2823,7 +2726,7 @@ public class UpdateTasksTests
 
         var lines = text.Split('\n');
         lines[0].Should().Be("Updated 1 of 4 task(s).");
-        lines[2].Should().Be("x #5: request timed out");
+        lines[2].Should().StartWith("x #5: ").And.Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
         lines[3].Should().Be("x #6: not attempted");
         lines[4].Should().Be("x #7: not attempted");
         handler.Requests.Should().NotContain(r => r.Path == "TaskItems/6" || r.Path == "TaskItems/7");
@@ -2850,8 +2753,8 @@ public class UpdateTasksTests
         var act = () => Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "low" }, new TaskUpdate { Id = 2, Priority = "low" }], cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
-        handler.Sent(HttpMethod.Put, "TaskItems/2").Should().BeEmpty();
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/2").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
     }
 
     [Fact]
@@ -2873,7 +2776,7 @@ public class UpdateTasksTests
 
         await Tools(batch).UpdateTasks([new TaskUpdate { Id = 5, Status = "blocked", BlockedReason = "Waiting on legal", ParentTaskId = 9, Title = "Renamed", Description = "" }]);
 
-        batch.Sent(HttpMethod.Put, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Put, "TaskItems/5").Last().Body);
+        batch.Sent(HttpMethod.Patch, "TaskItems/5").Last().Body.Should().Be(single.Sent(HttpMethod.Patch, "TaskItems/5").Last().Body);
     }
 
     [Fact]
@@ -2884,7 +2787,7 @@ public class UpdateTasksTests
         var text = await Tools(handler).UpdateTasks([new TaskUpdate { Id = 1, Priority = "urgent" }, new TaskUpdate { Id = 2, Priority = "low" }]);
 
         text.Should().StartWith("Updated 1 of 2 task(s).").And.Contain("x #1: ").And.Contain("+ #2 ");
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
     }
 
     private static object Planned(int id, string? plannedOn) =>
@@ -2894,8 +2797,8 @@ public class UpdateTasksTests
     public async Task UpdateTasks_JournalDate_ReportsPlannedOnlyWhereTheDayChanged()
     {
         var handler = new StubHandler()
-            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-10"))
-            .Get("TaskItems/2", Planned(2, "2026-10-10")).Put("TaskItems/2", Planned(2, "2026-10-10"));
+            .Get("TaskItems/1", Planned(1, null)).Patch("TaskItems/1", Planned(1, "2026-10-10"))
+            .Get("TaskItems/2", Planned(2, "2026-10-10")).Patch("TaskItems/2", Planned(2, "2026-10-10"));
 
         var text = await Tools(handler).UpdateTasks(
             [new TaskUpdate { Id = 1, JournalDate = "tomorrow" }, new TaskUpdate { Id = 2, JournalDate = "2026-10-10" }],
@@ -2904,7 +2807,7 @@ public class UpdateTasksTests
         var lines = text.Split('\n');
         lines[1].Should().Be("+ #1 \"Task 1\": Changed planned 2026-10-10");
         lines[2].Should().Be("+ #2 \"Task 2\": No changes needed");
-        handler.BodyOf(HttpMethod.Put, "TaskItems/1").GetProperty("journalDate").GetString().Should().Be("2026-10-10");
+        handler.BodyOf(HttpMethod.Patch, "TaskItems/1").GetProperty("journalDate").GetString().Should().Be("2026-10-10");
     }
 
     [Fact]
@@ -2912,8 +2815,8 @@ public class UpdateTasksTests
     {
         var handler = new StubHandler()
             .Get("TaskItems/1", Planned(1, null))
-            .On(HttpMethod.Put, "TaskItems/1", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity)
-            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-09"));
+            .On(HttpMethod.Patch, "TaskItems/1", new { code = "TASK_CREATION_PAST_DAY_NOT_ALLOWED", message = "Tasks cannot be planned on a past day." }, HttpStatusCode.UnprocessableEntity)
+            .Get("TaskItems/2", Planned(2, null)).Patch("TaskItems/2", Planned(2, "2026-10-09"));
 
         var text = await Tools(handler).UpdateTasks(
             [new TaskUpdate { Id = 1, JournalDate = "2026-10-01" }, new TaskUpdate { Id = 2, JournalDate = "today" }],
@@ -2930,23 +2833,23 @@ public class UpdateTasksTests
     public async Task UpdateTasks_JournalDate_YesterdayIsRejectedLocally_ForThatItemOnly()
     {
         var handler = new StubHandler()
-            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, null))
-            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-09"));
+            .Get("TaskItems/1", Planned(1, null)).Patch("TaskItems/1", Planned(1, null))
+            .Get("TaskItems/2", Planned(2, null)).Patch("TaskItems/2", Planned(2, "2026-10-09"));
 
         var text = await Tools(handler).UpdateTasks(
             [new TaskUpdate { Id = 1, JournalDate = "yesterday" }, new TaskUpdate { Id = 2, JournalDate = "today" }],
             TestContext.Current.CancellationToken);
 
         text.Should().Contain("x #1: journalDate 'yesterday' is not valid").And.Contain("+ #2 ");
-        handler.Sent(HttpMethod.Put, "TaskItems/1").Should().BeEmpty();
+        handler.Sent(HttpMethod.Patch, "TaskItems/1").Should().BeEmpty();
     }
 
     [Fact]
     public async Task UpdateTasks_JournalDate_TakesOneClockSnapshot_ForTheWholeBatch()
     {
         var handler = new StubHandler()
-            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-09"))
-            .Get("TaskItems/2", Planned(2, null)).Put("TaskItems/2", Planned(2, "2026-10-10"));
+            .Get("TaskItems/1", Planned(1, null)).Patch("TaskItems/1", Planned(1, "2026-10-09"))
+            .Get("TaskItems/2", Planned(2, null)).Patch("TaskItems/2", Planned(2, "2026-10-10"));
         var clock = new CountingTimeProvider();
         var tools = new TaskTools(Fixtures.Client(handler), clock);
 
@@ -2958,18 +2861,18 @@ public class UpdateTasksTests
     }
 
     [Fact]
-    public async Task UpdateTasks_JournalDate_ProjectFailureAfterPlanning_UsesThePartialSuccessText()
+    public async Task UpdateTasks_JournalDate_ProjectRefusal_IsOneRefusal_NotAPartialSaveText()
     {
         var handler = new StubHandler()
-            .Get("TaskItems/1", Planned(1, null)).Put("TaskItems/1", Planned(1, "2026-10-10"))
+            .Get("TaskItems/1", Planned(1, null))
             .Get("Projects", new[] { Fixtures.Project(7, "Alpha") })
-            .Post("Projects/7/tasks", new { message = "Project is full." }, HttpStatusCode.BadRequest);
+            .Patch("TaskItems/1", new { message = "Project is full." }, HttpStatusCode.BadRequest);
 
         var act = () => Tools(handler).UpdateTasks(
             [new TaskUpdate { Id = 1, JournalDate = "tomorrow", Project = "Alpha" }],
             TestContext.Current.CancellationToken);
 
         (await act.Should().ThrowAsync<McpException>()).Which.Message
-            .Should().Contain("x #1: Task #1 was updated and planned for 2026-10-10, but assigning it to project 'Alpha' failed: Project is full.");
+            .Should().Contain("x #1: Project is full. Nothing was saved.").And.NotContain("was updated");
     }
 }

@@ -27,6 +27,13 @@ public sealed class TaskFlowApiClient(HttpClient http)
     public Task<TaskItemDto> UpdateTaskAsync(int id, UpdateTaskRequest request, CancellationToken ct) =>
         SendAsync<TaskItemDto>(HttpMethod.Put, $"TaskItems/{id}", request, ct);
 
+    /// <summary>
+    /// PATCH: a property left out of <paramref name="patch"/> keeps its value, an explicit null clears it. The project and
+    /// goal are part of the same request, so a refusal saves nothing.
+    /// </summary>
+    public Task<TaskItemDto> PatchTaskAsync(int id, TaskPatch patch, CancellationToken ct) =>
+        SendAsync<TaskItemDto>(HttpMethod.Patch, $"TaskItems/{id}", patch.ToJson(), ct);
+
     public Task DeleteTaskAsync(int id, CancellationToken ct) =>
         SendAsync(HttpMethod.Delete, $"TaskItems/{id}", null, ct);
 
@@ -50,12 +57,6 @@ public sealed class TaskFlowApiClient(HttpClient http)
     /// <summary>The project PUT is full-replace: a null areaId removes the project from its area.</summary>
     public Task<ProjectDto> UpdateProjectAsync(int id, string name, string? description, bool isArchived, int? areaId, CancellationToken ct) =>
         SendAsync<ProjectDto>(HttpMethod.Put, $"Projects/{id}", new { name, description, isArchived, areaId }, ct);
-
-    public Task AssignTaskToProjectAsync(int projectId, int taskItemId, CancellationToken ct) =>
-        SendAsync(HttpMethod.Post, $"Projects/{projectId}/tasks", new { taskItemId }, ct);
-
-    public Task UnassignTaskFromProjectAsync(int projectId, int taskItemId, CancellationToken ct) =>
-        SendAsync(HttpMethod.Delete, $"Projects/{projectId}/tasks/{taskItemId}", null, ct);
 
     // --- Areas ---
 
@@ -129,6 +130,10 @@ public sealed class TaskFlowApiClient(HttpClient http)
 
     public Task<JournalEntryDto> UpdateJournalEntryAsync(int id, string title, string? summary, CancellationToken ct) =>
         SendAsync<JournalEntryDto>(HttpMethod.Put, $"JournalEntries/{id}", new { title, summary }, ct);
+
+    /// <summary>Atomic on the server: trims the text and adds it after the existing summary and a blank line. Returns the updated entry.</summary>
+    public Task<JournalEntryDto> AppendJournalSummaryAsync(int id, string text, CancellationToken ct) =>
+        SendAsync<JournalEntryDto>(HttpMethod.Post, $"JournalEntries/{id}/summary/append", new { text }, ct);
 
     public Task<List<TaskItemDto>> GetJournalTodosAsync(int entryId, CancellationToken ct) =>
         SendAsync<List<TaskItemDto>>(HttpMethod.Get, $"JournalEntries/{entryId}/todos", null, ct);

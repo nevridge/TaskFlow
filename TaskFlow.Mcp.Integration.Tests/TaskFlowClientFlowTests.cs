@@ -211,6 +211,69 @@ public sealed class TaskFlowClientFlowTests : IntegrationTestBase
         Assert.Equal([now.Id, b.Id], (await Client.GetGoalsAsync(project.Id, Ct)).Select(g => g.Id));
     }
 
+    [Fact]
+    public async Task Patch_FieldsProjectAndGoal_SaveInOneRequest_AndARefusalSavesNothing()
+    {
+        // The unit tests stub the PATCH route; only the real API proves the body shape and the all-or-nothing rule.
+        var project = await Client.CreateProjectAsync("Patch project", null, null, Ct);
+        var other = await Client.CreateProjectAsync("Other project", null, null, Ct);
+        var goal = await Client.CreateGoalAsync(new CreateGoalRequest(project.Id, "Ship it", null, null, "next"), Ct);
+        var task = await CreateTaskAsync("Before", description: "Keep me");
+
+        var patched = await Client.PatchTaskAsync(
+            task.Id,
+            new TaskPatch()
+                .Set(TaskPatchFields.Title, "After")
+                .Set(TaskPatchFields.ProjectId, project.Id)
+                .Set(TaskPatchFields.GoalId, goal.Id)
+                .Set(TaskPatchFields.TimezoneOffsetMinutes, TestClock.OffsetMinutes),
+            Ct);
+
+        Assert.Equal("After", patched.Title);
+        Assert.Equal("Keep me", patched.Description);
+        Assert.Equal(project.Id, patched.ProjectId);
+        Assert.Equal(goal.Id, patched.GoalId);
+
+        // The goal belongs to the first project, so moving the task while keeping that goal is refused whole.
+        var refused = await Assert.ThrowsAsync<TaskFlowApiException>(() => Client.PatchTaskAsync(
+            task.Id,
+            new TaskPatch()
+                .Set(TaskPatchFields.Title, "Not saved")
+                .Set(TaskPatchFields.ProjectId, other.Id)
+                .Set(TaskPatchFields.GoalId, goal.Id)
+                .Set(TaskPatchFields.TimezoneOffsetMinutes, TestClock.OffsetMinutes),
+            Ct));
+
+        Assert.Equal(HttpStatusCode.BadRequest, refused.Status);
+        var reread = await Client.GetTaskAsync(task.Id, Ct);
+        Assert.Equal("After", reread.Title);
+        Assert.Equal(project.Id, reread.ProjectId);
+        Assert.Equal(goal.Id, reread.GoalId);
+
+        var cleared = await Client.PatchTaskAsync(
+            task.Id,
+            new TaskPatch().Clear(TaskPatchFields.ProjectId).Set(TaskPatchFields.TimezoneOffsetMinutes, TestClock.OffsetMinutes),
+            Ct);
+
+        Assert.Null(cleared.ProjectId);
+        Assert.Null(cleared.GoalId);
+        Assert.Equal("After", cleared.Title);
+    }
+
+    [Fact]
+    public async Task AppendJournalSummary_AddsTheTextAfterABlankLine()
+    {
+        var entry = await Client.CreateJournalEntryAsync(TestClock.Today(), "Today", TestClock.OffsetMinutes, Ct);
+
+        var first = await Client.AppendJournalSummaryAsync(entry.Id, "  First part  ", Ct);
+        var second = await Client.AppendJournalSummaryAsync(entry.Id, "Second part", Ct);
+
+        Assert.Equal("First part", first.Summary);
+        Assert.Equal("First part\n\nSecond part", second.Summary);
+        var reread = Assert.Single(await Client.GetJournalEntriesAsync(Ct));
+        Assert.Equal("First part\n\nSecond part", reread.Summary);
+    }
+
     [Theory]
     [InlineData("draft")]
     [InlineData("completed")]

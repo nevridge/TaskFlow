@@ -13,13 +13,14 @@ function readField(error: unknown, field: string): unknown {
 }
 
 /**
- * Classifies an assign/unassign failure. The client throws the parsed response
+ * Classifies a project change failure. The client throws the parsed response
  * body only (no HTTP status): ASP.NET returns ProblemDetails with `status: 404`
- * for NotFound(), and `{ message }` for the 409 conflict.
+ * for NotFound() on assign/unassign, `{ message }` for the 409 conflict, and
+ * `{ code: 'TASK_PROJECT_NOT_FOUND' }` (422) when a task PATCH names an unknown project.
  */
 export function getProjectErrorKind(error: unknown): ProjectErrorKind {
   const status = readField(error, 'status')
-  if (status === 404) return 'notFound'
+  if (status === 404 || readField(error, 'code') === 'TASK_PROJECT_NOT_FOUND') return 'notFound'
   if (status === 409) return 'conflict'
   const message = readField(error, 'message')
   if (typeof message === 'string' && /already (assigned|in)/i.test(message)) return 'conflict'
@@ -32,6 +33,8 @@ export const PROJECT_GOAL_NOT_NOW_MESSAGE =
 
 export function getProjectMutationErrorMessage(error: unknown): string {
   if (readField(error, 'code') === 'TASK_GOAL_NOT_NOW') return PROJECT_GOAL_NOT_NOW_MESSAGE
+  // The task exists (the PATCH reached the project check), so only the project is to blame.
+  if (readField(error, 'code') === 'TASK_PROJECT_NOT_FOUND') return PROJECT_CREATE_NOT_FOUND_MESSAGE
   switch (getProjectErrorKind(error)) {
     case 'notFound':
       return PROJECT_NOT_FOUND_MESSAGE

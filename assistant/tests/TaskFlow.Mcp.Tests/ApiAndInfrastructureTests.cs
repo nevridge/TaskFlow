@@ -378,6 +378,127 @@ public class JournalDateSerializationTests
     }
 }
 
+public class TaskPatchTests
+{
+    [Fact]
+    public async Task PatchTaskAsync_SendsOnlyThePropertiesSet_AnAbsentOneIsNotNull()
+    {
+        var handler = new StubHandler().Patch("TaskItems/5", Fixtures.Task(5));
+        var api = Fixtures.Client(handler);
+
+        await api.PatchTaskAsync(5, new TaskPatch().Set("priority", "low").Set("timezoneOffsetMinutes", -420), CancellationToken.None);
+
+        handler.Sent(HttpMethod.Patch, "TaskItems/5").Single().Body.Should().Be("""{"priority":"low","timezoneOffsetMinutes":-420}""");
+    }
+
+    [Fact]
+    public async Task PatchTaskAsync_SendsAnExplicitNull_OnlyForAClear()
+    {
+        var handler = new StubHandler().Patch("TaskItems/5", Fixtures.Task(5));
+        var api = Fixtures.Client(handler);
+        string? none = null;
+        DateOnly? noDay = null;
+
+        await api.PatchTaskAsync(
+            5,
+            new TaskPatch().Set("description", none).Set("dueDate", noDay).Clear("projectId").Clear("goalId").Set("dueDate", new DateOnly(2026, 10, 12)),
+            CancellationToken.None);
+
+        var body = handler.BodyOf(HttpMethod.Patch, "TaskItems/5");
+        body.GetProperty("description").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        body.GetProperty("projectId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        body.GetProperty("goalId").ValueKind.Should().Be(System.Text.Json.JsonValueKind.Null);
+        body.GetProperty("dueDate").GetString().Should().Be("2026-10-12");
+        body.EnumerateObject().Should().HaveCount(4);
+    }
+
+    [Fact]
+    public void AnEmptyPatch_HasNoChanges()
+    {
+        new TaskPatch().HasChanges.Should().BeFalse();
+        new TaskPatch().Clear("goalId").HasChanges.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AppendJournalSummaryAsync_PostsTheTextToTheAppendRoute()
+    {
+        var handler = new StubHandler().Post("JournalEntries/3/summary/append", Fixtures.Journal(3, "2026-10-09", "ab"));
+        var api = Fixtures.Client(handler);
+
+        var entry = await api.AppendJournalSummaryAsync(3, "b", CancellationToken.None);
+
+        handler.BodyOf(HttpMethod.Post, "JournalEntries/3/summary/append").GetProperty("text").GetString().Should().Be("b");
+        entry.Summary.Should().Be("ab");
+    }
+}
+
+public class ToolGuardWriteTests
+{
+    private static TaskFlowApiClient Api() => Fixtures.Client(new StubHandler());
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity)]
+    public async Task A4xxRefusal_SaysNothingWasSaved(HttpStatusCode status)
+    {
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(status, null, "Refused."), "hint");
+
+        var ex = (await act.Should().ThrowAsync<McpException>()).Which;
+        ex.Message.Should().Be("Refused. Nothing was saved.");
+        ex.InnerException.Should().BeOfType<TaskFlowApiException>();
+    }
+
+    [Fact]
+    public async Task ARefusalWithGuidance_PutsTheSentenceOnItsOwnLine()
+    {
+        var details = System.Text.Json.JsonDocument.Parse("""{"nowGoalId":1,"nowGoalTitle":"Ship"}""").RootElement.Clone();
+        var act = () => ToolGuard.WriteAsync<int>(
+            Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.UnprocessableEntity, ErrorCodes.TaskGoalNotNow, "Not now.", details), "hint");
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Split('\n').Last().Should().Be("Nothing was saved.");
+        message.Should().Contain("Now goal: #1 Ship");
+    }
+
+    [Fact]
+    public async Task A5xx_IsNotARefusal_AndPassesThroughUnchanged()
+    {
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskFlowApiException(HttpStatusCode.InternalServerError, null, "Server error."), "hint");
+
+        (await act.Should().ThrowAsync<TaskFlowApiException>()).Which.Message.Should().Be("Server error.");
+    }
+
+    [Fact]
+    public async Task ATimeout_IsAnUnreachableSignal_ThatCarriesTheCallSitesHint()
+    {
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new TaskCanceledException(), "Call-site hint.");
+
+        var ex = (await act.Should().ThrowAsync<ApiUnreachableException>()).Which;
+        ex.Message.Should().Contain("did not respond in time").And.EndWith("Call-site hint.").And.NotContain("get_task").And.NotContain("Nothing was saved");
+    }
+
+    [Fact]
+    public async Task ACancellationByTheCaller_IsNotATimeout()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var act = () => ToolGuard.WriteAsync<int>(Api(), cts.Token, () => throw new TaskCanceledException(), "hint");
+
+        await act.Should().ThrowAsync<TaskCanceledException>();
+    }
+
+    [Fact]
+    public async Task AnUnreachableApi_IsNotARefusal()
+    {
+        var act = () => ToolGuard.WriteAsync<int>(Api(), CancellationToken.None, () => throw new HttpRequestException("refused"), "hint");
+
+        await act.Should().ThrowAsync<HttpRequestException>();
+    }
+}
+
 public class ProjectResolverTests
 {
     private static readonly IReadOnlyList<ProjectDto> Projects =
@@ -626,21 +747,42 @@ public class ToolSurfaceTests
     }
 
     [Fact]
-    public void UpdateTools_DescribeTheProjectStep_AndTheRetryOnlyTheProjectGuidance()
+    public void UpdateTools_DescribeOneRequest_TheGoalReset_AndNoPartialSaves()
     {
         var updateTask = Tools().Single(t => t.Attribute.Name == "update_task");
         var updateTasks = Tools().Single(t => t.Attribute.Name == "update_tasks");
 
+        // A same-value PATCH is a no-op, so the idempotent hint stays true.
         updateTask.Attribute.Idempotent.Should().BeTrue();
         updateTasks.Attribute.Idempotent.Should().BeTrue();
-        updateTask.Method.GetCustomAttribute<DescriptionAttribute>()!.Description
-            .Should().Contain("fields were saved").And.Contain("retry only the project change");
-        updateTasks.Method.GetCustomAttribute<DescriptionAttribute>()!.Description
-            .Should().Contain("Retry only the 'x' items").And.Contain("retry that item with just id and project");
+        Tools().Single(t => t.Attribute.Name == "update_journal").Attribute.Idempotent.Should().BeFalse();
+
+        var single = updateTask.Method.GetCustomAttribute<DescriptionAttribute>()!.Description;
+        single.Should().Contain("saved together with the other fields in one request").And.Contain("a refusal changes nothing")
+            .And.Contain("resets its goal (inherited from the parent, else none)").And.Contain("a task in no project cannot have a goal")
+            .And.NotContain("fields were saved").And.NotContain("retry only");
+
+        var batch = updateTasks.Method.GetCustomAttribute<DescriptionAttribute>()!.Description;
+        batch.Should().Contain("each is all-or-nothing").And.Contain("that item changed nothing").And.Contain("Only the 'x' items need a retry")
+            .And.Contain("'not attempted'").And.Contain("resets its goal")
+            .And.NotContain("Retry only the 'x' items").And.NotContain("something was saved");
+
         updateTask.Method.GetParameters().Single(p => p.Name == "project").GetCustomAttribute<DescriptionAttribute>()!.Description
             .Should().Contain("rejects the whole update before anything is saved");
         typeof(TaskUpdate).GetProperty("Project")!.GetCustomAttribute<DescriptionAttribute>()!.Description
             .Should().Contain("rejects the whole update before anything is saved");
+    }
+
+    [Fact]
+    public void CreateTasks_And_SaveGoal_DescribeTheirSingleRequests()
+    {
+        var create = Tools().Single(t => t.Attribute.Name == "create_tasks").Method.GetCustomAttribute<DescriptionAttribute>()!.Description;
+        create.Should().Contain("in the same request: a refused task is not created").And.Contain("check with list_tasks or get_task before retrying")
+            .And.NotContain("goal cannot be assigned");
+
+        var position = Tools().Single(t => t.Attribute.Name == "save_goal").Method.GetParameters().Single(p => p.Name == "position")
+            .GetCustomAttribute<DescriptionAttribute>()!.Description;
+        position.Should().Contain("the API refuses an out-of-range position or a non-Next result").And.Contain("a refusal changes nothing");
     }
 
     /// <summary>Older Claude Code versions cut a longer description, dropping the rules at its end.</summary>

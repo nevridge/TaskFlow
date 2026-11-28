@@ -67,6 +67,50 @@ internal static class ToolGuard
     }
 
     /// <summary>
+    /// Runs one write request (task PATCH or create, goal create or update, summary append). The API checks every rule
+    /// before it writes, so a 4xx refusal saved nothing and says so here, in the one place that wording lives. A 5xx or
+    /// an unreachable API is not a refusal and gets no such sentence. A timeout carries <paramref name="timeoutHint"/>,
+    /// which the call site picks (each names the read that shows whether the write landed), and, as an
+    /// <see cref="ApiUnreachableException"/>, stops a batch.
+    /// </summary>
+    public static async Task<T> WriteAsync<T>(TaskFlowApiClient api, CancellationToken ct, Func<Task<T>> write, string timeoutHint)
+    {
+        try
+        {
+            return await write();
+        }
+        catch (TaskFlowApiException ex) when ((int)ex.Status is >= 400 and < 500)
+        {
+            var refusal = WithGuidance(ex);
+            // Guidance adds lines of its own, and the sentence reads best on a line of its own after them.
+            throw new McpException(refusal + (refusal.Contains('\n') ? "\n" : " ") + NothingSaved, ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ApiUnreachableException(
+                $"The TaskFlow API at {api.BaseUrl} did not respond in time. {timeoutHint}",
+                ex);
+        }
+    }
+
+    // The timeout hint is chosen by the call site, because only some reads can show whether that write landed.
+
+    /// <summary>
+    /// A task PATCH is one atomic request, but the tool rebuilds it from a fresh read, so a retry after a status change
+    /// that landed (an unblock, for one) would send a second status change.
+    /// </summary>
+    public const string PatchTimeoutHint = "The update may or may not have been saved: check with get_task before retrying.";
+
+    /// <summary>A blind retry of a create makes a duplicate.</summary>
+    public const string CreateTaskTimeoutHint = "The task may or may not have been saved: check with list_tasks or get_task before retrying.";
+
+    public const string SaveGoalTimeoutHint = "The goal may or may not have been saved: check with list_goals before retrying.";
+
+    public const string JournalAppendTimeoutHint = "The text may or may not have been appended (an append is not idempotent): check with get_journal before retrying.";
+
+    public const string NothingSaved = "Nothing was saved.";
+
+    /// <summary>
     /// Appends one line of next-step guidance for known 422 codes, and for the goal rules a further line naming the
     /// tasks or the Now goal from <c>details</c>. Other errors pass through unchanged.
     /// </summary>
@@ -126,3 +170,6 @@ internal static class ToolGuard
 
     public static McpException Invalid(string message) => new(message);
 }
+
+/// <summary>The API did not answer a write in time. It carries only "stop the batch"; nothing is known to be saved.</summary>
+internal sealed class ApiUnreachableException(string message, Exception inner) : McpException(message, inner);

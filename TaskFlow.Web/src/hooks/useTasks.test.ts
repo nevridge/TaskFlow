@@ -101,6 +101,29 @@ describe('usePatchTaskMutation', () => {
     expect(keys).toContainEqual(['tasks', 4])
     expect(keys).toContainEqual(projectKeys.all)
   })
+
+  it('refetches tasks and projects when a PATCH that carried a project is refused', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_PROJECT_NOT_FOUND' })
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchTaskMutation(), { wrapper: makeWrapper(qc) })
+    await act(async () => { await result.current.mutateAsync({ id: 4, data: { projectId: 2 } }).catch(() => undefined) })
+
+    const keys = invalidate.mock.calls.map(c => c[0]?.queryKey)
+    expect(keys).toContainEqual(['tasks'])
+    expect(keys).toContainEqual(['tasks', 4])
+    expect(keys).toContainEqual(projectKeys.all)
+  })
+
+  it('does not refetch projects when a refused PATCH carried no project', async () => {
+    vi.mocked(sdk.patchApiV1TaskItemsById).mockRejectedValue({ code: 'TASK_GOAL_NOT_NOW' })
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchTaskMutation(), { wrapper: makeWrapper(qc) })
+    await act(async () => { await result.current.mutateAsync({ id: 4, data: { title: 'T' } }).catch(() => undefined) })
+
+    expect(invalidate).not.toHaveBeenCalled()
+  })
 })
 
 describe('task mutation bodies carry completion through status only', () => {

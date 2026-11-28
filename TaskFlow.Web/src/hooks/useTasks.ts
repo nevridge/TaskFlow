@@ -280,10 +280,13 @@ export function usePatchTaskMutation() {
       if (!next || next === 'Blocked') return undefined
       return applyOptimisticTaskUpdate(qc, [taskKeys.all, taskKeys.detail(id)], id, task => ({ ...task, status: next }))
     },
-    onError: (err, { id }, snapshot) => {
+    onError: (err, { id, data }, snapshot) => {
       rollbackTaskCache(qc, snapshot)
       const code = (err as { code?: unknown } | null)?.code
+      // A refused project change refetches too, as useChangeTaskProject does, so a deleted project leaves the picker.
+      const sentProject = data.projectId !== undefined
       if (
+        sentProject ||
         code === 'TASK_PARENT_STATUS_DERIVED' ||
         code === 'TASK_PARENT_COMPLETED_NOT_ALLOWED' ||
         code === 'TASK_JOURNAL_ASSIGNMENT_CONFLICT'
@@ -291,6 +294,7 @@ export function usePatchTaskMutation() {
         qc.invalidateQueries({ queryKey: taskKeys.all })
         qc.invalidateQueries({ queryKey: taskKeys.detail(id) })
       }
+      if (sentProject) qc.invalidateQueries({ queryKey: projectKeys.all })
     },
     onSuccess: (_result, { id, data }) => {
       // A project change moves the task's grouping, so the task keys refresh even for a project-only save.

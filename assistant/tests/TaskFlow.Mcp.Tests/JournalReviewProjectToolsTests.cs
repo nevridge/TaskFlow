@@ -931,6 +931,19 @@ public class JournalToolsTests
     }
 
     [Fact]
+    public async Task UpdateJournal_Append_Timeout_WithANote_SaysTheNoteWasSkipped()
+    {
+        var handler = new StubHandler()
+            .Get("JournalEntries", new[] { Fixtures.Journal(3, "2026-10-09", "Old") })
+            .Fail(HttpMethod.Post, AppendPath, new TaskCanceledException("timeout"));
+
+        var act = () => Tools(handler).UpdateJournal(summary: "New", note: "n", append: true);
+
+        var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
+        message.Should().Contain("check with get_journal before retrying").And.Contain("The note was skipped too.");
+    }
+
+    [Fact]
     public async Task UpdateJournal_Append_ServerError_IsNotCalledARefusal_AndSkipsNothingItClaims()
     {
         var handler = new StubHandler()

@@ -212,7 +212,8 @@ public class JournalEntriesController(
                 return BadRequest(new
                 {
                     message = $"The summary would be {result.CombinedLength} characters, over the {AppendJournalSummaryDtoValidator.MaxSummaryLength} limit: "
-                        + $"the existing summary is {result.ExistingLength} and the new text {result.TextLength} (plus a blank line between)."
+                        + $"the existing summary is {result.ExistingLength} and the new text {result.TextLength}"
+                        + (result.ExistingLength > 0 ? " (plus a blank line between)." : ".")
                 });
         }
 

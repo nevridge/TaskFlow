@@ -598,12 +598,15 @@ public class TaskItemsController(
         if (changes.HasGoalId && changes.GoalId is int explicitGoalId)
         {
             var check = await _repo.CheckGoalAssignmentAsync(explicitGoalId, isSubtask, resultingProjectId);
-            if (GoalCheckError(check.Status) is { } goalError)
+            var sameGoal = explicitGoalId == existing.GoalId && !projectChanged;
+
+            // A task already in a goal that has since closed is not being added to it, so the closed refusal does not apply.
+            if (!(sameGoal && check.Status == AssignGoalTaskStatus.GoalClosed) && GoalCheckError(check.Status) is { } goalError)
             {
                 return goalError;
             }
 
-            if (explicitGoalId == existing.GoalId && !projectChanged)
+            if (sameGoal)
             {
                 // The same goal again is a no-op here (the assign endpoint answers 409).
                 resultingGoalId = existing.GoalId;

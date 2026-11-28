@@ -240,6 +240,22 @@ public sealed class TaskItemsProjectGoalHttpTests : GoalsApiTestBase
     }
 
     [Fact]
+    public async Task Patch_SameGoalThatHasSinceClosed_IsANoOp_AndOtherFieldsApply()
+    {
+        var project = await CreateProjectAsync();
+        var goal = await CreateGoalAsync(project, "g");
+        var task = await CreateTaskAsync(project);
+        await AssignAsync(goal, task);
+        await SendAsync(HttpMethod.Put, $"/api/v1/Goals/{goal}", new { title = "g", status = "dropped" });
+
+        var (status, body) = await PatchAsync(task, new { title = "Renamed", goalId = goal });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("Renamed", body.GetProperty("title").GetString());
+        Assert.Equal(goal, GoalIdOf(body));
+    }
+
+    [Fact]
     public async Task Patch_InProgressTaskIntoNextGoal_IsGoalNotNow_ForAGoalChangeAlone()
     {
         var project = await CreateProjectAsync();

@@ -2241,7 +2241,7 @@ public class UpdateTaskTests
     }
 
     [Fact]
-    public async Task PatchTimeout_SaysTheRetryIsSafe_NotThatNothingWasSaved()
+    public async Task PatchTimeout_SaysToCheckBeforeRetrying_NotThatNothingWasSaved()
     {
         var handler = new StubHandler()
             .Get("TaskItems/5", Plan(null))
@@ -2251,7 +2251,7 @@ public class UpdateTaskTests
         var act = () => tools.UpdateTask(5, priority: "low", ct: TestContext.Current.CancellationToken);
 
         var message = (await act.Should().ThrowAsync<McpException>()).Which.Message;
-        message.Should().Contain("did not respond in time").And.Contain("safe to retry").And.NotContain("Nothing was saved");
+        message.Should().Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
     }
 
     [Theory]
@@ -2710,7 +2710,7 @@ public class UpdateTasksTests
     }
 
     [Fact]
-    public async Task Timeout_OnOneItem_SaysTheRetryIsSafe_AndStopsTheRest()
+    public async Task Timeout_OnOneItem_SaysToCheckBeforeRetrying_AndStopsTheRest()
     {
         var handler = HandlerFor(4)
             .Get("TaskItems/5", Existing(5))
@@ -2726,7 +2726,7 @@ public class UpdateTasksTests
 
         var lines = text.Split('\n');
         lines[0].Should().Be("Updated 1 of 4 task(s).");
-        lines[2].Should().StartWith("x #5: ").And.Contain("did not respond in time").And.Contain("safe to retry").And.NotContain("Nothing was saved");
+        lines[2].Should().StartWith("x #5: ").And.Contain("did not respond in time").And.Contain("check with get_task before retrying").And.NotContain("Nothing was saved");
         lines[3].Should().Be("x #6: not attempted");
         lines[4].Should().Be("x #7: not attempted");
         handler.Requests.Should().NotContain(r => r.Path == "TaskItems/6" || r.Path == "TaskItems/7");

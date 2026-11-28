@@ -280,6 +280,11 @@ public sealed class JournalTools(TaskFlowApiClient api, TimeProvider time)
                 {
                     updated = await ToolGuard.WriteAsync(api, ct, () => api.AppendJournalSummaryAsync(entry.Id, summary!.Trim(), ct), ToolGuard.JournalAppendTimeoutHint);
                 }
+                catch (ApiUnreachableException ex) when (!string.IsNullOrWhiteSpace(note))
+                {
+                    // A timed-out append also stops before the note, so say that too.
+                    throw new ApiUnreachableException($"{ex.Message}{NoteSkipped(note)}", ex);
+                }
                 catch (McpException ex) when (ex.InnerException is TaskFlowApiException { Status: HttpStatusCode.BadRequest })
                 {
                     throw ToolGuard.Invalid($"{ex.Message}{NoteSkipped(note)} To rewrite the whole summary instead, pass append=false.");

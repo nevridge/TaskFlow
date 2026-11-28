@@ -70,7 +70,7 @@ internal static class ToolGuard
     /// Runs one write request (task PATCH or create, goal create or update, summary append). The API checks every rule
     /// before it writes, so a 4xx refusal saved nothing and says so here, in the one place that wording lives. A 5xx or
     /// an unreachable API is not a refusal and gets no such sentence. A timeout carries <paramref name="timeoutHint"/>,
-    /// which the call site picks (retry is safe for a PATCH, check first for a create, goal save or append), and, as an
+    /// which the call site picks (each names the read that shows whether the write landed), and, as an
     /// <see cref="ApiUnreachableException"/>, stops a batch.
     /// </summary>
     public static async Task<T> WriteAsync<T>(TaskFlowApiClient api, CancellationToken ct, Func<Task<T>> write, string timeoutHint)
@@ -95,8 +95,11 @@ internal static class ToolGuard
 
     // The timeout hint is chosen by the call site, because only some reads can show whether that write landed.
 
-    /// <summary>A task PATCH is one atomic request and a same-value PATCH is a no-op, so a retry is safe.</summary>
-    public const string PatchTimeoutHint = "A task update is one atomic request, so it is safe to retry.";
+    /// <summary>
+    /// A task PATCH is one atomic request, but the tool rebuilds it from a fresh read, so a retry after a status change
+    /// that landed (an unblock, for one) would send a second status change.
+    /// </summary>
+    public const string PatchTimeoutHint = "The update may or may not have been saved: check with get_task before retrying.";
 
     /// <summary>A blind retry of a create makes a duplicate.</summary>
     public const string CreateTaskTimeoutHint = "The task may or may not have been saved: check with list_tasks or get_task before retrying.";
